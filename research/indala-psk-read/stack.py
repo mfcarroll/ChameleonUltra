@@ -118,16 +118,25 @@ def score(v, fc):
 
 
 def psk_frame(n, amp):
-    """A continuous PSK1 stream, polarity carried ACROSS frame boundaries — which for an
-    odd-parity word means it inverts every frame, exactly as the tag does."""
-    pol, p, out = M.bits_to_polarity(TRUTH_BITS), None, []
-    p = pol[-1]
-    while len(out) < n // BIT + 64:
-        for b in TRUTH_BITS:
-            if b:
-                p = -p
-            out.append(p)
-    s = np.repeat(np.array(out, float), BIT)[:n]
+    """A continuous PSK1 stream: the subcarrier PHASE is the bit, carried across frame
+    boundaries exactly as the tag sends it.
+
+    ⛔ THIS FUNCTION WAS BROKEN AND CARRYING THE RETRACTED BUG. Until it was fixed it read
+    `M.bits_to_polarity(...)` — a name deleted when that running XOR was identified as PSK2
+    rather than PSK1 — and its body still flipped the polarity on every '1'. So it raised
+    AttributeError on every call, which is the lucky outcome: had the name survived the
+    rename it would have gone on silently generating a PSK2 stream for a PSK1 decoder, in
+    the one file whose job is to INJECT a known signal into real noise. An injection
+    control that injects the wrong modulation cannot fail visibly — it just reports that
+    the thing is undetectable.
+
+    ⭐ The parity effect is real and is what the tile below preserves: a0000000e6bd0e92 has
+    19 ones, so under PSK1 the running polarity arrives at the next frame inverted and the
+    true repetition period is 4096 samples, not 2048 (C14). Nothing here restarts per
+    frame. generality.py's psk1_stream() is the same construction, parameterised by word."""
+    reps = int(np.ceil(n / (64 * BIT))) + 2
+    pol = np.where(np.tile(np.asarray(TRUTH_BITS), reps) > 0, 1.0, -1.0)
+    s = np.repeat(pol, BIT)[:n]
     return s * np.tile([1.0, -1.0], n // 2 + 1)[:n] * amp
 
 

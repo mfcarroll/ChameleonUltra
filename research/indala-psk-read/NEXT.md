@@ -1,26 +1,63 @@
 # Next — ranked
 
-**State:** shipped and validated both ways. `lf indala read` returns the credential in
-~0.5 s, 20/20 with the tag and 0/20 without (`FINDINGS.md`). What remains is generality,
-then re-testing the levers that were closed against a decoder that could not work.
+**State:** shipped, validated both ways, and word-agnostic in simulation. `lf indala read`
+returns the credential in ~0.5 s, 20/20 with the tag and 0/20 without; 36 synthetic words
+decode with no wrong answers (`FINDINGS.md`). What remains is **physical** generality —
+other tags, other signals, a second unit — then the levers that were closed against a
+decoder that could not work.
 
 ⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
 
 ---
 
-## 1. ⭐⭐ Check a second Indala tag, and a second Chameleon
+## 1. ⛔ Does `lf indala read` false-positive on a NON-Indala tag?
 
-The phase window is **not stable even across sessions on the same tag and unit** — phase 12
-went from 5/5 to 4/10 correct overnight while phase 28 went the other way. The rotation
-absorbs that, which is why it is a rotation. What is still untested is whether a different
-tag or a different unit lands *outside* ticks 4–60 entirely, which the rotation would not
-absorb.
+**The sharpest untested null, and the empty field does not test it.** An HID Prox, EM410x
+or ioProx tag puts a strong ASK or FSK signal on the antenna. The Indala decoder has never
+seen one. It brute-forces 32 sample offsets looking for a fixed 33-bit pattern, and a
+decoder straining against a *loud* wrong signal is a completely different proposition from
+one straining against silence.
 
-⚠ A second tag also tests something the parity cannot: `descramble26()` assumes format 26.
-A 29-bit or other-format Indala tag should still return a raw frame, with the Wiegand-26
-parity reported as failing — check it does not do something worse.
+Put each non-Indala LF tag you have on the antenna in turn:
 
-## 2. ⭐⭐ Make the failure cheaper, or the success more certain
+```bash
+cd software/script && for i in $(seq 1 10); do .venv/bin/python cu.py "lf indala read" 2>&1 | tail -1; done
+```
+
+Expect `LF tag not found` every time, each taking the full ~0.8 s. ⚠ Anything else is a
+serious finding — the two-capture agreement rule assumes wrong frames are *random*, and a
+periodic interferer could produce the same wrong frame twice.
+
+## 2. ⭐⭐ A second physical Indala tag
+
+C23 closed the *structural* half of this synthetically: 36 words decode, including the
+even-parity case that C14's frame inversion never covers. What is untested is physical —
+a different tag's coupling, tuning and drive level, and whether the phase window moves
+with the tag rather than with the reader.
+
+⚠ Also untested: `descramble26()` assumes format 26. A 29-bit or other-format tag should
+still return a raw frame, with the Wiegand-26 parity reported as failing. Check it does
+nothing worse.
+
+⭐ **A spare T5577 turns this from "whatever tags exist" into a designed experiment**, since
+the Proxmark writes an arbitrary raw frame:
+
+```bash
+cd /Users/Shared/code/personal/rfid/proxmark3 && ./pm3 -c "lf indala clone -r a0000000e6bd0e93"
+```
+
+That one is the bench word with its last bit flipped — **even parity**, so the subcarrier
+stops inverting between frames. It is the single most informative word to write, because
+it is the one structural branch that has only ever been tested in simulation.
+
+## 3. ⭐ A second Chameleon
+
+⚠ Worth doing and worth not over-reading. Two units bought together are the same hardware
+revision from the same batch, so this tests unit-to-unit tolerance — antenna tuning,
+component spread, trimmer position — and NOT whether the design generalises to a Chameleon
+Ultra in general. A pass is weak evidence; a failure would be very strong.
+
+## 4. ⭐⭐ Make the failure cheaper, or the success more certain
 
 A read costs a median of 2–3 captures at ~35 ms (0.08–0.22 s of device time, measured); a
 failure costs the whole 500 ms timeout (0.47–0.53 s, measured).
@@ -32,20 +69,20 @@ Two things are worth measuring now that decode rate is a real metric:
   and 2 ms has never been varied against a working decoder (L34 invalidated the old test).
   The Indala read restarts the field for every capture, so this is paid 2–3 times per read.
 
-## 3. ⭐ Re-test the levers closed against the broken decoder
+## 5. ⭐ Re-test the levers closed against the broken decoder
 
 Air gap, settle and oversampling were all closed pre-BLE-fix on a tag carrying
 `DEADBEEF/12345678` (L34), and every dB measured since went through a decoder that could
 not decode. Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe.
 
-## 4. ⚠ The per-lever sweep scripts score the wrong thing
+## 6. ⚠ The per-lever sweep scripts score the wrong thing
 
 `sweep.py`, `phasesweep.py`, `gaintest.py`, `gapsweep.py` and `oversample_test.py` all
 score the fc/2 **skirt**, which is transition energy and is polarity-blind (`METHOD.md` M8).
 They can rank coupling, but they cannot tell you whether something decodes. Port them to
 decode rate the way `phasebits.py` was, or retire them.
 
-## 5. Upstreamable?
+## 7. Upstreamable?
 
 Nothing in `lf_indala_psk.c` is bench-specific and it has no nRF dependency. The pieces a
 PR would need beyond what is here: emulation (`lf_tag_em.c` has a transmit-only `psk1.c`
