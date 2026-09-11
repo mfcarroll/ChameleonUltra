@@ -67,6 +67,26 @@ def probe(lo, hi):
     return float(np.sqrt((S[m] ** 2).sum())), float(x.mean())
 
 
+def monitor(lo, hi, floor, n):
+    """⭐ LIVE POSITIONING AID. Print the subcarrier against the empty-field floor, once a
+    second, so a tag can be slid around until it peaks.
+
+    ⚠ This exists because a tag that reads perfectly on a Proxmark can be COMPLETELY
+    INAUDIBLE to a Chameleon a few millimetres out of place. Measured: a T5577 carrying
+    a0000000e6bd0e92, written and verified by a Proxmark which then read it back, sat at
+    0.99x the empty-field floor across twelve sample phases on the Chameleon — no signal at
+    all — where the bench tag sits at 1.25-1.73x. And 1.25-1.73x IS the working range, so
+    there is almost no margin to give away to position."""
+    print(f"  empty-field floor {floor:.0f}. Slide the tag; 1.3x or better is a read.\n")
+    best = 0.0
+    for _ in range(n):
+        amp, dc = probe(lo, hi)
+        r = amp / floor
+        best = max(best, r)
+        bar = "#" * min(60, int((r - 0.8) * 80)) if r > 0.8 else ""
+        print(f"  {amp:8.0f}  {r:5.2f}x  best {best:5.2f}x  DC {dc:6.0f}  {bar}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--band", nargs=2, type=float, default=[10000.0, 18000.0],
@@ -79,8 +99,17 @@ def main():
     ap.add_argument("--idle", type=int, default=6)
     ap.add_argument("--loaded", type=int, default=6)
     ap.add_argument("--recover", type=int, default=10)
+    ap.add_argument("--monitor", type=int, metavar="N",
+                    help="live positioning: print the subcarrier N times, once a second")
+    ap.add_argument("--floor", type=float, default=6900.0,
+                    help="empty-field level for the band (default: the committed fc/2 "
+                         "empty captures, 6350-7900 across phases)")
     a = ap.parse_args()
     lo, hi = a.band
+
+    if a.monitor:
+        monitor(lo, hi, a.floor, a.monitor)
+        return
 
     print(__doc__.split("Default band is")[0])
     print(f"  band {lo:.0f}-{hi:.0f} Hz   load: {a.load!r}   read: {a.read!r}\n")

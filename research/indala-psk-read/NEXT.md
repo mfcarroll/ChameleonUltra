@@ -1,16 +1,55 @@
 # Next — ranked
 
-**State:** shipped, validated both ways, and word-agnostic in simulation. `lf indala read`
-returns the credential in ~0.5 s, 20/20 with the tag and 0/20 without; 36 synthetic words
-decode with no wrong answers (`FINDINGS.md`). What remains is **physical** generality —
-other tags, other signals, a second unit — then the levers that were closed against a
-decoder that could not work.
+**State:** shipped and validated on ONE tag. `lf indala read` returns the credential in
+~0.5 s, 20/20 with the bench tag, 0/20 empty, 10/10 against a loud HID signal, and 36
+synthetic words decode with no wrong answers (`FINDINGS.md`).
+
+⛔ **But a second, Proxmark-verified Indala tag was completely inaudible to the Chameleon —
+0 of 12, with no subcarrier present at any sample phase.** Until §1 is resolved, the honest
+scope of this work is "reads the bench tag", and whether that is a position problem, a tag
+problem or a reader problem is unknown.
 
 ⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
 
 ---
 
-## 1. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
+## 1. ⛔⛔ A SECOND TAG WAS INAUDIBLE — start here, everything else waits
+
+A spare T5577 was written with `a0000000e6bd0e92` **by a Proxmark, which reported "Data
+written and verified" and then read it back correctly** as Fmt 26 FC 52 Card 63612. On the
+Chameleon it decoded **0 of 12** — and the raw captures say why:
+
+```
+phase      4    8   12   16   20   24   28   32   36   40   44   48
+new tag 1.01 0.89 0.95 0.96 1.02 0.99 0.95 0.96 0.95 1.11 1.05 1.07   x empty-field floor
+bench   1.48 1.25 1.56 1.67 1.67 1.60 1.60 1.64 1.67 1.73 1.73 1.64
+```
+
+⇒ The subcarrier is **not there at all**. At every sample phase the tag is indistinguishable
+from an empty antenna. This is not the decoder failing to lock onto a weak signal — nothing
+arrives. ⚠ And note how little headroom the working case has: **1.25-1.73x IS the entire
+operating range**, so anything costing more than about 1.3x makes a tag unreadable.
+
+⚠ **The cause is not established.** Candidates, in order:
+
+1. **Position.** The bench tag's placement was arrived at over days; this one was put down.
+   The notes already price tag position at ~5.7 dB (n=1) — 1.9x, more than enough alone.
+2. **The tag.** Different batch, so possibly a different T5577 die revision or modulation
+   depth. A Proxmark's antenna is far better and would hide a large difference.
+3. **The reader.** Not excluded, and excluding it costs one tag swap.
+
+⛔ **RUN THE CONTROL FIRST.** Put the ORIGINAL Indala tag back and confirm it still reads.
+Until that is done, "the second tag does not read" and "nothing reads any more" are the
+same observation — which is exactly the mistake L51 records.
+
+Then slide the tag while watching the subcarrier, rather than guessing at placement:
+
+```bash
+cd research/indala-psk-read && ../../software/script/.venv/bin/python \
+  lfprobe.py --band 57000 62400 --monitor 60
+```
+
+## 2. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
 
 C24 closed HID Prox: 10/10 `LF tag not found` with the tag on the antenna and its coupling
 confirmed by a 5/5 HID read immediately before. That matters because it is the null the
@@ -32,28 +71,6 @@ cd software/script && .venv/bin/python cu.py \
   "lf indala read" "lf indala read" "lf indala read" \
   "lf hid prox read" "lf hid prox read"
 ```
-
-## 2. ⭐⭐ A second physical Indala tag
-
-C23 closed the *structural* half of this synthetically: 36 words decode, including the
-even-parity case that C14's frame inversion never covers. What is untested is physical —
-a different tag's coupling, tuning and drive level, and whether the phase window moves
-with the tag rather than with the reader.
-
-⚠ Also untested: `descramble26()` assumes format 26. A 29-bit or other-format tag should
-still return a raw frame, with the Wiegand-26 parity reported as failing. Check it does
-nothing worse.
-
-⭐ **A spare T5577 turns this from "whatever tags exist" into a designed experiment**, since
-the Proxmark writes an arbitrary raw frame:
-
-```bash
-cd /Users/Shared/code/personal/rfid/proxmark3 && ./pm3 -c "lf indala clone -r a0000000e6bd0e93"
-```
-
-That one is the bench word with its last bit flipped — **even parity**, so the subcarrier
-stops inverting between frames. It is the single most informative word to write, because
-it is the one structural branch that has only ever been tested in simulation.
 
 ## 3. ⭐ A second Chameleon
 
@@ -87,7 +104,32 @@ score the fc/2 **skirt**, which is transition energy and is polarity-blind (`MET
 They can rank coupling, but they cannot tell you whether something decodes. Port them to
 decode rate the way `phasebits.py` was, or retire them.
 
-## 7. Upstreamable?
+## 7. ⚠ T5577 WRITE reliability on the Chameleon — backlog
+
+`lf indala write` exists and is **not known to work**. Two paths were tried:
+
+| | result |
+|---|---|
+| three raw `lf_t55xx_write_block` calls | **one of three blocks landed** — the Proxmark dump showed block 2 took, blocks 0 and 1 did not |
+| `write_indala_to_t55xx` via the proven `write_t55xx` | spectrum unchanged; the config block did not take either |
+
+The raw path is weaker by construction — it cycles the field per block, so each block is
+written to a tag charging from cold for 1 ms, once, with no retry, where `write_t55xx`
+holds the field on and writes every block twice. That difference is real and the change was
+right. It did not make the write work here, so something else is wrong too.
+
+⚠ The obvious suspect is the one that sank §1: **a tag a Proxmark writes, verifies and reads
+back can be completely inaudible to the Chameleon**, and writing needs more field than
+reading. Nothing so far separates "the writer is broken" from "this tag was never coupled
+well enough to be written".
+
+⛔ **The blocker is instrumentation, not code.** The Chameleon has no T5577 *read*, so every
+write attempt costs a physical Proxmark round trip to verify — which is why two attempts ate
+an afternoon. ⇒ Add a T5577 block read before debugging the writer: `t55xx_send_cmd`
+already carries the read opcodes and the protocol decoders already recover data off the
+air. That turns a round trip into one command and makes the writer debuggable at all.
+
+## 8. Upstreamable?
 
 Nothing in `lf_indala_psk.c` is bench-specific and it has no nRF dependency. The pieces a
 PR would need beyond what is here: emulation (`lf_tag_em.c` has a transmit-only `psk1.c`

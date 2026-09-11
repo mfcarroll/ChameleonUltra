@@ -8,7 +8,10 @@ lf indala read   ->   Indala PSK1
                       Fmt 26 FC: 52 Card: 63612 Parity: 11
 ```
 
-20 of 20 consecutive reads, 0.41–0.55 s each. The demodulation is integer arithmetic on
+20 of 20 consecutive reads, 0.41–0.55 s each — **on the one tag this was developed against.**
+⛔ A second, Proxmark-verified Indala tag was completely inaudible to the Chameleon: 0/12,
+with no subcarrier present at any sample phase (C26). Until that is understood the honest
+scope of this work is "reads the bench tag". The demodulation is integer arithmetic on
 the nRF52840 — no float, no FFT, 8 KB of buffer.
 
 With no tag on the antenna it reports `LF tag not found` 20 times in 20, taking the full
