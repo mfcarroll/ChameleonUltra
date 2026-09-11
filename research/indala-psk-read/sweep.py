@@ -25,6 +25,10 @@ SETTLE = 400
 # substring of "PSK1-CF4", so the naive order labels everything 62500 Hz.
 BY_CONFIG = [('PSK1-CF8', 15625.0), ('PSK1-CF4', 31250.0), ('PSK1', 62500.0)]
 BY_NAME = {'psk_rf8': 15625.0, 'psk_rf4': 31250.0, 'psk_rf2': 62500.0}
+# Measured by phasesweep.py: optimising the SAADC sample phase moves fc/2 by this much.
+# Quoted here so the verdict can separate the part firmware can reach from the part it
+# cannot, rather than implying the whole excess is fixable.
+PHASE_DB = 7.5
 LABEL = {15625.0: 'RF/8', 31250.0: 'RF/4', 62500.0: 'RF/2'}
 
 
@@ -183,8 +187,6 @@ def main(paths):
     print("\n band = PSK modulation skirt, median of N deglitched captures.")
     print(" spread = max/min across repeats; anything far above 1 means the screen")
     print(" did not fully clean those captures and the median is doing real work.")
-    print("\n band = PSK modulation skirt (primary). bin = exact subcarrier: BPSK suppresses")
-    print(" its own carrier there, and at fc/2 the bin is at Nyquist and reads 0-2x the truth.")
 
     for d in (cham, pm3):
         for hz in list(d):
@@ -243,9 +245,10 @@ def main(paths):
         if ex4 is not None:
             print(f"   RF/4 already shows {abs(ex4):.1f} dB at 4 samples/cycle, so it is a genuine")
             print("   front-end rolloff and not a sampling artefact.")
-        print(f"\n   ⚠ But weigh it against the 8-bit truncation below: >>5 discards ~30 dB of")
-        print(f"      dynamic range, which is MORE than this {abs(ex2):.1f} dB. Resolution is the")
-        print("      larger handicap, and unlike the front end it is a firmware fix.")
+        # phasesweep.py measured how much of this the sample phase can buy back.
+        print(f"\n   Of that {abs(ex2):.1f} dB, the sample phase is worth ~{PHASE_DB:.1f} dB")
+        print(f"   (phasesweep.py, R^2=0.90 one-cycle fit), leaving ~{abs(ex2) - PHASE_DB:.0f} dB")
+        print("   that firmware cannot reach. That residue is the front end.")
     if bits == 8:
         print("\n ⚠ These are 8-BIT numbers. `lf sniff` right-shifts the 14-bit conversion by")
         print("   5 (lf_reader_generic.c:59); decoder.feed() does not. Re-measure with")

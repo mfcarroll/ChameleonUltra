@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — where the fc/2 subcarrier goes
+## Indala on Chameleon Ultra — ~27 dB of analog loss, not a firmware gap
 
 **Measured on device 2026-09-10/11.** Chameleon Ultra v3, firmware `v2.2 (v2.2.0-32-gccf6075)`,
 chip id `a461ebf3b85fb19c`. Reference reads on a Proxmark3 Iceman.
@@ -7,32 +7,42 @@ Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:1
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
 
-### 0. ⭐⭐⭐ RESULT: the sampler is real but MINOR — 7.5 dB of a ~44 dB loss
+### 0. ⭐⭐⭐ RESULT: ~27 dB of analog loss that firmware cannot reach
 
-The phase sweep ran (`phasesweep.py --step 4 --repeats 5`, paired against an empty field,
-5 deglitched captures per point). It **partly confirms and largely refutes** the sampling
-hypothesis, and the numbers are now repeatable.
+Measured at 14 bits, **5 repeats per point, each deglitched, medians reported**
+(`campaign_20260910_205456`, `--reads "sniff16 x5" --pm3-signal 0`), against the Proxmark
+on identical stimulus. Normalised to each instrument's own RF/8, which divides out the
+tag's own rolloff:
+
+| PSKCF | subcarrier | smp/cyc | Proxmark | Chameleon | **excess loss** | spread |
+|---|---|---|---|---|---|---|
+| RF/4 | 31250 Hz | 4.0 | −4.3 dB | −8.4 dB | **−4.1 dB** | 1.02x |
+| RF/2 | 62500 Hz | **2.0** | −9.3 dB | −43.8 dB | **−34.5 dB** | 1.28x |
+
+⭐ Repeat spreads of 1.02x / 1.02x / 1.28x — after eight weeks of chasing artefacts, these
+are the first numbers in this note that are simply **stable**.
+
+**Splitting the 34.5 dB at fc/2:**
 
 | | |
 |---|---|
-| one-cycle sinusoid fit to (tag − empty) | **R² = 0.897**, peak at 66° |
-| fit offset / amplitude | 7.14 / 4.79 → **modulated, never nulled** |
-| tag sideband across phase | 8.40 → 19.96 (**2.38x**) |
-| empty sideband across phase | 6.54 → 10.18 (1.56x — flat, so not a gain artefact) |
-| **worth moving the phase** | **7.5 dB** |
-| fc/2 at best phase vs RF/4 | **−36.9 dB still unexplained** |
+| sample phase (`phasesweep.py`, R²=0.90 one-cycle fit) | **~7.5 dB** — firmware can reach this |
+| residue | **~27 dB** — firmware cannot |
 
-⇒ **Sample phase genuinely modulates fc/2 recovery** — a clean one-cycle sinusoid, fitted
-against the tag's own contribution so a gain change affecting both passes cannot masquerade
-as signal. That part of §1 was right.
+⇒ **The analog front end is the blocker, and it is not close.** The Chameleon already loses
+4.1 dB at 31 kHz, where sampling is safe at 4 samples/cycle, so the rolloff is genuine and
+starts well below fc/2 — about 30 dB per octave across that span. Optimising the sample
+phase is worth a real 7.5 dB and no more.
 
-⛔ **But it never nulls, and it is a minor term.** The amplitude (4.79) is smaller than the
-offset (7.14), so the subcarrier is always partly recovered whatever the phase. Optimising
-the phase buys **7.5 dB**; fc/2 at its best phase is still **36.9 dB** below RF/4, which has
-no Nyquist degeneracy at all. An unlucky fixed phase is therefore **not** the explanation.
+⇒ **Reading Indala on an unmodified Chameleon Ultra is not viable.** At the best phase the
+fc/2 sideband reaches ~20 against an empty-field floor of ~7 — roughly 3x, where a
+demodulator wants an order of magnitude. The missing ~27 dB is in the receive chain ahead
+of the ADC, so no sample-rate, sample-phase or comparator change recovers it.
 
-⚠ **The RF/4 reference is a single capture** and single captures from this device are not
-trustworthy (§0c). That comparison needs re-running with repeats before the 36.9 dB is firm.
+⚠ **One cheap confirmation is still outstanding.** Sampling at 200–250 kHz removes the
+Nyquist degeneracy entirely rather than merely moving it. If fc/2 is *still* ~27 dB down
+there, the analog attribution is proved rather than inferred. That is the one experiment
+left worth running.
 
 ### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
