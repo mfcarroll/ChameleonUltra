@@ -110,8 +110,23 @@ cannot tell a burst from a tag.
 The V1.0 schematic brings `LF_OA_OUT` out to test point **TP7**. That node is the last point in
 the analog chain before the MCU, and it is what *both* firmware read paths see.
 
-**Probe TP7, ground to any GND test point, Indala tag on the LF antenna, device in reader mode**
-(`lf sniff --timeout 10000` gives a 10s window with the field up). Look for a 62.5kHz component.
+**Probe TP7, ground to any GND test point, device in reader mode.** If TP7 is hard to locate on
+the board, `IC1B` pin 7 (GS358B-FR output) is the same net.
+
+⚠ **Use `./fieldhold.sh 60`, not `lf sniff`.** `lf sniff` drops the field after ~32ms once its
+4000-sample buffer fills. `fieldhold.sh` loops a read that is *expected to fail*, and a failing
+read holds the field for the full `g_timeout_readem_ms` = 500ms (`lf_reader_main.c:25`) — measured
+~77% duty cycle, which is a comfortable scope target.
+
+⭐ **Run the HID Prox control BEFORE the Indala tag.** Its fc/8 at 15.6kHz must show up strongly.
+If it does not, the probe is on the wrong net and a null result on Indala would mean nothing.
+
+Settings: **AC coupling** (the net sits on `LF_VBIAS`), 10µs/div to resolve the 16µs subcarrier
+period, 200mV/div to start. Use **FFT** if the scope has it — a peak at 62.5kHz is the whole
+question. Also sweep out to 50µs/div for the 256µs bit period and 2ms/div for the 16.4ms frame.
+
+⚠ `LF_OA_OUT` is downstream of the VD1 peak detector, so it carries the **envelope**. Seeing
+125kHz dominate there would mean the detector is not behaving as this note assumes.
 
 | result at TP7 | meaning | next step |
 |---|---|---|
