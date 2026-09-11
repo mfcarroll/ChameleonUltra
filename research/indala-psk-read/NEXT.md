@@ -65,8 +65,8 @@ the floor the whole time. **A failed read is not evidence of absence** — brack
 | | why it should be re-opened |
 |---|---|
 | **`LF_RSSI` / AIN0** (C08, C09) | closed as "carries no fc/2, flat to 0.5 dB". Measured with the tag on the back. The whole comparison was between two nodes seeing 1/20 of the available signal, and the conclusion killed an entire line of investigation |
-| **Stacking** (C29, C30, C34) | worth 1.5–2.1x on the back. On the front, single captures already decode 71% of the time, so it may be solving a problem that no longer exists — and at phase 64 it demonstrably revives a *wrong* answer |
-| **Frame lock** (C11, C12, C13) | already in doubt (C31, C35) — the correlation that supports them reads 0.92–0.95 on the EMPTY field. Re-derive or retract |
+| ~~**Stacking**~~ ✅ | **Resolved, C58.** Nothing on the front (68.75% at every depth); reinforces the straddle in the dead band; still worth 32%->72% on the back. Keep it, but it is insurance for the wrong placement, not a feature of the right one |
+| ~~**Frame lock**~~ ✅ | **Resolved, C59.** The conclusion stands, the evidence does not: the empty field correlates as well as the tag, but rolled-stack decoding collapses 67%->0%, which proves alignment operationally (M25) |
 | **SAADC gain** (C10) | "the floor is analog-referred" may well survive, but it was measured against a signal 26 dB below what the device actually delivers |
 
 ## 2b. ✅ Phase rotation re-derived — and the union was a trap
@@ -104,7 +104,7 @@ offset moves (9 -> 10), which is C51's timing showing it depends on the reader t
 caveat §4 was written with still stands: same batch, same revision, so this is unit-to-unit
 tolerance and not design generality. A pass was always going to be weak evidence.
 
-## 3b. ⭐⭐⭐ FIX THE HID PROX READER — and there is a one-line candidate to test first
+## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
 
 Not this project's decoder, but it is the comparison instrument for everything here and it
 has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
@@ -112,6 +112,19 @@ has cost two measurements already (L51's uninterpretable run, and C44's near-mis
 **What is established:** three tags with byte-identical memory read 0/6, 3/6 and 7/9 on the
 Chameleon and 3/3 on a Proxmark (C46). The RF path is flat while reads fail (C45). So the
 decoder's tolerance is narrower than the Proxmark's, and package-level differences cross it.
+
+⚠ **`lf pac read` has the same disease**: 0/5 on one unit and 2/5 on the other while its tag
+sat at 16x the empty floor and a Proxmark read it perfectly (L66). So this is not one broken
+decoder — HID Prox and PAC both fail on tags that are loudly present, and `lf em 410x read`
+sits at 95% (76/80) rather than 100%. ⇒ Whatever is wrong may be shared across the LF reader
+family rather than specific to FSK. Fix HID first because it fails hardest (0/6, one tag
+never reading at all), but measure PAC in the same session — a fix that moves both is a very
+different fix from one that moves only HID.
+
+⚠ The Indala reader is the only LF reader in this tree with its own capture path
+(`raw_read_samples`, which suspends BLE and hands the decoder a whole buffer). It is also the
+only one at 100% — 40/40 today across two units. That may be the cleanest clue available, or
+it may be that Indala is simply the only one anybody has tuned. Do not assume which.
 
 **⭐ Test this first — it is one line and it explains an old observation.**
 `advertising_stop()` appears in **1 of 15** LF reader files. Only `lf_reader_generic.c`

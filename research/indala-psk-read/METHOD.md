@@ -175,3 +175,13 @@ cannot know it, it must REFUSE TO DEFAULT rather than supply a plausible number:
 ratio is obviously missing, a wrong one is not. And the fix is cheap — the floor for a band
 is one measurement with the antenna clear, which the same tool can take.
 
+**M25. ⭐ WHEN A DIRECT MEASUREMENT IS CONFOUNDED, TEST THE THING THAT DEPENDS ON IT.** Frame
+lock was asserted from a lag-0 baseband correlation, then doubted when the EMPTY field scored
+higher than the tag. Both readings were right and neither settled anything, because that
+correlation is dominated by a background common to every capture — it can neither prove nor
+disprove alignment. What settled it took one line: stacking only works if captures are
+aligned, so stack them rolled by a random offset and compare. Aligned 67%, rolled 0%.
+⇒ A property that cannot be measured cleanly can often be measured through its consequences,
+and the consequence test is usually both cheaper and harder to fool. Ask "what would stop
+working if this were false?" before building a better instrument for the thing itself.
+
