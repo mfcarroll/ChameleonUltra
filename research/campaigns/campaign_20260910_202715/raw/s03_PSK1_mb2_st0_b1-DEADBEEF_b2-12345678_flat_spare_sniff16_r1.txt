@@ -1,0 +1,10 @@
+# silicon=spare config=PSK1 block0=00081040 cmd=lf sniff --timeout 2000 --bits 16 reposition=1/1 ts=2026-09-10T20:29:28 repo=c9c849cec devfw=? settle=?ms
+ { Chameleon Ultra connected: v2.2 }
+Switch to {  Tag Reader  } mode successfully.
+ Capturing LF field for 2000ms at 125kHz (8µs/sample), 16-bit samples...
+ Captured : 2000 samples / 4000 bytes (16.0ms)
+ Range    : 0x00 – 0xff  mean: 0xa7
+ 14-bit   : 8 – 16380  mean: 5484   (peak-to-peak 16372 counts of 16383)
+ Gaps     : none detected — flat carrier (no gap commands sent)
+ Saved    : /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/raw/s03_PSK1_mb2_st0_b1-DEADBEEF_b2-12345678_flat_spare_sniff16_r1.bin (4000 bytes, 16-bit)
+

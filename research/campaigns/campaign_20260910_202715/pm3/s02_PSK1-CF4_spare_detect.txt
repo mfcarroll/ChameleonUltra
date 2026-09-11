@@ -1,0 +1,57 @@
+[=] Session log ~/.proxmark3/logs/log_20260911032834.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+
+---- after ----
+[=] Session log ~/.proxmark3/logs/log_20260911032835.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx write -b 1 -d DEADBEEF ; lf t55xx write -b 2 -d 12345678 ; lf t55xx write -b 0 -d 00081440 ; lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx write -b 1 -d DEADBEEF
+[=] Writing page 0  block: 01  data: 0xDEADBEEF 
+[usb|script] pm3 --> lf t55xx write -b 2 -d 12345678
+[=] Writing page 0  block: 02  data: 0x12345678 
+[usb|script] pm3 --> lf t55xx write -b 0 -d 00081440
+[=] Writing page 0  block: 00  data: 0x00081440 
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081440 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------

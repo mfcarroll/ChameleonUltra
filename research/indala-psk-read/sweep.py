@@ -39,6 +39,9 @@ def classify(path):
     return None
 
 
+WIDTH = {}          # path -> 8 or 16, for the mixing guard
+
+
 def load(path):
     """Proxmark .pm3 = one signed integer per line. Chameleon .bin = either the 8-bit
     format or, from `lf sniff --bits 16`, two bytes per sample big-endian.
@@ -50,8 +53,10 @@ def load(path):
         return np.array([float(l) for l in open(path) if l.strip()])
     raw = np.frombuffer(open(path, 'rb').read(), dtype=np.uint8)
     if len(raw) % 2 == 0 and len(raw) > 1 and raw[0::2].max() <= 0x3F:
+        WIDTH[path] = 16
         x = (raw[0::2].astype(np.uint16) << 8 | raw[1::2]).astype(float)
         return x[SETTLE:]                       # SETTLE is in SAMPLES, not bytes
+    WIDTH[path] = 8
     return raw.astype(float)[SETTLE:]
 
 
@@ -93,6 +98,7 @@ def amplitude_at(x, f):
 def main(paths):
     base = None
     cham, pm3 = {}, {}
+    seen = {}                       # (instrument, subcarrier) -> path, for the duplicate guard
     for p in paths:
         if 'baseline' in p.split('/')[-1].lower():
             base = load(p)
@@ -101,7 +107,29 @@ def main(paths):
         if hz is None:
             print(" ⚠ ignored (no PSKCF config in the name): %s" % p.split('/')[-1])
             continue
-        (pm3 if p.endswith('.pm3') else cham)[hz] = load(p)
+        inst = 'pm3' if p.endswith('.pm3') else 'cham'
+        target = pm3 if inst == 'pm3' else cham
+        # ⛔ A GLOB OVER campaigns/*/raw/*.bin MATCHES EVERY CAMPAIGN. Two runs of the
+        # same sweep then collide on the same subcarrier key and the later silently
+        # wins -- which happened, mixing an 8-bit run with a 14-bit one and producing
+        # a plausible-looking table from two different instruments-worth of data.
+        if (inst, hz) in seen:
+            sys.exit("⛔ two %s captures both claim %s:\n  %s\n  %s\n"
+                     "Point at ONE campaign, not a glob across all of them."
+                     % (inst, LABEL[hz], seen[(inst, hz)], p))
+        seen[(inst, hz)] = p
+        target[hz] = load(p)
+
+    widths = {WIDTH[p] for p in WIDTH if not p.endswith('.pm3')}
+    if len(widths) > 1:
+        sys.exit("⛔ mixed 8-bit and 16-bit Chameleon captures in one run. They are not\n"
+                 "   comparable: the 8-bit path discards 5 bits. Use one campaign's\n"
+                 "   captures and a baseline of the SAME width.")
+    bits = widths.pop() if widths else 8
+    if base is not None and WIDTH.get([p for p in WIDTH if 'baseline' in p][0]) != bits:
+        sys.exit("⛔ baseline is %d-bit but the captures are %d-bit. Take a matching one."
+                 % (WIDTH[[p for p in WIDTH if 'baseline' in p][0]], bits))
+    print("\n Sample width: %d-bit" % bits)
 
     order = [15625.0, 31250.0, 62500.0]
 
@@ -150,7 +178,24 @@ def main(paths):
     ex2, ex4 = excess.get(62500.0), excess.get(31250.0)
     if ex2 is None:
         return
-    if ex2 > -10:
+    # ⭐ THE SHAPE IS THE EVIDENCE, NOT THE DEPTH. RF/4 sits at 4 samples/cycle where
+    # sampling is safe, RF/2 at exactly 2 where a fixed-phase sampler can null a tone
+    # completely. So a chain that tracks the reference at RF/4 and then collapses at
+    # RF/2 is pointing at the SAMPLER; one that degrades progressively across both is
+    # pointing at the analog front end. Earlier versions of this script asserted the
+    # latter unconditionally, which inverted the reading once the 14-bit data arrived.
+    if ex4 is not None and ex4 > -3 and ex2 < -20:
+        print(f" ⇒ The chain TRACKS the Proxmark at RF/4 ({ex4:+.1f} dB) and then collapses")
+        print(f"   at fc/2 ({ex2:+.1f} dB). That shape indicts the SAMPLER, not the front end.")
+        print("   A filter flat at 31 kHz cannot lose 34 dB by 62.5 kHz — that is >6 poles,")
+        print("   and this chain has a diode detector and two RC stages. Sampling at exactly")
+        print("   2 samples/cycle at a FIXED phase can null a tone to any depth: the")
+        print("   recovered amplitude is proportional to cos(phi), and phi is constant")
+        print("   because the SAADC is PPI-triggered from the same PWM that makes the field.")
+        print("\n   ⇒ TESTABLE, AND IN FIRMWARE: sweep the sample phase, or sample at")
+        print("     200-250 kHz so fc/2 is no longer at Nyquist. If fc/2 reappears, this")
+        print("     is settled and the decoder port is worth doing.")
+    elif ex2 > -10:
         print(" ⇒ The Chameleon tracks the Proxmark at fc/2. The receive chain is NOT the")
         print("   blocker; the gap is the missing PSK demodulator, and a firmware route works.")
     else:
@@ -162,9 +207,10 @@ def main(paths):
         print(f"\n   ⚠ But weigh it against the 8-bit truncation below: >>5 discards ~30 dB of")
         print(f"      dynamic range, which is MORE than this {abs(ex2):.1f} dB. Resolution is the")
         print("      larger handicap, and unlike the front end it is a firmware fix.")
-    print("\n ⚠ These are 8-BIT numbers. `lf sniff` right-shifts the 14-bit conversion by 5")
-    print("   (lf_reader_generic.c:59); decoder.feed() does not. Before concluding the signal")
-    print("   is too small to demodulate, re-measure through a full-resolution path.")
+    if bits == 8:
+        print("\n ⚠ These are 8-BIT numbers. `lf sniff` right-shifts the 14-bit conversion by")
+        print("   5 (lf_reader_generic.c:59); decoder.feed() does not. Re-measure with")
+        print("   --bits 16 before concluding anything about demodulability.")
 
 
 if __name__ == '__main__':

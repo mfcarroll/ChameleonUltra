@@ -1,0 +1,261 @@
+{
+  "campaign": "20260910_202715",
+  "note": "PSKCF sweep at 14-bit",
+  "fw_commit": "c9c849cec",
+  "device_fw": "?",
+  "settle_ms": "?",
+  "flipper_port": null,
+  "serial_backend": "chameleon-cli",
+  "pm3": "../proxmark3/client/proxmark3 /dev/tty.usbmodemiceman1",
+  "program_mode": "auto",
+  "reads": [
+    "sniff16"
+  ],
+  "repos": 1,
+  "gap": "flat",
+  "gaps": [
+    "flat"
+  ],
+  "positions": [],
+  "steps": [
+    {
+      "step": 1,
+      "silicon": "spare",
+      "config": "PSK1-CF8",
+      "knobs": [],
+      "expect_block0": "00081840",
+      "data_override": null,
+      "program": {
+        "attempted": true,
+        "method": "write-blocks",
+        "block0_before": "00081040",
+        "block0_after": "00081840",
+        "chip": "T55x7",
+        "ok": true,
+        "skipped_reason": null,
+        "verify_skipped": null,
+        "detect_file": "pm3/s01_PSK1-CF8_spare_detect.txt"
+      },
+      "captures": [
+        {
+          "command": "lf sniff --timeout 2000 --bits 16",
+          "reposition": 1,
+          "timestamp": "2026-09-10T20:28:16",
+          "gap": "flat",
+          "position": null,
+          "raw_file": "raw/s01_PSK1-CF8_mb2_st0_b1-DEADBEEF_b2-12345678_flat_spare_sniff16_r1.txt",
+          "summary": [],
+          "flip_block0": null
+        }
+      ],
+      "pm3_signal": [
+        {
+          "block": 0,
+          "page": 0,
+          "cmds": [
+            "lf config",
+            "lf t55xx read -b 0",
+            "data save -f /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s01_PSK1-CF8_spare_p0_blk0"
+          ],
+          "ok": true,
+          "stdout_file": "/Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s01_PSK1-CF8_spare_p0_blk0_client.txt",
+          "saved": [
+            "s01_PSK1-CF8_spare_p0_blk0.pm3"
+          ],
+          "saved_bytes": 49747
+        }
+      ],
+      "reverify": {
+        "block0_after": "00081840",
+        "blocks_after": {
+          "0": "C0407D96",
+          "1": "1B5248CC",
+          "2": "849653C9",
+          "3": "95A95969",
+          "4": "55555569",
+          "5": "AAA95555",
+          "6": "AAAA9555",
+          "7": "B2AAA556"
+        },
+        "changes": [],
+        "block0_changed": false,
+        "blocks_expected": [
+          1,
+          2
+        ],
+        "blocks_missing": [],
+        "verdict": "non-destructive-rotfix",
+        "dump_retries": 2,
+        "rotfix": {
+          "manchester_block0": "00088840",
+          "blocks_after": {
+            "0": "00088840",
+            "1": "DEADBEEF",
+            "2": "12345678",
+            "3": "95A95969",
+            "4": "00000000",
+            "5": "00000000",
+            "6": "00000000",
+            "7": "00000000"
+          },
+          "changes": [],
+          "blocks_missing": [],
+          "block0_restored": "00081840",
+          "restore_ok": true
+        },
+        "detect_file": "pm3/s01_PSK1-CF8_spare_reverify.txt"
+      }
+    },
+    {
+      "step": 2,
+      "silicon": "spare",
+      "config": "PSK1-CF4",
+      "knobs": [],
+      "expect_block0": "00081440",
+      "data_override": null,
+      "program": {
+        "attempted": true,
+        "method": "write-blocks",
+        "block0_before": "00081840",
+        "block0_after": "00081440",
+        "chip": "T55x7",
+        "ok": false,
+        "skipped_reason": null,
+        "verify_skipped": null,
+        "detect_file": "pm3/s02_PSK1-CF4_spare_detect.txt"
+      },
+      "captures": [
+        {
+          "command": "lf sniff --timeout 2000 --bits 16",
+          "reposition": 1,
+          "timestamp": "2026-09-10T20:28:52",
+          "gap": "flat",
+          "position": null,
+          "raw_file": "raw/s02_PSK1-CF4_mb2_st0_b1-DEADBEEF_b2-12345678_flat_spare_sniff16_r1.txt",
+          "summary": [],
+          "flip_block0": null
+        }
+      ],
+      "pm3_signal": [
+        {
+          "block": 0,
+          "page": 0,
+          "cmds": [
+            "lf config",
+            "lf t55xx read -b 0",
+            "data save -f /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s02_PSK1-CF4_spare_p0_blk0"
+          ],
+          "ok": true,
+          "stdout_file": "/Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s02_PSK1-CF4_spare_p0_blk0_client.txt",
+          "saved": [
+            "s02_PSK1-CF4_spare_p0_blk0.pm3"
+          ],
+          "saved_bytes": 45513
+        }
+      ],
+      "reverify": {
+        "block0_after": "00081440",
+        "blocks_after": {},
+        "changes": [],
+        "block0_changed": false,
+        "blocks_expected": [
+          1,
+          2
+        ],
+        "blocks_missing": [],
+        "verdict": "non-destructive-rotfix",
+        "dump_retries": 2,
+        "rotfix": {
+          "manchester_block0": "00088440",
+          "blocks_after": {
+            "0": "00088440",
+            "1": "DEADBEEF",
+            "2": "12345678",
+            "3": "95A95969",
+            "4": "00000000",
+            "5": "00000000",
+            "6": "00000000",
+            "7": "00000000"
+          },
+          "changes": [],
+          "blocks_missing": [],
+          "block0_restored": "00081440",
+          "restore_ok": true
+        },
+        "detect_file": "pm3/s02_PSK1-CF4_spare_reverify.txt"
+      }
+    },
+    {
+      "step": 3,
+      "silicon": "spare",
+      "config": "PSK1",
+      "knobs": [],
+      "expect_block0": "00081040",
+      "data_override": null,
+      "program": {
+        "attempted": true,
+        "method": "write-blocks",
+        "block0_before": "00081440",
+        "block0_after": "00081040",
+        "chip": "T55x7",
+        "ok": true,
+        "skipped_reason": null,
+        "verify_skipped": null,
+        "detect_file": "pm3/s03_PSK1_spare_detect.txt"
+      },
+      "captures": [
+        {
+          "command": "lf sniff --timeout 2000 --bits 16",
+          "reposition": 1,
+          "timestamp": "2026-09-10T20:29:28",
+          "gap": "flat",
+          "position": null,
+          "raw_file": "raw/s03_PSK1_mb2_st0_b1-DEADBEEF_b2-12345678_flat_spare_sniff16_r1.txt",
+          "summary": [],
+          "flip_block0": null
+        }
+      ],
+      "pm3_signal": [
+        {
+          "block": 0,
+          "page": 0,
+          "cmds": [
+            "lf config",
+            "lf t55xx read -b 0",
+            "data save -f /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s03_PSK1_spare_p0_blk0"
+          ],
+          "ok": true,
+          "stdout_file": "/Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_202715/pm3_signal/s03_PSK1_spare_p0_blk0_client.txt",
+          "saved": [
+            "s03_PSK1_spare_p0_blk0.pm3"
+          ],
+          "saved_bytes": 41859
+        }
+      ],
+      "reverify": {
+        "block0_after": "00081040",
+        "blocks_after": {
+          "0": "00081040",
+          "1": "DEADBEEF",
+          "2": "12345678",
+          "3": "95A95969",
+          "4": "F0000000",
+          "5": "F0000000",
+          "6": "F0000000",
+          "7": "F0000000"
+        },
+        "changes": [],
+        "block0_changed": false,
+        "blocks_expected": [
+          1,
+          2
+        ],
+        "blocks_missing": [],
+        "verdict": "non-destructive",
+        "dump_retries": 0,
+        "rotfix": null,
+        "detect_file": "pm3/s03_PSK1_spare_reverify.txt"
+      }
+    }
+  ]
+}

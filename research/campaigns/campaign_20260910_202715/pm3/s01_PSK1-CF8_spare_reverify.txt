@@ -1,0 +1,202 @@
+[=] Session log ~/.proxmark3/logs/log_20260911032821.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 700BF27D | 01110000000010111111001001101.01 | p.�}
+[+]  01 | E4AA4B31 | 11100100101010100100101100110001 | �K1
+[+]  03 | 95A95BB4 | 100101011010100101011001.0110100 | .�[�
+[+]  04 | 6D4AAA95 | 01101101010010101010101010010101 | mJ�.
+[+]  05 | 55555555 | 01010101010101010101010101010101 | UUUU
+[+]  06 | 55555155 | 01010101010101010101000101010101 | UUQU
+[+]  07 | 2A955555 | 00101010100101010101010101010101 | *.UU
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | C07F0395 | 11000000011111110000001110010101 | �...
+[+]  01 | 723D6D26 | 01110010001111010110110100100110 | r=m&
+[+]  02 | B5A346CD | 10110101101000110100011011001101 | ��F�
+[+]  03 | A52AA555 | 10100101001010101010010101010101 | �*�U
+
+---- re-dump 1 ----
+[=] Session log ~/.proxmark3/logs/log_20260911032824.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | C0407D96 | 11000000010000000111110110010110 | �@}.
+[+]  01 | 1B5248CC | 00011011010100100100100011001100 | .RH�
+[+]  02 | 849653C9 | 1000010010010110010100110.001001 | ..S�
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | 55555569 | 01010101010101010101010101101001 | UUUi
+[+]  05 | AAA95555 | 10101010101010010101010101010101 | ��UU
+[+]  06 | AAAA9555 | 10101010101010101001010101010101 | ��.U
+[+]  07 | B2AAA556 | 10110010101010101010010101010110 | ���V
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 57020D95 | 01010111000000100000110110010101 | W...
+[+]  01 | 623D6D26 | 01100010001111010110110100100110 | b=m&
+[+]  02 | B670F132 | 10110110011100001111000100110010 | �p�2
+[+]  03 | A9554A92 | 10101001010101010100101010010010 | �UJ.
+[+] Saved 48 bytes to binary file `~/lf-t55xx-1B5248CC-849653C9-95A95969-55555569-AAA95555-AAAA9555-B2AAA556-dump.bin`
+[+] Saved to json file ~/lf-t55xx-1B5248CC-849653C9-95A95969-55555569-AAA95555-AAAA9555-B2AAA556-dump.json
+
+---- re-dump 2 ----
+[=] Session log ~/.proxmark3/logs/log_20260911032827.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 80BF026A | 10000000101111110000001001101010 | .�.j
+[+]  01 | 5256DA66 | 01010010010101101101101001100110 | RV�f
+[+]  02 | 572594C8 | 0101001.001001011001010011001000 | W%.�
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | 55556AAA | 01010101010101010110101010101010 | UUj�
+[+]  05 | 95554AAA | 10010101010101010100101010101010 | .UJ�
+[+]  06 | 5AB55555 | 01011010101101010101010101010101 | Z�UU
+[+]  07 | A55AAAAA | 10100101010110101010101010101010 | �Z��
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 0503F8EA | 00000101000000111111100011101010 | ..��
+[+]  03 | D5554AA5 | 11010101010101010100101010100101 | �UJ�
+[+] Saved 48 bytes to binary file `~/lf-t55xx-5256DA66-572594C8-95A95969-55556AAA-95554AAA-5AB55555-A55AAAAA-dump.bin`
+[+] Saved to json file ~/lf-t55xx-5256DA66-572594C8-95A95969-55556AAA-95554AAA-5AB55555-A55AAAAA-dump.json
+
+---- rot-fix: block0 -> 00088840 ----
+[=] Session log ~/.proxmark3/logs/log_20260911032830.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx write -b 0 -d 00088840 ; lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx write -b 0 -d 00088840
+[=] Writing page 0  block: 00  data: 0x00088840 
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ ASK
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... Yes
+[=]  Block0............ 00088840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 00088840 | 00000000000010001000100001000000 | ...@
+[+]  01 | DEADBEEF | 11011110101011011011111011101111 | �.��
+[+]  02 | 12345678 | 00010010001101000101011001111000 | .4Vx
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  05 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  06 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  07 | 00000000 | 00000000000000000000000000000000 | ....
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 00088840 | 00000000000010001000100001000000 | ...@
+[+]  01 | E0150A4C | 11100000000101010000101001001100 | �..L
+[+]  02 | 5B020499 | 01011011000000100000010010011001 | [...
+[+]  03 | 00000000 | 00000000000000000000000000000000 | ....
+[+] Saved 48 bytes to binary file `~/lf-t55xx-DEADBEEF-12345678-95A95969-dump-020.bin`
+[+] Saved to json file ~/lf-t55xx-DEADBEEF-12345678-95A95969-dump-020.json
+
+---- rot-fix: restore block0 -> 00081840 ----
+[=] Session log ~/.proxmark3/logs/log_20260911032834.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx write -b 0 -d 00081840 ; lf t55xx detect
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx write -b 0 -d 00081840
+[=] Writing page 0  block: 00  data: 0x00081840 
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
