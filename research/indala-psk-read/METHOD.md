@@ -85,6 +85,12 @@ They were wrong answers, not failures: 24 wrong frames in 200 captures, one in f
 reader built on the decode rate alone would hand back a wrong credential 20% of the time.
 ⇒ Always report recovered / correct / wrong as three numbers, never two.
 
+**M19. ⭐ Measure the SIGNAL, not whether it decoded.** A read is binary and conflates "the
+tag was not heard" with "the tag was heard and the decoder did not lock" — and a binary
+metric noisy enough to swing 6-11 out of 15 will manufacture a convincing before/after. The
+subcarrier amplitude is continuous, one number per capture, and it separated those two in
+thirty seconds after an hour of binary reads had separated nothing. `lfprobe.py`.
+
 **M17. ⛔ Run the no-stressor control BEFORE claiming a regression, not after.** "5/5 before,
 1/5 after" was reported as a reproduced bug. The control — same measurement, no stressor —
 swung 8/15, 11/15, 6/15, and the metric then decayed to 0/15 through the control arm. The

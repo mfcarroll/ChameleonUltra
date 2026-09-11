@@ -56,6 +56,7 @@ Expect `a0000000e6bd0e92`, `Fmt 26 FC: 52 Card: 63612`.
 | `mfdemod.py` | ⭐ The working decoder. `--selftest`, or pass capture files. |
 | `phasebits.py` | Sweep sample phase, count decodes. `--analyse-only` re-runs on existing captures. |
 | `generality.py` | ⭐ Does the decoder work on words other than the bench tag's? Synthetic, no hardware. |
+| `lfprobe.py` | ⭐ Is an LF problem RF or firmware? Measures the tag's signal continuously instead of whether it decoded. |
 | `stack.py` | Zero-offset capture stacking and the polarity diagnostics. |
 | `inputtest.py` | AIN5 vs AIN0 paired comparison. |
 | `sweep.py` `phasesweep.py` `gaintest.py` `gapsweep.py` `oversample_test.py` | Per-lever sweeps. ⚠ these score the fc/2 *skirt*, which is polarity-blind — see `METHOD.md` M8. |
