@@ -163,3 +163,15 @@ point, not just the worst one — and prefer a rule that rejects on a *mechanism
 alignment half a bit period off, at half the amplitude) over one that relies on errors
 being obliging enough to disagree with each other.
 
+**M24. ⛔ A REFERENCE LEVEL IS A PROPERTY OF THE MEASUREMENT, NOT A CONSTANT — AND A DEFAULT
+THAT CROSSES CONFIGURATIONS MANUFACTURES A RATIO.** `lfprobe.py` defaulted `--band` to HID
+Prox (10-18kHz) and `--floor` to 6900, the empty level for fc/2 (62.5kHz). Running it with
+both defaults divided one band's energy by another band's floor and printed "896.67x" with a
+full-width bar. It was reported to the user as an overwhelming signal before anyone checked
+that the two numbers described the same measurement. The true ratio, once the floor was
+measured in the right band, was ~90x — still the right conclusion, reached by luck.
+⇒ A normalisation constant must be measured in the configuration it normalises. Where a tool
+cannot know it, it must REFUSE TO DEFAULT rather than supply a plausible number: a missing
+ratio is obviously missing, a wrong one is not. And the fix is cheap — the floor for a band
+is one measurement with the antenna clear, which the same tool can take.
+

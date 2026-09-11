@@ -77,10 +77,14 @@ def monitor(lo, hi, floor, n):
     0.99x the empty-field floor across twelve sample phases on the Chameleon — no signal at
     all — where the bench tag sits at 1.25-1.73x. And 1.25-1.73x IS the working range, so
     there is almost no margin to give away to position."""
-    print(f"  empty-field floor {floor:.0f}. Slide the tag; 1.3x or better is a read.\n")
+    if floor:
+        print(f"  empty-field floor {floor:.0f}. Slide the tag; 1.3x or better is a read.\n")
     best = 0.0
     for _ in range(n):
         amp, dc = probe(lo, hi)
+        if not floor:
+            print(f"  {amp:11.0f}  (no floor for this band)  DC {dc:6.0f}", flush=True)
+            continue
         r = amp / floor
         best = max(best, r)
         bar = "#" * min(60, int((r - 0.8) * 80)) if r > 0.8 else ""
@@ -101,13 +105,25 @@ def main():
     ap.add_argument("--recover", type=int, default=10)
     ap.add_argument("--monitor", type=int, metavar="N",
                     help="live positioning: print the subcarrier N times, once a second")
-    ap.add_argument("--floor", type=float, default=6900.0,
-                    help="empty-field level for the band (default: the committed fc/2 "
-                         "empty captures, 6350-7900 across phases)")
+    # ⛔ THE FLOOR IS PER-BAND AND THE DEFAULTS USED TO CONTRADICT EACH OTHER. --band
+    # defaults to HID Prox (10-18kHz) while --floor defaulted to 6900, which is the fc/2
+    # (62.5kHz) empty level. Dividing one by the other produced a ratio near 900x that
+    # meant nothing, and it read like an overwhelming signal. There is no single empty
+    # floor: it is a property of the band, so it must be measured in the band being used.
+    # ⇒ No default. Measure it with the antenna clear, in the same band:
+    #       ./lfprobe.py --band 10000 18000 --monitor 3 --floor 1
+    #   then pass the number it prints as --floor.
+    ap.add_argument("--floor", type=float, default=None,
+                    help="empty-field level MEASURED IN THE SAME --band. No default: the "
+                         "floor is band-specific. fc/2 (62.5kHz) is 6350-7900 across "
+                         "phases; the 10-18kHz HID band has never been measured empty")
     a = ap.parse_args()
     lo, hi = a.band
 
     if a.monitor:
+        if a.floor is None:
+            print("  ⚠ no --floor given, printing raw band energy only. A ratio needs an\n"
+                  "    empty-field level measured in this same band (see --floor).\n")
         monitor(lo, hi, a.floor, a.monitor)
         return
 

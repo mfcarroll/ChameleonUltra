@@ -63,10 +63,14 @@ in order of how much they rely on absolute level:
    reports the CORRECT facility code (52) with a wrong card number. That is the exact shape
    of a credential a reader would hand over with confidence.
 
-**1d. Re-run the loud-signal null — still open, needs the bench.** C24 (no false positive on
-HID Prox) was run with the HID tag on the back, a *quiet* wrong signal. On the front that
-interferer is ~20x louder, which is the case the null was supposed to test. ⛔ Bracket it
-with proof of coupling, per §3.
+**1d. ✅ The loud-signal null passes.** An HID Prox tag at **88–100x the empty floor in its
+own band** produced `LF tag not found` on **30 of 30** `lf indala read` attempts. C44, L59.
+That is the case C24 could not test: a loud wrong signal rather than a quiet one.
+
+⛔ It nearly went in the bin. All 6 bracketing `lf hid prox read` calls failed, which by the
+old §3 rule means "the tag was not coupled, the null is uninterpretable". The tag was at 90x
+the floor the whole time. **A failed read is not evidence of absence** — bracket with
+`lfprobe.py`, which measures presence directly (F05, and §3 below is rewritten).
 
 ## 2. ⭐⭐ Re-open what was closed on back-side data
 
@@ -91,28 +95,36 @@ imported phase 64, which returns a wrong credential 5 times out of 5. A phase th
 is cheap; a phase that lies is not. The rotation is now derived from phases that decode
 correctly on both sides AND produce no repeatable wrong frame on either.
 
-## 3. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
+## 3. ⭐ Finish the loud-signal null — HID is done on BOTH sides, the ASK tags are not
 
-C24 closed HID Prox: 10/10 `LF tag not found` with the tag on the antenna and its coupling
-confirmed by a 5/5 HID read immediately before. That matters because it is the null the
-empty field cannot provide — a decoder brute-forcing 32 offsets for a fixed pattern against
-a *loud* wrong signal is a different proposition from one straining against silence.
+C24 closed HID Prox on the back; C44 now closes it on the front against a tag measured at
+88–100x the empty floor. That is the null the empty field cannot provide: a decoder
+brute-forcing 32 offsets for a fixed pattern against a *loud* wrong signal is a different
+proposition from one straining against silence.
 
 ⚠ HID Prox is FSK. EM410x, Viking, PAC and Jablotron are ASK/OOK and modulate the envelope
 in a completely different way, which is what the fs/2 notch and the bit integrator actually
 see. None of them are tested.
 
-⛔ **Confirm the probe tag's coupling immediately before and after, in the same run.** Not
-doing this is what made L51's measurement uninterpretable: `lf hid prox read` on this bench
-is intermittent enough to sit at 0/15 for a quarter of an hour, so "the Indala read found
-nothing" means nothing on its own — it has to be bracketed by proof the tag was there.
+⛔ **BRACKET WITH `lfprobe.py`, NOT WITH A READ.** The old rule here said to confirm the
+probe tag's coupling with a read immediately before and after. That rule is wrong and it
+nearly threw away C44: six bracketing `lf hid prox read` calls failed while the tag sat at
+90x the empty floor. A read conflates "not heard" with "heard but not decoded" — which is
+the exact failure `lfprobe.py` exists to separate, and the reason the bracket was needed in
+the first place. Measure amplitude in the interferer's own band, with a floor measured in
+that same band.
 
 ```bash
-cd software/script && .venv/bin/python cu.py \
-  "lf hid prox read" "lf hid prox read" \
-  "lf indala read" "lf indala read" "lf indala read" \
-  "lf hid prox read" "lf hid prox read"
+# 1. floor for this tag's band, ANTENNA CLEAR
+cd research/indala-psk-read && ../../software/script/.venv/bin/python lfprobe.py \
+  --band 10000 18000 --monitor 5
+# 2. tag on, same band — confirm it is loud, then run the null
+../../software/script/.venv/bin/python lfprobe.py --band 10000 18000 --monitor 5 --floor <N>
+cd ../../software/script && .venv/bin/python cu.py $(printf '"lf indala read" %.0s' {1..10})
 ```
+
+⚠ EM410x/Viking/PAC/Jablotron subcarriers are NOT at 10–18kHz. Set `--band` per tag, and
+measure that band's empty floor — there is no universal floor (M24).
 
 ## 4. ⭐ A second Chameleon
 
