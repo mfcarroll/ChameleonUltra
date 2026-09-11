@@ -11,13 +11,24 @@
  * Each sample is an 8-bit value (14-bit ADC >> 5, clamped to 0xFF).
  * A steady carrier reads ~0x80-0x82; a gap reads noticeably lower.
  *
+ * ⚠ 8-BIT MODE THROWS AWAY 5 BITS OF EVERY CONVERSION. The SAADC runs at 14-bit
+ * (SAADC_CONFIG_RESOLUTION 3) and the protocol decoders receive that value intact --
+ * lf_hidprox_data.c buffers nrf_saadc_value_t and hands decoder.feed() the raw word.
+ * Only this debug path truncates, which made weak subcarriers look absent when they
+ * were merely sub-LSB: a subcarrier measured at 0.25 LSB here is ~8 counts of the
+ * real conversion. Pass raw16 to keep the full value when that distinction matters.
+ *
  * @param data        Output buffer for raw samples
- * @param maxlen      Max bytes to capture (max 4000 for USB frame limit)
+ * @param maxlen      Max BYTES to capture (max 4000 for USB frame limit). In raw16
+ *                    mode a sample costs 2 bytes, so the capture spans half as long.
  * @param timeout_ms  Stop after this many ms even if buffer not full
- * @param outlen      Actual number of bytes written
+ * @param outlen      Actual number of BYTES written
+ * @param raw16       false: one byte per sample, 14-bit >> 5, clamped to 0xFF.
+ *                    true:  two bytes per sample, big-endian, full 14-bit value.
  * @return            true on success
  */
 /** Maximum bytes a single raw capture can return (USB frame limit). */
 #define LF_SNIFF_MAX_SAMPLES  4000
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen);
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                        bool raw16);

@@ -40,7 +40,8 @@ static void uninit_saadc_hw(void) {
     lf_125khz_radio_saadc_disable();
 }
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                        bool raw16) {
     *outlen = 0;
 
     cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
@@ -52,13 +53,24 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
      * another ~800µs to reach steady state. Skip 2ms to be safe. */
     bsp_delay_ms(2);
 
+    /* raw16 costs two bytes per sample, so stop one short of the end rather than
+     * writing half a sample the host would then parse as a whole one. */
+    const size_t step = raw16 ? 2 : 1;
     autotimer *p_at = bsp_obtain_timer(0);
-    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < maxlen) {
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen + step <= maxlen) {
         uint16_t val = 0;
-        while (cb_pop_front(&cb, &val) && *outlen < maxlen) {
-            val = val >> 5;  /* 14-bit ADC → 9-bit, then >>5 gives 8-bit */
-            data[*outlen] = val > 0xff ? 0xff : (uint8_t)val;
-            ++(*outlen);
+        while (cb_pop_front(&cb, &val) && *outlen + step <= maxlen) {
+            if (raw16) {
+                /* Full 14-bit conversion, big-endian. The high byte can never exceed
+                 * 0x3F, which is what lets the host tell the two formats apart. */
+                val &= 0x3FFF;
+                data[*outlen] = (uint8_t)(val >> 8);
+                data[*outlen + 1] = (uint8_t)(val & 0xFF);
+            } else {
+                uint16_t v8 = val >> 5;  /* 14-bit ADC → 9-bit, then >>5 gives 8-bit */
+                data[*outlen] = v8 > 0xff ? 0xff : (uint8_t)v8;
+            }
+            *outlen += step;
         }
         bsp_wdt_feed();  /* prevent watchdog reset during long captures */
     }

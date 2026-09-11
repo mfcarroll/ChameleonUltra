@@ -701,18 +701,27 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
-    def lf_sniff(self, timeout_ms: int = 2000):
+    def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8):
         """
         Capture raw LF field ADC samples.
 
         The ChameleonUltra samples the LF antenna at 125kHz (8µs/sample).
         Each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap/no field.
 
+        ⚠ 8-bit mode discards 5 bits of every conversion. The SAADC runs at 14-bit and
+        the protocol decoders get that value intact; only this debug path truncates, which
+        makes a weak subcarrier look absent when it is merely sub-LSB. bits=16 returns the
+        full conversion as 2 bytes/sample big-endian — at the cost of half the duration,
+        since the 4000-byte frame limit is on BYTES, not samples.
+
         :param timeout_ms: Capture duration in ms (1-10000, default 2000)
+        :param bits: 8 (default, historical format) or 16 (full 14-bit, big-endian)
         :return: Raw response object — check .status and .data
         """
         timeout_ms = max(1, min(10000, timeout_ms))
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        if bits not in (8, 16):
+            raise ValueError("bits must be 8 or 16")
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits])
         timeout_s = (timeout_ms // 1000) + 2
         return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
 

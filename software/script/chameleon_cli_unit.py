@@ -7718,22 +7718,54 @@ class LFSniff(ReaderRequiredUnit):
             '--hex', action='store_true',
             help='Print hex dump of samples to screen'
         )
+        parser.add_argument(
+            '--bits', type=int, default=8, choices=(8, 16), metavar='N',
+            help='Sample width. 8 (default) is the historical format: the 14-bit ADC '
+                 'conversion right-shifted by 5. 16 returns the FULL conversion, '
+                 'big-endian — use it when a subcarrier may be sub-LSB at 8 bits. '
+                 'Costs half the capture duration (the 4000-byte frame limit counts '
+                 'bytes, not samples).'
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(10000, args.timeout))
-        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample)...")
-        resp = self.cmd.lf_sniff(timeout_ms=timeout)
+        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample), "
+              f"{args.bits}-bit samples...")
+        resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")
             return
 
         import chameleon_cli_unit as _self_mod
-        data = bytes(resp.data)
+        raw = bytes(resp.data)
+
+        if args.bits == 16:
+            # ⚠ GUARD AGAINST OLD FIRMWARE. A device built before the --bits byte existed
+            # reads only the 2 timeout bytes and returns the 8-bit format regardless. The
+            # host would then parse 8-bit data as 16-bit samples and report confident
+            # nonsense. A real 14-bit sample can never have a high byte above 0x3F, so
+            # 8-bit data reliably fails this test as soon as any sample exceeds 0x3F.
+            if any(b > 0x3F for b in raw[0::2]):
+                print(f"{CR}Device returned 8-bit samples for a --bits 16 request.{C0}")
+                print("  Its firmware predates the sample-width byte. Reflash, or use --bits 8.")
+                return
+            # Two bytes per sample, big-endian, full 14-bit conversion.
+            samples = [(raw[i] << 8) | raw[i + 1] for i in range(0, len(raw) - 1, 2)]
+            # ⚠ The `data ...` commands and the on-screen stats below are all written
+            # against 8-bit samples. Give them the 8-bit view (the same >>5 the firmware
+            # would have applied) so they keep working unchanged, and write the FULL
+            # resolution to --out, which is what the offline analysis actually wants.
+            data = bytes(min(0xFF, v >> 5) for v in samples)
+            n_samples = len(samples)
+        else:
+            samples = None
+            data = raw
+            n_samples = len(raw)
         _self_mod._last_capture = data
 
-        n = len(data)
+        n = n_samples
         duration_ms = n * 8 / 1000
         print(f" Captured : {CG}{n}{C0} bytes ({duration_ms:.1f}ms)")
 
@@ -7741,6 +7773,13 @@ class LFSniff(ReaderRequiredUnit):
         mx = max(data)
         mean = sum(data) // len(data)
         print(f" Range    : {CG}0x{mn:02x}{C0} – {CG}0x{mx:02x}{C0}  mean: {CG}0x{mean:02x}{C0}")
+        if samples:
+            # The number that decides whether a sub-LSB subcarrier is recoverable: the
+            # 8-bit view above cannot show a swing smaller than one of its own steps.
+            s_mn, s_mx = min(samples), max(samples)
+            s_mean = sum(samples) // len(samples)
+            print(f" 14-bit   : {CG}{s_mn}{C0} – {CG}{s_mx}{C0}  mean: {CG}{s_mean}{C0}"
+                  f"   (peak-to-peak {CG}{s_mx - s_mn}{C0} counts of 16383)")
 
         # Detect real field gaps — they drop to near zero (0x00-0x40),
         # well below the steady carrier (~0xb0). Use half of mean as threshold
@@ -7785,9 +7824,11 @@ class LFSniff(ReaderRequiredUnit):
 
         if args.out:
             try:
+                out_bytes = raw if args.bits == 16 else data
                 with open(args.out, 'wb') as f:
-                    f.write(data)
-                print(f" Saved    : {CG}{args.out}{C0} ({n} bytes)")
+                    f.write(out_bytes)
+                print(f" Saved    : {CG}{args.out}{C0} ({len(out_bytes)} bytes, "
+                      f"{args.bits}-bit)")
             except Exception as e:
                 print(f"{CR}Failed to save: {e}{C0}")
 

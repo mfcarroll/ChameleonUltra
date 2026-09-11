@@ -25,7 +25,10 @@ bool pac_read(uint8_t *data, uint32_t timeout_ms);
 bool viking_read(uint8_t *data, uint32_t timeout_ms);
 bool jablotron_read(uint8_t *data, uint32_t timeout_ms);
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen);
+/* Definitive prototype and docs live in lf_reader_generic.h; kept in step by hand.
+ * raw16: false = one byte per sample (14-bit >> 5), true = two bytes, full value. */
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                        bool raw16);
 
 #ifdef __cplusplus
 }

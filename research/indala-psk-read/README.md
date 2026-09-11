@@ -1,61 +1,63 @@
-## Indala on Chameleon Ultra — the receive chain loses fc/2 before the ADC
+## Indala on Chameleon Ultra — 14 dB of analog loss, 30 dB of truncation
 
 **Measured on device 2026-09-10/11.** Chameleon Ultra v3, firmware `v2.2 (v2.2.0-32-gccf6075)`,
 chip id `a461ebf3b85fb19c`. Reference reads on a Proxmark3 Iceman.
 
 Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:17`). The Chameleon
-Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is why
-closing it is not enough.**
+Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
+else stands in the way, and how much of that is fixable in firmware.**
 
-### 0. ⭐⭐⭐ RESULT: the loss is analog, and it is 27 dB
+### 0. ⭐⭐⭐ RESULT: 14 dB of analog loss, and 30 dB of self-inflicted truncation
 
-A T5577's PSK carrier frequency is a field in block 0, so one tag was swept across three
+A T5577's PSK carrier frequency is a block-0 field, so one tag was swept across three
 subcarriers and read by BOTH instruments on identical stimulus (campaign
-`campaign_20260910_194209`, `--reader chameleon --pm3-signal 0`).
+`campaign_20260910_194209`, `--reader chameleon --pm3-signal 0`). Normalised to each
+instrument's own RF/8, which divides out the tag's own rolloff:
 
-| PSKCF | subcarrier | smp/cyc | Chameleon | vs empty field | Proxmark |
-|---|---|---|---|---|---|
-| RF/8 | 15625 Hz | 8.0 | 14.080 | 37.8x | 109.87 |
-| RF/4 | 31250 Hz | 4.0 | 0.544 | 15.3x | 44.27 |
-| **RF/2** | **62500 Hz** | **2.0** | **0.250** | **6.0x** | **46.15** |
+| PSKCF | subcarrier | Proxmark | Chameleon | **excess loss** |
+|---|---|---|---|---|
+| RF/4 | 31250 Hz | −4.3 dB | −11.0 dB | **−6.7 dB** |
+| RF/2 | 62500 Hz | −9.2 dB | −23.3 dB | **−14.1 dB** |
 
-Normalised to each instrument's own RF/8, which divides out the tag's behaviour:
+⇒ **The Chameleon's receive chain really does attenuate more than the Proxmark's — about
+14 dB at fc/2 — and that loss is analog, before digitisation.** RF/4 shows 6.7 dB at four
+samples per cycle, nowhere near Nyquist, so it is a genuine front-end rolloff.
 
-| PSKCF | Proxmark | Chameleon | **excess loss** |
-|---|---|---|---|
-| RF/4 | −7.9 dB | −28.3 dB | **−20.4 dB** |
-| RF/2 | −7.5 dB | −35.0 dB | **−27.5 dB** |
+⭐ **But it is the smaller of the two handicaps.** `lf sniff` right-shifts the 14-bit
+conversion by five (`lf_reader_generic.c:59`), discarding ~30 dB of dynamic range —
+**more than twice the analog loss**, and unlike the front end it is a firmware fix. §0b.
 
-The Proxmark is essentially flat from 31 kHz to 62.5 kHz. ⇒ **The tag emits fc/2 at full strength;
-the Chameleon's receive chain removes 27.5 dB of it.** That happens BEFORE digitisation, so no
-sample-rate, sample-phase or comparator change can recover it.
+⚠ **Measure the sidebands, not the subcarrier bin.** An earlier pass of this table read
+−20.4 / −27.5 dB, from a DFT at the exact subcarrier frequency. That estimator is wrong
+twice over:
+- **BPSK suppresses its own carrier.** With balanced data almost nothing sits at f; what
+  is there is residual imbalance, so the bin compares two instruments on the weakest part
+  of the signal.
+- **At fc/2 the bin is degenerate.** 62500 Hz sampled at 125000 is exactly Nyquist:
+  recovered amplitude is `2·A·|cos φ|` for a fixed sampling phase. Verified by injection —
+  a cosine reads **2x**, the same signal in quadrature reads **~0**.
 
-⭐ **And it is not a sampling artefact.** RF/4 sits at 4 samples/cycle with no Nyquist problem and
-already shows −20.4 dB of excess loss. The attenuation is present well below Nyquist. That
-independently kills the retracted §1 hypothesis and its surviving "secondary contributor" caveat.
+⇒ `sweep.py` now measures the modulation skirt below each subcarrier, which is off Nyquist
+and carries the actual energy. The exact-bin column is still printed, flagged.
 
-⚠ **The rolloff shape is not a linear filter.** −28.3 dB in one octave (RF/8→RF/4) then only
-−6.7 dB in the next exceeds what any pole count explains, and the netlist model in §3 predicted
-−2.6 dB for that first step. Consistent with the VD1 **peak detector**'s discharge time constant
-setting a knee rather than an RC pole — but that mechanism is inferred, not measured.
-
-### 0b. ⛔⛔ THE OPEN LEAD, AND IT IS BIG: every number above is 8-BIT
-
-`lf sniff` right-shifts the 14-bit SAADC conversion by five before it leaves the device:
+### 0b. ⛔⛔ THE LARGER HANDICAP: 8-bit truncation, ~30 dB, firmware-only
 
     val = val >> 5;  /* lf_reader_generic.c:59 */
 
-**The protocol decoders do not.** `lf_hidprox_data.c:46` buffers `nrf_saadc_value_t` and hands
-`decoder.feed()` the raw value, and `SAADC_CONFIG_RESOLUTION 3` is 14-bit.
+The SAADC runs at 14-bit (`SAADC_CONFIG_RESOLUTION 3`) and **the protocol decoders receive
+that value intact** — `lf_hidprox_data.c:46` buffers `nrf_saadc_value_t` and hands
+`decoder.feed()` the raw word. Only this debug path truncates.
 
-⇒ Every measurement in this note — including the original "the tag produces nothing" — came through
-a **32x truncation the real decoder path does not have.** 0.250 LSB at fc/2 is roughly **8 counts of
-the actual conversion**, which is small but not obviously undemodulable once integrated over the 32
-samples per bit an RF/32 frame gives.
+⇒ Every measurement in this note came through a 32x truncation the decoder path does not
+have. A subcarrier reading 0.25 LSB here is ~8 counts of the real conversion.
 
-⛔ **So "the signal is too small" is NOT established.** Measure through a full-resolution path before
-concluding anything about feasibility. That is the next action, and it is a few lines of firmware
-(widen or drop the shift in the sniff path), not a hardware change.
+⭐ **Done 2026-09-11**: `lf sniff --bits 16` returns the full conversion (2 bytes/sample,
+big-endian, `val & 0x3FFF`). 8-bit stays the default, so every existing host and capture
+is unaffected. Costs half the duration — the 4000-byte frame limit counts bytes.
+
+⚠ **Not yet flashed, so not yet measured.** The firmware builds; DFU packaging needs
+`nrfutil`, which is not installed here. Until the sweep is re-run at 16 bits, nothing in
+this note establishes whether fc/2 is demodulable.
 
 ### 1. ⛔ RETRACTED: "the ADC samples at exactly Nyquist, therefore fc/2 cancels"
 
@@ -146,22 +148,23 @@ rolloff from the Chameleon's, and that separation is the entire result.
 Indala word. At CF4/CF8 the harness will report `block0 IS CONFIRMED ... data blocks unconfirmed` and
 default to `[p]` — that is correct for a modulation PM3 cannot read back.
 
-### 6. Routes, re-ranked by §0
+### 6. Routes, re-ranked
 
-⛔ **Dead as primary fixes.** ~~A. comparator + edge timestamping. B. oversample at 200–250 kHz.
-C. shift the SAADC sample phase.~~ All three act at or after digitisation, and §0 shows the signal
-is already gone before it. A comparator cannot toggle on what the peak detector did not pass.
+⭐ **1. Re-measure at 16 bits.** Done in firmware, awaiting a flash. It removes the larger
+of the two handicaps and decides everything downstream. Nothing else should happen first.
 
-⭐ **1. Re-measure at full resolution (§0b).** Drop or widen the `>>5` in the sniff path and repeat
-the sweep. This is the only step that should happen next: it costs a few lines and it decides
-whether anything else is worth doing.
+**2. Then reconsider the sampling routes.** ⛔ ~~All three are dead; the signal is gone
+before digitisation.~~ Banded — that was written against the −27.5 dB figure §0 retracts.
+At −14.1 dB analog loss the digitised signal is not hopeless, and **the fc/2 sampling
+phase is still an open question**: the ADC samples exactly 2x per subcarrier cycle at a
+fixed phase, so `cos φ` genuinely gates what reaches the decoder, not merely what this
+analysis can measure. A phase sweep or oversampling at 200–250 kHz remains worth trying.
 
-**2. If the signal is adequate at 14 bits** — port the decoder. `protocols.h`'s
-`decoder_feed(codec, uint16_t)` already carries full-resolution samples, so an `indala.c` slots in
-like `hidprox.c`, and Proxmark's `PSKDemod()`/`detectIndala()` port directly.
+**3. Port the decoder** once resolution and phase are settled. `decoder_feed(codec,
+uint16_t)` already carries full-resolution samples, so an `indala.c` slots in like
+`hidprox.c`; Proxmark's `PSKDemod()`/`detectIndala()` port directly.
 
-**3. If it is not** — the fix is analog: the peak-detector time constant and/or the filter poles.
-A component change, out of scope for firmware.
+**4. Analog change** — peak-detector time constant and/or filter poles — only if 1–3 fail.
 
 ### 7. Firmware state today
 

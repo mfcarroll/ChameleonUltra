@@ -934,7 +934,7 @@ static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status
     }
 
     size_t outlen = 0;
-    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen)) {
+    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen, false)) {
         free(outdata);
         return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     };
@@ -2048,10 +2048,14 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
         timeout_ms = ((uint32_t)data[0] << 8) | data[1];
         if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
     }
+    /* Optional 3rd byte selects the sample width: 16 for the full 14-bit conversion,
+     * anything else (including absent) for the historical 8-bit format. Defaulting to
+     * 8 keeps every existing host build byte-compatible. */
+    bool raw16 = (length >= 3 && data[2] == 16);
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
+    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16);
 
     if (outlen == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);

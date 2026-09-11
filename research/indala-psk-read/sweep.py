@@ -40,10 +40,43 @@ def classify(path):
 
 
 def load(path):
-    """Chameleon .bin = raw uint8; Proxmark .pm3 = one signed integer per line."""
+    """Proxmark .pm3 = one signed integer per line. Chameleon .bin = either the 8-bit
+    format or, from `lf sniff --bits 16`, two bytes per sample big-endian.
+
+    ⭐ The two are told apart by content, not by name: a 14-bit conversion can never put
+    more than 0x3F in its high byte, so any even-offset byte above that proves the file
+    is 8-bit. This is the same invariant the firmware guarantees by masking to 0x3FFF."""
     if path.endswith('.pm3'):
         return np.array([float(l) for l in open(path) if l.strip()])
-    return np.frombuffer(open(path, 'rb').read(), dtype=np.uint8).astype(float)[SETTLE:]
+    raw = np.frombuffer(open(path, 'rb').read(), dtype=np.uint8)
+    if len(raw) % 2 == 0 and len(raw) > 1 and raw[0::2].max() <= 0x3F:
+        x = (raw[0::2].astype(np.uint16) << 8 | raw[1::2]).astype(float)
+        return x[SETTLE:]                       # SETTLE is in SAMPLES, not bytes
+    return raw.astype(float)[SETTLE:]
+
+
+def sideband_rms(x, f):
+    """RMS in the lower modulation skirt of a PSK1 subcarrier at f. THIS is the primary
+    estimator, for two reasons the exact-bin figure gets wrong:
+
+    ⛔ BPSK SUPPRESSES ITS OWN CARRIER. With balanced data almost nothing sits AT f --
+    what is there is residual imbalance, so a bin measurement at f compares two
+    instruments on the weakest part of the signal and the ratio is noise.
+
+    ⛔ AND AT f = fc/2 THE BIN IS DEGENERATE. 62500 Hz sampled at 125000 is exactly
+    Nyquist: the recovered amplitude is 2*A*|cos(phi)| for a fixed sampling phase phi,
+    i.e. anywhere from 0 to twice the truth. Verified in test: an injected cosine reads
+    2x, the same signal in quadrature reads ~0.
+
+    The skirt below f is off Nyquist and carries the actual modulation energy, so it is
+    both phase-safe and representative. The upper skirt aliases back onto the lower one
+    here, so one band catches both."""
+    y = x - x.mean()
+    w = np.hanning(len(y))
+    S = np.abs(np.fft.rfft(y * w))
+    freqs = np.fft.rfftfreq(len(y), 1 / FS)
+    m = (freqs >= f - 5000) & (freqs <= f - 200)
+    return 2 * np.sqrt((S[m] ** 2).sum()) / w.sum()
 
 
 def amplitude_at(x, f):
@@ -75,15 +108,20 @@ def main(paths):
     print("\n" + "=" * 74)
     print(" T5577 PSK CARRIER SWEEP")
     print("=" * 74)
-    print(f" {'PSKCF':6s}{'subcarrier':>12s}{'smp/cyc':>9s}{'Chameleon':>11s}{'noise':>8s}"
-          f"{'SNR':>9s}{'Proxmark':>11s}")
+    print(f" {'PSKCF':6s}{'subcarrier':>11s}{'smp/cyc':>8s}"
+          f"{'CHAM band':>11s}{'PM3 band':>10s}{'CHAM bin':>10s}{'PM3 bin':>9s}")
     for hz in order:
         if hz not in cham and hz not in pm3:
             continue
+        cb_ = sideband_rms(cham[hz], hz) if hz in cham else float('nan')
+        pb_ = sideband_rms(pm3[hz], hz) if hz in pm3 else float('nan')
         c = amplitude_at(cham[hz], hz) if hz in cham else float('nan')
-        b = amplitude_at(base, hz) if base is not None else float('nan')
         p = amplitude_at(pm3[hz], hz) if hz in pm3 else float('nan')
-        print(f" {LABEL[hz]:6s}{hz:11.0f}Hz{FS/hz:9.1f}{c:11.3f}{b:8.3f}{c/b:8.2f}x{p:11.2f}")
+        deg = " <- degenerate" if hz == 62500.0 else ""
+        print(f" {LABEL[hz]:6s}{hz:10.0f}Hz{FS/hz:8.1f}{cb_:11.3f}{pb_:10.2f}"
+              f"{c:10.3f}{p:9.2f}{deg}")
+    print("\n band = PSK modulation skirt (primary). bin = exact subcarrier: BPSK suppresses")
+    print(" its own carrier there, and at fc/2 the bin is at Nyquist and reads 0-2x the truth.")
 
     if not (len(cham) >= 2 and len(pm3) >= 2):
         print("\n Need both instruments at >=2 subcarriers for the verdict.")
@@ -93,14 +131,14 @@ def main(paths):
     print("\n" + "=" * 74)
     print(" ROLLOFF FROM RF/8 — each instrument against itself")
     print("=" * 74)
-    c0, p0 = amplitude_at(cham[15625.0], 15625.0), amplitude_at(pm3[15625.0], 15625.0)
+    c0, p0 = sideband_rms(cham[15625.0], 15625.0), sideband_rms(pm3[15625.0], 15625.0)
     excess = {}
     print(f" {'PSKCF':6s}{'Proxmark':>12s}{'Chameleon':>12s}{'excess loss':>14s}")
     for hz in order[1:]:
         if hz not in cham or hz not in pm3:
             continue
-        dp = 20 * np.log10(amplitude_at(pm3[hz], hz) / p0)
-        dc = 20 * np.log10(amplitude_at(cham[hz], hz) / c0)
+        dp = 20 * np.log10(sideband_rms(pm3[hz], hz) / p0)
+        dc = 20 * np.log10(sideband_rms(cham[hz], hz) / c0)
         excess[hz] = dc - dp
         print(f" {LABEL[hz]:6s}{dp:+11.1f}dB{dc:+11.1f}dB{dc - dp:+13.1f}dB")
     print("\n The Proxmark column is the TAG's own behaviour, common to both instruments.")
@@ -112,18 +150,18 @@ def main(paths):
     ex2, ex4 = excess.get(62500.0), excess.get(31250.0)
     if ex2 is None:
         return
-    if ex2 > -6:
+    if ex2 > -10:
         print(" ⇒ The Chameleon tracks the Proxmark at fc/2. The receive chain is NOT the")
         print("   blocker; the gap is the missing PSK demodulator, and a firmware route works.")
     else:
-        print(f" ⇒ The Chameleon loses {abs(ex2):.0f} dB at fc/2 that the Proxmark does not.")
-        print("   The tag emits it; this receive chain attenuates it. That loss happens")
-        print("   BEFORE digitisation, so no sample-rate, sample-phase or comparator change")
-        print("   can recover it.")
-        if ex4 is not None and ex4 < -6:
-            print(f"\n   ⭐ And it is NOT a sampling artefact: RF/4 sits at 4 samples/cycle with no")
-            print(f"      Nyquist problem and already shows {abs(ex4):.0f} dB of excess loss. The")
-            print("      attenuation is present well below Nyquist.")
+        print(f" ⇒ The Chameleon loses {abs(ex2):.1f} dB at fc/2 that the Proxmark does not,")
+        print("   and that loss is analog — it happens before digitisation.")
+        if ex4 is not None:
+            print(f"   RF/4 already shows {abs(ex4):.1f} dB at 4 samples/cycle, so it is a genuine")
+            print("   front-end rolloff and not a sampling artefact.")
+        print(f"\n   ⚠ But weigh it against the 8-bit truncation below: >>5 discards ~30 dB of")
+        print(f"      dynamic range, which is MORE than this {abs(ex2):.1f} dB. Resolution is the")
+        print("      larger handicap, and unlike the front end it is a firmware fix.")
     print("\n ⚠ These are 8-BIT numbers. `lf sniff` right-shifts the 14-bit conversion by 5")
     print("   (lf_reader_generic.c:59); decoder.feed() does not. Before concluding the signal")
     print("   is too small to demodulate, re-measure through a full-resolution path.")
