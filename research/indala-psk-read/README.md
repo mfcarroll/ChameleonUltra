@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — analog-limited; the demod test must be redone
+## Indala on Chameleon Ultra — not viable: 7.6 dB short, and the loss is analog
 
 ⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
 ⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
@@ -15,7 +15,7 @@ Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:1
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
 
-### 0. ⭐⭐⭐ FINAL RESULT: ~24 dB of analog loss that firmware cannot reach
+### 0e. ⛔ SUPERSEDED by §0 — kept for the channel measurement it contains
 
 Measured at 14 bits, **5 repeats per point, on captures free of field dropouts** (§0a4),
 against a verified empty-field baseline of 5 captures. Campaign
@@ -53,6 +53,40 @@ so the rolloff is genuine and starts well below fc/2. Clean captures moved the f
 it is the SNR column: fc/2 sits **2.8x** above the empty-field floor where RF/4 — which this
 device reads without trouble — sits at **58x**. A ~20x SNR deficit, all of it ahead of the
 ADC.
+
+### 0. ⭐⭐⭐ FINAL RESULT: the decisive test, run properly — negative by ~7.6 dB
+
+**2026-09-11, and the first time every condition was valid at once:** a tag confirmed by
+`lf indala reader` to carry the real credential, clean firmware (no field dropouts, 99% of
+windows kept), 14-bit samples, captures holding **two full Indala frames**, and the sample
+phase swept to its optimum.
+
+**Phase sweep, real credential, clean:** R² = **0.974** on a one-cycle fit — the cleanest
+measurement in the project. Peak 2.30x at 90°, 1.67x at phase 0 (where everything earlier
+was measured), minimum 1.08x at 247°. Full swing 6.0 dB; recoverable from phase 0, **2.8 dB**.
+
+**Demod at the optimum:** 5 phases x 3 repeats, raw and deglitched — **30 attempts, 0
+genuine demods.**
+
+| | |
+|---|---|
+| measured fc/2 SNR at the best phase | **2.30x** |
+| demod threshold, same payload, 2 frames | **5.50x** |
+| **shortfall** | **7.6 dB** |
+
+⚠ Two attempts returned a `Raw:` line and neither is the tag —
+`8000000003031b00187ffff…` and `80000006307fc3d8b0…`, 56 hex characters, the **224-bit**
+Indala format matched in noise. A demod that prints something is not a demod that read the
+tag; count the ID, not the output.
+
+⇒ **Reading Indala on an unmodified Chameleon Ultra is not viable.** The subcarrier arrives
+~7.6 dB below what Proxmark's own demodulator needs, and the deficit is analog — ahead of
+the ADC, where no firmware change reaches it.
+
+⛔ **This supersedes the "~1.5 dB short" figure**, which was inflated two ways: the tag was
+carrying `DEADBEEF/12345678` rather than an Indala frame (§0c), whose bit-dense payload puts
++1.9 dB more energy in the measured band, and phase 0 was being credited with the full 6 dB
+swing rather than the 2.8 dB actually recoverable from it.
 
 ### 0c. ⛔⛔⛔ RETRACTED: the demod attempt — the tag was never transmitting Indala
 

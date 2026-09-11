@@ -37,6 +37,28 @@ sample phase, leaving **~24 dB the front end owns**.
 RF/4 — which this device reads without trouble — sits at **58x**. A ~20x SNR deficit,
 entirely ahead of the ADC.
 
+## ⭐⭐⭐ FINAL RESULT: not viable, by ~7.6 dB, and the loss is analog
+
+The decisive test, with every condition valid at once for the first time — tag confirmed by
+`lf indala reader` to carry the real credential, clean firmware (99% of windows kept),
+14-bit samples, two full Indala frames per capture, sample phase at its measured optimum:
+
+**30 demod attempts, 0 genuine recoveries.**
+
+| | |
+|---|---|
+| phase sweep fit | R² = **0.974**, peak 2.30x at 90°, 1.67x at phase 0 |
+| phase worth (full swing / recoverable from 0) | 6.0 dB / **2.8 dB** |
+| measured fc/2 SNR at the optimum | **2.30x** |
+| threshold, same payload, 2 frames | **5.50x** |
+| **shortfall** | **7.6 dB** |
+
+⚠ Two attempts printed a `Raw:` line; neither was the tag — 224-bit-format preamble matches
+in noise. A demod that prints something is not a demod that read the tag.
+
+⇒ The subcarrier arrives ~7.6 dB below what Proxmark's own demodulator needs, and the
+deficit is ahead of the ADC. No firmware change reaches it.
+
 ## ⛔⛔ STATUS 2026-09-11: the demod test is retracted, and the tag state was wrong
 
 Found by the operator: `lf indala reader` failed on the bench tag and it had to be rewritten
