@@ -29,6 +29,24 @@ void lf_125khz_radio_uninit(void);
  */
 void lf_125khz_radio_saadc_phase_set(uint8_t ticks);
 
+/* ⭐ OVERSAMPLE, decoupling the ADC from the carrier entirely.
+ *
+ * The default trigger fires once per carrier period, so a tag's fc/2 subcarrier lands at
+ * exactly 2 samples/cycle — Nyquist — where recovery depends on sampling phase. Setting a
+ * rate instead free-runs TIMER3 at that frequency with a compare-clear short, so sampling
+ * is ASYNCHRONOUS to the field and fc/2 is comfortably oversampled: no degeneracy to
+ * phase-tune around, and the distinction between "attenuated" and "nulled by the sampler"
+ * stops mattering.
+ *
+ * ⚠ Rates above ~143kHz also need lf_adc_set_acq_fast(true); the enable path does that.
+ * The nRF52840 SAADC ceiling with a 3us acquisition is about 200kHz, so do not ask for
+ * more — the conversions would simply not keep up with the trigger.
+ *
+ * @param khz 0 restores the carrier-locked trigger (default). Otherwise the free-running
+ *            sample rate in kHz; 200 is the practical maximum.
+ */
+void lf_125khz_radio_saadc_rate_set(uint16_t khz);
+
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb);
 void lf_125khz_radio_gpiote_enable(void);
 void lf_125khz_radio_saadc_disable(void);

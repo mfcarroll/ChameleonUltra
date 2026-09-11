@@ -7719,6 +7719,14 @@ class LFSniff(ReaderRequiredUnit):
             help='Print hex dump of samples to screen'
         )
         parser.add_argument(
+            '--rate', type=int, default=0, metavar='KHZ',
+            help='Free-running sample rate in kHz, asynchronous to the carrier. 0 '
+                 '(default) samples once per carrier period at 125kHz, which puts an '
+                 'fc/2 subcarrier at exactly Nyquist. 200 is the ceiling (SAADC '
+                 'conversion time). ⚠ Samples are NOT 8µs apart in this mode — pass the '
+                 'rate to whatever analyses the capture.'
+        )
+        parser.add_argument(
             '--phase', type=int, default=0, metavar='TICKS',
             help='SAADC sample phase: 0-127 ticks of 62.5ns after the carrier period '
                  'boundary (0 = default trigger). 128 ticks span one carrier period, so '
@@ -7737,13 +7745,23 @@ class LFSniff(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(10000, args.timeout))
+        if args.rate and not 10 <= args.rate <= 200:
+            print(f"{CR}--rate must be 0 (carrier-locked) or 10..200 kHz{C0}")
+            return
+        if args.rate and args.phase:
+            print(f"{CR}--rate and --phase are mutually exclusive: a free-running trigger "
+                  f"has no fixed phase relative to the carrier.{C0}")
+            return
         ph = f", phase +{args.phase} ticks ({args.phase * 62.5:.0f}ns)" if args.phase else ""
-        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample), "
-              f"{args.bits}-bit samples{ph}...")
+        fs_khz = args.rate or 125
+        rt = " free-running" if args.rate else " carrier-locked"
+        print(f" Capturing LF field for {timeout}ms at {fs_khz}kHz "
+              f"({1000.0 / fs_khz:.1f}µs/sample,{rt}), {args.bits}-bit samples{ph}...")
         if not 0 <= args.phase <= 127:
             print(f"{CR}--phase must be 0..127 ticks{C0}")
             return
-        resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase)
+        resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase,
+                                 rate_khz=args.rate)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")
@@ -7777,7 +7795,7 @@ class LFSniff(ReaderRequiredUnit):
         _self_mod._last_capture = data
 
         n = n_samples
-        duration_ms = n * 8 / 1000
+        duration_ms = n * (1000.0 / fs_khz) / 1000
         # ⚠ Count SAMPLES, and say which. In 16-bit mode a sample is two bytes, so
         # reporting the sample count as "bytes" understates the transfer by half and
         # makes the duration look wrong against it.

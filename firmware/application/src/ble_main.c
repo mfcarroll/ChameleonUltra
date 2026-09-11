@@ -779,6 +779,12 @@ void ble_slave_init(void) {
     peer_manager_init();                // Peer manager Initialization
 }
 
+static bool m_lf_adc_acq_fast = false;
+
+void lf_adc_set_acq_fast(bool fast) {
+    m_lf_adc_acq_fast = fast;
+}
+
 void register_lf_adc_callback(lf_adc_callback_t cb) {
     m_lf_adc_callback = cb;
 
@@ -791,7 +797,7 @@ void register_lf_adc_callback(lf_adc_callback_t cb) {
     APP_ERROR_CHECK(err_code);
 
     nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN5);
-    ch.acq_time = NRF_SAADC_ACQTIME_5US;
+    ch.acq_time = m_lf_adc_acq_fast ? NRF_SAADC_ACQTIME_3US : NRF_SAADC_ACQTIME_5US;
     err_code = nrfx_saadc_channel_init(ADC_CHANNEL, &ch);
     APP_ERROR_CHECK(err_code);
 

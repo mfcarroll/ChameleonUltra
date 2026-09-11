@@ -19,6 +19,13 @@ void nus_data_response(uint8_t *p_data, uint16_t length);
 bool is_nus_working(void);
 void set_ble_connect_key(uint8_t *key);
 
+/* Shorten the SAADC acquisition window so a faster sample trigger can be serviced.
+ * Conversion takes roughly acq_time + 2us, so the default 5us caps the usable rate at
+ * about 143kHz — fine for the carrier-locked 125kHz trigger, not for oversampling.
+ * 3us brings the ceiling to ~200kHz. The LF source is an op-amp output, so the shorter
+ * window costs little settling accuracy. Call BEFORE register_lf_adc_callback(). */
+void lf_adc_set_acq_fast(bool fast);
+
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 

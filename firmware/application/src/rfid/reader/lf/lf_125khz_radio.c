@@ -22,6 +22,7 @@ static nrfx_timer_t m_phase_timer = NRFX_TIMER_INSTANCE(3);
 static nrf_ppi_channel_t m_pwm_phase_clear_ppi_channel;
 static nrf_ppi_channel_t m_phase_saadc_sample_ppi_channel;
 static uint8_t m_saadc_phase_ticks = 0;   /* 0 = direct PWMPERIODEND trigger */
+static uint16_t m_saadc_rate_khz = 0;     /* 0 = carrier-locked; else free-run at this kHz */
 
 /* One carrier period is 8us = 128 ticks of a 16MHz timer. */
 #define LF_PHASE_TICKS_PER_PERIOD 128
@@ -136,6 +137,15 @@ static void phase_ppi_init(void) {
                         nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE)));
 }
 
+void lf_125khz_radio_saadc_rate_set(uint16_t khz) {
+    /* Clamp to what the SAADC can actually convert (3us acquisition + ~2us conversion).
+     * Asking for more would leave the trigger firing faster than conversions complete. */
+    if (khz > 200) {
+        khz = 200;
+    }
+    m_saadc_rate_khz = khz;
+}
+
 void lf_125khz_radio_saadc_phase_set(uint8_t ticks) {
     /* ⚠ Clamp rather than wrap. A tick count at or beyond one period would leave
      * COMPARE[0] unreachable before the next CLEAR and the SAADC would simply never
@@ -161,7 +171,21 @@ static void pwm_saadc_sample_ppi_init(void) {
 }
 
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
+    /* Must precede register_lf_adc_callback(): that is where the channel is configured. */
+    lf_adc_set_acq_fast(m_saadc_rate_khz > 143);
     register_lf_adc_callback(cb);
+
+    if (m_saadc_rate_khz != 0) {
+        /* Free-running, ASYNCHRONOUS to the carrier. The PWM->CLEAR channel stays OFF --
+         * that channel is precisely what locks sampling to the field, and leaving it on
+         * would re-impose the degeneracy this mode exists to remove. */
+        uint32_t ticks = 16000u / m_saadc_rate_khz;      /* TIMER3 runs at 16MHz */
+        nrfx_timer_extended_compare(&m_phase_timer, NRF_TIMER_CC_CHANNEL0, ticks,
+                                    NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK, false);
+        nrfx_timer_enable(&m_phase_timer);
+        APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_phase_saadc_sample_ppi_channel));
+        return;
+    }
 
     if (m_saadc_phase_ticks == 0) {
         /* Default: sample straight off the carrier period boundary. */
