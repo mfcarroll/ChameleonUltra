@@ -97,13 +97,6 @@ Plus 320 empty captures producing no frame at all. ⛔ Read C57 before running a
 the default band is wrong for a PSK1 interferer, and for that case the interferer's own
 reader is the better bracket, not the amplitude probe.
 
-## 4. ✅ A second Chameleon — reads 20/20 at the same phase
-
-Same firmware, same copper coin, phase 20, one capture each, no gate rejections. Only the bit
-offset moves (9 -> 10), which is C51's timing showing it depends on the reader too. ⚠ The
-caveat §4 was written with still stands: same batch, same revision, so this is unit-to-unit
-tolerance and not design generality. A pass was always going to be weak evidence.
-
 ## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
 
 ⭐⭐ **START HERE: the SAADC readers duplicate a capture path that one of them gets right.**
@@ -173,12 +166,56 @@ all 15 readers get it, not pasted into `hidprox_read()` alone.
 ⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
 (`lfprobe.py`) for presence, per §3.
 
-## 4. ⭐ A second Chameleon
+## 3c. ⛔ FIRMWARE BUG: changing a slot to a PSK1 type while emulating leaves the PWM clock wrong
 
-⚠ Worth doing and worth not over-reading. Two units bought together are the same hardware
-revision from the same batch, so this tests unit-to-unit tolerance — antenna tuning,
-component spread, trimmer position — and NOT whether the design generalises to a Chameleon
-Ultra in general. A pass is weak evidence; a failure would be very strong.
+**Affects IDTECK as much as Indala — pre-existing, not introduced by this work.**
+
+`pwm_init()` picks the PWM base clock from the CURRENT tag type:
+
+```c
+cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+```
+
+but it is called only from `lf_sense_enable()`, which runs only on a
+`LF_SENSE_STATE_{NONE,DISABLE} -> ENABLE` transition. Changing `m_tag_type` afterwards — which
+is exactly what `hw slot type` does — never re-inits the PWM. The clock keeps whatever value
+it had when sense was last enabled.
+
+Every PWM entry is `counter_top / base_clock` with counter_top = 16:
+
+| base clock | entry | subcarrier | bit (16 entries) | |
+|---|---|---|---|---|
+| 1 MHz (PSK1) | 16 µs | 62.5 kHz | 256 µs | correct — fc/2 at RF/32 |
+| 125 kHz | 128 µs | 7.8 kHz | 2048 µs | **8x too slow, unrecognisable** |
+
+Both directions are broken: select a PSK1 type while a non-PSK1 one is live and the
+subcarrier is 8x slow; select a non-PSK1 type while PSK1 is live and everything ASK/FSK runs
+8x fast.
+
+⚠ **Real by inspection, NOT yet confirmed as the cause of any symptom.** It was found while
+debugging silent Indala emulation, and the mode cycle that should prove it had not been run
+when this was written. Do not close it by assuming it explains that; and do not assume it is
+the ONLY thing wrong with PSK1 emulation — see the control test below.
+
+**Workaround:** `hw mode -r` then `hw mode -e`, or reboot, after changing the slot type.
+
+**Fix:** re-init the PWM when `IS_PSK1_TYPE(m_tag_type)` changes — either in the LF loadcb
+when the new type's PSK1-ness differs from the live one, or by cycling sense on slot change.
+⚠ `nrfx_pwm_uninit`/`init` mid-emulation needs care: `lf_sense_disable()` also releases the
+HFXO request and nulls `m_pwm_seq`, so a naive disable/enable would drop the loaded sequence.
+
+⛔ **The control test this needs, and it should have come first:** set a slot to **IDTECK**
+and see whether a Proxmark reads it. IDTECK shares the entire transmit path, and nothing in
+this tree records it ever having been verified end to end — `idteck.c` documents only the
+READ side as unimplemented. If IDTECK is silent too, PSK1 emulation never worked and the
+Indala addition inherited a broken base, which is a much larger problem than `indala.c`.
+
+## 4. ✅ A second Chameleon — reads 20/20 at the same phase
+
+Same firmware, same copper coin, phase 20, one capture each, no gate rejections. Only the bit
+offset moves (9 -> 10), which is C51's timing showing it depends on the reader too. ⚠ The
+caveat §4 was written with still stands: same batch, same revision, so this is unit-to-unit
+tolerance and not design generality. A pass was always going to be weak evidence.
 
 ## 5–6. ✅ CLOSED AS UNMOTIVATED — there is no deficit left to hunt
 
