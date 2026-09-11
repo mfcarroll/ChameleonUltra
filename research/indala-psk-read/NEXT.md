@@ -1,65 +1,65 @@
 # Next — ranked
 
-**State:** shipped and working on one coil — 10/10 at 0.40–0.43 s, one capture each. The
-stacking path does not regress that, and raises the offline decode rate 31.9% -> 71.9%.
-⛔ A second coil with the same payload reads 0/12 and is 3.3x weaker in the fc/2 band, and
-**position alone is worth more than 2x** — larger than the whole working margin. That, not
-the decoder, is the open problem. `lf indala read` returns the credential in
-~0.5 s, 20/20 with the bench tag, 0/20 empty, 10/10 against a loud HID signal, and 36
-synthetic words decode with no wrong answers (`FINDINGS.md`).
+⛔⛔ **EVERY MEASUREMENT IN THIS PROJECT WAS TAKEN WITH THE TAG ON THE WRONG SIDE OF THE
+DEVICE.** The reading side is the FRONT. It is worth **21x** (~26 dB). See the banner at the
+top of `FINDINGS.md`. The plan below is reorganised around that: re-measure first, and treat
+every ⚠B claim as provisional until it is redone.
 
-⛔ **But a second, Proxmark-verified Indala tag was completely inaudible to the Chameleon —
-0 of 12, with no subcarrier present at any sample phase.** Until §1 is resolved, the honest
-scope of this work is "reads the bench tag", and whether that is a position problem, a tag
-problem or a reader problem is unknown.
+**State:** `lf indala read` works, and on the front it works far better than any number in
+these notes suggests — 71% of single captures decode, against 32% on the back, and the
+"phase window" turns out not to be a window.
 
 ⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
 
 ---
 
-## 1. ⭐ REPOSITION THE WEAK COIL FIRST — position is worth more than the whole margin
+## 1. ⭐⭐⭐ RE-MEASURE THE LOAD-BEARING CLAIMS ON THE FRONT
 
-The copper coil reads at **3.55–3.67x** the empty floor today, against **1.53–1.61x** in the
-original sweep. Same tag, same reader, different placement. ⇒ **Position alone is worth more
-than 2x**, and the entire difference between the two coils is 3.3x (C32, C33).
+Roughly 26 dB was missing from every measurement. Do these in order; each is cheap and each
+could collapse a pile of downstream work.
 
-So before any more signal processing: put the white coil on and move it while watching.
+**1a. Full phase sweep with a null.** 32 phases x 5 repeats, tag and empty, on the front.
+The 16x3 pilot says phases 0–48 and 96–120 give 3/3 and only 56–88 fails. Confirm it, and
+note that the dead band carries the HIGHEST skirt — so it is a polarity null, and the right
+model for phase is "two nulls per carrier period", not "a window".
 
 ```bash
-cd research/indala-psk-read && ../../software/script/.venv/bin/python \
-  lfprobe.py --band 57000 62400 --monitor 90
+cd research/indala-psk-read && ../../software/script/.venv/bin/python phasebits.py --step 4 --repeats 5 --keep caps/front
 ```
 
-⚠ ⭐ **Recalibrate the `--floor` first.** The default 6900 came from the committed empty
-captures; the copper coil now reads 3.6x, so the scale is trustworthy — but take a fresh
-empty reading with no tag on the pad and pass it, rather than trusting a number from another
-session. Then slide the white coil and watch for anything above ~1.5x.
+**1b. Are the three "individually fatal" details still fatal?** C03 (the fs/2 notch), C04
+(not discarding the settle window) and C02 (the PSK1 mapping) were each measured at 1/20 the
+signal. C02 is a convention and cannot change. The other two are SNR-dependent and may now
+be merely helpful rather than load-bearing — worth knowing before anyone treats them as
+sacred.
 
-If it never exceeds ~1.2x anywhere on the pad, the coil genuinely cannot couple to this
-antenna and §2 is the answer. If it reaches 2x+, everything below is moot.
+**1c. Is the two-capture agreement rule still needed?** C17 says one frame in five is wrong
+and C18 builds the whole acceptance rule on it — both at 1/20 signal. If the error rate
+collapses on the front, a read could return on the FIRST decode and take ~35 ms instead of
+~100 ms. ⚠ Measure it, do not assume it: a wrong credential is much worse than a slow read,
+so the rule stays until the data says otherwise.
 
-## 2. ⛔ Why does stacking not rescue the weak coil?
+**1d. Re-run the loud-signal null.** C24 (no false positive on HID Prox) was run with the
+HID tag on the back — a *quiet* wrong signal, which is the easy case. On the front that
+interferer is ~20x louder, which is the case the null was supposed to test.
 
-Stacking is worth 1.5–2.1x on the copper coil and **1.0x** on the white one (C34), so the
-white coil's captures are not coherent with each other in the way the copper coil's are.
+## 2. ⭐⭐ Re-open what was closed on back-side data
 
-⭐ **Best current story, and it is testable:** a weakly-coupled T5577 charges more slowly and
-more variably off the field, so its frame START JITTERS between captures. Adding captures
-that are not frame-aligned averages the credential away while the noise still falls —
-exactly the flat ratio observed.
+⚠ These were closed, some of them emphatically, on measurements now known to be ~26 dB down.
 
-⇒ **Align on the preamble, not on lag 0.** The decoder already locates the 33-bit preamble
-in every capture it can decode at all; shifting each capture to a common preamble position
-before adding would make stacking work regardless of when the tag woke up. For captures too
-weak to find a preamble, search the shift that maximises correlation with the accumulator
-*inside the fc/2 data band*.
+| | why it should be re-opened |
+|---|---|
+| **`LF_RSSI` / AIN0** (C08, C09) | closed as "carries no fc/2, flat to 0.5 dB". Measured with the tag on the back. The whole comparison was between two nodes seeing 1/20 of the available signal, and the conclusion killed an entire line of investigation |
+| **Stacking** (C29, C30, C34) | worth 1.5–2.1x on the back. On the front, single captures already decode 71% of the time, so it may be solving a problem that no longer exists |
+| **Frame lock** (C11, C12, C13) | already in doubt (C31, C35) — the correlation that supports them reads 0.92–0.95 on the EMPTY field. Re-derive or retract |
+| **SAADC gain** (C10) | "the floor is analog-referred" may well survive, but it was measured against a signal 26 dB below what the device actually delivers |
 
-⛔ **But fix the instrument first, because it is still broken.** Empty captures correlate at
-**0.92–0.95** after mixing to baseband, band-limiting to 6 kHz, removing DC and dropping
-1024 samples (C31). It is not the odd/even imbalance — that is 1.7–2.1 counts, 0.1% of the
-ripple. And the lag structure is near-identical for the two tags (C35), which is the proof
-it is not measuring either tag. Until that common background is identified, **no
-cross-capture correlation on this bench means what it appears to mean**.
+## 2b. ⚠ Re-derive the firmware's phase rotation
+
+`PHASE_ROTATION` is `{20, 12, 28, 36, 44, 4, 56, 0}`, chosen from the back-side window. On
+the front, 56 sits inside the dead band and 96–120 are all good and entirely absent from the
+list. ⚠ The right rotation must work for a tag placed on EITHER side, because users will do
+both — so derive it from the union, not from whichever placement is measured last.
 
 ## 3. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
 

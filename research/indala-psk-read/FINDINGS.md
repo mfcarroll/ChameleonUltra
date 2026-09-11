@@ -6,9 +6,40 @@ If a claim is not in the ledger below, it is not established.
 
 ---
 
+## ⛔⛔ PLACEMENT: READ THIS BEFORE TRUSTING ANY NUMBER BELOW
+
+**Every measurement in this project up to 2026-09-11 was taken with the tag on the BACK of
+the Chameleon Ultra. The reading side is the FRONT, where the buttons are. It is worth
+21x.**
+
+That is not a caveat, it is the dominant term. The whole investigation ran at roughly 1/20
+of the available signal — about 26 dB — which is most of the "31.2 dB below the Proxmark"
+the project spent days trying to explain. The PSK1/PSK2 decoder bug was one cause of that
+figure; the tag being on the wrong side of the device was the other, and larger, one.
+
+⚠ The Flipper Zero reads from its back, which is where the assumption came from. The
+Chameleon is the other way round.
+
+| | tag on the BACK | tag on the FRONT |
+|---|---|---|
+| fc/2 skirt over the empty floor | 1.0–3.7x | **20–34x** |
+| single-capture decode rate | 51/160 = 32% | **34/48 = 71%** |
+| sample phase 0 (the stock trigger) | 0/5 | **3/3** |
+| sample phases 96–120 | 0/5 | **3/3** |
+| the weak "white" coil | 0/12, never read | **reads first try** |
+
+⇒ Claims measured on the back are marked **⚠B**. They are not automatically wrong — many
+are relative comparisons that survive a common scale factor — but none of them has been
+confirmed at the signal level the device actually delivers, and several are now known to be
+artefacts. `NEXT.md` §1 is the re-measurement.
+
+---
+
 ## The result
 
-**The Chameleon Ultra reads Indala, on the device, as a command.**
+**The Chameleon Ultra reads Indala, on the device, as a command** — with the tag on the
+**front**, 71% of single captures decode and every sample phase outside 56–88 works,
+including the stock phase 0.
 
 ```
 lf indala read   ->   Indala PSK1
@@ -64,38 +95,40 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 
 | id | claim | n | null | indep | ref |
 |---|---|---|---|---|---|
-| C01 | The Chameleon Ultra decodes Indala from one 300 ms capture: 51/160 exact | 160 | emptyfield 0/160 | ✓ Proxmark reads the same tag | L44, L46 |
+| C01 ⚠B | The Chameleon Ultra decodes Indala from one 300 ms capture: 51/160 exact | 160 | emptyfield 0/160 | ✓ Proxmark reads the same tag | L44, L46 |
 | C02 | **PSK1: the phase IS the data.** Not differential — differential is `psk1TOpsk2`, the Proxmark's *fallback* | — | — | ✓ `cmdlfindala.c:1259` vs `:1293` | L44 |
-| C03 | The baseband filter is load-bearing: **51/160** real captures decode with it, **0/160** without | 160 | — | ✓ real captures, not synthetic | L44, L46 |
-| C04 | Discarding the 400-sample settle window is fatal: **43/160** with the full capture, **0/160** without | 160 | — | ✓ real captures | L44 |
+| C03 ⚠B | The baseband filter is load-bearing: **51/160** real captures decode with it, **0/160** without | 160 | — | ✓ real captures, not synthetic | L44, L46 |
+| C04 ⚠B | Discarding the 400-sample settle window is fatal: **43/160** with the full capture, **0/160** without | 160 | — | ✓ real captures | L44 |
 | C05 | The preamble needs an exact search, not a correlator — the template is dominated by a 28-bit constant run and the peak lands a nibble out | — | — | ✓ Proxmark `preambleSearch()` | L44 |
-| C06 | Working phase window is ticks 4–60; best 12–36. **Stock phase 0 decodes 0/5** | 5/phase | emptyfield | — | L44 |
-| C07 | Works at the stock 8-bit sample width; the 16-bit path is not required for the read | 1 | — | — | L44 |
-| C08 | `LF_RSSI`/AIN0 carries no fc/2: tag/empty 1.04x inside a 1.28x scatter, flat to 0.5 dB across 1–62 kHz vs AIN5's 31.6 dB rolloff. Not clipped | 7 | emptyfield | — | L39 |
-| C09 | …but AIN0 is alive: the tag shifts its DC by +16 counts with **±0 spread over 7 repeats** | 7 | emptyfield | — | L39 |
-| C10 | The fc/2 noise floor is analog-referred, not ADC-referred — it tracks gain at or above the gain ratio | 7 | emptyfield | — | L22 |
-| C11 | Captures are frame-locked to field-on: they cross-correlate at lag 0 with one sign; empty captures scatter with mixed signs | 7 | emptyfield | — | L40 |
-| C12 | Zero-offset cross-capture stacking gives √N: +7.3 dB at N=7, empty floor falling exactly 2.65x | 7 | emptyfield + arithmetic null | — | L40 |
-| C13 | The frame is visible in the sideband envelope — the 28-zero run as a reproducible null at the 2048-sample period | 7 | emptyfield | — | L40 |
+| C06 ⚠B | Working phase window is ticks 4–60; best 12–36. **Stock phase 0 decodes 0/5** | 5/phase | emptyfield | — | L44 |
+| C07 ⚠B | Works at the stock 8-bit sample width; the 16-bit path is not required for the read | 1 | — | — | L44 |
+| C08 ⚠B | `LF_RSSI`/AIN0 carries no fc/2: tag/empty 1.04x inside a 1.28x scatter, flat to 0.5 dB across 1–62 kHz vs AIN5's 31.6 dB rolloff. Not clipped | 7 | emptyfield | — | L39 |
+| C09 ⚠B | …but AIN0 is alive: the tag shifts its DC by +16 counts with **±0 spread over 7 repeats** | 7 | emptyfield | — | L39 |
+| C10 ⚠B | The fc/2 noise floor is analog-referred, not ADC-referred — it tracks gain at or above the gain ratio | 7 | emptyfield | — | L22 |
+| C11 ⚠B | Captures are frame-locked to field-on: they cross-correlate at lag 0 with one sign; empty captures scatter with mixed signs | 7 | emptyfield | — | L40 |
+| C12 ⚠B | Zero-offset cross-capture stacking gives √N: +7.3 dB at N=7, empty floor falling exactly 2.65x | 7 | emptyfield + arithmetic null | — | L40 |
+| C13 ⚠B | The frame is visible in the sideband envelope — the 28-zero run as a reproducible null at the 2048-sample period | 7 | emptyfield | — | L40 |
 | C14 | The word has **19 ones — odd parity** — so the subcarrier inverts every frame and the true repetition period is 4096 samples, not 2048 | — | — | ✓ arithmetic on the known word | L41 |
 | C15 | Stock firmware *had* no PSK demodulator: `reader/lf/*_data.c` were all ASK or FSK, `psk1.c` transmit-only. `lf_indala_psk.c` is the first | — | — | ✓ source | L01, L47 |
-| C16 | **The filter's job is a NULL AT fs/2, not a low cutoff.** [1,2,1] beats the 12 kHz FFT brick wall 51 vs 43, strictly (McNemar b=0 c=8, p=0.008) — and [1,1,1], which smooths as hard but nulls at fs/3, is the worst of the set at 31/160 | 160 paired | emptyfield 0/160 at every variant | ✓ mechanism control: same smoothing, wrong null | L46 |
-| C17 | **One recovered frame in five is WRONG.** 24 bad frames from 200 captures across two sessions — and all 24 were DISTINCT, while the truth recurred 77 times | 200 | emptyfield: no frame at all, 0/160 | ✓ two sessions, two geometries | L46, L47 |
-| C18 | Requiring two captures to agree removes them: **0 wrong in 40000** resampling trials on either pool, at a median of 2–3 captures | 2x20000 | ✓ vs need=1 at 20/22% wrong | ✓ replicated on live captures taken after the design was fixed | L47 |
-| C19 | The Wiegand-26 parity is **not** a sufficient gate: it rejects 13 of 17 bad frames but passed `a0000000b9be47a4`, which is wrong in 20 bits | 200 | — | ✓ a counter-example, not a rate | L47 |
+| C16 ⚠B | **The filter's job is a NULL AT fs/2, not a low cutoff.** [1,2,1] beats the 12 kHz FFT brick wall 51 vs 43, strictly (McNemar b=0 c=8, p=0.008) — and [1,1,1], which smooths as hard but nulls at fs/3, is the worst of the set at 31/160 | 160 paired | emptyfield 0/160 at every variant | ✓ mechanism control: same smoothing, wrong null | L46 |
+| C17 ⚠B | **One recovered frame in five is WRONG.** 24 bad frames from 200 captures across two sessions — and all 24 were DISTINCT, while the truth recurred 77 times | 200 | emptyfield: no frame at all, 0/160 | ✓ two sessions, two geometries | L46, L47 |
+| C18 ⚠B | Requiring two captures to agree removes them: **0 wrong in 40000** resampling trials on either pool, at a median of 2–3 captures | 2x20000 | ✓ vs need=1 at 20/22% wrong | ✓ replicated on live captures taken after the design was fixed | L47 |
+| C19 ⚠B | The Wiegand-26 parity is **not** a sufficient gate: it rejects 13 of 17 bad frames but passed `a0000000b9be47a4`, which is wrong in 20 bits | 200 | — | ✓ a counter-example, not a rate | L47 |
 | C20 | The firmware read works: **20/20** consecutive `lf indala read`, 0.41–0.55 s each, integer-only on the nRF52840 | 20 | emptyfield **0/20**, on the device | ✓ agrees with the Proxmark's read of the tag | L47, L48 |
-| C26 | A second, Proxmark-verified Indala tag reads **0/12** on the Chameleon. Its fc/2 skirt sits at 1.04–1.12x the empty-field floor where the bench tag sits at 1.53–1.61x. ⚠ **Revised: "inaudible" was too strong** — see C28 | 12 phases | ✓ empty-field captures at the *same* phases | ✓ the Proxmark wrote, verified and read the tag back; the Flipper reads both tags | L53, L55 |
-| C32 | ⭐ **The two coils differ by 3.3x in the fc/2 band** — copper 3.55–3.67x the empty floor, white 1.04–1.12x — same session, same geometry, same payload, same phases | 8 x 4 phases each | ✓ empty-field reference per phase | ✓ both read on a Flipper; a Proxmark wrote and verified both | L56 |
-| C33 | ⚠ **Position is worth more than 2x.** The copper coil reads 3.55–3.67x now against 1.53–1.61x in the original sweep — same tag, same reader, different placement. That is larger than the whole working margin | 8 x 4 | ✓ same empty reference | — | L56 |
-| C34 | Stacking gain is **1.5–2.1x on the copper coil and 1.0x on the white one**, so the white coil's captures are not coherent with each other in the way the copper coil's are | 8 x 4 | ✓ ratio is against a stacked empty, so a deterministic background cancels | — | L56 |
-| C35 | ⛔ **The lag structure is the same for both tags** — 4 of 7 captures at lag 0, 3 at ≈−47 samples, near-identical for copper and white. So the cross-capture correlation is a property of the CAPTURE PATH, not of either tag's frame | 7 pairs x 2 tags | ✓ the two tags are the control for each other | — | L56 |
-| C28 | ⭐ **That tag IS heard — the band ratio is simply not sensitive enough to see it.** Stacking 8 captures yields `a0000000e6ad0e92` (1 bit out), `a0000000e4bd0a92` (2), `a0000000e33d0e92` (3) at three separate phases, against a truth of `a0000000e6bd0e92`. Stacked EMPTY captures produce no frame at all, ever | 4 phases x 8 | ✓ emptyfield 0 frames at every stack depth | ✓ the exact 33-bit preamble is what noise never produces (0/160) | L55 |
-| C29 | ⭐ **Cross-capture stacking works: 31.9% -> 71.9% correct**, over every combination of the committed captures, with **0 empty-field frames at every depth**. It revives sample phase 0 — the stock trigger, 0/5 singly — and phase 64, outside the single-capture window | 160–320 per depth | ✓ emptyfield 0 at N=1..5 | ✓ decoded by the C firmware decoder, not the Python one | L55 |
-| C30 | ⛔ **…but it does nothing for the weak tag**: bench 1.56x -> 2.71x stacked, white coin 1.08x -> 1.05x. The cross-capture alignment stacking depends on is not holding for that tag | 4 phases x 8 | ✓ same treatment, same phases | — | L55 |
-| C31 | ⛔ **C11/C12 need re-examining: the EMPTY field correlates better than either tag.** Median lag-0 baseband \|r\| is 0.75–0.83 empty, 0.18–0.49 bench, 0.15–0.22 white — so that correlation is measuring the field turn-on transient, not frame lock | 10–28 pairs x 4 phases | ✓ empty is the control and it *wins*, which is the finding | — | L55 |
-| C27 | ⇒ **The working margin is tiny: ~1.5x over the floor reads, ~1.1x does not.** There is almost nothing between "works every time" and "never" | 12 | ✓ per-phase empty reference | — | L53 |
-| C25 | **The RF path does not degrade under heavy LF load.** An HID tag's fc/8+fc/10 amplitude is flat to **1.00x** across idle, sustained load and recovery, with the carrier DC flat to 0.3% | 22 | ✓ idle arms before and after the loaded one | ✓ a continuous measurement, not the binary read whose swings prompted it | L52 |
-| C24 | **No false positive on a non-Indala tag**: an HID Prox 36-bit tag on the antenna gives `LF tag not found` 10 times in 10, with coupling confirmed by a 5/5 HID read immediately before | 10 | ✓ the loud-signal null, which the empty field does not test | ✓ a second run of 10 by the user, same result | L50 |
+| C26 ⚠B | A second, Proxmark-verified Indala tag reads **0/12** on the Chameleon. Its fc/2 skirt sits at 1.04–1.12x the empty-field floor where the bench tag sits at 1.53–1.61x. ⚠ **Revised: "inaudible" was too strong** — see C28 | 12 phases | ✓ empty-field captures at the *same* phases | ✓ the Proxmark wrote, verified and read the tag back; the Flipper reads both tags | L53, L55 |
+| C36 | ⭐⭐ **The reading side is the FRONT and it is worth 21x.** Same coil, same session: 1.0–1.1x the empty floor on the back, 20–34x on the front. The coil that read 0/12 reads first try | 48 front + 32 back | ✓ empty floor unchanged (no tag either way) | ✓ found by an instrument built for something else, then confirmed by a read | L57 |
+| C37 | ⭐ **On the front, 34/48 single captures decode and the phase window is not a window.** Phases 0–48 and 96–120 all give 3/3; only 56–88 fails — and that band carries the HIGHEST skirt of the sweep, so it is a polarity null, not weak signal | 16 phases x 3 | ✓ per-phase skirt measured alongside | ✓ directly contradicts C06, which was measured on the back | L57 |
+| C32 ⚠B | ⭐ **The two coils differ by 3.3x in the fc/2 band** — copper 3.55–3.67x the empty floor, white 1.04–1.12x — same session, same geometry, same payload, same phases | 8 x 4 phases each | ✓ empty-field reference per phase | ✓ both read on a Flipper; a Proxmark wrote and verified both | L56 |
+| C33 ⚠B | ⚠ **Position is worth more than 2x.** The copper coil reads 3.55–3.67x now against 1.53–1.61x in the original sweep — same tag, same reader, different placement. That is larger than the whole working margin | 8 x 4 | ✓ same empty reference | — | L56 |
+| C34 ⚠B | Stacking gain is **1.5–2.1x on the copper coil and 1.0x on the white one**, so the white coil's captures are not coherent with each other in the way the copper coil's are | 8 x 4 | ✓ ratio is against a stacked empty, so a deterministic background cancels | — | L56 |
+| C35 ⚠B | ⛔ **The lag structure is the same for both tags** — 4 of 7 captures at lag 0, 3 at ≈−47 samples, near-identical for copper and white. So the cross-capture correlation is a property of the CAPTURE PATH, not of either tag's frame | 7 pairs x 2 tags | ✓ the two tags are the control for each other | — | L56 |
+| C28 ⚠B | ⭐ **That tag IS heard — the band ratio is simply not sensitive enough to see it.** Stacking 8 captures yields `a0000000e6ad0e92` (1 bit out), `a0000000e4bd0a92` (2), `a0000000e33d0e92` (3) at three separate phases, against a truth of `a0000000e6bd0e92`. Stacked EMPTY captures produce no frame at all, ever | 4 phases x 8 | ✓ emptyfield 0 frames at every stack depth | ✓ the exact 33-bit preamble is what noise never produces (0/160) | L55 |
+| C29 ⚠B | ⭐ **Cross-capture stacking works: 31.9% -> 71.9% correct**, over every combination of the committed captures, with **0 empty-field frames at every depth**. It revives sample phase 0 — the stock trigger, 0/5 singly — and phase 64, outside the single-capture window | 160–320 per depth | ✓ emptyfield 0 at N=1..5 | ✓ decoded by the C firmware decoder, not the Python one | L55 |
+| C30 ⚠B | ⛔ **…but it does nothing for the weak tag**: bench 1.56x -> 2.71x stacked, white coin 1.08x -> 1.05x. The cross-capture alignment stacking depends on is not holding for that tag | 4 phases x 8 | ✓ same treatment, same phases | — | L55 |
+| C31 ⚠B | ⛔ **C11/C12 need re-examining: the EMPTY field correlates better than either tag.** Median lag-0 baseband \|r\| is 0.75–0.83 empty, 0.18–0.49 bench, 0.15–0.22 white — so that correlation is measuring the field turn-on transient, not frame lock | 10–28 pairs x 4 phases | ✓ empty is the control and it *wins*, which is the finding | — | L55 |
+| C27 ⚠B | ⇒ **The working margin is tiny: ~1.5x over the floor reads, ~1.1x does not.** There is almost nothing between "works every time" and "never" | 12 | ✓ per-phase empty reference | — | L53 |
+| C25 ⚠B | **The RF path does not degrade under heavy LF load.** An HID tag's fc/8+fc/10 amplitude is flat to **1.00x** across idle, sustained load and recovery, with the carrier DC flat to 0.3% | 22 | ✓ idle arms before and after the loaded one | ✓ a continuous measurement, not the binary read whose swings prompted it | L52 |
+| C24 ⚠B | **No false positive on a non-Indala tag**: an HID Prox 36-bit tag on the antenna gives `LF tag not found` 10 times in 10, with coupling confirmed by a 5/5 HID read immediately before | 10 | ✓ the loud-signal null, which the empty field does not test | ✓ a second run of 10 by the user, same result | L50 |
 | C23 | The decoder is **word-agnostic**: 36 synthetic words all decode, no wrong answers at any amplitude. Odd-parity mean threshold 23.5, even 24.5 — one ladder rung apart | 36 words x 20 seeds | ✓ control = the bench word, generated by the same code | ✓ the generator is written from the physics and validated by the C decoder, which was validated on 320 real captures | L49 |
 | C22 | The empty-field failure is genuine **timeout exhaustion**, not an early abort: 0.47–0.53 s of device time against a 500 ms budget, where a success takes 0.08–0.22 s | 5 vs 20 | ✓ the 0.33 s host floor measured separately and subtracted | ✓ timing, independent of the decoder's own verdict | L48 |
 | C21 | The C decoder and the numpy decoder agree **word for word on all 320 committed captures**, including the failures | 320 | — | ✓ *this is the independent check* — integer vs float, notch vs FFT, no shared code | L47 |
@@ -112,6 +145,10 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 
 | claim | why it was wrong | retracted by |
 |---|---|---|
+| **"the working phase window is ticks 4–60; the stock phase 0 decodes 0/5"** (C06) | ⛔ a placement artefact. With the tag on the FRONT, phase 0 decodes 3/3 and so do phases 96–120. The surviving dead zone is 56–88, and it carries the HIGHEST skirt of the sweep — so it is a genuine polarity null, not weak signal | L57 |
+| "the working margin is tiny — ~1.5x over the floor reads, ~1.1x does not" (C27) | ⛔ measured entirely on the back. On the front the same coils sit at 20–34x | L57 |
+| "a second Indala coil is inaudible / 3.3x weaker" (C26, C32) | ⛔ both coils were on the back. On the front the weak one reads first try | L57 |
+| "tag position is worth ~5.7 dB" | ⛔ understated by a factor of ten. Side of the device alone is 21x, ~26 dB | L57 |
 | "fc/2 sits at Nyquist, therefore it cancels" | the Proxmark samples once per carrier cycle too, and reads Indala | L03 |
 | "the Indala tag produces no detectable modulation" | measured through the `>>5` truncation | L10 |
 | "phase sweep shows 659x" | tracking overrun bursts; small denominator | L15 |

@@ -8,11 +8,14 @@ lf indala read   ->   Indala PSK1
                       Fmt 26 FC: 52 Card: 63612 Parity: 11
 ```
 
-10 of 10 consecutive reads at 0.40–0.43 s, one capture each — **on the coil this was
-developed against.** ⚠ A second Indala coil carrying the same payload, written and verified
-by a Proxmark and readable on a Flipper, reads **0/12**: it is 3.3x weaker in the fc/2 band
-(C32). Position alone is worth more than 2x (C33), which is larger than the entire working
-margin, so placement is not a detail here — use `lfprobe.py --monitor` rather than guessing. The demodulation is integer arithmetic on
+⛔⛔ **PUT THE TAG ON THE FRONT OF THE DEVICE — the side with the buttons.** The Flipper
+reads from its back; the Chameleon is the other way round, and it is worth **21x**. Every
+measurement in this project before 2026-09-11 was taken on the wrong side, which is most of
+the deficit it spent days trying to explain. Claims measured that way are marked ⚠B in
+`FINDINGS.md` and are provisional.
+
+On the front: 71% of single captures decode, every sample phase outside 56–88 works
+including the stock phase 0, and a coil that read 0/12 on the back reads first try. The demodulation is integer arithmetic on
 the nRF52840 — no float, no FFT, 8 KB of buffer.
 
 With no tag on the antenna it reports `LF tag not found` 20 times in 20, taking the full

@@ -85,6 +85,26 @@ They were wrong answers, not failures: 24 wrong frames in 200 captures, one in f
 reader built on the decode rate alone would hand back a wrong credential 20% of the time.
 ⇒ Always report recovered / correct / wrong as three numbers, never two.
 
+**M20. ⛔⛔ THE SPECIMEN'S STATE IS NOT THE SAME AS THE SPECIMEN'S PLACEMENT, AND THIS
+PROJECT CHECKED ONLY THE FIRST.** `README`'s opening warning — confirm what is written on
+the tag before trusting any measurement — was followed scrupulously for days. Nobody ever
+asked which SIDE of the reader the tag was sitting on. It was the wrong side, for the entire
+investigation, and it was worth **21x — about 26 dB**, which is most of the "31.2 dB below
+the Proxmark" the project was built around explaining. ⇒ Write down the physical
+configuration, not just the logical one, and put a number on each part of it.
+
+**M21. ⚠ AN ASSUMPTION IMPORTED FROM A DIFFERENT DEVICE IS STILL AN ASSUMPTION.** The tag
+went on the back because that is where a Flipper Zero reads. The Chameleon is the other way
+round. Nothing in the investigation ever stated this belief, so nothing could ever test it —
+which is the defining property of the assumptions that cost the most.
+
+**M22. ⭐ THE VARIABLE NOBODY VARIED IS WHERE THE ERROR IS.** Days went into sample phase,
+gain, oversampling, settle, air gap, filters and stacking — every one of them a knob someone
+had already thought to turn. The 26 dB was in the one degree of freedom that was never
+written down as a degree of freedom at all. ⇒ When a large unexplained deficit persists
+across many careful experiments, stop refining the experiments and go looking for the axis
+that is not in them.
+
 **M19. ⭐ Measure the SIGNAL, not whether it decoded.** A read is binary and conflates "the
 tag was not heard" with "the tag was heard and the decoder did not lock" — and a binary
 metric noisy enough to swing 6-11 out of 15 will manufacture a convincing before/after. The
