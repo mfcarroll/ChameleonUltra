@@ -1,5 +1,7 @@
 # Where to pick this up — ranked, with why
 
+⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
+
 **State at 2026-09-11.** The channel is measured and trustworthy. The demodulation gap is
 **7.6 dB**, confirmed twice by independent routes (spectral band SNR, and a ~19% bit-error
 rate implying ~7.7 dB). The signal at fc/2 is **detectable but not decodable**: 52/64 bits

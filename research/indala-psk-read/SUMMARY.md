@@ -1,5 +1,7 @@
 # Indala on Chameleon Ultra — investigation summary
 
+⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
+
 ⭐ **Picking this up again? `NEXT.md`** — ranked next steps, the untried
 upstream levers, and the method rules this project paid for.
 
