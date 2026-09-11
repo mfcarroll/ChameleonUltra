@@ -59,6 +59,21 @@ in noise. A demod that prints something is not a demod that read the tag.
 ⇒ The subcarrier arrives ~7.6 dB below what Proxmark's own demodulator needs, and the
 deficit is ahead of the ADC. No firmware change reaches it.
 
+## ⚠⚠ BUT THE LEVER CLOSURES ARE NOT SAFE
+
+The 7.6 dB shortfall is solid. The claim that *nothing can close it* is not. Every lever
+except phase was closed before the BLE dropout fix and on a tag carrying
+`DEADBEEF/12345678` rather than an Indala frame.
+
+Solid: **phase** (re-measured today, R²=0.974). Survives a confound test: **gain** — though
+its floor scales *under* the gain ratio, implying ~1–1.5 dB is genuinely available. Weak
+nulls on noisy data: **settle**, **air gap**. Never tested at all: **field drive**, the
+**`LF_RSSI` tap upstream of both filter poles**, and **a purpose-built demodulator** (5.5x
+is Proxmark's threshold, not a bound — it does no coherent frame averaging).
+
+⇒ Against 7.6 dB there is more unexplored surface than measured wall. See `README.md` §0b2
+for the ranked list.
+
 ## ⛔⛔ STATUS 2026-09-11: the demod test is retracted, and the tag state was wrong
 
 Found by the operator: `lf indala reader` failed on the bench tag and it had to be rewritten

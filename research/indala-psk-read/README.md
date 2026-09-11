@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — not viable: 7.6 dB short, and the loss is analog
+## Indala on Chameleon Ultra — 7.6 dB short; not yet shown unbridgeable
 
 ⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
 ⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
@@ -87,6 +87,53 @@ the ADC, where no firmware change reaches it.
 carrying `DEADBEEF/12345678` rather than an Indala frame (§0c), whose bit-dense payload puts
 +1.9 dB more energy in the measured band, and phase 0 was being credited with the full 6 dB
 swing rather than the 2.8 dB actually recoverable from it.
+
+### 0b2. ⚠⚠ THE CLOSURES ARE NOT SAFE — only phase was ever validly measured
+
+§0's 7.6 dB shortfall is solid: real credential, clean firmware, 2 frames, optimal phase.
+**What is not solid is the claim that nothing can close it.** Every lever except phase was
+closed on data taken before the BLE dropout fix (23:01) and on a tag carrying
+`DEADBEEF/12345678` rather than an Indala frame:
+
+| lever | data taken | vs BLE fix | payload | closure |
+|---|---|---|---|---|
+| phase | 20:48, **re-run 07:0x today** | after ✓ | real ✓ | **solid** — R²=0.974, 2.8 dB from phase 0, already taken |
+| gain | 22:26 | before | wrong | **survives** — see below |
+| oversampling | 21:04 | before | wrong | weak, but has a sound reason to be ~0 dB |
+| settle | 22:33 | before | wrong | **weak** — a null result on noisy data |
+| air gap | 22:43 | before | wrong | **weak** — fc/2 was at the floor for half the points |
+| field drive | — | — | — | **never tested** |
+| `LF_RSSI` tap (AIN0) | — | — | — | **never tested** |
+| a better demodulator | — | — | — | **never considered** |
+
+**The gain closure was tested for its confound and survives.** The worry was that the
+empty-field floor it measured was dropout noise, which would scale with gain and fake an
+analog-referred result. Re-analysed at four screen strengths, the floor scales with gain at
+every one of them (never flat), and the post-fix floor is only ~1 dB below the pre-fix one,
+so dropouts were not dominating it. ⚠ But the scaling runs consistently *under* the gain
+ratio (≈1.4–1.75x for a 2.0x gain step), which implies a partial ADC-referred component
+worth perhaps **1–1.5 dB**. Small, not zero.
+
+⇒ **Against a 7.6 dB gap there is more unexplored surface than measured wall.** In rough
+order of plausible return:
+
+1. ⭐⭐⭐ **`LF_RSSI` (AIN0) taps `LF_OA`, upstream of BOTH filter poles.** If the deficit is
+   in the filter stages this recovers most of it. One firmware change (switch the channel),
+   never attempted. `ADVERSARIAL.md` §1 has the caveats — 470k source impedance, and the
+   node is designed to be slow — which is why it needs measuring, not arguing.
+2. ⭐⭐ **A purpose-built demodulator.** The 5.5x threshold is *Proxmark's PSKDemod*, not an
+   information-theoretic bound. It does no coherent frame averaging, and a capture already
+   holds 2 frames with more available across repeats. A matched filter could plausibly work
+   several dB lower. Entirely untested, and it attacks the gap from the other side.
+3. ⭐ **Field drive duty** — hardcoded 50%; changes the detector's operating point, not just
+   coupling, so the gap sweep does not stand in for it.
+4. **Re-test settle and gap** on the real credential with clean captures. Both closures are
+   nulls from noisy data, and a null is what noise produces.
+5. **Gain**, for the ~1–1.5 dB the scaling shortfall implies.
+
+⚠ **Do not read this as optimism.** The 7.6 dB is measured and real. The point is narrower:
+*it has not been shown to be unbridgeable*, and the levers that would bridge it were closed
+on invalid data or never opened.
 
 ### 0c. ⛔⛔⛔ RETRACTED: the demod attempt — the tag was never transmitting Indala
 
