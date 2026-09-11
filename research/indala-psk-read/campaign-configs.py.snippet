@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PROPOSED ADDITION to T5577_block0_analysis_data/t5577_campaign.py CONFIGS
+# (Momentum-Firmware, branch t5577-deep-read). Not applied — review first.
+#
+# Purpose: sweep the PSK CARRIER FREQUENCY field, which no existing config
+# varies. Every PSK entry in the registry today (PSK1, PSK2, PSK3, PSK1-MB1,
+# PSK1-RF40, PSK1-MB5, PSK1-MB3) leaves PSKCF at RF/2.
+#
+# ⚠ SINGLE FACTOR BY CONSTRUCTION, to the registry's usual standard:
+#     00081040 ^ 00081440 == 00000400
+#     00081040 ^ 00081840 == 00000800
+#   Both lie ENTIRELY inside the PSKCF mask (0x00000C00,
+#   proxmark3 include/protocols.h:818-820). Modulation stays PSK1
+#   (0x00001000), rate stays RF/32 (0x00080000), maxblock stays 2, ST stays 0,
+#   and the payload stays _D1/_D2. Only the PSK subcarrier moves.
+#
+# Why it matters here: PSKCF sets the subcarrier the tag actually emits —
+# RF/2 = 62500 Hz, RF/4 = 31250 Hz, RF/8 = 15625 Hz — against a fixed 125 kHz
+# carrier. That makes ONE tag a three-point frequency sweep of any reader's
+# receive chain, which is how we separate analog rolloff from a sampling
+# artefact on the Chameleon Ultra (it reads no PSK tag at all).
+#
+# ⭐ RF/8 and RF/4 land at 8 and 4 samples per subcarrier cycle on a 125 kHz
+#   sampler and so measure the ANALOG FILTER alone. RF/2 lands at exactly 2 —
+#   Nyquist — where fixed-phase sampling can add a penalty of its own. Fit on
+#   the two clean points, extrapolate, compare.
+
+CONFIGS["PSK1-CF4"] = {
+    "blocks": {1: _D1, 2: _D2, 0: "00081440"}, "expect_block0": "00081440",
+    "note": "PSK1 RF/32, PSK carrier RF/4 (31250 Hz) -- PSKCF-only step from PSK1",
+}
+CONFIGS["PSK1-CF8"] = {
+    "blocks": {1: _D1, 2: _D2, 0: "00081840"}, "expect_block0": "00081840",
+    "note": "PSK1 RF/32, PSK carrier RF/8 (15625 Hz) -- PSKCF-only step from PSK1",
+}
+
+# ⚠ UNVERIFIED ON SILICON. Whether a given T5577 honours all three PSKCF
+# values has not been measured here — that is itself a result worth recording,
+# and it is why the PM3 reference capture (--pm3-signal) is not optional: a
+# null on the reader under test means nothing unless the PM3 confirms the tag
+# emitted at that subcarrier at all.

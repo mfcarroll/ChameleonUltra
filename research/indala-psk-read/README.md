@@ -146,6 +146,35 @@ only −8.6dB (2.7x) between those two frequencies, while the measured gap is ~3
 **not conclusive across two different tags** with different modulation depths. That is precisely
 what the single-tag sweep settles.
 
+⭐ **Capture the PM3's view at every step too — it is not optional.** A null at RF/2 on the
+Chameleon means nothing unless something confirms the tag actually emitted at that subcarrier.
+Whether a given T5577 honours all three `PSKCF` values is itself unmeasured here. The Proxmark is
+the reference receiver, and its capture turns each step into a controlled comparison:
+
+| | RF/8 | RF/4 | RF/2 |
+|---|---|---|---|
+| PM3 sees subcarrier | reference | reference | **reference** |
+| Chameleon sees it | expect yes | ? | ? |
+
+If the PM3 sees RF/2 and the Chameleon does not, the tag is fine and the Chameleon's chain is the
+subject. If neither sees it, suspect the write or the silicon, not the Chameleon.
+
+**Reuse the existing campaign harness, do not rebuild it.**
+`T5577_block0_analysis_data/t5577_campaign.py` (Momentum `t5577-deep-read`) already does the risky
+half: `program_config()` writes and *verifies* block 0 against `expect_block0`, with restore files,
+and `--pm3-signal` runs `lf config; lf t55xx read -b N; data save -f FILE` for exactly the reference
+capture above. Its registry already carries `PSK1` at `00081040` — the Indala word.
+
+⚠ **What it does not have is a Chameleon reader leg.** `--reads` runs *Flipper CLI commands over a
+serial port* (`open_port`/`run_cmd`/`flip_read_command`), and the Chameleon speaks a framed protocol
+instead, so it needs a shell-out to `cu.py` rather than a port write. That is the one seam. For a
+three-point sweep it is not worth building: add the configs, let the harness program and take the
+PM3 reference, and capture the Chameleon side with `cu.py` by hand. Build a `--reader chameleon`
+backend only if the full matrix (PSKCF x rate x gap x repos) turns out to be worth running.
+
+⇒ Proposed registry additions are in `campaign-configs.py.snippet`, single-factor by construction
+to the registry's own standard. **Not applied** — that branch is the operator's.
+
 **Procedure** (Proxmark3 writes block 0; only block 0 changes, data blocks are untouched):
 
     # capture a fresh empty-field baseline first
