@@ -26,6 +26,23 @@ void set_ble_connect_key(uint8_t *key);
  * window costs little settling accuracy. Call BEFORE register_lf_adc_callback(). */
 void lf_adc_set_acq_fast(bool fast);
 
+/* SAADC input gain for the LF channel, as the DIVISOR: 6 is the default (GAIN1_6).
+ *
+ * ⭐ WHY IT IS WORTH A KNOB. With gain 1/6 against the 0.6V internal reference, full
+ * scale is 3.6V and one 14-bit count is 220uV. The LF signal sits on ~1.2V of LF_VBIAS
+ * DC, and the fc/2 subcarrier measures ~17 counts — about 1/3000th of the range. The DC
+ * is consuming the headroom, so most of the converter is spent representing a constant.
+ *
+ * ⚠ SINGLE-ENDED, THE DC SETS THE CEILING. 1.2V against full scale means divisors below
+ * 3 clip: 1/3 gives 1.8V full scale (DC at 67%), 1/2 gives 1.2V and saturates. Going
+ * further needs differential mode against LF_RSSI to subtract the DC first.
+ *
+ * ⇒ What this knob is FOR is one measurement: whether the empty-field noise floor scales
+ * with gain. If it does, the floor is analog and gain buys nothing. If it does not, the
+ * floor is ADC-referred and gain is real SNR. Call BEFORE register_lf_adc_callback().
+ */
+void lf_adc_set_gain(uint8_t divisor);
+
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 

@@ -7719,6 +7719,14 @@ class LFSniff(ReaderRequiredUnit):
             help='Print hex dump of samples to screen'
         )
         parser.add_argument(
+            '--gain', type=int, default=6, choices=(1, 2, 3, 4, 5, 6), metavar='DIV',
+            help='SAADC gain as a DIVISOR; 6 (default) is stock 1/6 = 3.6V full scale. '
+                 'The signal rides on ~1.2V of bias, so single-ended, 3 (1.8V FS) is '
+                 'about the limit and 2 or 1 will saturate. Use it to find out whether '
+                 'the noise floor is ADC-referred or analog: if the empty-field floor '
+                 'scales with gain it is analog and gain buys nothing.'
+        )
+        parser.add_argument(
             '--rate', type=int, default=0, metavar='KHZ',
             help='Free-running sample rate in kHz, asynchronous to the carrier. 0 '
                  '(default) samples once per carrier period at 125kHz, which puts an '
@@ -7761,7 +7769,7 @@ class LFSniff(ReaderRequiredUnit):
             print(f"{CR}--phase must be 0..127 ticks{C0}")
             return
         resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase,
-                                 rate_khz=args.rate)
+                                 rate_khz=args.rate, gain=args.gain)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")
@@ -7812,6 +7820,12 @@ class LFSniff(ReaderRequiredUnit):
             s_mean = sum(samples) // len(samples)
             print(f" 14-bit   : {CG}{s_mn}{C0} – {CG}{s_mx}{C0}  mean: {CG}{s_mean}{C0}"
                   f"   (peak-to-peak {CG}{s_mx - s_mn}{C0} counts of 16383)")
+            # ⚠ Raising gain against a 1.2V DC pedestal saturates before it helps, and a
+            # saturated capture still looks like a plausible waveform. Say so loudly.
+            sat = sum(1 for v in samples if v >= 16370 or v <= 8)
+            if sat:
+                print(f" {CR}SATURATED{C0}: {CR}{sat}{C0} of {len(samples)} samples at a rail"
+                      f" — gain 1/{args.gain} is too high for the {s_mean} count DC pedestal")
 
         # Detect real field gaps — they drop to near zero (0x00-0x40),
         # well below the steady carrier (~0xb0). Use half of mean as threshold

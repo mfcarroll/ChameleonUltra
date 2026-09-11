@@ -2057,12 +2057,15 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
     lf_125khz_radio_saadc_phase_set(length >= 4 ? data[3] : 0);
     /* Optional 5th byte: free-running sample rate in kHz (0 = carrier-locked). */
     lf_125khz_radio_saadc_rate_set(length >= 5 ? data[4] : 0);
+    /* Optional 6th byte: SAADC gain divisor (0 or 6 = stock 1/6). */
+    lf_adc_set_gain(length >= 6 ? data[5] : 6);
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     size_t outlen = 0;
     raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16);
     lf_125khz_radio_saadc_phase_set(0);   /* never leave a phase set for other readers */
     lf_125khz_radio_saadc_rate_set(0);
+    lf_adc_set_gain(6);
 
     if (outlen == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);

@@ -702,7 +702,7 @@ class ChameleonCMD:
         return resp
 
     def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8, phase: int = 0,
-                 rate_khz: int = 0):
+                 rate_khz: int = 0, gain: int = 6):
         """
         Capture raw LF field ADC samples.
 
@@ -733,7 +733,10 @@ class ChameleonCMD:
             raise ValueError("phase must be 0..127 ticks")
         if rate_khz and not 10 <= rate_khz <= 200:
             raise ValueError("rate_khz must be 0 (carrier-locked) or 10..200")
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase, rate_khz])
+        if gain not in (0, 1, 2, 3, 4, 5, 6):
+            raise ValueError("gain must be the divisor 1..6 (6 = stock 1/6)")
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase,
+                         rate_khz, gain])
         timeout_s = (timeout_ms // 1000) + 2
         return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
 
