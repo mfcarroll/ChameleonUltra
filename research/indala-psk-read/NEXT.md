@@ -126,6 +126,39 @@ cd ../../software/script && .venv/bin/python cu.py $(printf '"lf indala read" %.
 ⚠ EM410x/Viking/PAC/Jablotron subcarriers are NOT at 10–18kHz. Set `--band` per tag, and
 measure that band's empty floor — there is no universal floor (M24).
 
+## 3b. ⭐⭐⭐ FIX THE HID PROX READER — and there is a one-line candidate to test first
+
+Not this project's decoder, but it is the comparison instrument for everything here and it
+has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
+
+**What is established:** three tags with byte-identical memory read 0/6, 3/6 and 7/9 on the
+Chameleon and 3/3 on a Proxmark (C46). The RF path is flat while reads fail (C45). So the
+decoder's tolerance is narrower than the Proxmark's, and package-level differences cross it.
+
+**⭐ Test this first — it is one line and it explains an old observation.**
+`advertising_stop()` appears in **1 of 15** LF reader files. Only `lf_reader_generic.c`
+suspends BLE advertising; `hidprox_read()` does not. That file's comment records the
+measurement that put it there: an advertising burst collapses the 125 kHz field for ~1.6 ms
+and hit **4 captures in 10**. And it predicts the thing nobody could explain in L51 —
+*"after connecting it to my phone and/or a reboot, it does read"* — because connecting a BLE
+central is precisely what stops advertising (C47).
+
+```bash
+# the discriminating test, ~5 minutes, needs the BLUE DUAL (the 0/6 tag — the others
+# have too little headroom to show an improvement)
+cd software/script && for i in $(seq 1 15); do .venv/bin/python cu.py "lf hid prox read" | tail -1; done
+# then connect a phone over BLE so advertising stops, and repeat
+```
+
+⚠ **If it works, resist generalising it.** It cannot explain the blue dual reading 0/6
+deterministically — an intermittent field collapse does not produce a clean zero. Expect two
+causes: a BLE-induced intermittency affecting every LF reader, and a per-tag waveform
+tolerance in the FSK demodulator. ⇒ The fix belongs in `capture_begin()`-style shared code so
+all 15 readers get it, not pasted into `hidprox_read()` alone.
+
+⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
+(`lfprobe.py`) for presence, per §3.
+
 ## 4. ⭐ A second Chameleon
 
 ⚠ Worth doing and worth not over-reading. Two units bought together are the same hardware

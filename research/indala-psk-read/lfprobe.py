@@ -98,6 +98,10 @@ def main():
     ap.add_argument("--read", default="lf hid prox read",
                     help="the read command to score alongside the amplitude")
     ap.add_argument("--hit", default="HIDProx", help="substring marking a successful read")
+    ap.add_argument("--load-hit", default="Indala",
+                    help="substring marking the LOAD command finding a tag. The load arm is "
+                         "a loud-signal null for the other protocol's reader, so it is "
+                         "scored rather than discarded")
     ap.add_argument("--load", default="lf indala read",
                     help="the command used as the load")
     ap.add_argument("--idle", type=int, default=6)
@@ -143,8 +147,14 @@ def main():
 
     for _ in range(a.idle):
         sample("idle")
+    # ⭐ SCORE THE LOAD COMMAND TOO. The load arm runs the OTHER protocol's reader against
+    # this tag — which is a loud-signal null for that reader, and it was being thrown away.
+    # 32 Indala reads against a 95x HID tag went unrecorded before this was added.
+    load_hits, load_runs = 0, 0
     for _ in range(a.loaded):
-        cu(*([a.load] * 4))
+        out = cu(*([a.load] * 4))
+        load_runs += 4
+        load_hits += sum(1 for ln in out.splitlines() if a.load_hit in ln)
         sample("LOADED")
     for _ in range(a.recover):
         sample("recover")
@@ -158,6 +168,11 @@ def main():
               f"{np.median(amps)/base:5.2f}x idle   reads {hits}/{len(rs)}")
     load = float(np.median([r[0] for r in rows["LOADED"]]))
     print(f"\n  ⇒ {'RF DEGRADES under load' if abs(load/base - 1) > 0.1 else 'the RF path is FLAT under load — a failing read is the decoder, not the signal'}")
+    # The load arm doubles as a loud-signal null: the OTHER protocol's reader, run against
+    # a tag that is loudly present and of the wrong type. It must find nothing.
+    if load_runs:
+        print(f"  ⇒ loud-signal null: {a.load!r} found a tag {load_hits}/{load_runs} times "
+              f"against this tag" + ("  ⛔ FALSE POSITIVE" if load_hits else "  ✓ clean"))
 
 
 if __name__ == "__main__":
