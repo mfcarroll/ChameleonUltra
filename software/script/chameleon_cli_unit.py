@@ -6175,6 +6175,21 @@ class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
             self.cmd.indala_set_emu_id(bytes.fromhex(args.id))
             print(f" - Indala emu id set to {args.id.upper()}.")
         else:
+            # ⚠ CHECK THE TYPE BEFORE ASKING. The firmware answers STATUS_PAR_ERR when the
+            # slot's LF type is not Indala, which the CLI renders as the useless "API
+            # request fail, param error" — and the commonest way to hit it is setting a
+            # type on one slot while a DIFFERENT slot is active, since econfig without -s
+            # reads the ACTIVE one. Say which slot and what it actually holds.
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Indala:
+                print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                      f"{color_string((CR, str(lf_tag_type)))}"
+                      f"{color_string((CR, ', not Indala.'))}")
+                print(f"   Either pick the slot: {color_string((CG, 'lf indala econfig -s <n>'))}")
+                print(f"   or set this one:     {color_string((CG, 'hw slot type -s ' + str(selected) + ' -t Indala'))}")
+                return
             response = self.cmd.indala_get_emu_id()
             info = _indala_frame_info(response)
             print(f" - Indala emu id: {response.hex().upper()}")
