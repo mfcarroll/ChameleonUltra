@@ -75,24 +75,46 @@ def sideband(x):
     return 2 * np.sqrt((S[m] ** 2).sum()) / w.sum()
 
 
+# ⭐ Precomputed rotation tables. Scoring is a 2048 x 64 x 64 comparison and the loop
+# version took seconds per capture, which is unaffordable once a phase sweep calls it 64
+# times. Vectorised here, and checked against the loop version on real captures.
+_ROTS = np.array(ROTS, dtype=np.int8)                                   # 64 rotations x 64 bits
+_DATA_MASK = np.array([[((i + k) % 64) in DATA_BITS for i in range(64)]
+                       for k in range(64)])                             # which bits are credential
+_N_DATA = _DATA_MASK.sum(1)                                             # 31 for every rotation
+
+
 def score(v, fc):
     """Brute force every bit position and every cyclic rotation, and report errors in the
-    31 CREDENTIAL bits. Returns (all64, data31)."""
+    31 CREDENTIAL bits. Returns (all64, data31).
+
+    ⛔ SCORE THE CREDENTIAL, NOT THE FRAME. Bits 0-32 are the preamble, and 28 of them are
+    a constant-polarity run — matching a constant is free, and against 64 rotations that
+    is up to 32 bits of unearned score. Reading the all-64 number is how "52/64 against a
+    45/64 null" got written down as detection when the null was actually winning."""
     b = lowpass(M.baseband(v), fc)
-    best = (99, 99)
-    for pos in range(max(1, len(b) - 64 * BIT)):
-        pol = np.where(b[pos:pos + 64 * BIT].reshape(64, BIT).sum(1) >= 0, 1, -1)
-        bits = [1] + [1 if pol[k] != pol[k - 1] else 0 for k in range(1, 64)]
-        for k, r in enumerate(ROTS):
-            d = sum(x != y for x, y in zip(bits, r))
-            inv = d > 32
-            if inv:
-                d = 64 - d
-            dd = sum((bits[i] ^ (1 if inv else 0)) != r[i]
-                     for i in range(64) if ((i + k) % 64) in DATA_BITS)
-            if (dd, d) < (best[1], best[0]):
-                best = (d, dd)
-    return best
+    n_pos = len(b) - 64 * BIT
+    if n_pos < 1:
+        return (99, 99)
+    # sliding 32-sample boxcar at every offset, then gather the 64 bit-integrators per
+    # position in one indexing step
+    c = np.concatenate([[0.0], np.cumsum(b)])
+    box = c[BIT:] - c[:-BIT]                                   # box[i] = sum(b[i:i+BIT])
+    idx = np.arange(n_pos)[:, None] + BIT * np.arange(64)[None, :]
+    pol = np.where(box[idx] >= 0, 1, -1)                       # n_pos x 64
+    bits = np.empty_like(pol)
+    bits[:, 0] = 1
+    bits[:, 1:] = (pol[:, 1:] != pol[:, :-1]).astype(pol.dtype)
+    ne = bits[:, None, :] != _ROTS[None, :, :]                 # n_pos x 64 x 64
+    d_all = ne.sum(-1)
+    inv = d_all > 32                                           # differential decode is
+    d_all = np.where(inv, 64 - d_all, d_all)                   # polarity-blind
+    d_dat = (ne & _DATA_MASK[None, :, :]).sum(-1)
+    d_dat = np.where(inv, _N_DATA[None, :] - d_dat, d_dat)
+    # rank by credential errors first, then by the whole frame
+    flat = np.argmin(d_dat * 100 + d_all)
+    i, j = np.unravel_index(flat, d_dat.shape)
+    return (int(d_all[i, j]), int(d_dat[i, j]))
 
 
 def psk_frame(n, amp):
