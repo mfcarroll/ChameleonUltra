@@ -19,7 +19,23 @@ measured in THAT SAME BAND with the antenna clear. There is no universal floor (
     ./nulltest.py --floor <that number> --read "lf pac read" --hit PAC
 
 ⚠ The interferer's own reader is still run, but only as a BONUS. It cannot fail the test,
-because a broken decoder for the interferer says nothing about the Indala reader.
+because a broken decoder for the interferer says nothing about the Indala reader. (`lf pac
+read` scored 0/5 and 2/5 on the two units while the tag sat at 16x — exactly the case.)
+
+⛔⛔ PICK THE BAND FOR THE INTERFERER'S MODULATION, AND THE DEFAULT IS WRONG FOR PSK1.
+The 500-20000 Hz default covers ASK/OOK/NRZ/biphase, which modulate the ENVELOPE at 2-4kHz.
+A PSK1 tag does not: its energy is a subcarrier at fc/2 = 62500 Hz, entirely outside it.
+Measured: IDTECK scored 5.5-6.3x in the default band where the ASK tags scored 16-19x, and
+that 6x is leakage rather than the tag.
+
+    ASK / OOK / NRZ / biphase   --band 500 20000     (EM410x, Viking, PAC, Jablotron)
+    FSK  (fc/8, fc/10)          --band 10000 18000   (HID Prox, ioProx)
+    PSK1 (fc/2)                 --band 60000 65000   (Indala, IDTECK)
+
+⭐ AND FOR A PSK1 INTERFERER THE "BONUS" READER IS THE BETTER BRACKET ANYWAY. `lf idteck
+read` decodes PSK1 at fc/2 — the same physical layer the Indala reader uses — so it
+succeeding proves the tag is audible IN THE INDALA DECODER'S OWN BAND AND MODULATION, which
+no amplitude ratio can show. That is a stronger claim than the probe was built to make.
 """
 import argparse
 import os

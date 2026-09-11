@@ -81,36 +81,28 @@ imported phase 64, which returns a wrong credential 5 times out of 5. A phase th
 is cheap; a phase that lies is not. The rotation is now derived from phases that decode
 correctly on both sides AND produce no repeatable wrong frame on either.
 
-## 3. ⭐ Loud-signal nulls — HID and EM410x done, three ASK tags left
+## 3. ✅ LOUD-SIGNAL NULLS — DONE. 220 reads, 0 false positives
 
-| interferer | bracket | result |
-|---|---|---|
-| HID Prox, back (C24) | a read | 10/10 not found — but a *quiet* wrong signal |
-| HID Prox, front (C44) | amplitude, 88–100x | 30/30 not found |
-| **EM410x (C52)** | **amplitude 18.5x AND a confirming read** | **20/20 not found** |
-| Viking, PAC, Jablotron | — | ⚠ untested |
+| interferer | modulation | bracket | result |
+|---|---|---|---|
+| HID Prox, back (C24) | FSK RF/50 | a read | 10/10 not found |
+| HID Prox, front (C44) | FSK RF/50 | amplitude 88–100x | 30/30 |
+| EM410x (C52) | ASK RF/64 | amplitude 19x + its own reader | 20/20 |
+| **IDTECK (C55)** | **PSK1 RF/32 — Indala's own config word** | **its own reader, both units** | **40/40** |
+| Viking (C55) | ASK RF/32 | amplitude 18.6/19.3x | 40/40 |
+| PAC (C55) | NRZ RF/32 | amplitude 16.1/15.9x | 40/40 |
+| Jablotron (C55) | biphase RF/64 | amplitude 18.1/18.3x | 40/40 |
 
-C52 is the one to copy: the floor was measured in the interferer's own band with the pad
-clear, in the same session, and the interferer's own reader confirmed it independently.
+Plus 320 empty captures producing no frame at all. ⛔ Read C57 before running another one:
+the default band is wrong for a PSK1 interferer, and for that case the interferer's own
+reader is the better bracket, not the amplitude probe.
 
-⛔ **BRACKET WITH `lfprobe.py`, NOT WITH A READ.** A read conflates "not heard" with "heard
-but not decoded" — six bracketing `lf hid prox read` calls failed while that tag sat at 90x
-the floor, and following the old rule would have thrown away C44 (F05).
+## 4. ✅ A second Chameleon — reads 20/20 at the same phase
 
-```bash
-# 1. floor for THIS tag's band, ANTENNA CLEAR — there is no universal floor (M24)
-cd research/indala-psk-read && ../../software/script/.venv/bin/python lfprobe.py \
-  --band <lo> <hi> --monitor 5
-# 2. tag on, same band, floor from step 1 — want a ratio comfortably above 1
-../../software/script/.venv/bin/python lfprobe.py --band <lo> <hi> --monitor 5 --floor <N>
-# 3. the null
-cd ../../software/script && args=(); for i in $(seq 20); do args+=("lf indala read"); done
-.venv/bin/python cu.py "${args[@]}"
-```
-
-⚠ Bands: EM410x is ASK RF/64, so 1000–5000 Hz. HID Prox is FSK fc/8 and fc/10, so
-10000–18000. Viking, PAC and Jablotron each need their own — work it out from the bit rate
-and modulation, and measure that band's own empty floor.
+Same firmware, same copper coin, phase 20, one capture each, no gate rejections. Only the bit
+offset moves (9 -> 10), which is C51's timing showing it depends on the reader too. ⚠ The
+caveat §4 was written with still stands: same batch, same revision, so this is unit-to-unit
+tolerance and not design generality. A pass was always going to be weak evidence.
 
 ## 3b. ⭐⭐⭐ FIX THE HID PROX READER — and there is a one-line candidate to test first
 
