@@ -1,45 +1,63 @@
 # Adversarial review prompt — Indala on Chameleon Ultra
 
 Paste this to a fresh agent with the repo available. It is written to be hostile to its own
-conclusions on purpose: the investigation produced **nine** wrong conclusions before the
-final one, every single one from an artefact in its own analysis rather than the hardware,
-so the prior that the tenth is also wrong should be high.
+conclusions on purpose.
+
+⚠ **The prior that the current conclusion is also wrong should be HIGH.** This investigation
+produced **eleven** wrong conclusions before the current one, every single one from an
+artefact in its own analysis rather than the hardware. Its previous "final" conclusion —
+that the read was not viable, 31 dB short — was itself falsified, and the thing that
+falsified it was a two-line convention bug that had been sitting in the decoder the whole
+time while a self-consistent unit test reported PASS.
 
 ---
 
 ## Your task
 
-Falsify this conclusion, or find the lever it missed:
+Falsify this conclusion, or find what it is still getting wrong:
 
-> Reading Indala (PSK1, RF/32, fc/2 = 62.5 kHz subcarrier) on an unmodified Chameleon Ultra
-> is not viable. The firmware has no PSK demodulator, but that is not the binding
-> constraint: the receive chain loses ~31 dB at fc/2 relative to a Proxmark3 on identical
-> stimulus, of which ~7.5 dB is recoverable by ADC sample phase and **~24 dB is analog,
-> ahead of the ADC**. At fc/2 the tag sits 2.8x above the empty-field noise floor, where
-> RF/4 — which this device reads without trouble — sits at 58x.
+> An unmodified Chameleon Ultra **reads Indala** (PSK1, RF/32, fc/2 = 62.5 kHz subcarrier).
+> 43 of 160 single 300 ms captures decode `a0000000e6bd0e92` exactly; the empty field
+> produced the truth 0 times in 160. No stacking, no averaging, stock 8-bit sample width.
+> The read requires a sample phase in ticks 4–60 (best 12–36; the stock phase 0 fails), a
+> baseband low-pass, and **not** discarding the settle window.
 
-Do not take the write-up at face value. Re-derive from the captures.
+Do not take the write-up at face value. Re-derive from the committed captures — every number
+above is reproducible offline with no hardware.
+
+⭐ **The sharpest questions to put to it:**
+
+1. **Is the decode real, or is the decoder finding what it was told to look for?** It
+   brute-forces sample offsets and matches a known 33-bit preamble against a known 64-bit
+   answer. What is the false-positive rate of that procedure on noise? The empty-field null
+   is 0/160 — verify that independently, and check whether the near-misses
+   (`a0100000e6bd0e92`) are evidence of a marginal read or of a decoder straining.
+2. **Does it generalise?** One tag, one unit, one coupling geometry, one session. The phase
+   window in particular could be an artefact of this tag's position.
+3. **Was PSK1-vs-PSK2 really the root cause, or a coincidence that happens to work here?**
+   Check the claim against the ATA5577 datasheet as well as the Proxmark source.
+4. **What else is a self-consistent test?** The `synth()` bug survived because the encoder
+   and decoder shared a convention. Look for the same shape elsewhere in the tooling.
 
 ## Where everything is
 
-- Findings, with every retraction banded in place: `research/indala-psk-read/README.md`
-- Condensed: `research/indala-psk-read/SUMMARY.md`
-- Final clean dataset: `research/campaigns/campaign_20260910_231740/`
-  — `raw/*.bin` Chameleon, 16-bit big-endian, 2000 samples @125 kHz, 5 repeats per config
+- ⭐ Current knowledge and the claims ledger: `research/indala-psk-read/FINDINGS.md`
+- Method rules, each tied to the wrong conclusion that earned it: `research/indala-psk-read/METHOD.md`
+- What was learned when, indexed to git: `research/indala-psk-read/LOG.md`
+- ⛔ The old working notes, **frozen and mostly retracted**: `research/indala-psk-read/archive/`
+- The working decoder: `research/indala-psk-read/mfdemod.py`
+- Phase sweep, 32 phases x 5 repeats x tag/empty: `research/indala-psk-read/caps/phasebits/`
+- AIN5-vs-AIN0 paired captures: `research/indala-psk-read/caps/inputtest/`
+- Final clean PSKCF dataset: `research/campaigns/campaign_20260910_231740/`
+  — `raw/*.bin` Chameleon, 16-bit big-endian, 125 kHz, 5 repeats per config
   — `pm3_signal/*.pm3` Proxmark reference, one signed integer per line, 125 kHz
-- Empty-field baseline: `research/indala-psk-read/caps/baseline16_r*.bin` (5 captures)
-- Analysis: `sweep.py`, `phasesweep.py`, `gaintest.py`, `gapsweep.py`, `oversample_test.py`
-- Firmware knobs added: `lf sniff --bits 16 --phase N --rate N --gain N --settle N`
-- Schematic: `hardware/ultra/Chameleon_nrf52_ultra_V1.0.pdf` (LF is sheet 2)
-- Build + flash on macOS: `firmware/flash-dfu-app-macos.sh`
+- Empty-field baseline: `research/indala-psk-read/caps/baseline16_r*.bin`
 
-Signal chain, from the schematic:
+Reproduce the headline result with no hardware:
 
-    ANT -> VD1 detector -> LF_OA -> [C28 10n / R9 82 / C36 33n] -> IC1A (R17 4k7 / C38 1n)
-                             |                                        -> IC1B -> LF_OA_OUT (AIN5)
-                             \-> R12 470k -> LF_RSSI (AIN0)
-
----
+```bash
+cd research/indala-psk-read && ../../software/script/.venv/bin/python phasebits.py --analyse-only --keep caps/phasebits --step 4 --repeats 5
+```
 
 ## Ranked attack surface — start at the top
 
@@ -136,7 +154,7 @@ was validated only by "the tag/empty ratio does not change much".
 
 ---
 
-## How this investigation went wrong nine times — pattern-match against it
+## How this investigation went wrong eleven times — pattern-match against it
 
 1. Reasoned from one device's architecture without checking a device that already does the thing.
 2. A glitch screen tuned on null data discarded **90 of 90** windows of a strong capture and returned `nan`.

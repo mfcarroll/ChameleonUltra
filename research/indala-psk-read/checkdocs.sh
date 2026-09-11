@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Verify the notes have not drifted. Run before committing a notes change.
+#
+# Structure alone does not keep history and current knowledge apart — something has to
+# fail loudly when a reference goes stale. This checks the four ways they drift:
+#   1. FINDINGS cites a log entry that does not exist
+#   2. NEXT or README cites a claim or rule that does not exist
+#   3. a referenced file has been renamed or deleted
+#   4. a commit hash in LOG does not resolve (rebase, amend, wrong paste)
+# It does NOT check that a claim is true. Only a measurement does that.
+set -u
+cd "$(dirname "$0")" || exit 1
+fail=0
+note() { echo "  ⛔ $*"; fail=1; }
+
+ids() { grep -oE "^\| $1[0-9]+" "$2" 2>/dev/null | tr -d '| '; }
+refs() { grep -ohE "\b$1[0-9]+" "${@:2}" 2>/dev/null; }
+
+echo "cross-references"
+LOGIDS=$(ids L LOG.md)
+for r in $(refs L FINDINGS.md NEXT.md README.md METHOD.md | sort -u); do
+    grep -qx "$r" <<<"$LOGIDS" || note "$r cited but not in LOG.md"
+done
+CIDS=$(ids C FINDINGS.md; ids F FINDINGS.md)
+for r in $(refs C NEXT.md README.md | sort -u; refs F NEXT.md README.md | sort -u); do
+    grep -qx "$r" <<<"$CIDS" || note "$r cited but not in FINDINGS.md ledger"
+done
+MIDS=$(grep -oE '^\*\*M[0-9]+' METHOD.md | tr -d '*')
+for r in $(refs M NEXT.md README.md FINDINGS.md | sort -u); do
+    grep -qx "$r" <<<"$MIDS" || note "$r cited but not in METHOD.md"
+done
+
+echo "referenced files"
+# ⚠ archive/ is deliberately excluded: those files are frozen and reference the structure
+# as it was. Rewriting them to satisfy a checker would defeat the point of freezing them.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ../..)
+# LOG.md and METHOD.md are excluded by design: LOG names files as they were at the time
+# (append-only, so a deleted file must keep its entry), and METHOD names removed files
+# deliberately, as an explanation of why they were removed.
+for f in $(grep -ohE '`[A-Za-z0-9_./-]+\.(md|py|sh)`' README.md FINDINGS.md NEXT.md ADVERSARIAL.md |
+           tr -d '`' | sort -u); do
+    b=$(basename "$f")
+    for cand in "$f" "$b" "$ROOT/$f" "$ROOT/software/script/$b" "$ROOT/firmware/$b"; do
+        [ -e "$cand" ] && continue 2
+    done
+    # files that live in other repos are named, not linked; skip the ones we know
+    case "$b" in t5577_campaign.py) continue;; esac
+    note "referenced but missing: $f"
+done
+
+echo "commit hashes in LOG.md"
+# ⚠ only the commit column of the table — a 16-hex-digit credential like
+# a0000000e6bd0e92 otherwise reads as a short hash and fails forever.
+for h in $(grep -oE '^\| L[0-9]+ \|[^|]*\| `[0-9a-f]{7,40}`' LOG.md |
+           grep -oE '`[0-9a-f]{7,40}`' | tr -d '`' | sort -u); do
+    git cat-file -e "${h}^{commit}" 2>/dev/null || note "hash does not resolve: $h"
+done
+
+echo "edit-policy invariants"
+# LOG.md is append-only: entries may gain a retraction pointer, never lose or reword one.
+if git rev-parse HEAD >/dev/null 2>&1 && git cat-file -e HEAD:./LOG.md 2>/dev/null; then
+    old=$(git show HEAD:./LOG.md | grep -cE '^\| L[0-9]+')
+    new=$(grep -cE '^\| L[0-9]+' LOG.md)
+    [ "$new" -ge "$old" ] || note "LOG.md lost entries ($old -> $new) — it is append-only"
+fi
+grep -q 'no history' FINDINGS.md || note "FINDINGS.md lost its no-history declaration"
+for f in archive/*.md; do
+    [ -e "$f" ] || continue
+    grep -q 'FROZEN' "$f" || note "$f lost its FROZEN banner"
+done
+
+[ $fail -eq 0 ] && echo "✓ notes consistent" || echo "✗ see above"
+exit $fail
