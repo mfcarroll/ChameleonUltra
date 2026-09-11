@@ -81,37 +81,36 @@ imported phase 64, which returns a wrong credential 5 times out of 5. A phase th
 is cheap; a phase that lies is not. The rotation is now derived from phases that decode
 correctly on both sides AND produce no repeatable wrong frame on either.
 
-## 3. ⭐ Finish the loud-signal null — HID is done on BOTH sides, the ASK tags are not
+## 3. ⭐ Loud-signal nulls — HID and EM410x done, three ASK tags left
 
-C24 closed HID Prox on the back; C44 now closes it on the front against a tag measured at
-88–100x the empty floor. That is the null the empty field cannot provide: a decoder
-brute-forcing 32 offsets for a fixed pattern against a *loud* wrong signal is a different
-proposition from one straining against silence.
+| interferer | bracket | result |
+|---|---|---|
+| HID Prox, back (C24) | a read | 10/10 not found — but a *quiet* wrong signal |
+| HID Prox, front (C44) | amplitude, 88–100x | 30/30 not found |
+| **EM410x (C52)** | **amplitude 18.5x AND a confirming read** | **20/20 not found** |
+| Viking, PAC, Jablotron | — | ⚠ untested |
 
-⚠ HID Prox is FSK. EM410x, Viking, PAC and Jablotron are ASK/OOK and modulate the envelope
-in a completely different way, which is what the fs/2 notch and the bit integrator actually
-see. None of them are tested.
+C52 is the one to copy: the floor was measured in the interferer's own band with the pad
+clear, in the same session, and the interferer's own reader confirmed it independently.
 
-⛔ **BRACKET WITH `lfprobe.py`, NOT WITH A READ.** The old rule here said to confirm the
-probe tag's coupling with a read immediately before and after. That rule is wrong and it
-nearly threw away C44: six bracketing `lf hid prox read` calls failed while the tag sat at
-90x the empty floor. A read conflates "not heard" with "heard but not decoded" — which is
-the exact failure `lfprobe.py` exists to separate, and the reason the bracket was needed in
-the first place. Measure amplitude in the interferer's own band, with a floor measured in
-that same band.
+⛔ **BRACKET WITH `lfprobe.py`, NOT WITH A READ.** A read conflates "not heard" with "heard
+but not decoded" — six bracketing `lf hid prox read` calls failed while that tag sat at 90x
+the floor, and following the old rule would have thrown away C44 (F05).
 
 ```bash
-# 1. floor for this tag's band, ANTENNA CLEAR
+# 1. floor for THIS tag's band, ANTENNA CLEAR — there is no universal floor (M24)
 cd research/indala-psk-read && ../../software/script/.venv/bin/python lfprobe.py \
-  --band 10000 18000 --monitor 5
-# 2. tag on, same band — confirm it is loud, then run the null
-../../software/script/.venv/bin/python lfprobe.py --band 10000 18000 --monitor 5 --floor <N>
-cd ../../software/script && args=(); for i in $(seq 10); do args+=("lf indala read"); done
-.venv/bin/python cu.py "${args[@]}"    # ⚠ NOT $(printf '"..." %.0s') — quotes do not survive re-parsing
+  --band <lo> <hi> --monitor 5
+# 2. tag on, same band, floor from step 1 — want a ratio comfortably above 1
+../../software/script/.venv/bin/python lfprobe.py --band <lo> <hi> --monitor 5 --floor <N>
+# 3. the null
+cd ../../software/script && args=(); for i in $(seq 20); do args+=("lf indala read"); done
+.venv/bin/python cu.py "${args[@]}"
 ```
 
-⚠ EM410x/Viking/PAC/Jablotron subcarriers are NOT at 10–18kHz. Set `--band` per tag, and
-measure that band's empty floor — there is no universal floor (M24).
+⚠ Bands: EM410x is ASK RF/64, so 1000–5000 Hz. HID Prox is FSK fc/8 and fc/10, so
+10000–18000. Viking, PAC and Jablotron each need their own — work it out from the bit rate
+and modulation, and measure that band's own empty floor.
 
 ## 3b. ⭐⭐⭐ FIX THE HID PROX READER — and there is a one-line candidate to test first
 
