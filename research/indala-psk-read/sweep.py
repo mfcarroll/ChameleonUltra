@@ -23,7 +23,27 @@ import numpy as np
 
 FS = 125000.0
 SETTLE, WIN, GLITCH_PTP = 400, 40, 60
+# Subcarrier each capture should carry, in Hz. Two naming conventions are accepted:
+#   hand-taken  : psk_rf8.bin / psk_rf4.bin / psk_rf2.bin
+#   campaign     : s01_PSK1-CF8_..._sniff_r1.bin, as written by t5577_campaign.py --reader chameleon
+# ⚠ CHECK THE CF CELLS BEFORE BARE PSK1 -- "PSK1" is a substring of "PSK1-CF4", so testing PSK1 first
+# would label every capture 62500 Hz and the sweep would silently compare a frequency against itself.
+SUBCARRIER_BY_CONFIG = [('PSK1-CF8', 15625.0), ('PSK1-CF4', 31250.0), ('PSK1', 62500.0)]
 SUBCARRIER = {'psk_rf8': 15625.0, 'psk_rf4': 31250.0, 'psk_rf2': 62500.0}
+LABEL = {15625.0: 'psk_rf8', 31250.0: 'psk_rf4', 62500.0: 'psk_rf2'}
+
+
+def classify(path):
+    """-> (label, subcarrier Hz) or (label, None) for a baseline. Accepts either convention."""
+    stem = path.split('/')[-1].replace('.bin', '')
+    if 'baseline' in stem.lower():
+        return 'baseline', None
+    if stem in SUBCARRIER:
+        return stem, SUBCARRIER[stem]
+    for token, hz in SUBCARRIER_BY_CONFIG:
+        if ('_%s_' % token) in stem or stem.startswith(token + '_'):
+            return LABEL[hz], hz
+    return stem, None
 # First-order estimate from schematic netlist values, for comparison only.
 MODEL_POLES = [1 / (2 * math.pi * 82 * 33e-9), 1 / (2 * math.pi * 4700 * 1e-9)]
 
@@ -50,9 +70,17 @@ def amplitude_at(x, f_target):
 
 
 def main(paths):
-    caps = {p.split('/')[-1].replace('.bin', ''): load_clean(p) for p in paths}
+    caps, unknown = {}, []
+    for p in paths:
+        label, hz = classify(p)
+        if hz is None and label != 'baseline':
+            unknown.append(p.split('/')[-1])
+            continue
+        caps[label] = load_clean(p)
+    if unknown:
+        print("\n ⚠ ignored (no recognisable PSKCF config in the filename): %s" % ", ".join(unknown))
     if 'baseline' not in caps:
-        sys.exit("need a baseline.bin (empty field) capture")
+        sys.exit("need an empty-field capture with 'baseline' in its filename")
     base = caps['baseline']
 
     print(f"\n{'='*74}")

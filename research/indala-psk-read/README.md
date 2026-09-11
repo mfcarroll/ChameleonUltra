@@ -172,10 +172,46 @@ three-point sweep it is not worth building: add the configs, let the harness pro
 PM3 reference, and capture the Chameleon side with `cu.py` by hand. Build a `--reader chameleon`
 backend only if the full matrix (PSKCF x rate x gap x repos) turns out to be worth running.
 
-⇒ Proposed registry additions are in `campaign-configs.py.snippet`, single-factor by construction
-to the registry's own standard. **Not applied** — that branch is the operator's.
+⭐ **Applied 2026-09-11**: `PSK1-CF4`/`PSK1-CF8` are in the registry and `--reader chameleon` is in
+the harness (Momentum `t5577-deep-read`). `campaign-configs.py.snippet` is kept only as the record of
+what was proposed. Chameleon runs default their corpus to
+`<ChameleonUltra>/research/campaigns/campaign_<stamp>/` — not the Momentum T5577 tree, where the
+offline T5577 harnesses glob — and `--out-dir` overrides.
 
-**Procedure** (Proxmark3 writes block 0; only block 0 changes, data blocks are untouched):
+⚠ **Four bugs were found running it, two of them pre-existing and reader-independent.** Recorded here
+because they bite any campaign, not just this one:
+
+| bug | whose | symptom |
+|---|---|---|
+| capture named *after* the read | chameleon leg | a stray `.chameleon_capture_tmp.bin` left in `raw/`, belonging to no step |
+| `out_dir` derived before `--chameleon-cli` resolved | chameleon leg | `TypeError: NoneType` on every run |
+| `prog` initialised inside `if not args.no_pm3:` | **pre-existing** | every `--no-pm3` run dies `UnboundLocalError` *after* taking the read — capture lost |
+| verify verdict says `MISMATCH` on a dump-only failure | **pre-existing** | printed `block0=00081440 -> !! MISMATCH (expected block0 00081440)`, a value mismatching itself; cost an aborted campaign |
+
+⇒ The last one is the one to know about: on any modulation PM3 cannot read back, a **successful** write
+reports as a mismatch against itself. `res["ok"]` was left untouched — only the wording is now true.
+
+**Procedure.** One command now drives program → PM3 reference → Chameleon capture, three times:
+
+    cd Momentum-Firmware
+    <ChameleonUltra>/software/script/.venv/bin/python \
+      T5577_block0_analysis_data/t5577_campaign.py \
+      --reader chameleon --config PSK1-CF8,PSK1-CF4,PSK1 \
+      --silicon spare --reads sniff --repos 1 --pm3-signal 0 --gap flat \
+      --pm3 "../proxmark3/client/proxmark3 /dev/tty.usbmodemiceman1" \
+      --note "PSKCF sweep: Chameleon LF front-end rolloff"
+
+    ./sweep.py caps/baseline.bin <campaign>/raw/*.bin
+
+⚠ `--pm3` is needed whenever the Proxmark client is not the one on `PATH` — e.g. a locally built
+client, which is the normal case here. ⭐ Config order matters: ending on `PSK1` leaves the tag back
+at the Indala word.
+
+`sweep.py` reads both the campaign filenames (`s01_PSK1-CF8_..._sniff_r1.bin`) and hand-taken
+`psk_rf8.bin` names. An empty-field capture with `baseline` in its name is still required and the
+harness does not produce one — take it separately with `./grab.sh`.
+
+**Manual equivalent**, if the harness is not wanted (only block 0 changes; data blocks untouched):
 
     # capture a fresh empty-field baseline first
     ./grab.sh                                    # or just the baseline leg
