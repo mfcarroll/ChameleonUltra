@@ -3,20 +3,34 @@
 
     ./phasebits.py [--step 4] [--repeats 5] [--timeout 300] [--keep DIR]
 
-⭐ WHAT THIS ESTABLISHED. 43 of 160 single 300ms captures decode a0000000e6bd0e92
-EXACTLY, with 5/5 at ticks 12, 20 and 36, across a working window of ticks 4-60 — and the
-empty field produced the truth 0 times in 160. No stacking, no folding, and it works at
-the stock 8-bit sample width.
+⭐ WHAT THIS ESTABLISHED, with the tag on the FRONT (the reading side — see the placement
+banner in FINDINGS.md). 114 of 160 single 300ms captures decode a0000000e6bd0e92 EXACTLY
+(71%), and the empty field produced a frame AT ALL 0 times in 160. No stacking, no folding.
+Phase is TWO WORKING BANDS — ticks 0-56 and 96-124, every one of them 5/5 — split by a dead
+band at 60-92. On the back the same sweep gives 51/160 and only one band.
+
+⛔ DO NOT SCORE THIS SWEEP BY THE fc/2 SKIRT. Measured on these same captures, the skirt is
+UNCORRELATED with decoding: it peaks at tick 44 (212, decodes 5/5) and bottoms at ticks
+116-120 (134, also 5/5), while the dead band sits in the middle of that range. Over a phase
+sweep the skirt is transition energy, not coupling. This is why the other sweep scripts in
+this directory were retired rather than ported (FINDINGS C38).
+
+⛔⛔ THE DEAD BAND LIES — it does not merely fail. At ticks 60-92 the decoder returns the
+SAME wrong card number on every capture: tick 64 gives a0000000b5af0b92 5/5, tick 88 gives
+a0000000c6b90c92 5/5. The winning bit alignment there is offset 16, exactly half the
+32-sample bit period, so every integrator straddles a bit boundary. Two independent captures
+AGREE on that wrong word, which is why the firmware's acceptance rule cannot catch it and
+why no phase in 60-92 may ever enter PHASE_ROTATION (FINDINGS C39, C40).
 
 ⛔ THE ORIGINAL HYPOTHESIS HERE WAS WRONG, AND SO WAS EVERYTHING IT WAS BUILT ON. This
 script was written to test whether the sample phase sat at a polarity null. It does not.
 The reason nothing decoded was that mfdemod.py demodulated PSK2 against a PSK1 tag — in
 PSK1 the phase IS the data, and it was differential-decoding. See mfdemod.py
-polarity_from_bits(). The sweep still matters, because phase DOES set a working window,
-but "31.2 dB of analog deficit" and "7.6 dB short" were never real.
+polarity_from_bits(). "31.2 dB of analog deficit" and "7.6 dB short" were never real; about
+26 dB of that was the tag being on the wrong side of the device.
 
 ⚠ Load captures with mfdemod.load16, NOT stack.load16. The latter drops the first 400
-samples as "settle", and that discard alone takes this from 43/160 to 0/160: it removes
+samples as "settle", and that discard alone takes this from 107/160 to 0/160: it removes
 the first frame's preamble and leaves too few bits after the second. The turn-on transient
 needs no discarding here — baseband() moves it to fs/2 and the low-pass removes it.
 

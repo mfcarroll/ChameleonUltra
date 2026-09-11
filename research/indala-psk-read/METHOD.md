@@ -149,3 +149,17 @@ two decoders can both score 51/160 on different captures.
   not exist yet. Write `this commit`, commit, then fix the pointer in a follow-up. An
   `--amend` orphans the hash you just wrote in, and until `checkdocs.sh` was taught to ask
   about *reachability* rather than existence it passed anyway.
+
+**M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
+SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
+because bit errors land somewhere different each time." That was measured, correctly, on
+160 captures — all of them 26 dB down. At that level errors ARE noise-driven and they do
+scatter. With 20x the signal the decoder stops guessing and locks deterministically onto a
+half-bit-offset alignment, returning the *same* wrong word on every capture. Two
+independent captures then agree, and the rule reports full confidence in a wrong answer.
+⇒ Improving the signal moved the failure from random to systematic. When a rule's
+justification is "the errors are independent", re-test that independence at every operating
+point, not just the worst one — and prefer a rule that rejects on a *mechanism* (here: an
+alignment half a bit period off, at half the amplitude) over one that relies on errors
+being obliging enough to disagree with each other.
+

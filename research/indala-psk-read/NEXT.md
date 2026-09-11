@@ -13,35 +13,60 @@ these notes suggests — 71% of single captures decode, against 32% on the back,
 
 ---
 
-## 1. ⭐⭐⭐ RE-MEASURE THE LOAD-BEARING CLAIMS ON THE FRONT
+## 1. ✅ RE-MEASURED ON THE FRONT — 1a, 1b and 1c are done
 
-Roughly 26 dB was missing from every measurement. Do these in order; each is cheap and each
-could collapse a pile of downstream work.
+The full sweep ran (`caps/front/`, 320 captures, committed). **114 of 160 single captures
+decode the truth (71%) and 0 of 160 empty captures produce a frame at all.** Phase is TWO
+working bands — 0–56 and 96–124 — split by a dead band at 60–92. C36, C37, C38–C43, L58.
 
-**1a. Full phase sweep with a null.** 32 phases x 5 repeats, tag and empty, on the front.
-The 16x3 pilot says phases 0–48 and 96–120 give 3/3 and only 56–88 fails. Confirm it, and
-note that the dead band carries the HIGHEST skirt — so it is a polarity null, and the right
-model for phase is "two nulls per carrier period", not "a window".
+⛔ 1b and 1c needed no bench time: the sweep saves every capture, so both were settled
+offline against the committed set. Do that first next time.
 
-```bash
-cd research/indala-psk-read && ../../software/script/.venv/bin/python phasebits.py --step 4 --repeats 5 --keep caps/front
-```
+**What it settled:**
 
-**1b. Are the three "individually fatal" details still fatal?** C03 (the fs/2 notch), C04
-(not discarding the settle window) and C02 (the PSK1 mapping) were each measured at 1/20 the
-signal. C02 is a convention and cannot change. The other two are SNR-dependent and may now
-be merely helpful rather than load-bearing — worth knowing before anyone treats them as
-sacred.
+| | result |
+|---|---|
+| **1a** phase map | two bands, not a window. Every good phase is 5/5; the edges are cliffs, not gradients |
+| **1a** the skirt | **⛔ does not predict decode at all** (C38) — peak skirt and minimum skirt both decode 5/5, the dead band sits between them. This retires §7 rather than porting it |
+| **1b** C03 fs/2 notch | **reversed sign** (C41). Notch ON 114 truth / 21 wrong, OFF 121 / 26. No longer load-bearing either way — left ON, since it trades ~7 decodes for ~5 fewer wrong frames |
+| **1b** C04 settle discard | **still fatal, 107 -> 0** (C42), and always was structural rather than SNR |
+| **1c** agreement rule | **⛔ keep it — it is WEAKER than believed, not stronger** (C39, C40) |
 
-**1c. Is the two-capture agreement rule still needed?** C17 says one frame in five is wrong
-and C18 builds the whole acceptance rule on it — both at 1/20 signal. If the error rate
-collapses on the front, a read could return on the FIRST decode and take ~35 ms instead of
-~100 ms. ⚠ Measure it, do not assume it: a wrong credential is much worse than a slow read,
-so the rule stays until the data says otherwise.
+## 1c-follow-up. ⭐⭐⭐ THE HALF-BIT GATE — the one real hole left
 
-**1d. Re-run the loud-signal null.** C24 (no false positive on HID Prox) was run with the
-HID tag on the back — a *quiet* wrong signal, which is the easy case. On the front that
-interferer is ~20x louder, which is the case the null was supposed to test.
+In the dead band the decoder returns the SAME wrong card number every time: phase 64 gives
+`a0000000b5af0b92` on 5 of 5, phase 88 `a0000000c6b90c92` on 5 of 5. Two independent
+captures agree on it, so the acceptance rule passes it through. Requiring two different
+*phases* to agree does not help either — `a0000000c6b90c92` is produced at both 88 and 92.
+
+**Today this is latent**: no phase in `PHASE_ROTATION` lies in 60–92, and that is now the
+only thing preventing a confidently wrong credential. ⚠ NEXT §2b as originally written —
+"derive the rotation from the union of front and back working phases" — would have made it
+live, because the back-side stacking table specifically credits phase 64.
+
+⇒ **The fix should be a mechanism, not a keep-out list.** The signature is in the decoder's
+own output and is not subtle: the winning alignment is `off 16`, exactly half the 32-sample
+bit period, at ~half the amplitude (truth 7240–12699, wrong 5120–6833 — C43). Candidates,
+in order of how much they rely on absolute level:
+
+1. **Compare the winner against the alignment 16 offsets away.** A correctly aligned frame
+   should beat its straddle by ~2x; a straddle sits between two half-strength neighbours.
+   This is scale-free, which is the property a gate needs.
+2. Reject when the per-bit integrator magnitudes are *bimodal* — a straddling window
+   produces full-strength bits where neighbours match and near-zero where they differ.
+3. ⚠ NOT an absolute amplitude threshold. It separates perfectly on this data and would
+   still be wrong: amplitude scales with coupling, so a weakly-coupled tag falls under any
+   fixed cut. C43.
+4. ⚠ NOT Wiegand-26 parity, which C19 already rejected as a gate and which fails again
+   here in the sharpest possible way: it rejects `a0000000b5af0b92` and `a0000000c6b90c92`
+   but **passes `a0000000c6b90e92`** — a frame that also survives two-capture agreement and
+   reports the CORRECT facility code (52) with a wrong card number. That is the exact shape
+   of a credential a reader would hand over with confidence.
+
+**1d. Re-run the loud-signal null — still open, needs the bench.** C24 (no false positive on
+HID Prox) was run with the HID tag on the back, a *quiet* wrong signal. On the front that
+interferer is ~20x louder, which is the case the null was supposed to test. ⛔ Bracket it
+with proof of coupling, per §3.
 
 ## 2. ⭐⭐ Re-open what was closed on back-side data
 
@@ -50,16 +75,21 @@ interferer is ~20x louder, which is the case the null was supposed to test.
 | | why it should be re-opened |
 |---|---|
 | **`LF_RSSI` / AIN0** (C08, C09) | closed as "carries no fc/2, flat to 0.5 dB". Measured with the tag on the back. The whole comparison was between two nodes seeing 1/20 of the available signal, and the conclusion killed an entire line of investigation |
-| **Stacking** (C29, C30, C34) | worth 1.5–2.1x on the back. On the front, single captures already decode 71% of the time, so it may be solving a problem that no longer exists |
+| **Stacking** (C29, C30, C34) | worth 1.5–2.1x on the back. On the front, single captures already decode 71% of the time, so it may be solving a problem that no longer exists — and at phase 64 it demonstrably revives a *wrong* answer |
 | **Frame lock** (C11, C12, C13) | already in doubt (C31, C35) — the correlation that supports them reads 0.92–0.95 on the EMPTY field. Re-derive or retract |
 | **SAADC gain** (C10) | "the floor is analog-referred" may well survive, but it was measured against a signal 26 dB below what the device actually delivers |
 
-## 2b. ⚠ Re-derive the firmware's phase rotation
+## 2b. ✅ Phase rotation re-derived — and the union was a trap
 
-`PHASE_ROTATION` is `{20, 12, 28, 36, 44, 4, 56, 0}`, chosen from the back-side window. On
-the front, 56 sits inside the dead band and 96–120 are all good and entirely absent from the
-list. ⚠ The right rotation must work for a tag placed on EITHER side, because users will do
-both — so derive it from the union, not from whichever placement is measured last.
+`PHASE_ROTATION` is now `{20, 12, 28, 36, 44, 16, 112, 0}`: the first five decode on BOTH
+placements (10/10 or 9/10 across the two sweeps), and the last three are insurance chosen
+for spread rather than rank, including one from the upper front band. The old tail (`4`,
+`56`, `0`) was weak on the back and `56` sits one step from the dead band.
+
+⛔ The lesson is in §1c-follow-up: taking the union of "phases that ever worked" would have
+imported phase 64, which returns a wrong credential 5 times out of 5. A phase that is dead
+is cheap; a phase that lies is not. The rotation is now derived from phases that decode
+correctly on both sides AND produce no repeatable wrong frame on either.
 
 ## 3. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
 
@@ -109,12 +139,19 @@ Air gap, settle and oversampling were all closed pre-BLE-fix on a tag carrying
 `DEADBEEF/12345678` (L34), and every dB measured since went through a decoder that could
 not decode. Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe.
 
-## 7. ⚠ The per-lever sweep scripts score the wrong thing
+## 7. ✅ RETIRE the per-lever sweep scripts — do not port them
 
-`sweep.py`, `phasesweep.py`, `gaintest.py`, `gapsweep.py` and `oversample_test.py` all
-score the fc/2 **skirt**, which is transition energy and is polarity-blind (`METHOD.md` M8).
-They can rank coupling, but they cannot tell you whether something decodes. Port them to
-decode rate the way `phasebits.py` was, or retire them.
+`sweep.py`, `phasesweep.py`, `gaintest.py`, `gapsweep.py` and `oversample_test.py` all score
+the fc/2 **skirt**. C38 measured skirt and decode on the same 160 captures and they are
+**uncorrelated**: the highest skirt in the sweep (tick 44) decodes 5/5, the lowest (ticks
+116–120) also decodes 5/5, and the dead band sits in the middle of the range. The earlier
+hope that they "can rank coupling even if they cannot tell you whether something decodes"
+does not survive that — over a sample-phase sweep the skirt is dominated by transition
+energy, not coupling.
+
+⇒ Anything worth keeping from them should be rebuilt on `phasebits.py`'s pattern: count
+decodes, against an empty arm at the same setting. `lfprobe.py` remains useful because it
+measures a *ratio against the live empty floor* for coupling, which is a different job.
 
 ## 8. ⚠ T5577 WRITE reliability on the Chameleon — backlog
 

@@ -71,7 +71,11 @@ def c_decode_all(paths):
 
 
 def main():
-    caps = sorted(glob.glob(os.path.join(HERE, "..", "caps", "phasebits", "*.bin")))
+    # ⚠ Defaults to the back-side set for continuity, but the front-side captures are the
+    # ones current claims rest on — so the directory is an argument, not a constant.
+    #     ./compare.py ../caps/front
+    d = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "caps", "phasebits")
+    caps = sorted(glob.glob(os.path.join(d, "*.bin")))
     if not caps:
         sys.exit("no captures found")
     cres = c_decode_all(caps)

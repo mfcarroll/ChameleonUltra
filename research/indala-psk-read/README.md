@@ -14,16 +14,27 @@ measurement in this project before 2026-09-11 was taken on the wrong side, which
 the deficit it spent days trying to explain. Claims measured that way are marked ⚠B in
 `FINDINGS.md` and are provisional.
 
-On the front: 71% of single captures decode, every sample phase outside 56–88 works
-including the stock phase 0, and a coil that read 0/12 on the back reads first try. The demodulation is integer arithmetic on
-the nRF52840 — no float, no FFT, 8 KB of buffer.
+On the front: **114 of 160 single captures decode (71%) and 0 of 160 empty captures produce
+a frame at all**, measured over 32 sample phases x 5. Sample phase turns out to be two
+working bands — 0–56 and 96–124, every one of them 5/5 — split by a dead band at 60–92; the
+stock phase 0 is fine on the front and useless on the back. A coil that read 0/12 on the
+back reads first try. The demodulation is integer arithmetic on the nRF52840 — no float, no
+FFT, 8 KB of buffer.
 
 With no tag on the antenna it reports `LF tag not found` 20 times in 20, taking the full
 500 ms budget each — the rotation exhausts rather than aborting early.
 
-⚠ **One recovered frame in five is WRONG**, so the firmware returns a credential only once
-two captures agree. A reader that trusts a single decode returns a wrong card number about
-20% of the time.
+⚠ **A single decode is not trustworthy**, so the firmware returns a credential only once two
+captures agree. On the back one recovered frame in five was wrong; on the front 21 of 135.
+
+⛔ **And agreement is not sufficient on its own — it is the phase rotation that makes it
+safe.** In the 60–92 dead band the decoder returns the *same* wrong card number on every
+capture (phase 64 → `a0000000b5af0b92`, 5 of 5), because the winning bit alignment there is
+half a bit period off and every integrator straddles a boundary. Two independent captures
+agree on it. Nothing in `PHASE_ROTATION` lies in that band, and nothing may be added to it
+without checking — see the ⛔⛔ block in `lf_indala_data.c`. The premise the agreement rule
+was built on, that wrong words never repeat, held only because the original captures were
+26 dB down: **more signal turned a random error into a systematic one.**
 
 ⛔ **This was believed impossible for most of the investigation** — "31.2 dB below the
 Proxmark", "7.6 dB short", "detectable but not decodable". All retracted. The deficit was a

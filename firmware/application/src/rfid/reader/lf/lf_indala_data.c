@@ -13,28 +13,50 @@
 NRF_LOG_MODULE_REGISTER();
 
 /*
- * ⭐ THE SAMPLE PHASE IS NOT OPTIONAL, AND THE STOCK ONE IS THE WORST ONE.
+ * ⭐ THE SAMPLE PHASE IS NOT OPTIONAL — AND THE PHASE MAP DEPENDS ON WHICH SIDE THE TAG IS ON.
  *
  * Indala's subcarrier is fc/2, so it arrives at exactly two samples per cycle. A T5577
  * derives it by dividing the very field this reader generates, so it is phase-LOCKED to
  * the sample trigger: the recovered amplitude is proportional to cos(phi) for a CONSTANT
  * phi, and an unlucky phi nulls the subcarrier to any depth on every read, forever.
- * Stock firmware triggers straight off PWMPERIODEND — phase 0 — and phase 0 decodes
- * 0 of 5. Measured over 32 phases x 5 captures, at 62.5ns per tick:
  *
- *     ticks   0    4    8   12   16   20   24   28   32   36   40   44   48   52  56  60
- *     decodes 0/5  1/5  4/5  5/5  4/5  5/5  4/5  5/5  3/5  5/5  4/5  4/5  2/5  1/5 2/5 2/5
- *     ticks  64..127 — all 0/5
+ * Measured 32 phases x 5 captures, at 62.5ns per tick, with the tag on the FRONT (the
+ * reading side — see the placement banner in research/indala-psk-read/FINDINGS.md) and
+ * again on the back, decoded by this same C decoder:
  *
- * ⚠ THAT WINDOW IS ONE TAG, ONE UNIT, ONE COUPLING GEOMETRY. It has never been checked
+ *     ticks      0   4   8  12  16  20  24  28  32  36  40  44  48  52  56
+ *     FRONT    5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5 4/5
+ *     back     0/5 1/5 4/5 5/5 4/5 5/5 4/5 5/5 3/5 5/5 4/5 4/5 2/5 1/5 2/5
+ *
+ *     ticks     60  64  68  72  76  80  84  88  92 | 96 100 104 108 112 116 120 124
+ *     FRONT    0/5 0/5 0/5 0/5 0/5 0/5 0/5 0/5 0/5 |5/5 5/5 5/5 5/5 5/5 5/5 5/5 5/5
+ *     back     2/5 0/5 0/5 0/5 0/5 0/5 0/5 0/5 0/5 |0/5 0/5 0/5 0/5 0/5 0/5 0/5 0/5
+ *
+ * So phase is TWO WORKING BANDS split by a dead band at 60-92, not a window — and the
+ * stock trigger (phase 0) is fine on the front and useless on the back.
+ *
+ * ⛔⛔ NEVER PUT A PHASE FROM 60-92 IN THIS LIST. It is not merely dead: in that band the
+ * decoder returns a WRONG CARD NUMBER, the SAME one every time. Phase 64 returns
+ * a0000000b5af0b92 on 5 of 5 captures; phase 88 returns a0000000c6b90c92 on 5 of 5; phase
+ * 92 returns a0000000c6b90e92 on 4 of 5. The cause is visible in the decoder's own output:
+ * the winning bit alignment there is offset 16 — EXACTLY HALF the 32-sample bit period —
+ * so every integrator straddles a bit boundary, blends two adjacent bits and lands at
+ * about half the amplitude of a real frame.
+ *
+ * ⇒ TWO INDEPENDENT CAPTURES AGREE ON THAT WRONG WORD, so the acceptance rule below does
+ * NOT catch it. Nor would requiring two different phases to agree: a0000000c6b90c92 is
+ * produced at BOTH phase 88 and phase 92. The only thing standing between this reader and
+ * a confidently wrong credential is that no phase in this list lies in 60-92. Keep it so.
+ *
+ * ⚠ THIS MAP IS ONE TAG, ONE UNIT, TWO COUPLING GEOMETRIES. It has never been checked
  * against a second Indala tag or a second Chameleon, and it could move. So this does not
- * hard-code the best phase — it ROTATES, best-measured first, across the whole live
- * window. If the window has shifted this costs a few more captures rather than failing;
- * resampling the measured captures with only ticks 32-60 alive still reaches a read in a
- * median of 7 captures.
+ * hard-code the best phase — it ROTATES across phases that decode with the tag on EITHER
+ * side, best-measured first. The first five are the strongest on both placements; the last
+ * three are insurance chosen for SPREAD rather than rank, including one from the upper
+ * band, so a shifted window is unlikely to take out every entry at once.
  */
 static const uint8_t PHASE_ROTATION[] = {
-    20, 12, 28, 36, 44, 4, 56, 0
+    20, 12, 28, 36, 44, 16, 112, 0
 };
 #define PHASE_ROTATION_COUNT (sizeof(PHASE_ROTATION) / sizeof(PHASE_ROTATION[0]))
 
@@ -52,9 +74,22 @@ static const uint8_t PHASE_ROTATION[] = {
  * captures to produce the same 64 bits removes them. The same bootstrap gives 0 wrong
  * reads in 50000 trials at a cost of a median of 2 captures and 5 at the 95th percentile.
  *
+ * ⛔⛔ AND THAT INDEPENDENCE IS A PROPERTY OF A WEAK SIGNAL, NOT OF THIS DECODER. Every
+ * capture above was taken with the tag on the BACK, ~26 dB down. Repeated on the FRONT,
+ * where the signal actually is: all 17 back-side wrong frames were distinct, but 3 of the
+ * 21 front-side ones REPEAT WITHIN A PHASE, two of them on 5 captures out of 5. At 20x the
+ * signal the demodulator stops guessing and locks deterministically onto a half-bit-offset
+ * alignment, so two independent captures produce the same wrong word and this rule reports
+ * full confidence in it. ⇒ Improving the signal moved the failure from random to
+ * systematic. See the ⛔⛔ block above PHASE_ROTATION: every one of those frames comes from
+ * the 60-92 dead band, and keeping that band out of the rotation is what makes this rule
+ * safe — the rule does not make itself safe.
+ *
  * ⚠ What that does NOT establish is a rate below ~1/50000; it is resampling 160 real
  * captures, so it cannot see a failure mode absent from them. The defensible claim is the
- * one the data supports: no wrong word ever repeated, and agreement removes the 12%.
+ * one the data supports: within the phases this reader actually uses, no wrong word ever
+ * repeated — 114 decodes at 22 front-side phases produced 0 wrong frames — and agreement
+ * removes the 12%.
  */
 #define INDALA_AGREE_COUNT   2
 
@@ -82,6 +117,12 @@ static const uint8_t PHASE_ROTATION[] = {
  * Stacking five revives sample phases that decode 0/5 individually — INCLUDING PHASE 0,
  * the stock trigger, and phase 64, which is outside the single-capture window entirely.
  * The null is clean at every level: stacked noise produced no frame at all, ever.
+ *
+ * ⛔ DO NOT READ THE PHASE 64 RESULT AS A REASON TO ADD PHASE 64. That whole table is
+ * back-side data. On the front, phase 64 decodes a0000000b5af0b92 on 5 captures out of 5 —
+ * a wrong credential, reproducibly. "Stacking revives it" there means stacking revives a
+ * confident error. Whether stacking is worth anything at all now that single captures
+ * decode 71% of the time on the front is itself unmeasured; see NEXT.md §2.
  *
  * ⚠ CAPTURES ARRIVE WITH EITHER POLARITY. They are frame-locked but the subcarrier phase
  * is not, so a capture can be the inverse of the accumulator — adding it would CANCEL the
