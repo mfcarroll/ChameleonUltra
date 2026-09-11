@@ -83,7 +83,8 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 | C17 | **One recovered frame in five is WRONG.** 24 bad frames from 200 captures across two sessions — and all 24 were DISTINCT, while the truth recurred 77 times | 200 | emptyfield: no frame at all, 0/160 | ✓ two sessions, two geometries | L46, L47 |
 | C18 | Requiring two captures to agree removes them: **0 wrong in 40000** resampling trials on either pool, at a median of 2–3 captures | 2x20000 | ✓ vs need=1 at 20/22% wrong | ✓ replicated on live captures taken after the design was fixed | L47 |
 | C19 | The Wiegand-26 parity is **not** a sufficient gate: it rejects 13 of 17 bad frames but passed `a0000000b9be47a4`, which is wrong in 20 bits | 200 | — | ✓ a counter-example, not a rate | L47 |
-| C20 | The firmware read works: **20/20** consecutive `lf indala read`, 0.41–0.55 s each, integer-only on the nRF52840 | 20 | ⚠ **the on-device empty-field null has not been run** | ✓ agrees with the Proxmark's read of the tag | L47 |
+| C20 | The firmware read works: **20/20** consecutive `lf indala read`, 0.41–0.55 s each, integer-only on the nRF52840 | 20 | emptyfield **0/20**, on the device | ✓ agrees with the Proxmark's read of the tag | L47, L48 |
+| C22 | The empty-field failure is genuine **timeout exhaustion**, not an early abort: 0.47–0.53 s of device time against a 500 ms budget, where a success takes 0.08–0.22 s | 5 vs 20 | ✓ the 0.33 s host floor measured separately and subtracted | ✓ timing, independent of the decoder's own verdict | L48 |
 | C21 | The C decoder and the numpy decoder agree **word for word on all 320 committed captures**, including the failures | 320 | — | ✓ *this is the independent check* — integer vs float, notch vs FFT, no shared code | L47 |
 
 ### Firmware bugs found and fixed
@@ -118,7 +119,6 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 | Tag position is worth ~5.7 dB | n=1, from an accidental probe. Large, concentrated at high frequency, and plausible — but one capture |
 | Settle, air gap, oversampling | closures invalid (L34); never re-measured against a working decoder |
 | Is the phase window tag- or unit-specific? | ⚠ worse than that — it is **not stable across sessions on the same tag and unit**. Phase 12 was 5/5 in the sweep and 4/10 correct a day later; phase 28 went the other way. ⇒ do not hard-code a phase, rotate. Still untested on a second tag or unit |
-| On-device empty-field null | ⛔ **not run.** The offline null is strong (no frame in 160) but the firmware adds a phase rotation and an agreement rule, and neither has been exercised against an empty field. C20 is incomplete until it is |
 | Indala parity | reported, deliberately **not** a gate — see C19. It only covers format 26, and a badly wrong frame passed it |
 
 ## What runs on the device

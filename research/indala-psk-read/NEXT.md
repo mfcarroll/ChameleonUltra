@@ -1,30 +1,14 @@
 # Next — ranked
 
-**State:** shipped. `lf indala read` runs on the device and returns the credential in
-~0.5 s (`FINDINGS.md`). What remains is closing the one gap in its validation, then
-re-testing the levers that were closed against a decoder that could not work.
+**State:** shipped and validated both ways. `lf indala read` returns the credential in
+~0.5 s, 20/20 with the tag and 0/20 without (`FINDINGS.md`). What remains is generality,
+then re-testing the levers that were closed against a decoder that could not work.
 
 ⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
 
 ---
 
-## 1. ⛔ Run the on-device empty-field null
-
-**This is the only thing standing between C20 and a complete claim, and it needs the tag
-lifted off the antenna.** The offline null is strong — no frame at all in 160 empty
-captures, at any preamble tolerance — but the firmware adds two things the offline decoder
-does not have: a phase rotation, and the two-capture agreement rule. Neither has ever seen
-an empty field.
-
-```bash
-cd software/script && for i in $(seq 1 20); do .venv/bin/python cu.py "lf indala read"; done
-```
-
-Expect `LF tag not found` twenty times. ⚠ It should also take ~500 ms each — the full
-timeout — where a successful read takes ~100 ms of capture. A *fast* failure would mean
-something is aborting the rotation early.
-
-## 2. ⭐⭐ Check a second Indala tag, and a second Chameleon
+## 1. ⭐⭐ Check a second Indala tag, and a second Chameleon
 
 The phase window is **not stable even across sessions on the same tag and unit** — phase 12
 went from 5/5 to 4/10 correct overnight while phase 28 went the other way. The rotation
@@ -36,9 +20,10 @@ absorb.
 A 29-bit or other-format Indala tag should still return a raw frame, with the Wiegand-26
 parity reported as failing — check it does not do something worse.
 
-## 3. ⭐⭐ Make the failure cheaper, or the success more certain
+## 2. ⭐⭐ Make the failure cheaper, or the success more certain
 
-A read costs a median of 2–3 captures at ~35 ms; a failure costs the whole 500 ms timeout.
+A read costs a median of 2–3 captures at ~35 ms (0.08–0.22 s of device time, measured); a
+failure costs the whole 500 ms timeout (0.47–0.53 s, measured).
 Two things are worth measuring now that decode rate is a real metric:
 
 - **Sort the rotation by live evidence, not by the committed sweep.** The order is
@@ -47,20 +32,20 @@ Two things are worth measuring now that decode rate is a real metric:
   and 2 ms has never been varied against a working decoder (L34 invalidated the old test).
   The Indala read restarts the field for every capture, so this is paid 2–3 times per read.
 
-## 4. ⭐ Re-test the levers closed against the broken decoder
+## 3. ⭐ Re-test the levers closed against the broken decoder
 
 Air gap, settle and oversampling were all closed pre-BLE-fix on a tag carrying
 `DEADBEEF/12345678` (L34), and every dB measured since went through a decoder that could
 not decode. Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe.
 
-## 5. ⚠ The per-lever sweep scripts score the wrong thing
+## 4. ⚠ The per-lever sweep scripts score the wrong thing
 
 `sweep.py`, `phasesweep.py`, `gaintest.py`, `gapsweep.py` and `oversample_test.py` all
 score the fc/2 **skirt**, which is transition energy and is polarity-blind (`METHOD.md` M8).
 They can rank coupling, but they cannot tell you whether something decodes. Port them to
 decode rate the way `phasebits.py` was, or retire them.
 
-## 6. Upstreamable?
+## 5. Upstreamable?
 
 Nothing in `lf_indala_psk.c` is bench-specific and it has no nRF dependency. The pieces a
 PR would need beyond what is here: emulation (`lf_tag_em.c` has a transmit-only `psk1.c`

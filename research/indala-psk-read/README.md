@@ -11,9 +11,12 @@ lf indala read   ->   Indala PSK1
 20 of 20 consecutive reads, 0.41–0.55 s each. The demodulation is integer arithmetic on
 the nRF52840 — no float, no FFT, 8 KB of buffer.
 
+With no tag on the antenna it reports `LF tag not found` 20 times in 20, taking the full
+500 ms budget each — the rotation exhausts rather than aborting early.
+
 ⚠ **One recovered frame in five is WRONG**, so the firmware returns a credential only once
 two captures agree. A reader that trusts a single decode returns a wrong card number about
-20% of the time. ⛔ The on-device empty-field null has not been run — `NEXT.md` §1.
+20% of the time.
 
 ⛔ **This was believed impossible for most of the investigation** — "31.2 dB below the
 Proxmark", "7.6 dB short", "detectable but not decodable". All retracted. The deficit was a
