@@ -708,13 +708,17 @@ class ChameleonCMD:
         agree. A capture is ~35ms and the measured median is 2 of them; the 95th
         percentile is 5.
 
-        Returns (id, fc, csn, flags, phase, offset) where id is the raw 64-bit frame,
+        Returns (id, fc, csn, flags, phase, offset, stacked) where id is the raw 64-bit frame,
         flags bit2 is "the Wiegand-26 parity checks out" and bits 1..0 are the parity bits
         themselves, and phase/offset say where in the carrier cycle the read came from.
         """
-        resp = self.device.send_cmd_sync(Command.INDALA_SCAN)
+        # ⚠ NOT the 3s default. INDALA_READ_TIMEOUT_MS is 3000ms on the device and the
+        # budget is only checked BETWEEN captures, so a read can land just past 3s and the
+        # host would time out on a command that actually succeeded — which it did, and it
+        # looked exactly like a successful read in the output.
+        resp = self.device.send_cmd_sync(Command.INDALA_SCAN, timeout=10)
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack(">8sBHBBB2x", resp.data[:16])
+            resp.parsed = struct.unpack(">8sBHBBBB1x", resp.data[:16])
         return resp
 
     @expect_response(Status.LF_TAG_OK)

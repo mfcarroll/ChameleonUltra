@@ -1,6 +1,6 @@
 # Next — ranked
 
-**State:** shipped and validated on ONE tag. `lf indala read` returns the credential in
+**State:** shipped and validated on ONE tag, and the second tag is the whole story now. `lf indala read` returns the credential in
 ~0.5 s, 20/20 with the bench tag, 0/20 empty, 10/10 against a loud HID signal, and 36
 synthetic words decode with no wrong answers (`FINDINGS.md`).
 
@@ -13,41 +13,47 @@ problem or a reader problem is unknown.
 
 ---
 
-## 1. ⛔⛔ A SECOND TAG WAS INAUDIBLE — start here, everything else waits
+## 1. ⛔⛔ WHY DOES STACKING NOT RESCUE THE WEAK TAG?
 
-A spare T5577 was written with `a0000000e6bd0e92` **by a Proxmark, which reported "Data
-written and verified" and then read it back correctly** as Fmt 26 FC 52 Card 63612. On the
-Chameleon it decoded **0 of 12** — and the raw captures say why:
+This is the question everything else now hangs on.
 
-```
-phase      4    8   12   16   20   24   28   32   36   40   44   48
-new tag 1.01 0.89 0.95 0.96 1.02 0.99 0.95 0.96 0.95 1.11 1.05 1.07   x empty-field floor
-bench   1.48 1.25 1.56 1.67 1.67 1.60 1.60 1.64 1.67 1.73 1.73 1.64
-```
+|  | single | stacked | gain |
+|---|---|---|---|
+| bench tag (reads) | 1.53–1.61x floor | **2.71–2.91x** | 1.74x |
+| white coin (does not) | 1.04–1.12x | 0.91–1.21x | **1.00x** |
 
-⇒ The subcarrier is **not there at all**. At every sample phase the tag is indistinguishable
-from an empty antenna. This is not the decoder failing to lock onto a weak signal — nothing
-arrives. ⚠ And note how little headroom the working case has: **1.25-1.73x IS the entire
-operating range**, so anything costing more than about 1.3x makes a tag unreadable.
+Stacking is worth 1.74x on the tag that already works and **nothing** on the tag that needs
+it. Since ~1.5x reads and ~1.1x does not (C27), 1.74x applied to the white coin would land
+it comfortably inside the working range — if it applied.
 
-⚠ **The cause is not established.** Candidates, in order:
+⭐ **And the signal is definitely there.** Stacked, the white coin yields
+`a0000000e6ad0e92`, `a0000000e4bd0a92` and `a0000000e33d0e92` at three separate phases —
+1, 2 and 3 bits from `a0000000e6bd0e92` — while stacked noise yields no frame at all, ever.
+It is 1.4x short, not absent.
 
-1. **Position.** The bench tag's placement was arrived at over days; this one was put down.
-   The notes already price tag position at ~5.7 dB (n=1) — 1.9x, more than enough alone.
-2. **The tag.** Different batch, so possibly a different T5577 die revision or modulation
-   depth. A Proxmark's antenna is far better and would hide a large difference.
-3. **The reader.** Not excluded, and excluding it costs one tag swap.
+⛔ **Start by fixing the instrument, because it is broken.** C31: the lag-0 baseband
+correlation used to justify frame-lock (C11) and stacking (C12) reads **0.75–0.83 on the
+EMPTY field** and only 0.15–0.49 on the tags. It is measuring the field turn-on transient,
+which is identical in every capture — the exact artefact that already produced one wrong
+conclusion in this project (`stack.py` Control 1). ⇒ Re-derive cross-capture alignment with
+the transient excluded and the correlation restricted to the fc/2 sideband, then ask:
 
-⛔ **RUN THE CONTROL FIRST.** Put the ORIGINAL Indala tag back and confirm it still reads.
-Until that is done, "the second tag does not read" and "nothing reads any more" are the
-same observation — which is exactly the mistake L51 records.
+1. Are the white coin's captures aligned to each other at all? If a different T5577 starts
+   its frame at a different point after power-up, there is nothing to stack.
+2. If they are not, can the alignment be *recovered* rather than assumed — cross-correlate
+   and shift before adding, instead of trusting lag 0?
+3. Does the polarity resolution work at this SNR? It currently correlates raw captures,
+   which are dominated by ~316 counts of carrier ripple against a ~10-count subcarrier.
+   ⚠ Correlating the baseband instead changes nothing (measured), which is itself
+   suspicious and probably means both are keying on the transient.
 
-Then slide the tag while watching the subcarrier, rather than guessing at placement:
+## 1b. ⚠ The stacking firmware has NOT been verified on a tag that reads
 
-```bash
-cd research/indala-psk-read && ../../software/script/.venv/bin/python \
-  lfprobe.py --band 57000 62400 --monitor 60
-```
+It is validated offline — C29, over every combination of the committed captures, decoded by
+the firmware decoder itself — and on-device it behaves correctly against a tag it cannot
+read (0/12, clean timeouts, no crashes). But no successful on-device read has happened
+since it landed, because the tag that reads was not on the bench. **Put the thin copper
+coin back and confirm a read still takes ~2 captures and ~0.5 s.**
 
 ## 2. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
 

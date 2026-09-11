@@ -57,7 +57,12 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
  * @return STATUS_LF_TAG_OK on success
  */
 uint8_t scan_indala(uint8_t *data) {
-    if (indala_read(data, g_timeout_readem_ms)) {
+    /* ⚠ NOT g_timeout_readem_ms. 500ms was right when a read was 2-4 captures; stacking
+     * spends up to 8 per sample phase to buy sqrt(N) of signal, and the tags that NEED
+     * stacking are exactly the ones that will use the whole budget. A tag that reads in
+     * 100ms still returns in 100ms — this only changes how long a hard one is given
+     * before being called absent. */
+    if (indala_read(data, INDALA_READ_TIMEOUT_MS)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;

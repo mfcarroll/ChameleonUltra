@@ -5998,7 +5998,7 @@ class LFIndalaRead(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        uid, fc, csn, flags, phase, offset = self.cmd.indala_scan()
+        uid, fc, csn, flags, phase, offset, stacked = self.cmd.indala_scan()
         parity_ok = bool(flags & 0x04)
         print(f"Indala PSK1")
         print(f"   Raw: {color_string((CY, uid.hex()))}")
@@ -6011,7 +6011,8 @@ class LFIndalaRead(ReaderRequiredUnit):
             # rather than alarming.
             print(f"   {color_string((CR, 'Wiegand-26 parity does not check out'))} — "
                   f"expected for a non-format-26 Indala tag")
-        print(f"   Read at sample phase {phase} ticks, bit offset {offset}")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{stacked} capture{'' if stacked == 1 else 's'} stacked")
 
 
 @lf_indala.command("write")

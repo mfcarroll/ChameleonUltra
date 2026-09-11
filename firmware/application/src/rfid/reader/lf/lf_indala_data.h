@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/** Total budget for one read, in ms. Generous on purpose: a tag that reads easily still
+ *  returns in ~100ms, and this only bounds how long a marginal one is given. */
+#define INDALA_READ_TIMEOUT_MS 3000
+
 /** Bytes written by indala_read(), matching the 16-byte convention of the other LF scans. */
 #define INDALA_READ_DATA_SIZE 16
 
