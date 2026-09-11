@@ -781,6 +781,14 @@ void ble_slave_init(void) {
 
 static bool m_lf_adc_acq_fast = false;
 static nrf_saadc_gain_t m_lf_adc_gain = NRF_SAADC_GAIN1_6;
+static nrf_saadc_input_t m_lf_adc_input = NRF_SAADC_INPUT_AIN5;
+
+void lf_adc_set_input(uint8_t ain) {
+    switch (ain) {
+        case 0:  m_lf_adc_input = NRF_SAADC_INPUT_AIN0; break;   /* LF_RSSI, P0.02 */
+        default: m_lf_adc_input = NRF_SAADC_INPUT_AIN5; break;   /* LF_OA_OUT, P0.29 */
+    }
+}
 
 void lf_adc_set_gain(uint8_t divisor) {
     switch (divisor) {
@@ -808,7 +816,7 @@ void register_lf_adc_callback(lf_adc_callback_t cb) {
     err_code = nrfx_saadc_init(&cfg, saadc_event_handler);
     APP_ERROR_CHECK(err_code);
 
-    nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN5);
+    nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(m_lf_adc_input);
     ch.acq_time = m_lf_adc_acq_fast ? NRF_SAADC_ACQTIME_3US : NRF_SAADC_ACQTIME_5US;
     ch.gain = m_lf_adc_gain;
     err_code = nrfx_saadc_channel_init(ADC_CHANNEL, &ch);

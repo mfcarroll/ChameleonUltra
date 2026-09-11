@@ -7749,6 +7749,16 @@ class LFSniff(ReaderRequiredUnit):
                  'Use it when a subcarrier at exactly 2 samples/cycle reads as absent.'
         )
         parser.add_argument(
+            '--input', type=int, default=5, choices=(0, 5), metavar='AIN',
+            help='SAADC input node. 5 (default) is AIN5/LF_OA_OUT, the stock tap AFTER '
+                 'both RC filter poles (58.8kHz and 33.9kHz), which together cost ~9.7dB '
+                 'at an fc/2 = 62.5kHz subcarrier. 0 is AIN0/LF_RSSI, which taps LF_OA '
+                 'upstream of both — but through 470k, far above what a 5µs acquisition '
+                 'window can settle, so expect heavy attenuation of fc/2 as well. Compare '
+                 'the two on the same tag: the poles attenuate upstream noise along with '
+                 'the signal, so they only cost SNR for noise made at or after IC1A.'
+        )
+        parser.add_argument(
             '--bits', type=int, default=8, choices=(8, 16), metavar='N',
             help='Sample width. 8 (default) is the historical format: the 14-bit ADC '
                  'conversion right-shifted by 5. 16 returns the FULL conversion, '
@@ -7773,14 +7783,16 @@ class LFSniff(ReaderRequiredUnit):
         ph = f", phase +{args.phase} ticks ({args.phase * 62.5:.0f}ns)" if args.phase else ""
         fs_khz = args.rate or 125
         rt = " free-running" if args.rate else " carrier-locked"
+        node = "AIN5/LF_OA_OUT" if args.input == 5 else "AIN0/LF_RSSI"
         print(f" Capturing LF field for {timeout}ms at {fs_khz}kHz "
-              f"({1000.0 / fs_khz:.1f}µs/sample,{rt}), {args.bits}-bit samples{ph}...")
+              f"({1000.0 / fs_khz:.1f}µs/sample,{rt}), {args.bits}-bit samples{ph} "
+              f"on {node}...")
         if not 0 <= args.phase <= 127:
             print(f"{CR}--phase must be 0..127 ticks{C0}")
             return
         resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase,
                                  rate_khz=args.rate, gain=args.gain,
-                                 settle_ms=args.settle)
+                                 settle_ms=args.settle, input_ain=args.input)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")

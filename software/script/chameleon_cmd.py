@@ -705,7 +705,8 @@ class ChameleonCMD:
         return resp
 
     def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8, phase: int = 0,
-                 rate_khz: int = 0, gain: int = 6, settle_ms: int = 0):
+                 rate_khz: int = 0, gain: int = 6, settle_ms: int = 0,
+                 input_ain: int = 5):
         """
         Capture raw LF field ADC samples.
 
@@ -727,6 +728,10 @@ class ChameleonCMD:
         :param phase: SAADC sample phase, 0-127 ticks of 62.5ns after the carrier period
             boundary. 0 keeps the default trigger. 128 ticks span one carrier period, so
             this walks 0-360° of the carrier and 0-720° of an fc/2 subcarrier.
+        :param input_ain: SAADC input node. 5 = AIN5 / LF_OA_OUT, the stock tap after both
+            RC filter poles. 0 = AIN0 / LF_RSSI, which taps LF_OA upstream of both — worth
+            ~9.7dB at fc/2 if the noise is made downstream, but fed through 470k, which is
+            far above what the converter's 5us acquisition can settle. See ble_main.h.
         :return: Raw response object — check .status and .data
         """
         timeout_ms = max(1, min(10000, timeout_ms))
@@ -740,6 +745,8 @@ class ChameleonCMD:
             raise ValueError("gain must be the divisor 1..6 (6 = stock 1/6)")
         if not 0 <= settle_ms <= 255:
             raise ValueError("settle_ms must be 0..255 (0 = the historical 2ms)")
+        if input_ain not in (0, 5):
+            raise ValueError("input_ain must be 5 (AIN5/LF_OA_OUT) or 0 (AIN0/LF_RSSI)")
         timeout_s = (timeout_ms // 1000) + 2
 
         # ⭐ Reassemble the chunked response. Chunk 0 performs the capture; later chunks
@@ -749,7 +756,7 @@ class ChameleonCMD:
         buf = bytearray()
         for chunk in range(16):
             payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase,
-                             rate_khz, gain, settle_ms, chunk])
+                             rate_khz, gain, settle_ms, chunk, input_ain])
             resp = self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
             if first is None:
                 first = resp

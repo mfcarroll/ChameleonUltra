@@ -2072,6 +2072,11 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
      * ⚠ buffer and length are static precisely so a chunk > 0 cannot trigger a fresh
      * capture; that would silently splice two different acquisitions. */
     uint8_t chunk = (length >= 8) ? data[7] : 0;
+
+    /* Optional 9th byte: SAADC input node, 5 = AIN5 / LF_OA_OUT (stock), 0 = AIN0 /
+     * LF_RSSI, which taps LF_OA upstream of both RC filter poles. See ble_main.h. */
+    lf_adc_set_input(length >= 9 ? data[8] : 5);
+
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     static size_t sniff_len = 0;
 
@@ -2082,6 +2087,7 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
         lf_125khz_radio_saadc_phase_set(0);  /* never leave a phase set for other readers */
         lf_125khz_radio_saadc_rate_set(0);
         lf_adc_set_gain(6);
+        lf_adc_set_input(5);
     }
 
     if (sniff_len == 0) {

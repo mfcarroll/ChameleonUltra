@@ -47,6 +47,31 @@ void lf_adc_set_acq_fast(bool fast);
  */
 void lf_adc_set_gain(uint8_t divisor);
 
+/* SAADC input node for the LF channel: 5 = AIN5 (default), 0 = AIN0.
+ *
+ * ⭐ WHY IT IS WORTH A KNOB — it is the only way to get UPSTREAM of the filter poles.
+ *
+ *     ANT -> VD1 detector -> LF_OA -> [C28 10n / R9 82 / C36 33n] -> IC1A (R17 4k7 / C38 1n)
+ *                              |                                      -> IC1B -> AIN5 (P0.29)
+ *                              \-> R12 470k -> LF_RSSI -> AIN0 (P0.02)
+ *
+ * AIN5 sits after BOTH RC poles (R9/C36 = 58.8kHz, R17/C38 = 33.9kHz). At an fc/2 = 62.5kHz
+ * subcarrier those cost -3.3dB and -6.4dB, so ~9.7dB of the measured deficit is spent
+ * before the converter ever sees the signal. AIN0 hangs off LF_OA itself, ahead of both.
+ *
+ * ⚠ Whether that is RECOVERABLE depends on where the noise is made. The poles attenuate
+ * upstream noise along with the signal, so they only cost SNR for noise added at or after
+ * IC1A. Measuring AIN0 against AIN5 on the same tag is what separates the two.
+ *
+ * ⚠ 470k IS FAR ABOVE WHAT THE SAADC WANTS. Nordic's table asks ~20-40us of acquisition at
+ * this source impedance; a 125kHz carrier-locked trigger has 8us of period, so 5us is the
+ * ceiling and the sample cap cannot fully charge. Each conversion becomes a one-pole IIR of
+ * the input rather than a sample of it, which attenuates fc/2 hardest of all. That
+ * attenuation hits signal and floor alike, so the fc/2-to-floor RATIO is still the number
+ * to read — but a dead result here is a real finding, not a null. Call BEFORE
+ * register_lf_adc_callback(). */
+void lf_adc_set_input(uint8_t ain);
+
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 
