@@ -131,6 +131,44 @@ up, and fakes a recovery at wide gaps. That inflated the apparent "range" to 1.8
 disguised a clean monotonic decline. Now the floor is subtracted and at-floor points are
 dropped by name.
 
+### 0a4. ⭐⭐⭐ THE "OVERRUNS" WERE BLE ADVERTISING COLLAPSING THE FIELD
+
+Misdiagnosed for this entire investigation, by the firmware's own comments and then by me.
+They are not lost samples. In a glitchy capture the **125kHz field itself collapses** for
+~1.6ms and recovers. Samples across one such event:
+
+    3140 1472 156 28 24 16380 12 0 0 4 20
+
+`lf sniff`'s own output line — `Gaps: N samples below 0x52 (real field drops)` — had been
+reporting exactly this all along.
+
+**Cause: BLE advertising.** Each advertising event is a radio transmit burst, and
+`BLE_ADV_MODE_FAST` places them tens of ms apart; against a 16ms capture that predicts a
+minority of captures being hit. `raw_read_to_buffer` now calls `advertising_stop()` for the
+duration and restarts it after — only when not connected, since dropping advertising is
+harmless and dropping a live link is not.
+
+| condition | dropouts | kept | fc/2 spread across repeats |
+|---|---|---|---|
+| old ring, advertising running | **14 / 34** | 94–100% | 1.20x – 2.92x |
+| new ring, advertising running | 4 / 10 | 97% | 5.58x |
+| **new ring + advertising suspended** | **0 / 20** | **100%** | **1.18x** |
+
+⇒ 41% of captures corrupted, down to none. 1.18x across 20 captures is the best
+repeatability this project has measured.
+
+⚠ **The ring resize was NOT the fix** — 4 of 10 still dropped out with it alone. But the
+ring was genuinely wrong and is worth having fixed: `ADC_BUF_SIZE` is 2048 and the ring was
+512, so `saadc_cb()` dropped **1536 of every 2048 samples (75%)**, making a capture ISLANDS
+of 512 contiguous samples separated by 12.3ms of discarded time. A "2000 sample, 16ms"
+capture actually spanned 64ms. That barely affects a narrowband measurement — which is why
+it hid — but **it would defeat any real demodulator**, which needs contiguous samples. Ring
+is now 2560, one whole batch with slack, and `__HEAP_SIZE` raised 8192 → 16384 to cover it.
+
+⇒ **Every measurement in this note was taken with ~41% of captures corrupted.** Deglitching
+and medians absorbed it, and the conclusions above survive — but they should be re-measured
+on clean captures before anyone builds on them.
+
 ### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
 `lf sniff` captures land randomly in one of two states: clean, or carrying a **USB-transfer
@@ -267,14 +305,17 @@ the analog chain ahead of it.
 
 ⛔ **Also closed:** settle (§0a2), air gap (§0a3 — flat is already optimal).
 
-⭐ **Still open, and neither is likely to move fc/2:**
+⛔ **Also closed:** settle (§0a2), air gap (§0a3), and the overruns (§0a4 — they were BLE
+advertising, now suspended during capture; dropout rate 41% → 0%).
 
-1. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}`, `top_value 4` — a hardcoded 50%
-   duty, never varied. Changes tag power and the detector's operating point. The gap sweep
-   makes this less promising: varying coupling 3.2x did not change the response, and drive
-   is another way of varying the same thing.
-2. **Fix the overruns.** 10–20% of windows discarded, and the bursts have now produced
-   FIVE false readings here. Worth doing for measurement quality whatever happens to Indala.
+⭐ **Still open:**
+
+1. **Re-measure the PSKCF sweep on clean captures.** §0a4 means every number in this note
+   was taken with ~41% of captures corrupted. The conclusions survived deglitching, but
+   the headline −34.5 dB deserves a clean re-run now that one is possible.
+2. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}`, `top_value 4` — hardcoded 50%
+   duty. The gap sweep makes it unpromising: varying coupling 3.2x did not move the
+   response, and drive varies much the same thing.
 
 ⚠ **And the honest possibility**: if settle, gap and drive all come back flat, the answer is
 the front end's bandwidth and only a component change moves it.

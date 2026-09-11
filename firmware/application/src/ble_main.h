@@ -12,6 +12,10 @@ extern uint8_t percentage_batt_lvl;
 typedef void (*lf_adc_callback_t)(nrf_saadc_value_t *, size_t);
 
 void ble_slave_init(void);
+/* Defined in ble_main.c. Declared here because it was previously reachable only by
+ * re-declaring it locally, which is how a definition drifts out of step with its users. */
+extern volatile bool g_is_ble_connected;
+
 void advertising_start(bool erase_bonds);
 void advertising_stop(void);
 void delete_bonds_all(void);

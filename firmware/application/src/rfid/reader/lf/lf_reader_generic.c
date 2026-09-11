@@ -17,17 +17,39 @@ NRF_LOG_MODULE_REGISTER();
 
 /*
  * Circular buffer for SAADC samples.
- * Increased from 128 to 512 to reduce overrun risk during USB transfer.
- * The main loop drains it as fast as possible into the output buffer.
+ *
+ * ⛔⛔ IT MUST HOLD A WHOLE EasyDMA BATCH, AND FOR A LONG TIME IT DID NOT.
+ * The SAADC fills adc_buf[] — ADC_BUF_SIZE = 2048 samples, ble_main.c:71 — and only
+ * then fires NRFX_SAADC_EVT_DONE, so saadc_cb() is handed 2048 samples AT ONCE every
+ * 16.4ms. Against a 512-entry ring that silently dropped 1536 of every 2048 (75%):
+ * cb_push_back() fails and the callback returns, discarding the rest of the batch.
+ *
+ * ⇒ THE CONSEQUENCE WAS NOT "a few lost samples". A capture became ISLANDS of 512
+ * contiguous samples (4.1ms) separated by 12.3ms of thrown-away time, stitched together
+ * as if they were adjacent. A "2000 sample, 16ms" capture actually spanned 64ms, and
+ * every island boundary was a discontinuity — which is what produced the full-scale
+ * jumps this project spent days deglitching around, and five false readings.
+ *
+ * 2560 holds one batch with slack. Batches are 16.4ms apart and the main loop drains
+ * one in microseconds, so a second cannot arrive before the first is consumed.
+ * ⚠ This is malloc'd, so __HEAP_SIZE in application/Makefile must cover it.
  */
-#define CIRCULAR_BUFFER_SIZE (512)
+#define CIRCULAR_BUFFER_SIZE (2560)
 static circular_buffer cb;
+
+/* Dropped-sample counter. A drop now means something is genuinely wrong rather than
+ * being the normal case, so it is worth being able to see. */
+static volatile uint32_t m_cb_dropped = 0;
 
 static void saadc_cb(nrf_saadc_value_t *vals, size_t size) {
     for (int i = 0; i < size; i++) {
         nrf_saadc_value_t val = vals[i];
         if (!cb_push_back(&cb, &val)) {
-            return;  /* buffer full — oldest samples dropped */
+            /* Ring full: the rest of this batch is lost and the capture will have a
+             * time discontinuity here. With a batch-sized ring this should never
+             * happen; count it so it cannot go unnoticed again. */
+            m_cb_dropped += (uint32_t)(size - i);
+            return;
         }
     }
 }
@@ -44,7 +66,37 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
                         bool raw16, uint16_t settle_ms) {
     *outlen = 0;
 
-    cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
+    /* ⭐ SUSPEND BLE ADVERTISING FOR THE DURATION.
+     *
+     * The bursts that this code's comments have long blamed on "USB transfer overruns"
+     * are not lost samples at all — they are the 125kHz FIELD COLLAPSING. In a glitchy
+     * capture the envelope drops to near zero for ~1.6ms and returns; the sniff output's
+     * own "Gaps: N samples below 0x52 (real field drops)" line has been reporting exactly
+     * this all along. Measured samples across one such event:
+     *     3140 1472 156 28 24 16380 12 0 0 4 20
+     *
+     * Each BLE advertising event is a radio transmit burst, and BLE_ADV_MODE_FAST places
+     * them tens of ms apart. Against a 16ms capture that predicts a minority of captures
+     * being hit — and 4 of 10 were.
+     *
+     * ⚠ Only when not connected: dropping advertising is harmless, dropping a live link
+     * is not. */
+    bool adv_paused = false;
+    if (!g_is_ble_connected) {
+        advertising_stop();
+        adv_paused = true;
+    }
+
+    m_cb_dropped = 0;
+    if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
+        /* malloc failed — returning true here would hand back an empty buffer that
+         * looks like a legitimately quiet capture. */
+        NRF_LOG_ERROR("lf sniff: could not allocate %d-sample ring", CIRCULAR_BUFFER_SIZE);
+        if (adv_paused) {
+            advertising_start(false);
+        }
+        return false;
+    }
     init_saadc_hw();
     start_lf_125khz_radio();
 
@@ -98,5 +150,13 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
     uninit_saadc_hw();
     cb_free(&cb);
 
+    if (adv_paused) {
+        advertising_start(false);
+    }
+
+    if (m_cb_dropped) {
+        NRF_LOG_WARNING("lf sniff: dropped %lu samples — capture is discontinuous",
+                        (unsigned long)m_cb_dropped);
+    }
     return true;
 }
