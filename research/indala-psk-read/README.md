@@ -7,42 +7,44 @@ Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:1
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
 
-### 0. ⭐⭐⭐ RESULT: ~27 dB of analog loss that firmware cannot reach
+### 0. ⭐⭐⭐ FINAL RESULT: ~24 dB of analog loss that firmware cannot reach
 
-Measured at 14 bits, **5 repeats per point, each deglitched, medians reported**
-(`campaign_20260910_205456`, `--reads "sniff16 x5" --pm3-signal 0`), against the Proxmark
-on identical stimulus. Normalised to each instrument's own RF/8, which divides out the
-tag's own rolloff:
+Measured at 14 bits, **5 repeats per point, on captures free of field dropouts** (§0a4),
+against a verified empty-field baseline of 5 captures. Campaign
+`campaign_20260910_231740`.
 
-| PSKCF | subcarrier | smp/cyc | Proxmark | Chameleon | **excess loss** | spread |
-|---|---|---|---|---|---|---|
-| RF/4 | 31250 Hz | 4.0 | −4.3 dB | −8.4 dB | **−4.1 dB** | 1.02x |
-| RF/2 | 62500 Hz | **2.0** | −9.3 dB | −43.8 dB | **−34.5 dB** | 1.28x |
+| PSKCF | subcarrier | smp/cyc | Chameleon | spread | empty | **SNR** | Proxmark |
+|---|---|---|---|---|---|---|---|
+| RF/8 | 15625 Hz | 8.0 | 1909.60 | 1.00x | 107.36 | 17.8x | 73.95 |
+| RF/4 | 31250 Hz | 4.0 | 764.13 | 1.00x | 13.10 | **58.3x** | 44.68 |
+| RF/2 | 62500 Hz | **2.0** | 17.86 | 1.12x | 6.37 | **2.8x** | 25.15 |
 
-⭐ Repeat spreads of 1.02x / 1.02x / 1.28x — after eight weeks of chasing artefacts, these
-are the first numbers in this note that are simply **stable**.
+Rolloff from RF/8, each instrument against itself:
 
-**Splitting the 34.5 dB at fc/2:**
+| PSKCF | Proxmark | Chameleon | **excess loss** |
+|---|---|---|---|
+| RF/4 | −4.4 dB | −8.0 dB | **−3.6 dB** |
+| RF/2 | −9.4 dB | −40.6 dB | **−31.2 dB** |
+
+⭐ **Spreads of 1.00x / 1.00x / 1.12x.** After a fortnight of chasing artefacts, this is
+the measurement the whole investigation was trying to make.
+
+**The budget at fc/2:**
 
 | | |
 |---|---|
-| sample phase (`phasesweep.py`, R²=0.90 one-cycle fit) | **~7.5 dB** — firmware can reach this |
-| residue | **~27 dB** — firmware cannot |
+| excess loss vs the Proxmark | **31.2 dB** |
+| recoverable by sample phase (§0a, R²=0.90) | −7.5 dB |
+| **residue the front end owns** | **≈24 dB** |
 
-⇒ **The analog front end is the blocker, and it is not close.** The Chameleon already loses
-4.1 dB at 31 kHz, where sampling is safe at 4 samples/cycle, so the rolloff is genuine and
-starts well below fc/2 — about 30 dB per octave across that span. Optimising the sample
-phase is worth a real 7.5 dB and no more.
+⇒ The Chameleon already loses 3.6 dB at 31 kHz, where sampling is safe at 4 samples/cycle,
+so the rolloff is genuine and starts well below fc/2. Clean captures moved the figure from
+−34.5 dB to −31.2 dB — better, same direction, and it changes nothing structural.
 
-⇒ **Reading Indala on an unmodified Chameleon Ultra is not viable.** At the best phase the
-fc/2 sideband reaches ~20 against an empty-field floor of ~7 — roughly 3x, where a
-demodulator wants an order of magnitude. The missing ~27 dB is in the receive chain ahead
-of the ADC, so no sample-rate, sample-phase or comparator change recovers it.
-
-⚠ **One cheap confirmation is still outstanding.** Sampling at 200–250 kHz removes the
-Nyquist degeneracy entirely rather than merely moving it. If fc/2 is *still* ~27 dB down
-there, the analog attribution is proved rather than inferred. That is the one experiment
-left worth running.
+⇒ **Reading Indala on an unmodified Chameleon Ultra is not viable.** The number that decides
+it is the SNR column: fc/2 sits **2.8x** above the empty-field floor where RF/4 — which this
+device reads without trouble — sits at **58x**. A ~20x SNR deficit, all of it ahead of the
+ADC.
 
 ### 0a. ⛔ GAIN CLOSED: the noise floor is ANALOG-referred, so the ADC was never the limit
 
@@ -279,7 +281,10 @@ the measurement — see §1b.
       --pm3 "../proxmark3/client/proxmark3 /dev/tty.usbmodemiceman1" \
       --note "PSKCF sweep"
 
-    ./sweep.py caps/baseline.bin <campaign>/raw/*.bin <campaign>/pm3_signal/*.pm3
+    # ⚠ use a real path or a glob -- zsh reads <campaign> as a redirect
+    ./sweep.py caps/baseline16_r*.bin \\
+        ../campaigns/campaign_20260910_231740/raw/*.bin \\
+        ../campaigns/campaign_20260910_231740/pm3_signal/*.pm3
 
 ⭐ **Pass the `.pm3` files.** Without the Proxmark reference the sweep cannot separate the tag's own
 rolloff from the Chameleon's, and that separation is the entire result.
