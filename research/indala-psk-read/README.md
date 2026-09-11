@@ -15,6 +15,12 @@ the deficit it spent days trying to explain. Claims measured that way are marked
 `FINDINGS.md` and are provisional.
 
 On the front: **114 of 160 single captures decode (71%) and 0 of 160 empty captures produce
+
+⭐ **And `lf indala write` works: 9 of 9 verified writes.** It reads the tag before and after,
+so it reports VERIFIED, WRITE DID NOT LAND, WRITE FAILED, WRONG DATA or CANNOT TELL rather
+than claiming success it cannot know. A successful read-back covers all three T5577 blocks at
+once — a tag whose config block had not landed would not be transmitting PSK1 at RF/32 and
+could not be read at all.
 a frame at all**, measured over 32 sample phases x 5. Sample phase turns out to be two
 working bands — 0–56 and 96–124, every one of them 5/5 — split by a dead band at 60–92; the
 stock phase 0 is fine on the front and useless on the back. A coil that read 0/12 on the

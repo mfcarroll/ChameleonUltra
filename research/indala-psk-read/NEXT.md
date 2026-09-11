@@ -195,39 +195,27 @@ energy, not coupling.
 decodes, against an empty arm at the same setting. `lfprobe.py` remains useful because it
 measures a *ratio against the live empty floor* for coupling, which is a different job.
 
-## 8. ⭐⭐⭐ T5577 WRITE — the last real gap, and it is no longer blocked
+## 8. ✅ T5577 WRITE — works, 9 of 9 verified
 
-`lf indala write` ships in this branch and is **not known to work**. That is worse than
-absent: it reports what it transmitted, and a T5577 sends no acknowledgement, so the command
-cannot tell success from silence. Two paths were tried:
+`lf indala write` reads the tag before and after and reports VERIFIED / WRITE DID NOT LAND /
+WRITE FAILED / WRONG DATA / CANNOT TELL. Measured by alternating between two words, so each
+result proves a state change rather than a tag that already held the value: **9 consecutive
+writes, all VERIFIED** (C60).
 
-| | result |
-|---|---|
-| three raw `lf_t55xx_write_block` calls | **one of three blocks landed** — a Proxmark dump showed block 2 took, blocks 0 and 1 did not |
-| `write_indala_to_t55xx` via the proven `write_t55xx` | spectrum unchanged; the config block did not take either |
+⇒ The question this section could never answer — *is the writer broken, or was the tag never
+coupled well enough to be written* — resolves as **coupling**. The original failures predate
+the placement discovery (L57) and were taken with the tag on the back, where writing, which
+needs more field than reading, is the worst case of the worst placement.
 
-⭐ **THE BLOCKER IS GONE, AND IT WAS NEVER THE T5577 READ.** §8 used to say the fix was to
-add a T5577 block read, because verifying a write cost a physical Proxmark round trip. It
-does not any more: **this project built the verifier.** `lf indala read` is now 60/60 on two
-tags and two units with 220 nulls and no false positive, and a successful read-back proves
-*everything* that matters — if the config block had not landed the tag would not be
-transmitting PSK1 RF/32 at all, so it could not read. ⇒ Write then read, in one command, on
-one device.
+⛔ And §8's own stated blocker was wrong. It said to add a T5577 block read before debugging
+the writer. By the time that was written the verifier already existed: `lf indala read` is
+60/60 across two tags and two units, and one successful read-back covers blocks 0, 1 and 2
+together. A T5577 block read is still worth having for OTHER protocols — it was never on this
+path.
 
-That turns an afternoon-per-attempt loop into seconds, which is the whole reason this was
-backlogged.
-
-**Order of work:**
-1. Make `lf indala write` verify by reading back, and say plainly which of the two it is.
-2. With a fast loop, find out whether the writer is broken or the tag was never coupled well
-   enough to be written — ⚠ the question §8 has never been able to separate, and the one that
-   sank the original investigation (a tag a Proxmark writes and verifies can be inaudible to
-   the Chameleon).
-3. Only then consider a T5577 block read, which is still worth having for other protocols but
-   is no longer on this path.
-
-⚠ If the writer cannot be made to work, **remove the command** rather than shipping one that
-silently does nothing. That is a real option, not a formality.
+⚠ What is NOT established: writes to a tag the reader cannot hear. Verification is only as
+good as read coupling, which is why CANNOT TELL exists as a distinct verdict rather than
+being folded into failure.
 
 ## 9. Upstreamable?
 
