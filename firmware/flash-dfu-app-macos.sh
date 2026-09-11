@@ -47,7 +47,21 @@ echo "==> Package: $PKG ($(stat -f%z $PKG) bytes)"
 echo "==> Entering DFU mode"
 "$PY" ../resource/tools/enter_dfu.py || {
   echo "   Trigger it by hand: unplug, hold B, plug in (LEDs 4 & 5 blink), then --no-build."; exit 1; }
-sleep 3
+
+# ⛔ POLL, DO NOT SLEEP. This was `sleep 3` and it failed: nrfutil reported "No devices with
+# requested serial number(s) or trait(s) found" while the device was, moments later, sitting
+# in DFU perfectly happily. The bootloader's USB enumeration and its inactivity window do not
+# line up with any fixed delay — 2s was enough on the retry that worked. Waiting for the
+# TRAIT is both faster and correct. (The failure is harmless: app-only DFU leaves the
+# bootloader intact, so a missed flash just means running this again.)
+echo "==> Waiting for the DFU bootloader to enumerate"
+for i in $(seq 1 30); do
+  "$NRFUTIL" device list 2>/dev/null | grep -q nordicDfu && { echo "    up after ${i}s"; break; }
+  sleep 1
+done
+"$NRFUTIL" device list 2>/dev/null | grep -q nordicDfu || {
+  echo "   Bootloader never appeared. Unplug, hold B, plug in (LEDs 4 & 5 blink), then --no-build."
+  exit 1; }
 
 echo "==> Flashing"
 "$NRFUTIL" device program --firmware "$PKG" --traits nordicDfu
