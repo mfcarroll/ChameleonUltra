@@ -10,23 +10,28 @@ decoder that could not work.
 
 ---
 
-## 1. ⛔ Does `lf indala read` false-positive on a NON-Indala tag?
+## 1. ⭐ Finish the loud-signal null — HID is done, the ASK tags are not
 
-**The sharpest untested null, and the empty field does not test it.** An HID Prox, EM410x
-or ioProx tag puts a strong ASK or FSK signal on the antenna. The Indala decoder has never
-seen one. It brute-forces 32 sample offsets looking for a fixed 33-bit pattern, and a
-decoder straining against a *loud* wrong signal is a completely different proposition from
-one straining against silence.
+C24 closed HID Prox: 10/10 `LF tag not found` with the tag on the antenna and its coupling
+confirmed by a 5/5 HID read immediately before. That matters because it is the null the
+empty field cannot provide — a decoder brute-forcing 32 offsets for a fixed pattern against
+a *loud* wrong signal is a different proposition from one straining against silence.
 
-Put each non-Indala LF tag you have on the antenna in turn:
+⚠ HID Prox is FSK. EM410x, Viking, PAC and Jablotron are ASK/OOK and modulate the envelope
+in a completely different way, which is what the fs/2 notch and the bit integrator actually
+see. None of them are tested.
+
+⛔ **Confirm the probe tag's coupling immediately before and after, in the same run.** Not
+doing this is what made L51's measurement uninterpretable: `lf hid prox read` on this bench
+is intermittent enough to sit at 0/15 for a quarter of an hour, so "the Indala read found
+nothing" means nothing on its own — it has to be bracketed by proof the tag was there.
 
 ```bash
-cd software/script && for i in $(seq 1 10); do .venv/bin/python cu.py "lf indala read" 2>&1 | tail -1; done
+cd software/script && .venv/bin/python cu.py \
+  "lf hid prox read" "lf hid prox read" \
+  "lf indala read" "lf indala read" "lf indala read" \
+  "lf hid prox read" "lf hid prox read"
 ```
-
-Expect `LF tag not found` every time, each taking the full ~0.8 s. ⚠ Anything else is a
-serious finding — the two-capture agreement rule assumes wrong frames are *random*, and a
-periodic interferer could produce the same wrong frame twice.
 
 ## 2. ⭐⭐ A second physical Indala tag
 

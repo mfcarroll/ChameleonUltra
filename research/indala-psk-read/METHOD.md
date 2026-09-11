@@ -85,6 +85,17 @@ They were wrong answers, not failures: 24 wrong frames in 200 captures, one in f
 reader built on the decode rate alone would hand back a wrong credential 20% of the time.
 ⇒ Always report recovered / correct / wrong as three numbers, never two.
 
+**M17. ⛔ Run the no-stressor control BEFORE claiming a regression, not after.** "5/5 before,
+1/5 after" was reported as a reproduced bug. The control — same measurement, no stressor —
+swung 8/15, 11/15, 6/15, and the metric then decayed to 0/15 through the control arm. The
+before/after shape is the most persuasive thing a noisy metric can produce by accident,
+and it is free to check: measure the probe twice with nothing in between, first.
+
+**M18. ⚠ "Confirm the tag state" applies to the CONTROL tag too.** M-rule discipline was
+applied to the Indala tag from the start and never once to the HID tag used as the probe —
+which sat on the antenna, unverified, through 25 minutes of measurement whose outcome
+depended entirely on it being there.
+
 **M16. ⭐ Port it to a second implementation, and diff the outputs per input.** The C
 firmware decoder and the numpy research decoder share no code — integer vs float, 3-tap
 notch vs FFT — and agreeing word for word on 320 captures INCLUDING the failures is the
