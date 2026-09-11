@@ -17,10 +17,13 @@ this directory were retired rather than ported (FINDINGS C38).
 
 ⛔⛔ THE DEAD BAND LIES — it does not merely fail. At ticks 60-92 the decoder returns the
 SAME wrong card number on every capture: tick 64 gives a0000000b5af0b92 5/5, tick 88 gives
-a0000000c6b90c92 5/5. The winning bit alignment there is offset 16, exactly half the
-32-sample bit period, so every integrator straddles a bit boundary. Two independent captures
-AGREE on that wrong word, which is why the firmware's acceptance rule cannot catch it and
-why no phase in 60-92 may ever enter PHASE_ROTATION (FINDINGS C39, C40).
+a0000000c6b90c92 5/5. Those frames are not aligned to the data and their weakest bit
+integrator cancels to near zero, which is what the firmware's straddle gate rejects. Two
+independent captures AGREE on the wrong word, so the acceptance rule cannot catch it, and no
+phase in 60-92 may ever enter PHASE_ROTATION (FINDINGS C39, C40, C48).
+⛔ Do not read the OFFSET column as a signature: these won at 16 and 22 while true frames won
+at 9, 10 and 12, but a second Indala tag decodes correctly at offset 22 on hardware. The
+offset is the tag's frame timing, not a correctness signal (C51).
 
 ⛔ THE ORIGINAL HYPOTHESIS HERE WAS WRONG, AND SO WAS EVERYTHING IT WAS BUILT ON. This
 script was written to test whether the sample phase sat at a polarity null. It does not.

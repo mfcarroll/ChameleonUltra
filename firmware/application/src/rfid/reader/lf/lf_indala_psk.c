@@ -235,15 +235,25 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     /* ⛔⛔ THE STRADDLE GATE — the only thing between this decoder and a WRONG CREDENTIAL
      * that two independent captures will agree on.
      *
-     * At sample phases 60-92 the best-scoring alignment is offset 16, exactly half the
-     * 32-sample bit period. Every integrator then straddles a bit boundary and averages
-     * two adjacent bits, so the frame is a coherent, repeatable, WRONG word — phase 64
-     * returns a0000000b5af0b92 on 5 captures out of 5. The acceptance rule in
-     * lf_indala_data.c cannot catch that, because both captures agree.
+     * At sample phases 60-92 the decoder locks onto a candidate that is NOT aligned to the
+     * data, and returns a coherent, repeatable, WRONG word — phase 64 gives
+     * a0000000b5af0b92 on 5 captures out of 5. The acceptance rule in lf_indala_data.c
+     * cannot catch that, because both captures agree on it.
      *
-     * ⭐ The signature is the SHAPE of the frame, not its level. Where two adjacent bits
-     * differ, a straddling integrator averages +1 and -1 and lands near ZERO, so the
-     * weakest bit of the frame collapses relative to the average:
+     * ⛔ DO NOT GATE ON THE SAMPLE OFFSET, however tempting the numbers look. Those wrong
+     * frames all won at offset 16 or 22 while the true ones won at 9, 10 or 12, and an
+     * earlier version of this comment called 16 "exactly half the 32-sample bit period" and
+     * treated it as the signature. It is not one. Half a bit from the true alignment of 9
+     * would be 25, not 16 — the arithmetic never worked. And a SECOND Indala tag, read on
+     * hardware, decodes correctly at offset 22, which is one of the "straddle" offsets:
+     * the winning offset is a property of the TAG's frame timing, not of the sample phase
+     * or of correctness. Only the shape test below is measured to separate them.
+     *
+     * ⭐ The signature is the SHAPE of the frame, not its level and not its offset. A
+     * candidate that is not aligned to the data has at least one bit whose integrator
+     * spans a transition almost symmetrically and therefore cancels to near ZERO, so the
+     * weakest bit of the frame collapses relative to the average. That is measured; the
+     * finer mechanism (exactly how far off alignment has to be) is not established:
      *
      *                          min|integ| / mean|integ|      mean |integ|
      *     front, true frames          0.36 - 0.62            7240 - 12700

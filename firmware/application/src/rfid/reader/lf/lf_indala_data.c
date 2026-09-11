@@ -38,10 +38,12 @@ NRF_LOG_MODULE_REGISTER();
  * ⛔⛔ NEVER PUT A PHASE FROM 60-92 IN THIS LIST. It is not merely dead: in that band the
  * decoder returns a WRONG CARD NUMBER, the SAME one every time. Phase 64 returns
  * a0000000b5af0b92 on 5 of 5 captures; phase 88 returns a0000000c6b90c92 on 5 of 5; phase
- * 92 returns a0000000c6b90e92 on 4 of 5. The cause is visible in the decoder's own output:
- * the winning bit alignment there is offset 16 — EXACTLY HALF the 32-sample bit period —
- * so every integrator straddles a bit boundary, blends two adjacent bits and lands at
- * about half the amplitude of a real frame.
+ * 92 returns a0000000c6b90e92 on 4 of 5. Those frames are not aligned to the data, so
+ * their weakest bit integrator cancels to near zero — which is what lf_indala_psk.c's
+ * straddle gate now tests for and rejects.
+ * ⛔ It does NOT test the sample offset, and neither should anything else: a second Indala
+ * tag decodes CORRECTLY on hardware at offset 22, which is one of the offsets these wrong
+ * frames won at. The offset belongs to the tag's frame timing, not to correctness.
  *
  * ⇒ TWO INDEPENDENT CAPTURES AGREE ON THAT WRONG WORD, so the acceptance rule below does
  * NOT catch it. Nor would requiring two different phases to agree: a0000000c6b90c92 is
