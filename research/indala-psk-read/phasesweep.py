@@ -43,6 +43,29 @@ CU = os.path.normpath(os.path.join(HERE, "..", "..", "software", "script", "cu.p
 PY = os.path.normpath(os.path.join(HERE, "..", "..", "software", "script", ".venv", "bin", "python"))
 
 
+def deglitch(x, w=50, k=4.0):
+    """Drop windows whose peak-to-peak is far above the median window's.
+
+    ⛔⛔ WITHOUT THIS THE SWEEP MEASURES NOTHING. `lf sniff` captures land randomly in
+    two states: clean, or carrying a USB-transfer buffer overrun (lf_reader_generic.c:30
+    — "buffer full, oldest samples dropped"). An overrun is a FULL-SCALE discontinuity
+    (measured: single-sample jumps of 16380 of 16383) and it dumps broadband energy into
+    every bin, fc/2 included. Measured at a FIXED phase with the tag untouched, the fc/2
+    sideband varied 49x run to run (15.3 to 752.7) — as much as the whole phase sweep.
+    Deglitched, the same six repeats spread 1.1x.
+    ⇒ Any single-capture number from this device is suspect. Repeat and take medians.
+
+    Scale-free on purpose: a fixed LSB threshold tuned on 8-bit captures silently
+    discarded 100% of a strong 14-bit one earlier in this project."""
+    n = len(x) // w
+    if n == 0:
+        return x
+    pp = np.array([np.ptp(x[i * w:(i + 1) * w]) for i in range(n)])
+    med = np.median(pp)
+    keep = [x[i * w:(i + 1) * w] for i in range(n) if pp[i] <= k * med]
+    return np.concatenate(keep) if keep else np.array([])
+
+
 def load16(path):
     raw = np.frombuffer(open(path, "rb").read(), dtype=np.uint8)
     if len(raw) < 2 or len(raw) % 2 or raw[0::2].max() > 0x3F:
@@ -71,6 +94,10 @@ def main():
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--freq", type=float, default=62500.0)
     ap.add_argument("--keep", help="directory to keep the captures in")
+    ap.add_argument("--repeats", type=int, default=5,
+                    help="captures per phase; the median is reported (default 5). "
+                         "Captures return when the buffer fills (~16ms), NOT after "
+                         "--timeout, so repeats are nearly free.")
     ap.add_argument("--yes", action="store_true", help="skip the place/remove prompts")
     a = ap.parse_args()
 
@@ -90,46 +117,61 @@ def main():
         os.makedirs(sub_dir, exist_ok=True)
         if not a.yes:
             input("  %s, then press RETURN... " % label)
-        cs = ["hw mode -r"] + [
-            "lf sniff --timeout %d --bits 16 --phase %d --out %s/p%03d.bin"
-            % (a.timeout, p, sub_dir, p) for p in phases]
+        cs = ["hw mode -r"]
+        for rep in range(a.repeats):
+            for p in phases:
+                cs.append("lf sniff --timeout %d --bits 16 --phase %d --out %s/p%03d_r%d.bin"
+                          % (a.timeout, p, sub_dir, p, rep))
         r = subprocess.run([PY, CU] + cs, capture_output=True, text=True)
         if r.returncode != 0:
             sys.exit("cu.py failed:\n" + (r.stdout or "") + (r.stderr or ""))
         out = {}
         for p in phases:
-            f = "%s/p%03d.bin" % (sub_dir, p)
-            if not os.path.exists(f):
-                continue
-            x = load16(f)
-            if x is None:
-                sys.exit("capture at phase %d is not 16-bit — is the firmware current?" % p)
-            out[p] = (amplitude_at(x, a.freq), sideband_rms(x, a.freq), x.std())
+            sbs, bins, kept = [], [], []
+            for rep in range(a.repeats):
+                f = "%s/p%03d_r%d.bin" % (sub_dir, p, rep)
+                if not os.path.exists(f):
+                    continue
+                x = load16(f)
+                if x is None:
+                    sys.exit("capture at phase %d is not 16-bit — is the firmware current?" % p)
+                c = deglitch(x)
+                kept.append(len(c) / max(len(x), 1))
+                if len(c) < 300:            # too little left to transform meaningfully
+                    continue
+                sbs.append(sideband_rms(c, a.freq))
+                bins.append(amplitude_at(c, a.freq))
+            if sbs:
+                out[p] = (float(np.median(bins)), float(np.median(sbs)),
+                          float(np.median(kept)), len(sbs))
         if not out:
-            sys.exit("no captures were produced")
+            sys.exit("no usable captures were produced")
         return out
 
-    print(" Sweeping %d phases (step %d ticks = %.1f deg of carrier), twice."
-          % (len(phases), a.step, a.step * 360.0 / 128))
+    print(" Sweeping %d phases x %d repeats (step %d ticks = %.1f deg of carrier), twice."
+          % (len(phases), a.repeats, a.step, a.step * 360.0 / 128))
     empty = run_pass("empty", "Remove EVERY tag from the antenna")
     withtag = run_pass("tag", "Place the PSK1 RF/32 tag on the LF antenna")
 
     print("\n%s\n PAIRED SAMPLE-PHASE SWEEP at %.0f Hz\n%s" % ("=" * 74, a.freq, "=" * 74))
-    print(" %5s %8s %10s %10s %9s  %s"
-          % ("ticks", "deg", "empty", "tag", "tag/empty", "tag/empty"))
+    print(" (medians of %d deglitched captures; sideband measure, not the Nyquist bin)"
+          % a.repeats)
+    print(" %5s %8s %10s %10s %10s %7s  %s"
+          % ("ticks", "deg", "empty", "tag", "tag/empty", "kept", "tag/empty"))
     ratios = []
     for p in phases:
         if p not in empty or p not in withtag:
             continue
-        e, t = empty[p][0], withtag[p][0]
+        e, t = empty[p][1], withtag[p][1]        # [1] = sideband, the robust measure
         r = t / e if e else float("inf")
-        ratios.append((p, r, e, t))
-    peak = max((r for _, r, _, _ in ratios if np.isfinite(r)), default=1.0) or 1.0
-    for p, r, e, t in ratios:
+        ratios.append((p, r, e, t, withtag[p][2]))
+    peak = max((r for _, r, _, _, _ in ratios if np.isfinite(r)), default=1.0) or 1.0
+    for p, r, e, t, kp in ratios:
         bar = "#" * int(round(40 * min(r, peak) / peak))
-        print(" %5d %7.1f° %10.2f %10.2f %8.2fx  %s" % (p, p * 360.0 / 128, e, t, r, bar))
+        print(" %5d %7.1f° %10.2f %10.2f %9.2fx %6.0f%%  %s"
+              % (p, p * 360.0 / 128, e, t, r, kp * 100, bar))
 
-    rr = np.array([r for _, r, _, _ in ratios if np.isfinite(r)])
+    rr = np.array([r for _, r, _, _, _ in ratios if np.isfinite(r)])
     print("\n%s\n VERDICT\n%s" % ("=" * 74, "=" * 74))
     print(" tag/empty ratio: min %.2fx  max %.2fx  median %.2fx"
           % (rr.min(), rr.max(), np.median(rr)))
