@@ -106,6 +106,29 @@ tolerance and not design generality. A pass was always going to be weak evidence
 
 ## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
 
+⭐⭐ **START HERE: the SAADC readers duplicate a capture path that one of them gets right.**
+The LF readers are two families, and it matters which:
+
+| family | readers | capture |
+|---|---|---|
+| GPIO/comparator | em410x, jablotron, viking | `register_rio_callback`, 128-entry ring, no SAADC |
+| **SAADC** | **hidprox, ioprox, pac** + lf_reader_generic | own `saadc_cb`, own 6144 ring, own field start/stop |
+
+Only `lf_reader_generic.c` also suspends BLE advertising — and its own comment records why:
+a burst collapses the 125 kHz field for ~1.6 ms and hit **4 captures in 10**. The three that
+duplicate the prologue instead of sharing it are HID, ioProx and PAC, and HID and PAC are
+exactly the two measured failing on loud tags. The SAADC reader that HAS the guard is Indala,
+at 60/60.
+
+⇒ `capture_begin()`/`capture_end()` already exist and are already shared by two entry points.
+Moving HID onto them is a small mechanical change that also happens to be **the clean test of
+C47** — same protocol, same tag, same bench, one variable.
+
+⛔ **Do not read the em410x 95% as evidence either way.** It is on the GPIO path and never
+touches the SAADC, so it cannot test this. That mistake is why C47 was wrongly weakened in
+L64.
+
+
 Not this project's decoder, but it is the comparison instrument for everything here and it
 has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
 
@@ -216,6 +239,26 @@ path.
 ⚠ What is NOT established: writes to a tag the reader cannot hear. Verification is only as
 good as read coupling, which is why CANNOT TELL exists as a distinct verdict rather than
 being folded into failure.
+
+## 8b. ⚠ 32KB of the Indala reader serves only the wrong placement — a decision, not a bug
+
+The reader holds **48KB static**: 8KB samples, 8KB scratch, and **32KB of stacking
+accumulators**. C58 measured stacking at exactly 68.75% for N=1..5 on the front — no gain at
+any depth, because a good phase decodes from one capture and a dead one never decodes — and
+32% -> 72% on the back.
+
+⇒ Two thirds of the reader's RAM is insurance for the placement users are told not to use.
+
+| option | RAM | back-side read rate |
+|---|---|---|
+| as shipped | 48KB | 72% |
+| int16 accumulators, cap stacking at 2 | 32KB | 52% (C58, N=2) |
+| drop stacking | 16KB | 32% |
+
+⚠ This is a product decision about whether back-side reads matter, and the numbers are here
+so it can be made rather than drifted into. ⛔ Do NOT drop stacking without also re-checking
+the straddle gate: C58 showed stacking REINFORCES the dead-band straddle, and the gate is
+what holds it at 0 wrong — removing one without re-measuring the other is the dangerous move.
 
 ## 9. Upstreamable?
 
