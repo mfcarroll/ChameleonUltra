@@ -99,6 +99,38 @@ that finding was about a Flipper read path, not this one.
 ⇒ Principle, earned three times now: on this device a single capture is not evidence of
 anything. Not for a sweep, not for a spot check, not for "just looking".
 
+### 0a3. ⛔ AIR GAP CLOSED: flat is already the optimum
+
+`gapsweep.py --gaps flat,1mm,2mm,3mm,5mm,8mm --repeats 5`. Coupling was measured on the
+same captures as the 31250 Hz band (8th harmonic of the RF/32 bit rate), so the chain's
+frequency response can be read with coupling divided out. Empty-field floors: fc/2 7.59,
+h8 14.76.
+
+| gap | fc2 | h8 | fc2 − floor | h8 − floor | **net response** | usable |
+|---|---|---|---|---|---|---|
+| flat | 28.70 | 66.42 | 21.11 | 51.66 | **0.409** | yes |
+| 1mm | 21.05 | 56.22 | 13.46 | 41.46 | 0.325 | yes |
+| 2mm | 16.11 | 51.00 | 8.52 | 36.24 | 0.235 | yes |
+| 3mm | 9.81 | 37.00 | 2.22 | 22.24 | — | fc/2 **at the floor** |
+| 5mm | 7.64 | 20.72 | 0.05 | 5.96 | — | fc/2 **at the floor** |
+| 8mm | 11.46 | 23.38 | 3.87 | 8.62 | 0.449 | marginal, 88% kept |
+
+⇒ **The response declines monotonically as the gap opens** — 0.409, 0.325, 0.235. Tighter
+coupling is better, which **refutes the overcoupling mechanism** that motivated the sweep,
+and the best gap is the one every prior measurement already used.
+
+⚠ 8mm shows the highest ratio (0.449) but it is the ratio of two small noisy numbers at
+88% kept, and fc/2 there is **11.46 against flat's 28.70**. A demodulator needs absolute
+signal above the floor, not a favourable ratio between two small numbers. Best response
+and best absolute are at different gaps, and the absolute column is the one that matters.
+
+⛔⛔ **The script first called this "flat across gaps, nothing here" — wrong description,
+right conclusion.** The raw fc2/h8 ratio carries the noise floor in both terms, so once
+the tag stops reaching fc/2 (3mm onward) the ratio measures noise over noise, drifts back
+up, and fakes a recovery at wide gaps. That inflated the apparent "range" to 1.85x and
+disguised a clean monotonic decline. Now the floor is subtracted and at-floor points are
+dropped by name.
+
 ### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
 `lf sniff` captures land randomly in one of two states: clean, or carrying a **USB-transfer
@@ -233,17 +265,16 @@ default to `[p]` — that is correct for a modulation PM3 cannot read back.
 ⇒ Nothing in the converter, its clock, its phase or its gain moves fc/2. The limit is in
 the analog chain ahead of it.
 
-⭐ **Still open:**
+⛔ **Also closed:** settle (§0a2), air gap (§0a3 — flat is already optimal).
 
-1. **Air gap.** Every capture in this note is `--gap flat`. The harness already stamps the
-   axis and the measurement is now repeatable, so this is cheap.
-2. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}` with `top_value 4` — a hardcoded
-   50% duty. Changes tag power and the detector's operating point.
-3. **Fix the overruns.** 10–20% of windows discarded, and the bursts have now produced
-   FOUR false readings in this investigation. Worth doing for measurement quality alone,
-   whatever happens to Indala.
+⭐ **Still open, and neither is likely to move fc/2:**
 
-⛔ **Also closed:** settle (§0a2) — flat across 2–250ms.
+1. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}`, `top_value 4` — a hardcoded 50%
+   duty, never varied. Changes tag power and the detector's operating point. The gap sweep
+   makes this less promising: varying coupling 3.2x did not change the response, and drive
+   is another way of varying the same thing.
+2. **Fix the overruns.** 10–20% of windows discarded, and the bursts have now produced
+   FIVE false readings here. Worth doing for measurement quality whatever happens to Indala.
 
 ⚠ **And the honest possibility**: if settle, gap and drive all come back flat, the answer is
 the front end's bandwidth and only a component change moves it.

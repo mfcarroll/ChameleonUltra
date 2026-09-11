@@ -132,26 +132,43 @@ def main():
     print("\n" + "=" * 80)
     print(" VERDICT")
     print("=" * 80)
-    ratios = np.array([r[3] for r in rows])
-    couplings = np.array([r[2] for r in rows])
-    print(" coupling (h8) across gaps: %s  -> %.1fx range"
-          % ("  ".join("%.0f" % c for c in couplings), couplings.max() / max(couplings.min(), 1e-9)))
-    print(" response (fc2/h8)        : %s  -> %.2fx range"
-          % ("  ".join("%.3f" % v for v in ratios), ratios.max() / max(ratios.min(), 1e-9)))
-    best = rows[int(ratios.argmax())]
-    if couplings.max() / max(couplings.min(), 1e-9) < 1.5:
-        print("\n ⚠ Coupling barely changed across the sweep — the gaps may not have been")
-        print("   distinct enough to test anything. Widen the range before reading it.")
-    elif ratios.max() / max(ratios.min(), 1e-9) > 2.0:
-        print("\n ⇒ The RESPONSE changes with gap, best at %s (%.3f). Gap is a real lever:"
-              % (best[0], best[3]))
-        print("   fc/2 is not merely quieter when coupled hard, it is relatively suppressed.")
-        print("   Re-run the PSKCF sweep at that gap before concluding anything about the")
-        print("   front end.")
+    # ⛔ SUBTRACT THE FLOOR, AND DROP POINTS SITTING ON IT. The raw fc2/h8 ratio includes
+    # the empty-field floor in both terms, so once the tag stops reaching fc/2 the ratio
+    # stops measuring the tag and starts measuring noise/noise — which drifts back UP and
+    # fakes a recovery at wide gaps. The first run of this script called a clean monotonic
+    # decline "flat across gaps" for exactly that reason.
+    usable = [(g, (f2 - e2) / (h8 - eh), f2, h8)
+              for g, f2, h8, _r, _dc in [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+              if f2 > 1.5 * e2 and h8 > 1.5 * eh]
+    if len(usable) < 2:
+        print(" ⚠ fc/2 sits on the noise floor at all but one gap — nothing to compare.")
+        return
+    print(" %-8s %12s %12s" % ("gap", "net fc2/h8", "fc2 absolute"))
+    for g, r, f2, _h8 in usable:
+        print(" %-8s %12.3f %12.2f" % (g, r, f2))
+    dropped = [r[0] for r in rows if not (r[1] > 1.5 * e2 and r[2] > 1.5 * eh)]
+    if dropped:
+        print(" (dropped, fc/2 at the floor: %s)" % ", ".join(dropped))
+
+    vals = [r for _g, r, _f, _h in usable]
+    best_resp = usable[int(np.argmax(vals))]
+    best_abs = max(usable, key=lambda u: u[2])
+    declining = all(b <= a * 1.05 for a, b in zip(vals, vals[1:]))
+    print("\n best RESPONSE  : %s (%.3f)" % (best_resp[0], best_resp[1]))
+    print(" best ABSOLUTE  : %s (fc2 %.2f)" % (best_abs[0], best_abs[2]))
+    if declining:
+        print("\n ⛔ The response DECLINES monotonically as the gap opens. Tighter coupling")
+        print("   is better, so the overcoupling mechanism is refuted — and the best gap is")
+        print("   the one every prior measurement already used. No improvement available.")
+    elif best_resp[0] != best_abs[0]:
+        print("\n ⚠ Best response and best absolute signal are at DIFFERENT gaps. A better")
+        print("   ratio at a wide gap is not useful if fc/2 is quieter there in absolute")
+        print("   terms — a demodulator needs signal above the floor, not a favourable")
+        print("   ratio between two small numbers. Trust the absolute column.")
     else:
-        print("\n ⛔ The response is flat across gaps while coupling changes %.1fx. Gap moves"
-              % (couplings.max() / max(couplings.min(), 1e-9)))
-        print("   how loud the tag is, not how the chain treats fc/2. Nothing here.")
+        print("\n ⇒ %s is best on both response and absolute signal. Re-run the PSKCF sweep"
+              % best_resp[0])
+        print("   there before concluding anything about the front end.")
     print("\n captures in %s%s" % (out, "" if a.keep else " (temporary)"))
 
 
