@@ -6014,6 +6014,53 @@ class LFIndalaRead(ReaderRequiredUnit):
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}")
 
 
+@lf_indala.command("write")
+class LFIndalaWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Write a raw 64-bit Indala frame to a T5577. "
+                              "Configures PSK1, RF/32, 2 data blocks.")
+        parser.add_argument("-r", "--raw", required=True,
+                            help="16 hex digits, e.g. a0000000e6bd0e92")
+        return parser
+
+    # ⭐ T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | (2 << T55x7_MAXBLOCK_SHIFT).
+    # Confirmed twice over: it is what Proxmark's `lf indala clone` writes
+    # (cmdlfindala.c) and it is what block 0 of the working bench tag actually reads back
+    # as. Two independent sources, which is the standard this project holds itself to.
+    CONFIG = 0x00081040
+
+    def on_exec(self, args: argparse.Namespace):
+        raw = args.raw.strip().lower().removeprefix("0x")
+        if len(raw) != 16 or any(c not in "0123456789abcdef" for c in raw):
+            print(f"{color_string((CR, 'Need exactly 16 hex digits'))}")
+            return
+        word = int(raw, 16)
+
+        # ⚠ DATA BLOCKS FIRST, CONFIG LAST. Writing block 0 first would switch the tag to
+        # PSK1/RF32/maxblock-2 while blocks 1 and 2 still hold whatever was there before,
+        # so a failure part-way would leave a tag that confidently transmits the wrong
+        # credential in the right format. This order leaves a partial failure looking like
+        # a failure.
+        for block, value in ((1, word >> 32), (2, word & 0xFFFFFFFF), (0, self.CONFIG)):
+            self.cmd.lf_t55xx_write_block(block, value)
+            print(f"   block {block} <- {value:08x} (sent)")
+
+        # ⛔ NOT "Wrote". A T5577 SENDS NO ACKNOWLEDGEMENT, so lf_t55xx_write_block()
+        # returns STATUS_LF_TAG_OK unconditionally — its own doc comment says so — and
+        # this command has NO WAY to know whether a single bit landed. Printing "Wrote
+        # a0000000e6bd0e92" here was a success message with nothing behind it, and it cost
+        # an hour: the tag stopped reading as HID, which looked like confirmation, on a
+        # bench where that same tag had already gone from 5/5 to 0/15 with nothing done to
+        # it at all.
+        print(f"{color_string((CY, 'Sent'))} {raw} — "
+              f"{color_string((CR, 'NOT verified'))}: a T5577 does not acknowledge a "
+              f"write, so this reports what was transmitted, not what landed.")
+        print(f"   Verify with {color_string((CG, 'lf indala read'))}, and if that fails "
+              f"confirm the tag independently:")
+        print(f"   {color_string((CG, 'pm3 -c \'lf t55xx detect; lf t55xx dump\''))}")
+
+
 @lf_ioprox.command("write")
 class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:

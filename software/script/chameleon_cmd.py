@@ -669,6 +669,21 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def lf_t55xx_write_block(self, block: int, word: int, use_pwd: bool = False,
+                             pwd: int = 0, page1: bool = False):
+        """Write one 32-bit T5577 block.
+
+        The firmware handler has existed since before this work (DATA_CMD_LF_T55XX_WRITE,
+        app_cmd.c) with no host binding at all — every write went through a
+        protocol-specific helper, so there was no way to put an arbitrary word on a tag.
+        """
+        if not 0 <= block <= (3 if page1 else 7):
+            raise ValueError("block out of range for the selected page")
+        data = struct.pack('!BIBIB', block, word & 0xFFFFFFFF, 1 if use_pwd else 0,
+                           pwd & 0xFFFFFFFF, 1 if page1 else 0)
+        return self.device.send_cmd_sync(Command.LF_T55XX_WRITE, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def indala_scan(self):
         """
         Read an Indala credential (PSK1, RF/32, fc/2 subcarrier).
