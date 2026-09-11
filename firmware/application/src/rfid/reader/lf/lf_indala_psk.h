@@ -48,6 +48,22 @@
  * in 2048. Two frames guarantees one whole frame lands inside. */
 #define INDALA_PSK_CAPTURE_SAMPLES 4096
 
+/* ⛔ THE STRADDLE GATE. A frame is rejected when it is BOTH loud and ragged — see the long
+ * note at the gate itself in lf_indala_psk.c. Both conditions are required: shape alone
+ * costs 61% of back-side reads, because a genuine frame 26 dB down is ragged too.
+ *
+ *   reject when   mean|integ| >= INDALA_PSK_STRADDLE_AMP
+ *           and   min|integ| * INDALA_PSK_STRADDLE_DIV < mean|integ|
+ *
+ * Measured over 320 captures on both placements: rejects 21 of 21 straddles, keeps 110 of
+ * 114 front-side true frames (and 40 of 40 at the phases PHASE_ROTATION actually uses),
+ * and touches nothing on the back — 51 of 51 kept. */
+#define INDALA_PSK_STRADDLE_AMP  2048   /* geometric mean of the two populations: 2.2x the
+                                           loudest back-side frame, 2.5x below the quietest
+                                           straddle. Coupling-dependent — see the gate. */
+#define INDALA_PSK_STRADDLE_DIV  8      /* min/mean < 1/8. Straddles measured 0.001-0.092,
+                                           front-side true frames 0.36-0.62. */
+
 /** Upper bound on bits recoverable from one capture, for the stack-allocated workspace. */
 #define INDALA_PSK_MAX_BITS (INDALA_PSK_CAPTURE_SAMPLES / INDALA_PSK_BIT_SAMPLES)
 
@@ -64,6 +80,11 @@ typedef struct {
     uint8_t  bit_pos;      /**< bit index of the preamble in that offset's stream. */
     bool     inverted;     /**< the frame was found as the inverted preamble. */
     int32_t  amp;          /**< mean |bit integrator| over the 64 word bits. */
+    int32_t  min_amp;      /**< SMALLEST |bit integrator| in the frame. With `amp` this is
+                                the straddle test: a frame whose weakest bit has collapsed
+                                relative to its average is an integrator sitting across bit
+                                boundaries, which decodes to a repeatable WRONG word. See
+                                the gate in lf_indala_psk.c. */
 } indala_psk_result_t;
 
 /**

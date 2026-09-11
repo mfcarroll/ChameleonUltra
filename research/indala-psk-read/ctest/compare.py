@@ -27,9 +27,18 @@ TRUTH = "a0000000e6bd0e92"
 TAPS = np.array([1.0, 2.0, 1.0]) / 4.0
 
 
+# ⛔ The straddle gate, mirrored from lf_indala_psk.h. It lives here for the same reason
+# TAPS does: this comparison is meant to catch a bad PORT, so everything that is a
+# deliberate algorithm choice must be identical on both sides or every straddle shows up as
+# a spurious mismatch. The gate itself is validated independently, against both placements,
+# not by this file.
+STRADDLE_AMP = 2048
+STRADDLE_DIV = 8
+
+
 def py_decode(path):
-    """mfdemod's chain with the firmware's filter, so the comparison isolates the PORT
-    rather than re-testing the filter choice (which lives in its own row below)."""
+    """mfdemod's chain with the firmware's filter AND its straddle gate, so the comparison
+    isolates the PORT rather than re-testing either choice."""
     x = M.load16(path)
     if x is None:
         return None
@@ -42,11 +51,21 @@ def py_decode(path):
         for i, inv, err in M.find_preamble(bits, 0):
             if i + 64 > len(bits):
                 continue
-            amp = float(np.sum(np.abs(integ[i:i + 64])))
+            seg = np.abs(integ[i:i + 64])
+            amp = float(np.sum(seg))
             if best is None or amp > best[0]:
                 w = bits[i:i + 64]
-                best = (amp, "".join(str(int(v)) for v in (1 - w if inv else w)))
+                best = (amp, "".join(str(int(v)) for v in (1 - w if inv else w)),
+                        float(np.min(seg)))
     if best is None:
+        return None
+    # ⚠ SCALE. TAPS is [1,2,1]/4 but the firmware folds [1,2,1] into the boxcar WITHOUT
+    # dividing (4*box + corrections), so every C integrator is 4x its numpy counterpart.
+    # The thresholds are in firmware units, so scale up rather than editing the constant —
+    # this comparison caught the mismatch when it was missed, which is the point of it.
+    mean = 4.0 * best[0] / 64.0
+    mn = 4.0 * best[2]
+    if mean >= STRADDLE_AMP and mn * STRADDLE_DIV < mean:
         return None
     return "%016x" % int(best[1], 2)
 

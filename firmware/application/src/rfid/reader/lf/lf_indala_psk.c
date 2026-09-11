@@ -1,3 +1,4 @@
+#include <limits.h>
 #include "lf_indala_psk.h"
 
 /*
@@ -168,6 +169,7 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
      * the one whose integrators are largest, because a straddling one averages part of
      * each neighbour and partially cancels. */
     int32_t  best_amp = -1;
+    int32_t  best_min = 0;
     uint8_t  best_err = 0xFF;
     uint8_t  best_word[INDALA_PSK_FRAME_BITS];
     uint8_t  best_off = 0, best_pos = 0;
@@ -200,13 +202,19 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
                 /* Sum rather than mean: every candidate spans the same 64 bits, so the
                  * divide would cancel. Bounded by 64 * 4 * 32 * 16383 = 1.4e8. */
                 int32_t amp = 0;
+                int32_t mn = INT32_MAX;
                 for (size_t k = 0; k < INDALA_PSK_FRAME_BITS; k++) {
                     int32_t v = integ[i + k];
-                    amp += (v < 0) ? -v : v;
+                    v = (v < 0) ? -v : v;
+                    amp += v;
+                    if (v < mn) {
+                        mn = v;
+                    }
                 }
                 if (err < best_err || (err == best_err && amp > best_amp)) {
                     best_err = err;
                     best_amp = amp;
+                    best_min = mn;
                     best_off = (uint8_t)off;
                     best_pos = (uint8_t)i;
                     best_inv = (inv != 0);
@@ -224,6 +232,47 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
         return false;
     }
 
+    /* ⛔⛔ THE STRADDLE GATE — the only thing between this decoder and a WRONG CREDENTIAL
+     * that two independent captures will agree on.
+     *
+     * At sample phases 60-92 the best-scoring alignment is offset 16, exactly half the
+     * 32-sample bit period. Every integrator then straddles a bit boundary and averages
+     * two adjacent bits, so the frame is a coherent, repeatable, WRONG word — phase 64
+     * returns a0000000b5af0b92 on 5 captures out of 5. The acceptance rule in
+     * lf_indala_data.c cannot catch that, because both captures agree.
+     *
+     * ⭐ The signature is the SHAPE of the frame, not its level. Where two adjacent bits
+     * differ, a straddling integrator averages +1 and -1 and lands near ZERO, so the
+     * weakest bit of the frame collapses relative to the average:
+     *
+     *                          min|integ| / mean|integ|      mean |integ|
+     *     front, true frames          0.36 - 0.62            7240 - 12700
+     *     front, straddles           0.001 - 0.092           5120 -  6832
+     *     back,  true frames         0.015 - 0.059            468 -   936
+     *
+     * ⚠ min/mean ALONE IS NOT ENOUGH and that is why there are two conditions. At 26 dB
+     * down a genuine frame is also ragged — back-side true frames sit at 0.015-0.059,
+     * indistinguishable in shape from a straddle. Gating on shape alone would cost 61% of
+     * back-side reads. But the two cases are an order of magnitude apart in LEVEL, so
+     * requiring BOTH "loud" and "ragged" rejects 21 of 21 straddles while leaving every
+     * back-side frame untouched (51 of 51 kept). Measured over 320 captures, both
+     * placements.
+     *
+     * ⚠ INDALA_PSK_STRADDLE_AMP IS AN ABSOLUTE LEVEL and therefore coupling-dependent —
+     * the one property C43 warns about. It sits at the geometric mean of the two
+     * populations, 2.2x above the loudest back-side frame and 2.5x below the quietest
+     * straddle, which is the widest margin the data supports. A tag coupled well enough to
+     * produce a straddle but too weakly to clear this bar would slip through. That is why
+     * this gate does NOT replace keeping 60-92 out of PHASE_ROTATION; it is the second
+     * layer, for phases and placements nobody has characterised.
+     *
+     * ⇒ It only ever REJECTS. A rejected capture costs one retry at the next phase, and
+     * nothing that is accepted today becomes accepted that was not before. */
+    if (best_amp / INDALA_PSK_FRAME_BITS >= INDALA_PSK_STRADDLE_AMP &&
+            best_min * INDALA_PSK_STRADDLE_DIV < best_amp / INDALA_PSK_FRAME_BITS) {
+        return false;
+    }
+
     for (size_t k = 0; k < 8; k++) {
         uint8_t byte = 0;
         for (size_t b = 0; b < 8; b++) {
@@ -235,6 +284,7 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     out->bit_pos  = best_pos;
     out->inverted = best_inv;
     out->amp      = best_amp / INDALA_PSK_FRAME_BITS;
+    out->min_amp  = best_min;
     /* ⚠ ADVISORY, NOT A GATE. The parity is reported so a caller can prefer a clean read,
      * but it does NOT reject a frame here: it is two bits, it only covers format 26, and
      * the preamble search already produced 0 false positives in 160 empty captures. Making

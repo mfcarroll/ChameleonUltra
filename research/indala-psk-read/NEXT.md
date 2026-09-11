@@ -32,36 +32,22 @@ offline against the committed set. Do that first next time.
 | **1b** C04 settle discard | **still fatal, 107 -> 0** (C42), and always was structural rather than SNR |
 | **1c** agreement rule | **⛔ keep it — it is WEAKER than believed, not stronger** (C39, C40) |
 
-## 1c-follow-up. ⭐⭐⭐ THE HALF-BIT GATE — the one real hole left
+## 1c-follow-up. ✅ THE STRADDLE GATE — closed
 
-In the dead band the decoder returns the SAME wrong card number every time: phase 64 gives
-`a0000000b5af0b92` on 5 of 5, phase 88 `a0000000c6b90c92` on 5 of 5. Two independent
-captures agree on it, so the acceptance rule passes it through. Requiring two different
-*phases* to agree does not help either — `a0000000c6b90c92` is produced at both 88 and 92.
+On the front the decoder now returns **110 frames, 110 of them correct**. C48, C49, L61.
 
-**Today this is latent**: no phase in `PHASE_ROTATION` lies in 60–92, and that is now the
-only thing preventing a confidently wrong credential. ⚠ NEXT §2b as originally written —
-"derive the rotation from the union of front and back working phases" — would have made it
-live, because the back-side stacking table specifically credits phase 64.
+Reject when a frame is BOTH loud and ragged: `mean|integ| >= 2048` AND `min|integ| * 8 <
+mean|integ|`. 21 of 21 straddles rejected, 40 of 40 true frames kept at rotation phases,
+back-side set untouched.
 
-⇒ **The fix should be a mechanism, not a keep-out list.** The signature is in the decoder's
-own output and is not subtle: the winning alignment is `off 16`, exactly half the 32-sample
-bit period, at ~half the amplitude (truth 7240–12699, wrong 5120–6833 — C43). Candidates,
-in order of how much they rely on absolute level:
+⚠ **It does not retire the 60–92 keep-out.** The amplitude term is absolute and therefore
+coupling-dependent (C43). A tag coupled well enough to straddle but too weakly to clear 2048
+slips through. Two layers, not one.
 
-1. **Compare the winner against the alignment 16 offsets away.** A correctly aligned frame
-   should beat its straddle by ~2x; a straddle sits between two half-strength neighbours.
-   This is scale-free, which is the property a gate needs.
-2. Reject when the per-bit integrator magnitudes are *bimodal* — a straddling window
-   produces full-strength bits where neighbours match and near-zero where they differ.
-3. ⚠ NOT an absolute amplitude threshold. It separates perfectly on this data and would
-   still be wrong: amplitude scales with coupling, so a weakly-coupled tag falls under any
-   fixed cut. C43.
-4. ⚠ NOT Wiegand-26 parity, which C19 already rejected as a gate and which fails again
-   here in the sharpest possible way: it rejects `a0000000b5af0b92` and `a0000000c6b90c92`
-   but **passes `a0000000c6b90e92`** — a frame that also survives two-capture agreement and
-   reports the CORRECT facility code (52) with a wrong card number. That is the exact shape
-   of a credential a reader would hand over with confidence.
+⚠ **Still worth doing:** the gate is tuned on 21 straddles from one tag on one unit. A
+second Indala tag (§4) would be the first real test of the 2048 threshold, since it moves
+with coupling. Until then treat the margin — 2.2x above the loudest back-side frame, 2.5x
+below the quietest straddle — as the whole safety budget.
 
 **1d. ✅ The loud-signal null passes.** An HID Prox tag at **88–100x the empty floor in its
 own band** produced `LF tag not found` on **30 of 30** `lf indala read` attempts. C44, L59.
