@@ -684,6 +684,20 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.LF_T55XX_WRITE, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def indala_write_to_t55xx(self, raw8: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                              old_keys: list = None):
+        """Write a raw 64-bit Indala frame onto a T55xx tag (PSK1, RF/32).
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write. This says
+        what was transmitted, not what landed. Read the tag back.
+        """
+        if len(raw8) != 8:
+            raise ValueError("The raw frame must be exactly 8 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', raw8, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def indala_scan(self):
         """
         Read an Indala credential (PSK1, RF/32, fc/2 subcarrier).

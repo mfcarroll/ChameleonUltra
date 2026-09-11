@@ -180,6 +180,7 @@ class Command(enum.IntEnum):
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
     INDALA_SCAN = 3033
+    INDALA_WRITE_TO_T55XX = 3034
 
 
 @enum.unique

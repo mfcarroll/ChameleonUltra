@@ -756,6 +756,25 @@ static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
+static data_frame_tx_t *cmd_processor_indala_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t raw8[8];      /* the 64-bit frame, big-endian */
+        uint8_t new_key[4];
+        uint8_t old_keys[4];  /* one or more */
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_indala_to_t55xx(payload->raw8, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_ioprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[16] = {0};
     uint8_t hint = (data != NULL) ? data[0] : 0;
@@ -3187,6 +3206,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
     {    DATA_CMD_INDALA_SCAN,                  before_reader_run,           cmd_processor_indala_scan,                   NULL                   },
+    {    DATA_CMD_INDALA_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_indala_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },

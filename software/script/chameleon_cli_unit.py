@@ -6037,27 +6037,26 @@ class LFIndalaWrite(ReaderRequiredUnit):
             return
         word = int(raw, 16)
 
-        # ⚠ DATA BLOCKS FIRST, CONFIG LAST. Writing block 0 first would switch the tag to
-        # PSK1/RF32/maxblock-2 while blocks 1 and 2 still hold whatever was there before,
-        # so a failure part-way would leave a tag that confidently transmits the wrong
-        # credential in the right format. This order leaves a partial failure looking like
-        # a failure.
-        for block, value in ((1, word >> 32), (2, word & 0xFFFFFFFF), (0, self.CONFIG)):
-            self.cmd.lf_t55xx_write_block(block, value)
-            print(f"   block {block} <- {value:08x} (sent)")
+        # ⛔ NOT three lf_t55xx_write_block() calls. That was the first version and it
+        # DOES NOT RELIABLY WORK — measured on a real tag, one of three writes landed, and
+        # the two that did not were the config block and the high data word. The raw
+        # single-block path cycles the field per block, so each one is written to a tag
+        # charging from cold, once, with no retry. write_indala_to_t55xx() goes through
+        # write_t55xx(), which holds the field on and writes every block twice, and is
+        # what every other protocol writer on this device uses.
+        self.cmd.indala_write_to_t55xx(bytes.fromhex(raw))
 
-        # ⛔ NOT "Wrote". A T5577 SENDS NO ACKNOWLEDGEMENT, so lf_t55xx_write_block()
-        # returns STATUS_LF_TAG_OK unconditionally — its own doc comment says so — and
-        # this command has NO WAY to know whether a single bit landed. Printing "Wrote
-        # a0000000e6bd0e92" here was a success message with nothing behind it, and it cost
-        # an hour: the tag stopped reading as HID, which looked like confirmation, on a
-        # bench where that same tag had already gone from 5/5 to 0/15 with nothing done to
-        # it at all.
+        # ⛔ NOT "Wrote". A T5577 SENDS NO ACKNOWLEDGEMENT, so the firmware returns
+        # STATUS_LF_TAG_OK unconditionally and this command has no way to know whether a
+        # single bit landed. Printing a success message here cost an hour: the tag stopped
+        # reading as HID, which looked like confirmation, on a bench where that same tag
+        # had already gone from 5/5 to 0/15 with nothing done to it at all (L51). The
+        # Proxmark dump later showed only ONE of the three blocks had changed.
         print(f"{color_string((CY, 'Sent'))} {raw} — "
               f"{color_string((CR, 'NOT verified'))}: a T5577 does not acknowledge a "
               f"write, so this reports what was transmitted, not what landed.")
-        print(f"   Verify with {color_string((CG, 'lf indala read'))}, and if that fails "
-              f"confirm the tag independently:")
+        print(f"   Verify with {color_string((CG, 'lf indala read'))}, and confirm the "
+              f"blocks independently with:")
         print(f"   {color_string((CG, 'pm3 -c \'lf t55xx detect; lf t55xx dump\''))}")
 
 

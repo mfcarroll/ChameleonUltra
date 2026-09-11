@@ -260,6 +260,36 @@ uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_p
 }
 
 /**
+ * @brief Write a raw 64-bit Indala frame to a T55xx tag (PSK1, RF/32, 2 data blocks).
+ *
+ * ⭐ THIS GOES THROUGH write_t55xx() AND THAT IS THE ENTIRE POINT. The obvious alternative
+ * is lf_t55xx_write_block() three times, and it DOES NOT RELIABLY WORK: measured on a real
+ * tag, one of three such writes landed. The raw single-block path starts the field, waits
+ * 1ms, sends the block once, resets, and stops the field — per block — so every block is
+ * written to a tag charging from cold, once, with no second attempt. write_t55xx() holds
+ * the field on across all blocks and t55xx_write_data() sends each one TWICE (password
+ * write then open write), which is why every protocol writer on this device uses it.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT, so this returns STATUS_LF_TAG_OK regardless, exactly
+ * as every other writer here does. It reports what was transmitted, not what landed. Read
+ * the tag back before believing it.
+ *
+ * @param raw8 8 bytes, the 64-bit frame big-endian
+ * @return STATUS_LF_TAG_OK
+ */
+uint8_t write_indala_to_t55xx(uint8_t *raw8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    /* T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | (2 << T55x7_MAXBLOCK_SHIFT).
+     * Confirmed twice: what Proxmark's `lf indala clone` writes, and what block 0 of the
+     * working bench tag actually reads back as. */
+    uint32_t blks[3] = {
+        0x00081040,
+        bytes_to_num(raw8, 4),
+        bytes_to_num(raw8 + 4, 4),
+    };
+    return write_t55xx(blks, 3, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
  * Set the LF card scanning timeout value (in milliseconds).
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }

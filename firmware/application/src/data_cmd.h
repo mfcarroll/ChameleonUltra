@@ -207,5 +207,6 @@
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
 #define DATA_CMD_INDALA_SCAN                    (3033)
+#define DATA_CMD_INDALA_WRITE_TO_T55XX          (3034)
 
 #endif
