@@ -57,10 +57,37 @@ def baseband(x):
     return y * ((-1.0) ** np.arange(len(y)))
 
 
-def preamble_correlate(b):
-    """Matched filter for the 33-bit preamble. Returns (position, peak, noise_rms)."""
+def lowpass(b, fc=12000.0):
+    """⭐ THE DEMODULATOR HAD NO SELECTIVITY AND IT COST REAL SIGNAL. After baseband()
+    the data sits near DC, and everything that was originally low-frequency sits near
+    fs/2. The only thing filtering it was the 32-sample boxcar in decode_from(), whose
+    response at 57.5-61.5kHz is ~2.4-2.8% — not 0. Measured on this bench the carrier
+    ripple is ~316 counts against a ~10-count subcarrier, so ~9 counts leak straight
+    into every bit decision. One proper low-pass on the baseband removes it.
+
+    12kHz keeps three lobes of a 3906bps rectangular bit; narrower starts smearing the
+    transitions, which is the half of the frame that actually carries the credential."""
+    if not fc:
+        return b
+    S = np.fft.rfft(b)
+    S[np.fft.rfftfreq(len(b), 1 / FS) > fc] = 0
+    return np.fft.irfft(S, len(b))
+
+
+def preamble_correlate(b, dc_free=False):
+    """Matched filter for the 33-bit preamble. Returns (position, peak, noise_rms).
+
+    ⛔ dc_free USED TO BE ON AND IT THREW AWAY THE PREAMBLE. bits_to_polarity(PREAMBLE)
+    is two -1s, thirty +1s and one -1, so subtracting its mean leaves 90.9% of the
+    template's energy in 3 of its 33 bits: the 28-zero run — the most distinctive thing
+    in an Indala frame — contributes almost nothing. It was there so residual drift could
+    not bias the peak, but baseband() already moves DC to fs/2 and the per-bit boxcar
+    nulls exactly there, so it was guarding against something that cannot happen.
+    Measured on synthetic frames: raw beats DC-free 15/20 vs 12/20 at amp 5, 9/20 vs
+    5/20 at amp 4."""
     tpl = np.repeat(bits_to_polarity(PREAMBLE), BIT)
-    tpl = tpl - tpl.mean()                 # DC-free, so residual drift cannot bias the peak
+    if dc_free:
+        tpl = tpl - tpl.mean()
     tpl /= np.linalg.norm(tpl)
     if len(b) < len(tpl) + BIT:
         return None, 0.0, 0.0
@@ -92,8 +119,15 @@ def decode_from(b, pos, nbits=64):
     return bits, integ
 
 
-def demod(x, verbose=False):
-    b = baseband(x)
+def demod(x, verbose=False, lpf=None):
+    """⚠ lpf DEFAULTS OFF, AND THAT IS DELIBERATE. Against WHITE noise the 32-sample
+    boxcar in decode_from() is already the matched filter for a rectangular bit, so any
+    extra filter is strictly suboptimal — switching a 12kHz low-pass on costs the
+    synthetic threshold 2.13x -> 2.86x. Against the REAL chain it helps, because that
+    noise is strongly coloured and carries a large component near fs/2 the boxcar barely
+    touches. Pass lpf=12000 for real captures; leave it off for synthetic ones. That the
+    same filter helps one and hurts the other IS the finding."""
+    b = lowpass(baseband(x), lpf)
     pos, peak, noise = preamble_correlate(b)
     if pos is None:
         return None
@@ -120,6 +154,13 @@ def synth(n, amp, noise_std, seed=0):
     rng = np.random.default_rng(seed)
     bits = [(TRUTH >> (63 - i)) & 1 for i in range(64)]
     pol = bits_to_polarity(bits)
+    # ⚠ THIS RESTARTS THE POLARITY EVERY FRAME. A real tag does not: PSK1 carries the
+    # running polarity across the frame boundary, and a0000000e6bd0e92 has 19 ones — ODD
+    # — so the subcarrier INVERTS every 64 bits and the true repetition period is 4096
+    # samples, not 2048. Anything that folds or averages at 2048 averages a frame against
+    # its own inverse and cancels the data; the transition skirt survives, which is how
+    # band SNR can improve as sqrt(N) while not one bit is recovered. Use psk_frame() in
+    # stack.py when the inter-frame polarity matters.
     frame = np.repeat(pol, BIT) * np.tile([1.0, -1.0], BIT * 64 // 2)
     reps = int(np.ceil(n / len(frame))) + 1
     sig = np.tile(frame, reps)[:n] * amp
@@ -181,7 +222,7 @@ if __name__ == '__main__':
         if x is None:
             print(f" {p.split('/')[-1]:40s} not a 16-bit capture")
             continue
-        r = demod(x)
+        r = demod(x, lpf=12000.0)         # real capture: coloured noise, filter helps
         hit = r and r['word'] == TRUTH
         print(f" {p.split('/')[-1]:40s} {len(x):5d} samples  "
               f"{'*** ' + r['hex'] + ' ***' if hit else (r['hex'] if r else '—')}"

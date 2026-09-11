@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — 7.6 dB short; not yet shown unbridgeable
+## Indala on Chameleon Ultra — the phase is gone before the ADC, not the amplitude
 
 ⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
 
@@ -19,6 +19,154 @@ advertising suspension and the resized DMA ring.
 Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:17`). The Chameleon
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
+
+### 0z. ⭐⭐⭐ 2026-09-11 — IT IS NOT SNR. A KNOWN SIGNAL AT THE TAG'S OWN AMPLITUDE DECODES.
+
+**The single test that reframes the whole project.** Take the real empty-field captures —
+the actual measured noise of this chain, not a model of it — and add a synthetic PSK1
+frame of `a0000000e6bd0e92` scaled to the tag's own measured fc/2 sideband. Then run the
+same brute-force decoder used on the tag.
+
+| injected | amp | fc/2 | tag/empty | data errors |
+|---|---|---|---|---|
+| = tag, N=1 | 8.60 | 14.52 | 2.32x | **0/31 DECODE** |
+| 0.5x tag, N=1 | 4.30 | 9.49 | 1.51x | **0/31 DECODE** |
+| 0.25x tag, N=7 | 2.15 | 4.09 | 1.63x | **0/31 DECODE** |
+| **real tag, N=1** | — | 12.63 | 2.02x | **6/31** |
+| **real tag, N=7** | — | 10.36 | 4.14x | **7/31** |
+
+⇒ A signal at **half** the tag's amplitude, in the **same** noise, from a **single**
+capture, decodes perfectly. The real tag at **four times** the band SNR does not, and does
+not improve with averaging.
+
+⭐ **So the deficit is not SNR, not the noise, not the demodulator.** What arrives at the
+converter has the right fc/2 **amplitude** and the wrong **phase structure**. The question
+is no longer "how do we find 7.6 dB" — it is "where does the polarity go?"
+
+**The obvious first suspect, and it is testable on the bench:** the 32-tick sample phase
+was chosen by maximising the **skirt**, and the skirt is polarity-blind (§0z2). The
+polarity lives in the component *at* 62.5kHz = Nyquist, whose recovered value is
+`2A·cos φ` — it has a hard NULL where the skirt does not. **Nobody has ever swept phase
+while scoring bit recovery.** That is the next run: `phasesweep.py` scoring data bits
+instead of sideband amplitude.
+
+### 0z2. ⛔⛔⛔ THREE MEASURES THAT LOOK LIKE PROGRESS AND ARE NOT
+
+**1. Folding at 2048 samples CANCELS the data.** `a0000000e6bd0e92` has **19 ones — odd**.
+PSK1 carries its running polarity across the frame boundary, so the subcarrier **inverts
+every 64 bits** and the true repetition period is **4096 samples, not 2048**. Folding at
+2048 averages a frame against its own inverse.
+
+⚠ The transition **skirt** survives it — transitions fall at the same sample positions
+either way — which is exactly why folding 1.8 → 12.6 frames drove band SNR from 1.79x to
+**6.22x** (+10.8 dB, 98% of the sqrt(N) ideal, empty control falling as sqrt(N)) while the
+bit errors **never moved a single bit**: 12, 12, 10, 10, 10, 12, 10.
+
+**2. The fc/2 band-SNR criterion is polarity-blind.** It measures the modulation skirt at
+57.5–62.3kHz, deliberately offset from the 62.5kHz bin because BPSK suppresses its own
+carrier and 62.5kHz is exactly Nyquist. Skirt energy is **transition** energy. It sailed
+past the 5.50x threshold with **zero** bits recovered. Every "dB" in this file measured
+with it is a statement about transition energy, not about decodability.
+
+**3. ⛔ RETRACTED — "52/64 bits vs a 45/64 white-noise null".** Half an Indala frame is the
+28-zero preamble, a **constant polarity run**; matching a constant is free, and scoring
+against all 64 cyclic rotations hands over up to 32 bits for nothing. Scored on the **31
+credential bits only**, the tag gets **6/31** and the empty-field null gets **4/31** — the
+null is **better**. There is no bit-level detection, and there never was. Per-bit
+inspection shows it plainly: all 18 errors fall in the data half while the 32-bit constant
+run reads a clean, consistent −1.2 to −1.7.
+
+### 0z3. ⭐⭐ ZERO-OFFSET STACKING WORKS — and it is the polarity-preserving method
+
+Captures are **frame-locked to field-on**: the T5577 restarts from a fixed point when the
+field comes up, so separate captures already begin at the same place in the frame and
+cross-correlate at **lag 0 with one sign** (r ≈ 0.40, six of six), while empty captures
+scatter across lags with mixed signs (r ≈ 0.12–0.20).
+
+⇒ **There is no alignment step to get wrong**, which is why `NEXT.md` §6's circularity
+argument — "you need SNR to align frames and alignment to gain SNR" — does not apply here.
+Stacking 7 captures at offset zero gives **+7.3 dB**, with all three controls passing:
+
+- empty floor fell **2.65x** = sqrt(7) exactly;
+- tag signal fell only 1.14x (coherent predicts 1.00x);
+- arithmetic null: empty halves at n=3 fell 1.72x vs sqrt(3) = 1.73.
+
+⚠ **It buys SNR and not one bit** (table in §0z). Useful, validated, and not sufficient.
+
+### 0z4. ⭐ TWO REAL DEFECTS IN `mfdemod.py`, both now fixed
+
+**The preamble template threw away the preamble.** `tpl - tpl.mean()` on a polarity
+sequence of two −1s, thirty +1s and one −1 leaves **90.9% of the template energy in 3 of
+its 33 bits** — the 28-zero run, the most distinctive thing in an Indala frame,
+contributed almost nothing. It guarded against drift biasing the peak, but `baseband()`
+already moves DC to fs/2 and the per-bit boxcar nulls exactly there. Synthetic: raw beats
+DC-free 15/20 vs 12/20 at amp 5, 9/20 vs 5/20 at amp 4.
+
+**No selectivity at all.** After mixing, 1–5kHz carrier ripple lands at 57.5–61.5kHz where
+the 32-sample boxcar rejects only **2.4–2.8%**. At ~316 counts of ripple against a
+~10-count subcarrier that is ~9 counts leaking into every bit decision.
+
+⚠ **And the fix is noise-dependent, which is itself the lesson.** Against **white** noise
+the boxcar already IS the matched filter for a rectangular bit, so the low-pass is
+strictly suboptimal and costs the synthetic threshold 2.13x → 2.86x. Against the **real**
+chain it helps. `lpf` therefore defaults OFF and the real-capture path passes 12000.
+
+### 0z5. ⛔ ITEM 1 CLOSED: `LF_RSSI` (AIN0) carries no fc/2 — but it is alive
+
+`lf sniff --input 0` selects AIN0 at runtime, so the A/B is two captures in one session.
+7 repeats each, phase 32, deglitched medians:
+
+| node | state | DC | %FS | clean σ | 1–5k | 10–20k | 28–36k | 55–62k |
+|---|---|---|---|---|---|---|---|---|
+| AIN5 | empty | 5440 | 33.2% | 223.2 | 316.34 | 145.03 | 13.09 | 8.32 |
+| AIN5 | tag | 5436 | 33.2% | 250.0 | 320.10 | 208.19 | 28.47 | 13.86 |
+| AIN0 | empty | 15948 | 97.3% | 17.6 | 10.26 | 11.76 | 10.28 | 9.69 |
+| AIN0 | tag | 15964 | 97.4% | 18.0 | 10.24 | 12.58 | 10.34 | 10.07 |
+
+fc/2 within-node tag/empty: **AIN5 1.80x** (spread 1.17x), **AIN0 1.04x** (spread 1.28x).
+AIN0's ratio is **inside its own scatter** — no detection.
+
+**Rolloff, empty field, 1–5k → 55–62k: AIN5 38.04x (31.6 dB), AIN0 1.06x (0.5 dB).** AIN0
+is flat across the entire band: a noise floor, not a filtered signal. Its corner is below
+1kHz, consistent with R12's 470k into VD2 and stray capacitance. It is a **DC
+field-strength indicator by design**, which is why LPCOMP uses it for field-presence wake.
+
+⚠ **Not the acquisition-time story predicted, and not compression either.** AIN0 reads
+3.51V against the 3.6V full scale of the lowest gain the SAADC offers — but **zero samples
+at full scale**, max 16044 of 16383, 419 counts of headroom against 18 counts of σ. A
+~17-count subcarrier would have fit. (Battery measured 4240mV, so 3.51V is a real level.)
+
+⭐ **And it is demonstrably alive**: the tag shifts its DC by **+16 counts, with ±0 spread
+across 7 repeats**. It sees the field and it sees the tag. It has no bandwidth.
+
+### 0z6. ⚠ POSITION IS WORTH ~5.7 dB — n=1, and it reopens §0a3
+
+An accidental probe taken before the paired run, at identical settings but a different
+physical tag placement, gave tag/empty **3.49x** where the run gave **1.80x**. The band
+pattern rules out a session artefact: the discrepancy grows with frequency — 1.08x at
+1–5k, 1.24x at 10–20k, 1.66x at 28–36k, 1.79x at 55–62k — so the reader's own ripple is
+unchanged and only the tag's contribution moved. Sub-window spread within the probe
+(1.88x) is **inside** the run's own range (1.57–2.30x), so it is not a glitch.
+
+⚠ n=1. But it is large, it is concentrated where the tag lives, and `§0a3`'s "air gap
+closed" was already invalid (pre-BLE-fix, wrong payload).
+
+### 0z7. ⭐ THE FRAME IS VISIBLE IN THE SIDEBAND ENVELOPE
+
+PSK1 changes phase on a '1', so the 28-zero preamble run is 28 bit periods with **no
+transition** — a pure subcarrier, which at fc/2 sits at Nyquist and vanishes from the
+skirt. It shows up as a reproducible sideband **null**, and every one of the 7 tag
+captures has the same shape (low-low-high-high-high-low-high-high) while empty captures
+are flat.
+
+- envelope autocorrelation: **tag lag 1989 ± 69** samples against a 2048-sample frame;
+  **empty 1810 ± 440**, scattered across the whole search range. Peak r 0.280 ± 0.029 vs
+  0.138 ± 0.044.
+- averaged across 7 captures with **no alignment**, the tag's structure survives
+  (2.59x → 1.98x) while the empty's collapses (2.51x → 1.51x) — the frame-lock of §0z3.
+
+⇒ This is the strongest **detection** evidence in the project. It is also, per §0z2,
+entirely transition energy — it locates the frame and says nothing about the credential.
 
 ### 0e. ⛔ SUPERSEDED by §0 — kept for the channel measurement it contains
 

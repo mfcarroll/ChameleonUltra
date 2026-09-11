@@ -1,5 +1,42 @@
 # Indala on Chameleon Ultra — investigation summary
 
+## ⭐⭐⭐ STATUS 2026-09-11 (later) — IT IS NOT SNR, AND THAT CHANGES THE QUESTION
+
+A synthetic PSK1 frame of `a0000000e6bd0e92`, injected into the **real measured
+empty-field noise** at **half** the tag's own fc/2 amplitude, decodes at **0/31**
+credential-bit errors from a **single** capture. The real tag, at **four times** the band
+SNR after 7-capture stacking, gets **7/31** and does not improve with averaging.
+
+⇒ **The amplitude is there and the phase is not.** Not SNR, not the noise, not the
+demodulator. The question is no longer "how do we find 7.6 dB" but **"where does the
+polarity go?"**
+
+⛔ **Three retractions come with it** (`README.md` §0z2):
+
+- **Folding at 2048 samples cancels the data.** `a0000000e6bd0e92` has 19 ones — odd — so
+  PSK1's running polarity inverts every frame and the true period is **4096** samples. The
+  transition skirt survives, which is why band SNR rose to **6.22x** (+10.8 dB, 98% of the
+  sqrt(N) ideal) while bit errors never moved: 12, 12, 10, 10, 10, 12, 10.
+- **The fc/2 band-SNR criterion is polarity-blind** — it measures the modulation skirt,
+  which is transition energy. It passed the 5.50x threshold with zero bits recovered.
+- **"52/64 bits vs a 45/64 null" is retracted.** Half the frame is a constant 28-zero
+  preamble and scoring it against 64 rotations gives up to 32 bits free. On the 31
+  credential bits the tag gets **6/31** and the empty-field null gets **4/31** — the null
+  is better. There is no bit-level detection.
+
+**What is new and holds:** zero-offset cross-capture stacking works (+7.3 dB at N=7, empty
+floor falling exactly sqrt(7), all controls passing) because captures are frame-locked to
+field-on — there is no alignment step to fail. The frame is directly visible in the
+sideband envelope, the 28-zero run appearing as a reproducible null at the 2048-sample
+period. Two real defects in `mfdemod.py` are fixed. `LF_RSSI` (AIN0) is **closed**: flat to
+0.5 dB across 1–62kHz, tag/empty 1.04x inside a 1.28x scatter, alive but with no bandwidth.
+
+**Next:** sweep sample phase scoring **bit recovery**, not skirt amplitude. The 32-tick
+optimum was chosen by maximising the skirt, and the polarity component `2A·cos φ` has a
+hard null the skirt does not — they have no reason to share an optimum. See `NEXT.md` §1.
+
+
+
 ⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
 
 ⭐ **Picking this up again? `NEXT.md`** — ranked next steps, the untried
