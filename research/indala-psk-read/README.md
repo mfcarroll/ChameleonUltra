@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — ~24 dB of analog loss, not a firmware gap
+## Indala on Chameleon Ultra — analog-limited, but ~1.5 dB from a demod
 
 ⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
 ⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
@@ -53,6 +53,67 @@ so the rolloff is genuine and starts well below fc/2. Clean captures moved the f
 it is the SNR column: fc/2 sits **2.8x** above the empty-field floor where RF/4 — which this
 device reads without trouble — sits at **58x**. A ~20x SNR deficit, all of it ahead of the
 ADC.
+
+### 0d. ⭐⭐⭐ DEMOD ATTEMPTED AT LAST — and it reframes everything: ~1.5 dB short, not 24
+
+Every conclusion above rests on band energy. Nobody had tried to recover a bit. Doing so
+(`ADVERSARIAL.md` §2, run 2026-09-11) changes the picture materially.
+
+**Pipeline validated first.** A synthetic PSK1 RF/32 waveform carrying this tag's own word,
+pushed through `data load` + `lf indala demod`, returns
+
+    Indala (len 64)  Raw: a0000000e6bd0e92
+    Fmt 26 FC: 52 Card: 63612 Parity: 11
+
+— exactly the Proxmark's live read. So the offline path is sound and negatives mean something.
+
+**The real captures all fail.** 5x 16-bit (2000 samples) and the 8-bit (4000 samples) fc/2
+captures: nothing.
+
+**But two measured facts turn that from a wall into a margin:**
+
+⚠ **1. Capture length is a hard, separate, FIXABLE blocker.** With white-noise synthetics:
+
+| samples | frames | demod |
+|---|---|---|
+| 2000 | 0.98 | **fails at EVERY SNR tested, up to 9.8x** |
+| 4096 | 2.0 | works down to ≈5.5x band SNR |
+| 8192–32768 | 4–16 | **no better than 2 frames** |
+
+⇒ A 64-bit Indala frame is exactly 2048 samples at 125 kHz. `LF_SNIFF_MAX_SAMPLES` is 4000
+**bytes** = 2000 16-bit samples = 0.98 frames, so **no full-resolution capture in this
+project could ever have demodulated, at any SNR.** ~2 frames (8192 bytes) is needed, and
+more than that buys nothing — Proxmark's PSKDemod wants one clean frame, not integration.
+
+⛔ **2. My "phase is worth 7.5 dB" was the full min-to-max swing, and phase 0 sits near the
+peak.** The recoverable part is what matters:
+
+| phase | tag | empty | SNR |
+|---|---|---|---|
+| 0° (where every measurement was taken) | 16.12 | 9.17 | 1.76x |
+| 11° (best) | 19.96 | 6.88 | **2.90x** |
+
+⇒ recoverable by moving off phase 0: **1.65x = +4.4 dB**, not 7.5.
+
+**The budget, corrected:**
+
+| | |
+|---|---|
+| demod threshold, 2 frames | 5.50x |
+| measured fc/2, clean, phase 0 | 2.80x |
+| projected at the optimal phase | 2.80 × 1.65 = **4.62x** |
+| **remaining shortfall** | **≈1.5 dB** |
+
+⇒ ⭐⭐ **This supersedes §0's framing.** The receive chain's ~31 dB deficit is real, but the
+question was never "recover 31 dB" — it is "clear the demodulator's threshold", and that is
+**about 1.5 dB away**, not 24. A concrete path exists: raise `LF_SNIFF_MAX_SAMPLES` to hold
+two frames, find the optimal phase on clean firmware, capture there, demod.
+
+⚠ **Caveats, and they are not small.** The threshold is noise-character dependent — at 4096
+samples one noise seed failed at 5.54x while another passed at 5.53x, so ±1.5 dB is inside
+the uncertainty. The synthetic used white Gaussian noise; real noise is not. The phase
+figures are pre-BLE-fix. And band SNR is a proxy for demodulability, not the thing itself.
+⇒ The honest statement is **"plausibly within reach"**, not "will work".
 
 ### 0a. ⛔ GAIN CLOSED: the noise floor is ANALOG-referred, so the ADC was never the limit
 
