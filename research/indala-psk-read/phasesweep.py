@@ -175,19 +175,42 @@ def main():
     print("\n%s\n VERDICT\n%s" % ("=" * 74, "=" * 74))
     print(" tag/empty ratio: min %.2fx  max %.2fx  median %.2fx"
           % (rr.min(), rr.max(), np.median(rr)))
-    best = max(ratios, key=lambda x: x[1] if np.isfinite(x[1]) else -1)
-    print(" best phase: %d ticks (%.1f°) at %.2fx" % (best[0], best[0] * 360.0 / 128, best[1]))
-    if rr.max() > 3 and rr.max() / max(np.median(rr), 1e-9) > 2:
-        print("\n ⇒ The tag IS recoverable at some phases and not others. That is the")
-        print("   cos(phi) signature, and it is a firmware fix: sample at the peak phase,")
+
+    # ⛔ NO THRESHOLDS. An earlier version asked `max ratio > 3?`, got 2.90, and printed
+    # "the tag never rises above the empty field at any phase" -- flatly contradicted by
+    # its own table, where the tag led the empty field at all 32 phases. Fit the shape
+    # instead and report what the fit says.
+    #
+    # The prediction is one cycle of cos() per CARRIER period, because that is the span
+    # the phase knob covers. Fit it to the tag's own contribution (tag minus empty), so
+    # a gain change that moves both is not mistaken for signal.
+    ph = np.array([p * 360.0 / 128 for p, _, _, _, _ in ratios])
+    tag_only = np.array([t - e for _, _, e, t, _ in ratios])
+    X = np.c_[np.ones_like(ph), np.cos(np.deg2rad(ph)), np.sin(np.deg2rad(ph))]
+    coef, *_ = np.linalg.lstsq(X, tag_only, rcond=None)
+    resid = tag_only - X @ coef
+    denom = ((tag_only - tag_only.mean()) ** 2).sum()
+    r2 = 1 - (resid ** 2).sum() / denom if denom else 0.0
+    amp, off = float(np.hypot(coef[1], coef[2])), float(coef[0])
+    peak_deg = float(np.rad2deg(np.arctan2(coef[2], coef[1])) % 360)
+    tags = np.array([t for _, _, _, t, _ in ratios])
+    swing_db = 20 * np.log10(tags.max() / tags.min()) if tags.min() > 0 else float("inf")
+
+    print(" one-cycle sinusoid fit to (tag - empty): R^2 = %.3f, peak at %.0f deg" % (r2, peak_deg))
+    print(" offset %.2f, amplitude %.2f  =>  %s" % (off, amp,
+          "modulated but never nulled" if amp < off else "reaches zero (true null)"))
+    print(" moving the phase is worth %.1f dB" % swing_db)
+
+    if r2 < 0.5:
+        print("\n ⛔ No coherent phase dependence. The sampler is not what removes fc/2.")
+    elif amp >= off:
+        print("\n ⇒ cos(phi) CONFIRMED and it nulls completely. Sample at the peak phase,")
         print("   or oversample so fc/2 is no longer at Nyquist.")
-    elif rr.max() > 3:
-        print("\n ⇒ The tag shows at EVERY phase. fc/2 reaches the ADC regardless, so the")
-        print("   sampler was not the blocker — re-examine what the 8-bit sweep measured.")
     else:
-        print("\n ⛔ The tag never rises above the empty field at any phase. The sampler is")
-        print("   NOT what removes fc/2 — it never arrives. Hypothesis falsified; the loss")
-        print("   is analog.")
+        print("\n ⇒ PARTLY confirmed: the phase dependence is real and smooth, but SHALLOW.")
+        print("   It modulates the subcarrier without ever nulling it, so a fixed unlucky")
+        print("   phase is NOT the explanation — it is worth %.1f dB, not the whole loss." % swing_db)
+        print("   ⚠ Compare that against the total fc/2 deficit before calling it a fix.")
     print("\n captures in %s%s" % (out_dir, "" if a.keep else " (temporary)"))
 
 

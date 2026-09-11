@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — the sampler, not the front end
+## Indala on Chameleon Ultra — where the fc/2 subcarrier goes
 
 **Measured on device 2026-09-10/11.** Chameleon Ultra v3, firmware `v2.2 (v2.2.0-32-gccf6075)`,
 chip id `a461ebf3b85fb19c`. Reference reads on a Proxmark3 Iceman.
@@ -7,48 +7,62 @@ Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:1
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
 
-### 0. ⭐⭐⭐ RESULT AT FULL RESOLUTION: the front end is fine; the SAMPLER is the blocker
+### 0. ⭐⭐⭐ RESULT: the sampler is real but MINOR — 7.5 dB of a ~44 dB loss
 
-Measured at 14 bits (`lf sniff --bits 16`, firmware `v2.2.0-43-g69a3d54`) against the
-Proxmark on identical stimulus, campaign `campaign_20260910_202715`. Normalised to each
-instrument's own RF/8, which divides out the tag's own rolloff:
+The phase sweep ran (`phasesweep.py --step 4 --repeats 5`, paired against an empty field,
+5 deglitched captures per point). It **partly confirms and largely refutes** the sampling
+hypothesis, and the numbers are now repeatable.
 
-| PSKCF | subcarrier | smp/cyc | Proxmark | Chameleon | **excess loss** |
-|---|---|---|---|---|---|
-| RF/4 | 31250 Hz | 4.0 | −4.1 dB | −3.6 dB | **+0.5 dB** |
-| RF/2 | 62500 Hz | **2.0** | −9.3 dB | −43.5 dB | **−34.2 dB** |
+| | |
+|---|---|
+| one-cycle sinusoid fit to (tag − empty) | **R² = 0.897**, peak at 66° |
+| fit offset / amplitude | 7.14 / 4.79 → **modulated, never nulled** |
+| tag sideband across phase | 8.40 → 19.96 (**2.38x**) |
+| empty sideband across phase | 6.54 → 10.18 (1.56x — flat, so not a gain artefact) |
+| **worth moving the phase** | **7.5 dB** |
+| fc/2 at best phase vs RF/4 | **−36.9 dB still unexplained** |
 
-⭐⭐ **The Chameleon tracks the Proxmark exactly at 31 kHz, then falls off a cliff at
-62.5 kHz.** That shape is the whole finding, and it indicts the sampler:
+⇒ **Sample phase genuinely modulates fc/2 recovery** — a clean one-cycle sinusoid, fitted
+against the tag's own contribution so a gain change affecting both passes cannot masquerade
+as signal. That part of §1 was right.
 
-- A filter that is **flat at 31 kHz cannot lose 34 dB by 62.5 kHz** — one octave — without
-  something like six poles. This chain is a diode detector and two RC op-amp stages.
-- **RF/2 is exactly 2 samples per cycle**, and the SAADC is PPI-triggered from the very PWM
-  that generates the field (`lf_125khz_radio.c:113`), so the sampling phase φ is a constant.
-  Recovered amplitude goes as `cos φ`, which can null a tone to **any** depth.
-- RF/4 is 4 samples/cycle, where no such degeneracy exists — and there the loss is zero.
+⛔ **But it never nulls, and it is a minor term.** The amplitude (4.79) is smaller than the
+offset (7.14), so the subcarrier is always partly recovered whatever the phase. Optimising
+the phase buys **7.5 dB**; fc/2 at its best phase is still **36.9 dB** below RF/4, which has
+no Nyquist degeneracy at all. An unlucky fixed phase is therefore **not** the explanation.
 
-⇒ **This reverses §1, which I retracted twice.** The Nyquist mechanism was right; the earlier
-8-bit data could not see it because truncation was manufacturing apparent loss at RF/4 too
-(it read −6.7 dB there, against +0.5 dB measured properly), which made the rolloff look
-progressive and analog. At full resolution the loss is confined to exactly the frequency
-where sampling degenerates.
+⚠ **The RF/4 reference is a single capture** and single captures from this device are not
+trustworthy (§0c). That comparison needs re-running with repeats before the 36.9 dB is firm.
 
-⚠ **Still an inference, and a directly testable one.** Sweep the SAADC sample phase, or
-sample at 200–250 kHz so fc/2 is no longer at Nyquist. If fc/2 reappears, it is settled.
+### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
-### 0b. ✅ RESOLVED: the 8-bit truncation
+`lf sniff` captures land randomly in one of two states: clean, or carrying a **USB-transfer
+buffer overrun** (`lf_reader_generic.c:30`). An overrun is a full-scale discontinuity —
+measured single-sample jumps of **16380 of 16383** — in a localised burst, and it dumps
+broadband energy into every bin including fc/2. Capture std is bimodal, ~350 against ~2500.
 
-`lf_reader_generic.c:59` right-shifted the 14-bit conversion by five, discarding ~30 dB of
-dynamic range on the sniff path only — the protocol decoders always received the full value
-(`lf_hidprox_data.c:46`).
+Measured at a **fixed** phase, tag untouched, six consecutive captures:
 
-⭐ Fixed and flashed. `lf sniff --bits 16` returns the full conversion, 2 bytes/sample
-big-endian; 8-bit remains the default so existing hosts and captures are unaffected. Costs
-half the duration — the 4000-byte frame limit counts bytes, so 2000 samples / 16 ms.
+    raw        752.7   15.3   53.1  539.1  469.0   17.0     <- 49x spread
+    deglitched  15.5   15.3   17.0   16.3   17.4   17.0     <- 1.1x
 
-⇒ It mattered more than expected: **it was not merely hiding signal, it was distorting the
-shape of the rolloff** and pointing the diagnosis at the wrong subsystem.
+⇒ **Any single-capture number from this device is suspect**, including the PSKCF sweep that
+produced the −34.2 dB figure §0 now supersedes. The fix is cheap: a capture returns when the
+buffer fills (~16 ms), **not** after `--timeout`, so repeats cost almost nothing. Every
+measurement here is now a median of 5 deglitched captures.
+
+⚠ The screen is **scale-free** (drop 50-sample windows whose peak-to-peak exceeds 4x the
+median window's). A fixed LSB threshold tuned on 8-bit captures once discarded 100% of a
+strong 14-bit capture and returned `nan`.
+
+### 0c. ⛔ TWO VERDICTS RETRACTED, BOTH FROM THIS SCRIPT
+
+1. **"659x at 44 ticks — cos(phi) confirmed."** Withdrawn: that sweep was one capture per
+   phase and was tracking overrun bursts, not phase. The 659x was a small denominator.
+2. **"The tag never rises above the empty field at any phase."** Withdrawn, and it was
+   contradicted by its own table — the tag led at all 32 phases. The verdict asked
+   `max ratio > 3?`, got **2.90**, and fell through to the falsified branch. Arbitrary
+   threshold, wrong answer. `phasesweep.py` now fits the shape and reports the fit.
 
 ### 1. ⛔ RETRACTED: "the ADC samples at exactly Nyquist, therefore fc/2 cancels"
 
