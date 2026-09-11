@@ -35,6 +35,15 @@ SETTLE = 400
 MODES = [(0, 125000.0, "125kHz carrier-locked"), (200, 200000.0, "200kHz free-running")]
 
 
+def capture_path(out, state, rate, rep):
+    """⚠ ONE function for both writing and reading. The writer formatted
+    (state, rate, rep) and the reader (state, rep, rate) — two positional %d in the same
+    template, silently swapped. Every 200kHz file was written and then looked for under a
+    name that did not exist, the measurement came back nan, and the verdict printed
+    "fc/2 does NOT recover" off missing data."""
+    return "%s/%s_r%d_%d.bin" % (out, state, rate, rep)
+
+
 def load16(path):
     raw = np.frombuffer(open(path, "rb").read(), dtype=np.uint8)
     if len(raw) < 2 or len(raw) % 2 or raw[0::2].max() > 0x3F:
@@ -77,9 +86,9 @@ def main():
         cmds = ["hw mode -r"]
         for rate, _, _ in MODES:
             for r in range(a.repeats):
-                cmds.append("lf sniff --timeout %d --bits 16 %s--out %s/%s_r%d_%d.bin"
+                cmds.append("lf sniff --timeout %d --bits 16 %s--out %s"
                             % (a.timeout, ("--rate %d " % rate) if rate else "",
-                               out, tag_state, rate, r))
+                               capture_path(out, tag_state, rate, r)))
         p = subprocess.run([PY_, CU] + cmds, capture_output=True, text=True)
         if p.returncode != 0:
             sys.exit("cu.py failed:\n" + (p.stdout or "") + (p.stderr or ""))
@@ -98,7 +107,7 @@ def main():
             for state in ("empty", "tag"):
                 got = []
                 for r in range(a.repeats):
-                    fp = "%s/%s_r%d_%d.bin" % (out, state, r, rate)
+                    fp = capture_path(out, state, rate, r)
                     if not os.path.exists(fp):
                         continue
                     x = load16(fp)
@@ -108,6 +117,11 @@ def main():
                     if len(c) > 300:
                         got.append(sideband_rms(c, f, fs))
                 vals[state] = float(np.median(got)) if got else float("nan")
+            if not np.isfinite(vals["empty"]) or not np.isfinite(vals["tag"]):
+                sys.exit("⛔ no usable captures for %s at %.0f Hz.\n"
+                         "   Refusing to report a verdict on missing data — that is how the\n"
+                         "   nan run of 2026-09-11 concluded 'fc/2 does NOT recover' from\n"
+                         "   files it had simply failed to find." % (name, f))
             ratio = vals["tag"] / vals["empty"] if vals["empty"] else float("nan")
             results[(rate, f)] = ratio
             print(" %-24s %8.0fHz %10.2f %10.2f %10.2fx"
