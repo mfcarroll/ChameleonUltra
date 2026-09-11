@@ -37,7 +37,34 @@ sample phase, leaving **~24 dB the front end owns**.
 RF/4 — which this device reads without trouble — sits at **58x**. A ~20x SNR deficit,
 entirely ahead of the ADC.
 
-## Levers tried, and closed by measurement
+## ⛔⛔ STATUS 2026-09-11: the demod test is retracted, and the tag state was wrong
+
+Found by the operator: `lf indala reader` failed on the bench tag and it had to be rewritten
+with the Indala config before the Proxmark would read it.
+
+Every PSK1 cell in the campaign registry writes `DEADBEEF`/`12345678`. Block 0 is the
+correct Indala **air shaping**; the data blocks are not an Indala **frame**. So from the
+first campaign onward the tag broadcast PSK1 RF/32 with a payload no Indala demodulator
+accepts — and the offline PSKDemod negatives say nothing about the Chameleon.
+
+⚠ The harness reported this on every run ("data blocks UNVERIFIED", plus a ROT-FIX reverify
+naming `DEADBEEF`/`12345678`). It was misread as *PM3 cannot see them* rather than *they are
+not what you want*.
+
+| | |
+|---|---|
+| demod attempt | **void** |
+| absolute SNR vs threshold | **biased +1.9 dB** — the campaign payload is bit-dense and puts 1.24x more energy in the measured skirt than `a0000000e6bd0e92`, which has a 32-bit zero run |
+| instrument-relative loss (−3.6 dB RF/4, −31.2 dB fc/2) | **survives** — both instruments saw the same tag and payload |
+| lever closures, firmware bugs | **survive** — relative, and payload-independent |
+
+⛔ **No measurement in this project was ever taken on a correctly-configured Indala tag at
+full resolution on clean captures.** Two tags were involved and neither gave one.
+
+Fixed at the root: an `INDALA26` registry cell now carries the real credential with block 0
+identical to `PSK1`. See `README.md` §0c and §6 for the re-measurement plan.
+
+## Levers tried, and closed by measurement## Levers tried, and closed by measurement
 
 | lever | result | where |
 |---|---|---|

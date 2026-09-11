@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — analog-limited, but ~1.5 dB from a demod
+## Indala on Chameleon Ultra — analog-limited; the demod test must be redone
 
 ⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
 ⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
@@ -53,6 +53,55 @@ so the rolloff is genuine and starts well below fc/2. Clean captures moved the f
 it is the SNR column: fc/2 sits **2.8x** above the empty-field floor where RF/4 — which this
 device reads without trouble — sits at **58x**. A ~20x SNR deficit, all of it ahead of the
 ADC.
+
+### 0c. ⛔⛔⛔ RETRACTED: the demod attempt — the tag was never transmitting Indala
+
+**Found 2026-09-11 by the operator, not by this analysis.** A `lf indala reader` on the
+bench tag failed; it had to be rewritten with the Indala config (via a Flipper) before the
+Proxmark would read it again.
+
+**Cause.** Every PSK1 cell in the campaign registry writes `_D1/_D2 = DEADBEEF/12345678`,
+the standard blank payload. Block 0 (`00081040`) is the correct Indala **air shaping** —
+PSK1, RF/32 — but the data blocks are not an Indala **frame**: no valid preamble. So from
+the first campaign onward the tag broadcast PSK1 RF/32 carrying a payload no Indala
+demodulator will accept.
+
+⇒ **§0d's demod attempt is void.** `lf indala demod` returning nothing from those captures
+says nothing about the Chameleon — there was no Indala frame present to find. The synthetic
+control was valid; the real-capture negatives were not.
+
+⚠⚠ **The harness said so on every single run**, and I misread it every time:
+
+    ~~ WRITE NOT CONFIRMED: block0 matches 00081040, but `dump` returned no readable
+       block rows, so the DATA blocks are unconfirmed.
+    [reverify] ROT-FIX: all 2 data block(s) verify unrotated.
+
+I read "data blocks UNVERIFIED" as *PM3 cannot see them* rather than *they are not what you
+want*, and the ROT-FIX line named `DEADBEEF`/`12345678` outright. The operator's tag-state
+confirmation worked exactly as designed. ⇒ Reading a verification line is not the same as
+understanding what it verified.
+
+**What is invalidated:**
+
+| | |
+|---|---|
+| the demod attempt (§0d) | **void** — no Indala frame on the tag |
+| "2.80x vs a 5.5x threshold" | **biased.** The threshold was measured on Indala-word synthetics; the signal was DEADBEEF. Measured payload bias: the campaign payload puts **1.24x (+1.9 dB)** more energy in the skirt this project measures, because DEADBEEF is bit-dense (many PSK phase flips) while `a0000000e6bd0e92` has a 32-bit run of zeros and almost none. Corrected: **2.25x**, not 2.80x |
+
+**What survives.** Both instruments measured the *same* tag with the *same* payload, so the
+instrument-relative figures are untouched: **−3.6 dB at RF/4, −31.2 dB at fc/2**. So are all
+the lever closures (phase, rate, gain, settle, gap) — each a relative measurement on one
+tag — and all three firmware bugs, which are payload-independent.
+
+⛔⛔ **And the honest summary of the whole project: no measurement here was ever taken on a
+correctly-configured Indala tag at full resolution on clean captures.** Two tags were
+involved and neither gave one — the original credential was hand-held, 8-bit, and its
+result was retracted (§1b); the `spare` carried the wrong payload from the first campaign
+onward.
+
+⇒ Fixed at the root: `INDALA26` is now a registry cell carrying `A0000000`/`E6BD0E92` with
+block 0 identical to `PSK1`, so a PSK1/INDALA26 pair isolates payload from modulation and
+`lf indala reader` becomes a per-step proof of life. **The re-measurement plan is §6.**
 
 ### 0d. ⭐⭐⭐ DEMOD ATTEMPTED AT LAST — and it reframes everything: ~1.5 dB short, not 24
 
@@ -377,7 +426,19 @@ default to `[p]` — that is correct for a modulation PM3 cannot read back.
 ⇒ Nothing in the converter, its clock, its phase or its gain moves fc/2. The limit is in
 the analog chain ahead of it.
 
-⛔ **Also closed:** settle (§0a2), air gap (§0a3 — flat is already optimal).
+⭐⭐⭐ **THE RE-MEASUREMENT, in order — everything else waits on this:**
+
+1. **Program `INDALA26` and confirm with `lf indala reader`.** A tag that demodulates on the
+   Proxmark is the only valid starting state, and it was never established.
+2. **Raise `LF_SNIFF_MAX_SAMPLES`** from 4000 bytes to ≥8192 so a 16-bit capture holds the
+   2 frames the demod needs. Measured: at 2000 samples PSKDemod fails at every SNR up to
+   9.8x, and beyond 2 frames more length buys nothing (§0d).
+3. **Re-run `phasesweep.py` on clean firmware** against the real credential, to find the
+   true optimal phase — the existing 4.4 dB figure is pre-BLE-fix and on the wrong payload.
+4. **Capture at that phase and demod.** That is the decisive test, and it has never been run
+   under valid conditions.
+5. Re-run the PSKCF sweep with `PSK1` *and* `INDALA26` as a pair, to confirm the payload
+   bias measured synthetically at +1.9 dB.
 
 ⛔ **Also closed:** settle (§0a2), air gap (§0a3), and the overruns (§0a4 — they were BLE
 advertising, now suspended during capture; dropout rate 41% → 0%).
