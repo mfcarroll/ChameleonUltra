@@ -88,6 +88,56 @@ carrying `DEADBEEF/12345678` rather than an Indala frame (§0c), whose bit-dense
 +1.9 dB more energy in the measured band, and phase 0 was being credited with the full 6 dB
 swing rather than the 2.8 dB actually recoverable from it.
 
+### 0a0. ⭐⭐⭐ MATCHED FILTER: +8.2 dB on white noise, but no decode on real captures
+
+`mfdemod.py`, built 2026-09-11. Everything about this signal is known a priori — the
+subcarrier is exactly fc/2 (so mixing by `(-1)^n` is exact, no clock recovery), a bit is
+exactly 32 samples, and the 33-bit preamble is fixed for every Indala tag. So sync becomes
+a correlation over 1056 samples rather than 33 independent hard bit decisions.
+
+**Validated, then thresholded** (20 noise seeds per level, 2 frames, ≥19/20 recovery):
+
+| demodulator | threshold |
+|---|---|
+| Proxmark `PSKDemod` | 5.50x |
+| **matched filter** | **2.13x** |
+| ⇒ worth | **+8.2 dB** |
+
+That is above the 2.30x the Chameleon delivers at its best phase — so on paper it clears.
+
+⛔ **On the real captures it does not decode.** 15 captures at 5 phases: every one returns a
+plausible-looking word with high correlation confidence, none is `a0000000e6bd0e92`.
+
+**But the signal is genuinely there.** Exhaustive search over alignments, scored as bits
+agreeing with the known word, against two nulls:
+
+| | median best-of-2048 |
+|---|---|
+| **tag present** | **52 / 64** |
+| white-noise null | 45 / 64 |
+| empty field | 42 / 64 |
+
+⚠ The raw "51–54/64" is **partly a multiple-comparison artefact** — taking the max over
+2048 candidate positions lifts pure white noise to 45/64 on its own. The tag still sits
+**7 bits above that null**, so detection is real. Error-free decode needs 64/64, and ~12
+bits per frame are wrong: a ~19% bit-error rate, which independently implies ~7.7 dB more
+Eb/N0 is needed and so **reproduces the 7.6 dB spectral shortfall from a completely
+different measurement**.
+
+⛔ **Coherent averaging across frames does not rescue it.** 1 → 2 → 4 → 8 → 16 → 30 frames
+aligned by cross-correlation and summed gives 51, 52, 53, 52, 53, 48 bits — flat, then
+worse, where 30 frames should have bought ~14.8 dB. The alignment is being driven by noise:
+you need SNR to align frames and alignment to gain SNR, and at 19% BER the correlation
+between two frames is too weak to break that circle.
+
+⇒ ⭐⭐ **The most promising untried software lever is NOISE WHITENING.** The 2.13x threshold
+was measured against *white* Gaussian noise, and this chain's noise is demonstrably
+coloured — the empty-field floor runs 107 / 13 / 6.4 across the fc/8, fc/4 and fc/2 bands, a
+17x range. A matched filter is only optimal for white noise; for coloured noise it must be
+preceded by a whitening filter estimated from an empty-field capture. **That is very likely
+why the synthetic threshold did not transfer**, and it is the difference between the filter
+being worth 8.2 dB in theory and 0 dB in practice. Untried.
+
 ### 0b2. ⚠⚠ THE CLOSURES ARE NOT SAFE — only phase was ever validly measured
 
 §0's 7.6 dB shortfall is solid: real credential, clean firmware, 2 frames, optimal phase.
