@@ -281,12 +281,24 @@ reuses its `exec_cmd()` the way `tests/test_ultra.py` does.
 
     cd software/script && .venv/bin/python cu.py "hw version" "lf em 410x read"
 
-⚠ **Two interpreters, one per half — do not try to use one for both.**
+**One interpreter runs both halves.** ⛔ ~~Two interpreters, one per half — the toolchain python
+has pyserial but no numpy, the venv has numpy but no pyserial.~~ Banded 2026-09-11: `pyserial` was
+simply installed into the Chameleon venv, and the harness runs fine on the newer interpreter.
 
-| half | interpreter | why |
-|---|---|---|
-| campaign harness (`t5577_campaign.py`) | `Momentum-Firmware/toolchain/arm64-darwin/bin/python3` (3.11.9) | has **pyserial 3.5** for the Flipper port; no numpy |
-| analysis (`analyse.py`, `sweep.py`) | `ChameleonUltra/software/script/.venv/bin/python` (3.14.7) | has **numpy 2.5.3**; no pyserial |
+    ChameleonUltra/software/script/.venv/bin/python    # 3.14.7, numpy 2.5.3 + pyserial 3.5
 
-⇒ Do **not** install numpy into the Momentum toolchain to unify them — that is a build toolchain,
-not a scratch environment.
+Verified under 3.14.7: `py_compile` of `t5577_campaign.py` clean, `--list-configs` clean, and a
+full `--dry-run --config PSK1 --pm3-signal 0` walking program → PM3 reference → read → re-verify.
+
+⇒ Do not install numpy into `Momentum-Firmware/toolchain/` to achieve the same thing. That is a
+build toolchain; add to the venv instead.
+
+⭐ **This lowers the cost of a `--reader chameleon` backend considerably.** With one interpreter,
+the seam is a single step in the campaign loop — the dry run renders it as
+
+    [Flipper] move the 'spare' tag to the Flipper LF antenna, then Enter...
+        -> rfid t5577 nativeadc   (reposition 1/1, timeout 60s)
+
+Everything around it (config stepping, PM3 program + verify + reference capture, repositions, gap
+stamping, `manifest.json`) is reader-agnostic already. A Chameleon leg replaces that one
+`run_cmd(port, ...)` with a shell-out to `cu.py "lf sniff --out <capture path>"`.
