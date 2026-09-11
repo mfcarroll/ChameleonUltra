@@ -105,39 +105,85 @@ peak-to-peak > 200. These are USB-transfer buffer overruns, not tag signal
 40-sample window swinging more than 60 LSB before measuring. Without an empty-field reference you
 cannot tell a burst from a tag.
 
-### 5. ⭐ The decisive measurement: scope TP7
+### 5. ⭐ The decisive measurement: sweep the T5577's PSK carrier
 
-The V1.0 schematic brings `LF_OA_OUT` out to test point **TP7**. That node is the last point in
-the analog chain before the MCU, and it is what *both* firmware read paths see.
+**No instrument required.** The tag under test is a T5577, and its PSK carrier frequency is a
+field in block 0 — `PSKCF` (`proxmark3 include/protocols.h:818`). The Indala config decodes
+exactly as
 
-**Probe TP7, ground to any GND test point, device in reader mode.** If TP7 is hard to locate on
-the board, `IC1B` pin 7 (GS358B-FR output) is the same net.
+    0x00081040 = T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | T55x7_PSKCF_RF_2 | (2 << 5)
+
+so **one tag can emit a clean continuous subcarrier at three frequencies**, changing only block 0:
+
+| PSKCF | block 0 | subcarrier | samples/cycle | netlist model |
+|---|---|---|---|---|
+| RF/8 | `00081840` | 15625 Hz | 8.0 | −1.1 dB |
+| RF/4 | `00081440` | 31250 Hz | 4.0 | −3.8 dB |
+| RF/2 | `00081040` | 62500 Hz | **2.0 — Nyquist** | −9.7 dB |
+
+⭐ **Why this beats a scope.** RF/8 and RF/4 sit at 8 and 4 samples per cycle, free of any
+sampling artefact, so they measure the **analog filter alone**. RF/2 sits at exactly Nyquist,
+where fixed-phase PPI sampling could add a penalty of its own. Fit the filter on the two clean
+points, extrapolate to 62.5kHz, and compare against the measured RF/2:
+
+- measured RF/2 ≈ extrapolation ⇒ **front-end rolloff is the whole story** → hardware change
+- measured RF/2 ≪ extrapolation ⇒ **sampling is adding a penalty** → §1's retracted mechanism
+  returns as a real secondary effect, and route B or C fixes it in firmware
+
+A scope at TP7 cannot separate those two, because it never sees the sampler. Sweeping one tag
+also controls for modulation depth, which comparing across two different tags does not.
+
+**Scale from the existing captures**, for calibration:
+
+| signal | amplitude | noise | SNR |
+|---|---|---|---|
+| HID control @ fc/8 15625Hz | 2.06 LSB | 0.31 | **6.67x** |
+| HID control @ fc/10 12500Hz | 1.36 LSB | 0.25 | **5.36x** |
+| indala tag @ fc/2 62500Hz | **0.06 LSB** | 0.09 | **0.69x** |
+
+⚠ 0.06 LSB is sub-quantisation — there is nothing there at all. Note the netlist model predicts
+only −8.6dB (2.7x) between those two frequencies, while the measured gap is ~34x. Suggestive, but
+**not conclusive across two different tags** with different modulation depths. That is precisely
+what the single-tag sweep settles.
+
+**Procedure** (Proxmark3 writes block 0; only block 0 changes, data blocks are untouched):
+
+    # capture a fresh empty-field baseline first
+    ./grab.sh                                    # or just the baseline leg
+
+    lf t55xx write -b 0 -d 00081840              # PSKCF RF/8  -> 15625 Hz
+    #   then on the Chameleon:
+    #   cd ../../software/script && .venv/bin/python cu.py "hw mode -r" \
+    #       "lf sniff --out ../../research/indala-psk-read/caps/psk_rf8.bin"
+
+    lf t55xx write -b 0 -d 00081440              # PSKCF RF/4  -> 31250 Hz   -> psk_rf4.bin
+    lf t55xx write -b 0 -d 00081040              # PSKCF RF/2  -> 62500 Hz   -> psk_rf2.bin  (restores Indala)
+
+    ./sweep.py caps/baseline.bin caps/psk_rf8.bin caps/psk_rf4.bin caps/psk_rf2.bin
+
+⚠ **Use a scratch T5577, not the working credential**, if one is to hand. Writing block 0 is
+how a T5577 gets locked into an unreadable configuration. The original is recoverable — block 0
+`00081040`, data blocks `A0000000` / `E6BD0E92` — and the last write above restores it, but a
+blank costs nothing.
+
+### 5b. Alternative: scope TP7
+
+If an oscilloscope is available it is a useful cross-check, though it cannot separate filter from
+sampler. Probe TP7 (`LF_OA_OUT`); if hard to locate, `IC1B` pin 7 (GS358B-FR output) is the same
+net. Ground to any GND test point.
 
 ⚠ **Use `./fieldhold.sh 60`, not `lf sniff`.** `lf sniff` drops the field after ~32ms once its
 4000-sample buffer fills. `fieldhold.sh` loops a read that is *expected to fail*, and a failing
 read holds the field for the full `g_timeout_readem_ms` = 500ms (`lf_reader_main.c:25`) — measured
-~77% duty cycle, which is a comfortable scope target.
+~77% duty cycle.
 
 ⭐ **Run the HID Prox control BEFORE the Indala tag.** Its fc/8 at 15.6kHz must show up strongly.
 If it does not, the probe is on the wrong net and a null result on Indala would mean nothing.
 
 Settings: **AC coupling** (the net sits on `LF_VBIAS`), 10µs/div to resolve the 16µs subcarrier
-period, 200mV/div to start. Use **FFT** if the scope has it — a peak at 62.5kHz is the whole
-question. Also sweep out to 50µs/div for the 256µs bit period and 2ms/div for the 16.4ms frame.
-
-⚠ `LF_OA_OUT` is downstream of the VD1 peak detector, so it carries the **envelope**. Seeing
-125kHz dominate there would mean the detector is not behaving as this note assumes.
-
-| result at TP7 | meaning | next step |
-|---|---|---|
-| 62.5kHz present, volts-scale | front end passes it; purely a firmware gap | comparator route, §6 |
-| 62.5kHz present but tens of mV | marginal; below GPIO logic threshold but fine for COMP | comparator route with a low reference |
-| nothing at 62.5kHz | R17/C38 is eating it | component change, not firmware |
-
-Take the same trace with the **HID Prox control** for scale — its fc/8 at 15.6kHz should be
-strong, and the ratio between the two is the measured version of the −9.7dB estimate in §3.
-
-⇒ This is one probe and it forks the whole project. Do it before writing code.
+period, 200mV/div to start, **FFT** if available. `LF_OA_OUT` is downstream of the VD1 peak
+detector so it carries the **envelope** — 125kHz dominating there would mean the detector is not
+behaving as this note assumes.
 
 ### 6. Porting routes, cheapest first
 
