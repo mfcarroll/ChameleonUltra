@@ -35,8 +35,19 @@
  *                    varied, and every LF measurement on this device inherits it.
  * @return            true on success
  */
-/** Maximum bytes a single raw capture can return (USB frame limit). */
-#define LF_SNIFF_MAX_SAMPLES  4000
+/** Maximum BYTES a single raw capture can return. Bounded by NETDATA_MAX_DATA_LENGTH.
+ *
+ * ⭐ 8192 bytes = 4096 samples at 16-bit = exactly two 64-bit Indala frames (2048 samples
+ * each at RF/32). That is the point of the number: measured against Proxmark's PSKDemod,
+ * demodulation needs >= 3584 samples and fails at 1.0 frames no matter how clean the
+ * signal, because the 32-bit preamble can start anywhere in the capture.
+ * ⚠ This EXCEEDS NETDATA_MAX_DATA_LENGTH, so a full capture cannot be returned in one
+ * frame — cmd_processor_lf_sniff() hands it back in chunks. Raising the protocol cap
+ * instead faults the device; see the note in netdata.h. */
+#define LF_SNIFF_MAX_SAMPLES  8192
+
+/** Bytes returned per response frame. The capture is sliced into chunks of this size. */
+#define LF_SNIFF_CHUNK_BYTES  4000
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
                         bool raw16, uint16_t settle_ms);

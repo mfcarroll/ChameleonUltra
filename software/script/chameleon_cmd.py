@@ -14,6 +14,9 @@ new_key = b'\x20\x20\x66\x66'
 old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
 
+LF_SNIFF_CHUNK_BYTES = 4000   # keep in step with LF_SNIFF_CHUNK_BYTES in firmware
+
+
 class ChameleonCMD:
     """
         Chameleon cmd function
@@ -737,10 +740,28 @@ class ChameleonCMD:
             raise ValueError("gain must be the divisor 1..6 (6 = stock 1/6)")
         if not 0 <= settle_ms <= 255:
             raise ValueError("settle_ms must be 0..255 (0 = the historical 2ms)")
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase,
-                         rate_khz, gain, settle_ms])
         timeout_s = (timeout_ms // 1000) + 2
-        return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+
+        # ⭐ Reassemble the chunked response. Chunk 0 performs the capture; later chunks
+        # slice the SAME acquisition on-device, so this is one contiguous capture and not
+        # several stitched together. A short or empty chunk means the end.
+        first = None
+        buf = bytearray()
+        for chunk in range(16):
+            payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase,
+                             rate_khz, gain, settle_ms, chunk])
+            resp = self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+            if first is None:
+                first = resp
+                if resp.status != Status.LF_TAG_OK or not resp.data:
+                    return resp
+            elif resp.status != Status.LF_TAG_OK or not resp.data:
+                break
+            buf += bytes(resp.data)
+            if len(resp.data) < LF_SNIFF_CHUNK_BYTES:
+                break                     # a short chunk is the last one
+        first.data = bytes(buf)
+        return first
 
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):

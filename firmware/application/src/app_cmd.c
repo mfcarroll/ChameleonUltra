@@ -2063,17 +2063,41 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
     /* Optional 7th byte: field-on settle in ms before the capture window (0 = 2ms). */
     uint16_t settle_ms = (length >= 7) ? data[6] : 0;
 
+    /* Optional 8th byte: chunk index. ⭐ A 16-bit capture long enough to demodulate is
+     * ~8KB, over the 4096-byte frame cap, and raising that cap FAULTS the device
+     * (see netdata.h). So chunk 0 performs the capture and returns the first
+     * LF_SNIFF_CHUNK_BYTES, and later chunks return slices of the SAME capture without
+     * re-reading — the host reassembles one contiguous acquisition rather than stitching
+     * separate ones together.
+     * ⚠ buffer and length are static precisely so a chunk > 0 cannot trigger a fresh
+     * capture; that would silently splice two different acquisitions. */
+    uint8_t chunk = (length >= 8) ? data[7] : 0;
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
-    size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16, settle_ms);
-    lf_125khz_radio_saadc_phase_set(0);   /* never leave a phase set for other readers */
-    lf_125khz_radio_saadc_rate_set(0);
-    lf_adc_set_gain(6);
+    static size_t sniff_len = 0;
 
-    if (outlen == 0) {
+    if (chunk == 0) {
+        sniff_len = 0;
+        raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &sniff_len, raw16,
+                           settle_ms);
+        lf_125khz_radio_saadc_phase_set(0);  /* never leave a phase set for other readers */
+        lf_125khz_radio_saadc_rate_set(0);
+        lf_adc_set_gain(6);
+    }
+
+    if (sniff_len == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
+    size_t off = (size_t)chunk * LF_SNIFF_CHUNK_BYTES;
+    if (off >= sniff_len) {
+        /* Past the end: empty OK, so the host stops without it looking like a failed
+         * capture. */
+        return data_frame_make(cmd, STATUS_LF_TAG_OK, 0, NULL);
+    }
+    size_t n = sniff_len - off;
+    if (n > LF_SNIFF_CHUNK_BYTES) {
+        n = LF_SNIFF_CHUNK_BYTES;
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)n, sniff_buf + off);
 }
 
 /* ========================================================================

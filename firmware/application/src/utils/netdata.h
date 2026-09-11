@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include "utils.h"
 
+/* ⛔ DO NOT RAISE THIS TO GET A BIGGER RESPONSE. Tried 8192 on 2026-09-11 so `lf sniff`
+ * could return two Indala frames: the build was clean and the device then failed EVERY
+ * sniff with a host-side timeout. usb_cdc_write() wraps app_usbd_cdc_acm_write() in
+ * APP_ERROR_CHECK, so an oversized transfer faults the device rather than returning an
+ * error the caller can see — the symptom is silence, not a diagnostic.
+ * ⇒ Responses larger than this are CHUNKED instead; see cmd_processor_lf_sniff(). */
 #define NETDATA_MAX_DATA_LENGTH   4096
 
 /*
@@ -17,8 +23,8 @@
  *  SOF(1byte)  LRC(1byte)  CMD(2byte)  Status(2byte)  Data Length(2byte)  Frame Head LRC(1byte)  Data(length)  Frame All LRC(1byte)
  *     0x11       0xEF        cmd(u16)    status(u16)      length(u16)              lrc(u8)          data(u8*)       lrc(u8)
  *
- *  The data length max is 4096, frame length is 1 + 1 + 2 + 2 + 2 + 1 + n + 1 = (10 + n)
- *  So, one frame will be between 10 and 4106 bytes.
+ *  The data length max is NETDATA_MAX_DATA_LENGTH, frame length is
+ *  1 + 1 + 2 + 2 + 2 + 1 + n + 1 = (10 + n), so one frame is between 10 and (10 + max).
  * *********************************************************************************************************************************
  */
 

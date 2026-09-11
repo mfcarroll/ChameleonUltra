@@ -430,9 +430,18 @@ the analog chain ahead of it.
 
 1. **Program `INDALA26` and confirm with `lf indala reader`.** A tag that demodulates on the
    Proxmark is the only valid starting state, and it was never established.
-2. **Raise `LF_SNIFF_MAX_SAMPLES`** from 4000 bytes to ≥8192 so a 16-bit capture holds the
-   2 frames the demod needs. Measured: at 2000 samples PSKDemod fails at every SNR up to
-   9.8x, and beyond 2 frames more length buys nothing (§0d).
+2. ✅ **DONE — captures now hold two frames.** Measured minimum for PSKDemod, on clean
+   synthetics: **≥3584 samples (1.75 frames)**. One frame is never enough however clean the
+   signal, because the 32-bit preamble can start anywhere; beyond two frames buys nothing.
+   ⇒ Neither old mode could work: 8-bit had the length (4000) but a sub-LSB signal, 16-bit
+   had the resolution but only 2000 samples (0.98 frames).
+   ⛔ Raising `NETDATA_MAX_DATA_LENGTH` to 8192 is NOT the way — the build is clean and the
+   device then faults on every sniff, because `usb_cdc_write()` wraps the USB write in
+   `APP_ERROR_CHECK`, so an oversized transfer resets the device instead of returning an
+   error. The symptom is a bare host timeout. ⇒ The capture is **chunked** instead: chunk 0
+   acquires and returns the first 4000 bytes, later chunks slice the *same* acquisition, and
+   the host reassembles. Now 4096 samples (2.00 frames) at 16-bit, 8192 at 8-bit; verified
+   contiguous — |diff| at the seam is 36 against a median of 52.
 3. **Re-run `phasesweep.py` on clean firmware** against the real credential, to find the
    true optimal phase — the existing 4.4 dB figure is pre-BLE-fix and on the wrong payload.
 4. **Capture at that phase and demod.** That is the decisive test, and it has never been run
