@@ -6,7 +6,7 @@
 #   1. FINDINGS cites a log entry that does not exist
 #   2. NEXT or README cites a claim or rule that does not exist
 #   3. a referenced file has been renamed or deleted
-#   4. a commit hash in LOG does not resolve (rebase, amend, wrong paste)
+#   4. a commit hash in LOG is not reachable from HEAD (rebase, amend, wrong paste)
 # It does NOT check that a claim is true. Only a measurement does that.
 set -u
 cd "$(dirname "$0")" || exit 1
@@ -51,9 +51,20 @@ done
 echo "commit hashes in LOG.md"
 # ⚠ only the commit column of the table — a 16-hex-digit credential like
 # a0000000e6bd0e92 otherwise reads as a short hash and fails forever.
+#
+# ⛔ "IT RESOLVES" IS NOT THE TEST, AND THE WEAKER ONE LET A STALE HASH THROUGH. This used
+# to run `git cat-file -e`, which succeeds for ANY object still in the store — including a
+# commit orphaned by the amend that happened thirty seconds earlier. It passed, the notes
+# pointed at a commit unreachable from any branch, and it would have kept passing until a
+# gc removed the object and turned a silent rot into a sudden one.
+# ⇒ The question is reachability from HEAD, not existence.
 for h in $(grep -oE '^\| L[0-9]+ \|[^|]*\| `[0-9a-f]{7,40}`' LOG.md |
            grep -oE '`[0-9a-f]{7,40}`' | tr -d '`' | sort -u); do
-    git cat-file -e "${h}^{commit}" 2>/dev/null || note "hash does not resolve: $h"
+    if ! git cat-file -e "${h}^{commit}" 2>/dev/null; then
+        note "hash does not resolve: $h"
+    elif ! git merge-base --is-ancestor "$h" HEAD 2>/dev/null; then
+        note "hash resolves but is NOT reachable from HEAD (amended or rebased away): $h"
+    fi
 done
 
 echo "edit-policy invariants"

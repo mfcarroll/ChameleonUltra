@@ -105,6 +105,10 @@ two decoders can both score 51/160 on different captures.
 - A new claim goes in the ledger with its `n`, its `null` and its `indep` filled in. **If a
   column would be blank, that is the finding** — say so rather than leaving it empty.
 - `./checkdocs.sh` verifies all of the above mechanically: dangling `L##`/`C##`/`M##`
-  references, renamed files, commit hashes that no longer resolve, and the append-only and
+  references, renamed files, commit hashes not reachable from HEAD, and the append-only and
   frozen-banner invariants. ⚠ It cannot check whether a claim is TRUE. Only a measurement
   does that.
+- ⚠ **A `LOG.md` entry cannot carry its own commit hash when it is written** — the hash does
+  not exist yet. Write `this commit`, commit, then fix the pointer in a follow-up. An
+  `--amend` orphans the hash you just wrote in, and until `checkdocs.sh` was taught to ask
+  about *reachability* rather than existence it passed anyway.
