@@ -7719,6 +7719,13 @@ class LFSniff(ReaderRequiredUnit):
             help='Print hex dump of samples to screen'
         )
         parser.add_argument(
+            '--phase', type=int, default=0, metavar='TICKS',
+            help='SAADC sample phase: 0-127 ticks of 62.5ns after the carrier period '
+                 'boundary (0 = default trigger). 128 ticks span one carrier period, so '
+                 'this walks a full turn of the carrier and two of an fc/2 subcarrier. '
+                 'Use it when a subcarrier at exactly 2 samples/cycle reads as absent.'
+        )
+        parser.add_argument(
             '--bits', type=int, default=8, choices=(8, 16), metavar='N',
             help='Sample width. 8 (default) is the historical format: the 14-bit ADC '
                  'conversion right-shifted by 5. 16 returns the FULL conversion, '
@@ -7730,9 +7737,13 @@ class LFSniff(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(10000, args.timeout))
+        ph = f", phase +{args.phase} ticks ({args.phase * 62.5:.0f}ns)" if args.phase else ""
         print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample), "
-              f"{args.bits}-bit samples...")
-        resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits)
+              f"{args.bits}-bit samples{ph}...")
+        if not 0 <= args.phase <= 127:
+            print(f"{CR}--phase must be 0..127 ticks{C0}")
+            return
+        resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")

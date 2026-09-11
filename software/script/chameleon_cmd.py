@@ -701,7 +701,7 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
-    def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8):
+    def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8, phase: int = 0):
         """
         Capture raw LF field ADC samples.
 
@@ -716,12 +716,17 @@ class ChameleonCMD:
 
         :param timeout_ms: Capture duration in ms (1-10000, default 2000)
         :param bits: 8 (default, historical format) or 16 (full 14-bit, big-endian)
+        :param phase: SAADC sample phase, 0-127 ticks of 62.5ns after the carrier period
+            boundary. 0 keeps the default trigger. 128 ticks span one carrier period, so
+            this walks 0-360° of the carrier and 0-720° of an fc/2 subcarrier.
         :return: Raw response object — check .status and .data
         """
         timeout_ms = max(1, min(10000, timeout_ms))
         if bits not in (8, 16):
             raise ValueError("bits must be 8 or 16")
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits])
+        if not 0 <= phase <= 127:
+            raise ValueError("phase must be 0..127 ticks")
+        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase])
         timeout_s = (timeout_ms // 1000) + 2
         return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
 

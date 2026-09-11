@@ -2052,10 +2052,14 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
      * anything else (including absent) for the historical 8-bit format. Defaulting to
      * 8 keeps every existing host build byte-compatible. */
     bool raw16 = (length >= 3 && data[2] == 16);
+    /* Optional 4th byte: SAADC sample phase in 62.5ns ticks after the carrier period
+     * boundary. 0 (or absent) keeps the direct PWMPERIODEND trigger. */
+    lf_125khz_radio_saadc_phase_set(length >= 4 ? data[3] : 0);
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     size_t outlen = 0;
     raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16);
+    lf_125khz_radio_saadc_phase_set(0);   /* never leave a phase set for other readers */
 
     if (outlen == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
