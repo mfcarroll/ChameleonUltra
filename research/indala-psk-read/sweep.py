@@ -119,12 +119,15 @@ def amplitude_at(x, f):
 
 
 def main(paths):
-    base = None
+    base = []
     cham, pm3 = {}, {}
     seen = {}                       # (instrument, subcarrier) -> path, for the duplicate guard
     for p in paths:
         if 'baseline' in p.split('/')[-1].lower():
-            base = load(p)
+            # ⭐ Accept SEVERAL. Everything in the table is normalised against the
+            # empty-field floor, so an n=1 baseline was the weakest link in the whole
+            # measurement while the tag side ran 5 repeats.
+            base.append(load(p))
             continue
         hz = classify(p)
         if hz is None:
@@ -154,7 +157,7 @@ def main(paths):
                  "   comparable: the 8-bit path discards 5 bits. Use one campaign's\n"
                  "   captures and a baseline of the SAME width.")
     bits = widths.pop() if widths else 8
-    if base is not None and WIDTH.get([p for p in WIDTH if 'baseline' in p][0]) != bits:
+    if base and WIDTH.get([p for p in WIDTH if 'baseline' in p][0]) != bits:
         sys.exit("⛔ baseline is %d-bit but the captures are %d-bit. Take a matching one."
                  % (WIDTH[[p for p in WIDTH if 'baseline' in p][0]], bits))
     print("\n Sample width: %d-bit" % bits)
@@ -175,15 +178,18 @@ def main(paths):
         return float(np.median(vals)), len(vals), spread
 
     print(f" {'PSKCF':6s}{'subcarrier':>11s}{'smp/cyc':>8s}"
-          f"{'CHAM band':>11s}{'n':>3s}{'spread':>8s}{'PM3 band':>10s}{'n':>3s}")
+          f"{'CHAM band':>11s}{'n':>3s}{'spread':>8s}{'empty':>9s}{'SNR':>8s}"
+          f"{'PM3 band':>10s}{'n':>3s}")
     for hz in order:
         if hz not in cham and hz not in pm3:
             continue
         cb_, cn, csp = med_sb(cham.get(hz, []), hz)
+        eb_, en, _ = med_sb(base, hz)
         pb_, pn, _ = med_sb(pm3.get(hz, []), hz)
         deg = " <- Nyquist" if hz == 62500.0 else ""
+        snr = (cb_ / eb_) if eb_ and np.isfinite(eb_) else float('nan')
         print(f" {LABEL[hz]:6s}{hz:10.0f}Hz{FS/hz:8.1f}{cb_:11.3f}{cn:3d}{csp:7.2f}x"
-              f"{pb_:10.2f}{pn:3d}{deg}")
+              f"{eb_:9.2f}{snr:7.2f}x{pb_:10.2f}{pn:3d}{deg}")
     print("\n band = PSK modulation skirt, median of N deglitched captures.")
     print(" spread = max/min across repeats; anything far above 1 means the screen")
     print(" did not fully clean those captures and the median is doing real work.")
