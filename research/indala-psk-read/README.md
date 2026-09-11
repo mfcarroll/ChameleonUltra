@@ -1,5 +1,10 @@
 ## Indala on Chameleon Ultra — ~27 dB of analog loss, not a firmware gap
 
+⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
+⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
+these conclusions, because nine earlier ones were wrong and every one failed on an artefact
+in this project's own analysis rather than on the hardware.
+
 **Measured on device 2026-09-10/11.** Chameleon Ultra v3, firmware `v2.2 (v2.2.0-32-gccf6075)`,
 chip id `a461ebf3b85fb19c`. Reference reads on a Proxmark3 Iceman.
 
