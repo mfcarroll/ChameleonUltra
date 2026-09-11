@@ -1,33 +1,39 @@
 #!/bin/bash
-# Build + sign the application DFU package on macOS, then hand it to the GUI to flash.
+# Build + flash the application over USB DFU on macOS. Fully automated.
 #
 #   ./flash-dfu-app-macos.sh [--no-build]
 #
-# BUILD + SIGN is fully automated here, via the project's own Docker image
-# (docker-compose.yml), which carries Nordic's real nrfutil and the pinned ARM
-# toolchain. That is the sanctioned toolchain — do not hand-roll it.
+# BUILD + SIGN runs in the project's own Docker image (docker-compose.yml), which
+# carries Nordic's nrfutil and the pinned ARM toolchain. FLASH uses nrfutil on the
+# host, because Docker Desktop on macOS cannot pass USB through to a container.
 #
-# ⛔ FLASHING FROM THE CLI IS NOT SOLVED ON macOS. Measured 2026-09-11, so that the
-# next person does not spend the afternoon rediscovering it:
-#   - flash-dfu-app.sh needs `lsusb` (Linux-only) and `nrfutil device` (Nordic v7+).
-#   - The Homebrew cask for v7+/v8 was DISABLED 2026-09-01: it fails the macOS
-#     Gatekeeper check. Installing it anyway means bypassing Gatekeeper by hand.
-#   - nrfutil 8.x has no macOS arm64 wheel on PyPI. 6.1.7 installs but caps at
-#     Python <3.11 and hard-requires pc_ble_driver_py>=0.16.4, which has no arm64
-#     wheel at all (PyPI stops at 0.11.4).
-#   - nrfutil 5.2.0 installs on 3.11 but is not py3-clean: `c.encode('hex')` and
-#     `dict.iteritems()` both raise in the `pkg generate` path.
-#   - 6.1.7 on Python 3.9 with a pc_ble_driver_py shim DOES run, and `pkg generate`
-#     works — but `dfu usb-serial` never gets a reply to SetPRN/GetSerialMTU from
-#     this bootloader, with or without DTR asserted (the device's own enter_dfu.py
-#     notes DTR is required) and at every connect-delay tried. Suspect
-#     __ensure_bootloader()'s DeviceLister/DFUTrigger path, which runs BEFORE the
-#     port is opened and may be knocking the device back out of DFU.
+# ⚠ INSTALL nrfutil THE WAY THE WIKI SAYS, NOT VIA HOMEBREW. The Homebrew cask was
+# disabled 2026-09-01 for failing the Gatekeeper check, which is easy to read as
+# "no nrfutil on macOS" — it is not. Nordic ships a signed native arm64 build, and
+# curl does not set com.apple.quarantine, so there is no Gatekeeper prompt at all:
 #
-# ⇒ Flash the zip this script builds with ChameleonUltraGUI, which implements DFU
-#   itself and is known to work with this device.
+#   curl -sL -o ~/bin/nrfutil \
+#     https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/aarch64-apple-darwin/nrfutil
+#   chmod 755 ~/bin/nrfutil
+#   nrfutil install device nrf5sdk-tools
+#
+# (The old developer.nordicsemi.com/.pc-tools/... paths now 410 for macOS; the
+# executables moved to files.nordicsemi.com under Rust target triples.)
+#
+# ⛔ Do NOT use the PyPI `nrfutil`. It ends at 6.1.7 (2022) because Nordic moved the
+# tool to Rust at v7; 6.1.7 hard-requires pc_ble_driver_py, which has no arm64
+# wheel, and its `dfu usb-serial` never completes the handshake with this
+# bootloader. Measured 2026-09-11, after an afternoon of trying.
+#
+# The Linux scripts flash-dfu-app.sh / flash-dfu-full.sh need lsusb, hence this one.
+#
+# App-only: bootloader and SoftDevice are untouched, so a failed flash leaves the
+# device in DFU mode and recoverable by re-running.
 set -euo pipefail
 cd -- "$(dirname "$0")"
+
+NRFUTIL="${NRFUTIL:-$(command -v nrfutil || echo "$(cd .. && pwd)/../.tools/bin/nrfutil")}"
+PY="${PY:-$(cd .. && pwd)/software/script/.venv/bin/python}"
 PKG=objects/ultra-dfu-app.zip
 
 if [[ "${1:-}" != "--no-build" ]]; then
@@ -35,15 +41,15 @@ if [[ "${1:-}" != "--no-build" ]]; then
   docker compose up --pull=always build-ultra
 fi
 [[ -f $PKG ]] || { echo "No $PKG — build first (drop --no-build)."; exit 1; }
+[[ -x $NRFUTIL ]] || { echo "nrfutil not found — see the install note at the top of this script."; exit 1; }
 
-cat <<MSG
+echo "==> Package: $PKG ($(stat -f%z $PKG) bytes)"
+echo "==> Entering DFU mode"
+"$PY" ../resource/tools/enter_dfu.py || {
+  echo "   Trigger it by hand: unplug, hold B, plug in (LEDs 4 & 5 blink), then --no-build."; exit 1; }
+sleep 3
 
-Signed package ready:
-  $(pwd)/$PKG   ($(stat -f%z $PKG) bytes)
-
-To flash: open ChameleonUltraGUI, connect the device, and choose the option to
-flash firmware from a local DFU zip, pointing it at the file above.
-
-App-only: the bootloader and SoftDevice are untouched, so a failed flash leaves
-the device recoverable.
-MSG
+echo "==> Flashing"
+"$NRFUTIL" device program --firmware "$PKG" --traits nordicDfu
+echo "==> Done. Verify with:"
+echo "    cd ../software/script && .venv/bin/python cu.py \"hw version\""

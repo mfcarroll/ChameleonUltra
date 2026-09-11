@@ -7767,7 +7767,10 @@ class LFSniff(ReaderRequiredUnit):
 
         n = n_samples
         duration_ms = n * 8 / 1000
-        print(f" Captured : {CG}{n}{C0} bytes ({duration_ms:.1f}ms)")
+        # ⚠ Count SAMPLES, and say which. In 16-bit mode a sample is two bytes, so
+        # reporting the sample count as "bytes" understates the transfer by half and
+        # makes the duration look wrong against it.
+        print(f" Captured : {CG}{n}{C0} samples / {len(raw)} bytes ({duration_ms:.1f}ms)")
 
         mn = min(data)
         mx = max(data)
