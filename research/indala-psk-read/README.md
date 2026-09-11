@@ -44,6 +44,36 @@ Nyquist degeneracy entirely rather than merely moving it. If fc/2 is *still* ~27
 there, the analog attribution is proved rather than inferred. That is the one experiment
 left worth running.
 
+### 0a. ⛔ GAIN CLOSED: the noise floor is ANALOG-referred, so the ADC was never the limit
+
+`gaintest.py --repeats 7`, empty-then-tag, four gains, deglitched medians. The question was
+whether the fc/2 floor is quantisation/converter noise (which gain would lift the signal
+clear of) or analog noise from the detector and op-amp chain (which gain multiplies along
+with the signal).
+
+| gain | gain vs 1/6 | empty-field std | std vs 1/6 | empty sb | tag sb | tag/empty |
+|---|---|---|---|---|---|---|
+| 1/6 | 1.00x | 357 | 1.00x | 7.18 | 13.85 | 1.93x |
+| 1/5 | 1.20x | 436 | 1.22x | 8.91 | 17.15 | 1.93x |
+| 1/4 | 1.50x | 635 | 1.78x | 12.87 | 20.33 | 1.58x |
+| 1/3 | 2.00x | 830 | 2.33x | 11.61 | 27.78 | 2.39x |
+
+⇒ **The floor tracks gain at every point** — if anything slightly faster than gain. Signal
+and floor rise together, so **tag/empty is flat**: 1.93, 1.93, 1.58, 2.39 is non-monotonic
+with ±25% scatter, not a trend.
+
+⛔ **So the ADC was never the limit, and differential mode against `LF_RSSI` is dead too** —
+subtracting the DC pedestal would allow more gain, but more gain amplifies an analog floor
+along with the signal. Nothing in the converter's configuration helps.
+
+⚠ **Two reading traps this run exposed**, both now handled in the script:
+- **Endpoints lied.** First-to-last gave "+1.9 dB" from 1.93x → 2.39x, while the full
+  series is non-monotonic. The verdict now reads the whole sequence and says whether it is
+  monotonic.
+- **"Saturated" was measuring glitches, not clipping.** Per-repeat at a FIXED gain it swings
+  0% to 7%, and 1/3 can read lower than 1/4 despite sitting nearer the rail. Those are
+  USB-overrun bursts hitting the rails. Relabelled, and flagged as a glitch indicator.
+
 ### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
 `lf sniff` captures land randomly in one of two states: clean, or carrying a **USB-transfer
@@ -163,22 +193,36 @@ rolloff from the Chameleon's, and that separation is the entire result.
 Indala word. At CF4/CF8 the harness will report `block0 IS CONFIRMED ... data blocks unconfirmed` and
 default to `[p]` — that is correct for a modulation PM3 cannot read back.
 
-### 6. Routes, re-ranked by §0
+### 6. Routes — what is closed, and what is left
 
-⭐ **1. Sweep the SAADC sample phase, or oversample.** §0 makes this the decisive experiment,
-not a fallback. Drive `NRF_SAADC_TASK_SAMPLE` from a spare TIMER COMPARE with a programmable
-offset instead of `PWMPERIODEND` (62.5 ns resolution ≈ 1.4° of subcarrier phase), or run that
-timer at 200–250 kHz so fc/2 stops being Nyquist. If fc/2 reappears, the diagnosis is proved
-and the rest follows.
+⛔ **Closed by measurement, all firmware-side:**
 
-**2. Port the decoder.** `decoder_feed(codec, uint16_t)` already carries full-resolution
-samples, so an `indala.c` slots in like `hidprox.c`; Proxmark's `PSKDemod()`/`detectIndala()`
-port directly. ⚠ At 250 kHz a 64-bit frame is ~4100 samples, over `LF_SNIFF_MAX_SAMPLES`, so
-decode incrementally through `decoder.feed()` the way `hidprox_read()` does.
+| lever | result | where |
+|---|---|---|
+| 8-bit truncation | fixed (`--bits 16`); it was distorting the rolloff shape | §0b |
+| sample phase | real but worth only **7.5 dB**, never nulls | §0 |
+| oversampling at 200kHz | recovers **nothing**; control moved as much | §0 |
+| ADC gain | floor is **analog-referred**; SNR flat across 2x gain | §0a |
+| differential vs `LF_RSSI` | dead by implication — gain cannot beat an analog floor | §0a |
 
-⛔ **3. Analog change.** ~~The fix is the peak-detector time constant and/or the filter poles.~~
-Struck: §0 measures the front end as **flat to 31 kHz with zero excess loss**. There is nothing
-to fix there until an experiment says otherwise.
+⇒ Nothing in the converter, its clock, its phase or its gain moves fc/2. The limit is in
+the analog chain ahead of it.
+
+⭐ **Still open, and worth trying in this order:**
+
+1. **Settle / field-on time.** `raw_read_to_buffer` waits a hardcoded `bsp_delay_ms(2)` and
+   then captures 10–16ms. A T5577 must charge before it transmits at full amplitude, and
+   this has never been varied. ⭐ This is the direct analogue of the Momentum `t5577-deep-read`
+   finding where apparent air-gap effects turned out to be settle — same shape of confound,
+   and every measurement in this note was taken at ONE settle.
+2. **Air gap.** Every capture here is `--gap flat`. The harness already stamps the axis.
+3. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}` with `top_value 4` — a hardcoded
+   50% duty. Changes tag power and the detector's operating point.
+4. **Fix the overruns.** 10–20% of windows are discarded, and the bursts have produced three
+   false verdicts in this investigation. Worth doing for the measurement quality alone.
+
+⚠ **And the honest possibility**: if settle, gap and drive all come back flat, the answer is
+the front end's bandwidth and only a component change moves it.
 
 ### 7. Firmware state today
 

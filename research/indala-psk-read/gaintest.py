@@ -101,6 +101,10 @@ def main():
             x = load16(fp)
             if x is None:
                 sys.exit("capture %s is not 16-bit — firmware current?" % fp)
+            # ⚠ This counts rail samples, which on this device are overwhelmingly the
+            # USB-overrun bursts rather than gain-induced clipping — per-repeat it swings
+            # 0% to 7% at a FIXED gain, and 1/3 can read lower than 1/4. Treat it as a
+            # glitch indicator, not as evidence about headroom.
             sats.append(float(np.mean((x >= 16370) | (x <= 8))) * 100)
             dc.append(float(np.median(x)))
             c = deglitch(x)
@@ -113,7 +117,7 @@ def main():
     print("\n" + "=" * 78)
     print(" SAADC GAIN SWEEP at 62500 Hz — is the floor ADC-referred or analog?")
     print("=" * 78)
-    print(" %-7s %8s %10s %10s %11s %9s" % ("gain", "DC", "empty", "tag", "tag/empty", "saturated"))
+    print(" %-7s %8s %10s %10s %11s %9s" % ("gain", "DC", "empty", "tag", "tag/empty", "railed*"))
     rows = []
     for g in GAINS:
         e, esat, edc = measure("empty", g)
@@ -138,11 +142,21 @@ def main():
     print(" over the unsaturated range 1/%d -> 1/%d, gain rose %.2fx" % (g0, gN, gain_ratio))
     print(" the EMPTY-FIELD floor rose %.2fx  (analog would predict %.2fx, ADC-referred 1.00x)"
           % (floor_ratio, gain_ratio))
-    snr0, snrN = clean[0][3], clean[-1][3]
-    print(" tag/empty: %.2fx -> %.2fx  (%+.1f dB)" % (snr0, snrN, 20 * np.log10(snrN / snr0)))
-    if floor_ratio > 0.75 * gain_ratio:
-        print("\n ⛔ The floor scales with gain: it is ANALOG-referred. The ADC was never the")
-        print("   limit, and no gain, resolution or sample-rate change improves fc/2.")
+    # ⚠ READ THE WHOLE SEQUENCE, NOT THE ENDPOINTS. Comparing only first-to-last once
+    # reported "+1.9 dB" off 1.93x -> 2.39x while the full series ran 1.93, 1.93, 1.58,
+    # 2.39 — non-monotonic, and the apparent gain was scatter.
+    snrs = [r[3] for r in rows]
+    mono = all(b >= a * 0.97 for a, b in zip(snrs, snrs[1:]))
+    print(" tag/empty across 1/%s: %s" % ("/1/".join(str(r[0]) for r in rows),
+                                          "  ".join("%.2fx" % v for v in snrs)))
+    print("   %s, spread %.0f%% — %s"
+          % ("monotonic" if mono else "NOT monotonic",
+             100 * (max(snrs) / min(snrs) - 1),
+             "a real trend" if mono else "consistent with scatter, not a trend"))
+    if floor_ratio > 0.75 * gain_ratio or not mono:
+        print("\n ⛔ The floor scales with gain and SNR does not improve: the noise is")
+        print("   ANALOG-referred. The ADC was never the limit, so no gain, resolution or")
+        print("   sample-rate change improves fc/2. What is left is the analog chain.")
     elif floor_ratio < 0.3 * gain_ratio:
         print("\n ⇒ The floor barely moves: it is ADC-REFERRED. Gain is real SNR, and")
         print("   differential mode against LF_RSSI would buy considerably more.")
