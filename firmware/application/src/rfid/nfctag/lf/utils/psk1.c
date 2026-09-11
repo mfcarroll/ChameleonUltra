@@ -46,3 +46,26 @@ size_t lf_psk1_build_sequence(const uint8_t *frame_bytes,
 
     return k;
 }
+
+// The shared 64-bit PSK1/RF-32 sequence. See the note in psk1.h for why there is exactly
+// one of these rather than one per protocol.
+static nrf_pwm_values_wave_form_t m_psk1_rf32_vals[LF_PSK1_RF32_PWM_ENTRIES] = {};
+
+static nrf_pwm_sequence_t m_psk1_rf32_seq = {
+    .values.p_wave_form = m_psk1_rf32_vals,
+    .length = NRF_PWM_VALUES_LENGTH(m_psk1_rf32_vals),
+    .repeats = 0,
+    .end_delay = 0,
+};
+
+const nrf_pwm_sequence_t *lf_psk1_rf32_modulator(const uint8_t *frame8) {
+    size_t n = lf_psk1_build_sequence(frame8, LF_PSK1_RF32_FRAME_BITS,
+                                      m_psk1_rf32_vals, LF_PSK1_RF32_PWM_ENTRIES);
+    if (n == 0) {
+        return NULL;
+    }
+    // 4 uint16 fields per wave-form entry, which is what nrf_pwm_sequence_t counts.
+    m_psk1_rf32_seq.length = (uint16_t)(n * 4);
+    return &m_psk1_rf32_seq;
+}
+

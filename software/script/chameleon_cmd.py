@@ -1165,6 +1165,29 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def indala_set_emu_id(self, id: bytes):
+        """
+        Set the 64-bit Indala frame emulated on the active slot.
+
+        :param id: 8 bytes, MSB first on air. The first 33 bits are Indala's fixed
+                   preamble (1010, 28 zeros, 1), which is why a valid frame always
+                   starts a0000000 and the next byte has its top bit set.
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        return self.device.send_cmd_sync(Command.INDALA_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def indala_get_emu_id(self):
+        """
+        Get the emulated Indala 64-bit frame.
+        """
+        resp = self.device.send_cmd_sync(Command.INDALA_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def viking_set_emu_id(self, id: bytes):
         """
         Set the card number emulated by Viking.

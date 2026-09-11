@@ -11,6 +11,7 @@
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
@@ -288,6 +289,15 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_IDTECK_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_INDALA && buffer->length >= LF_INDALA_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = indala.alloc();
+        m_pwm_seq = indala.modulator(codec, buffer->buffer);
+        indala.free(codec);
+        NRF_LOG_INFO("load lf indala data finish.");
+        return LF_INDALA_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -442,6 +452,26 @@ bool lf_tag_idteck_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t tag_id[LF_IDTECK_TAG_ID_SIZE] = {
         0x49, 0x44, 0x54, 0x4B,   // "IDTK" preamble (MSB first)
         0xDE, 0xAD, 0xBE, 0xEF,   // default card data
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Indala data save callback. */
+int lf_tag_indala_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_INDALA ? LF_INDALA_TAG_ID_SIZE : 0;
+}
+
+/** @brief Indala default frame: the fixed 33-bit preamble plus a placeholder payload.
+ *
+ * ⭐ a0000000e6bd0e92 is the bench credential this protocol was developed against —
+ * Fmt 26, FC 52, Card 63612 — so a factory-reset slot emulates something a reader will
+ * actually recognise, and something `lf indala read` is known to decode 20 times in 20.
+ * The leading a0000000 is not a choice: bits 0-32 are Indala's fixed preamble (1010, then
+ * 28 zeros, then a 1), which is why every Indala raw word begins that way. */
+bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_INDALA_TAG_ID_SIZE] = {
+        0xA0, 0x00, 0x00, 0x00,   // fixed preamble: 1010, 28 zeros, then the leading 1 of
+        0xE6, 0xBD, 0x0E, 0x92,   // ...the payload. Fmt 26 FC 52 Card 63612.
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

@@ -87,6 +87,24 @@ extern "C" {
     T5577_PWD |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+// Indala: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
+//
+// ⭐ 0x00081040, confirmed against two independent sources: it is what Proxmark's
+// `lf indala clone` writes (cmdlfindala.c) and what block 0 of a working bench tag reads
+// back as. Verified end to end — `lf indala write` reads the credential back off the tag,
+// 9 writes out of 9.
+//
+// ⚠ NOTE THE ABSENCE OF T5577_PWD, which every other config in this file sets. Bit 4 is
+// the password-enable bit; setting it makes the tag demand a password for later writes.
+// The Indala config proven on this bench does NOT set it, and `lf t55xx detect` reports
+// "Password set...... No" for those tags. Whether the others should set it is a separate
+// question and is NOT changed here — see NEXT.md.
+#define T5577_INDALA_CONFIG (     \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_PSK1 |       \
+    T5577_PSKCF_RF_2 |            \
+    (2 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

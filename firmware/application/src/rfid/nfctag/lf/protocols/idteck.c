@@ -10,23 +10,23 @@
 #include "tag_base_type.h"
 #include "utils/psk1.h"
 
+// The shared modulator is fixed at a 64-bit frame. If this protocol's frame
+// length ever changes, it needs its own path rather than silently transmitting
+// the wrong number of bits.
+_Static_assert(IDTECK_BIT_COUNT == LF_PSK1_RF32_FRAME_BITS,
+               "IDTECK frame is not 64 bits — lf_psk1_rf32_modulator cannot carry it");
+
 // IDTECK: 64-bit PSK1 frame at RF/32. The 32-bit fixed preamble 0x4944544B
 // ("IDTK") occupies the first four bytes of the frame; the remaining four
 // bytes are the card payload (a one-byte checksum followed by a 24-bit card
 // number in a byte-reversed layout, matching the format used by common
 // IDTECK readers; see cmdlfidteck.c in the Proxmark3 client for details).
 
-#define IDTECK_PWM_ENTRIES        (IDTECK_BIT_COUNT * LF_PSK1_RF32_SUBCYCLES_PER_BIT)
 #define IDTECK_T55XX_BLOCK_COUNT  (3)   // config word + 2 data blocks
 
-static nrf_pwm_values_wave_form_t m_idteck_pwm_seq_vals[IDTECK_PWM_ENTRIES] = {};
-
-static nrf_pwm_sequence_t m_idteck_pwm_seq = {
-    .values.p_wave_form = m_idteck_pwm_seq_vals,
-    .length = NRF_PWM_VALUES_LENGTH(m_idteck_pwm_seq_vals),
-    .repeats = 0,
-    .end_delay = 0,
-};
+// ⚠ The 8KB PWM buffer this file used to own now lives in utils/psk1.c and is shared
+// with Indala, which is identical at the physical layer. Only one tag is emulated at a
+// time, so a second copy bought nothing and cost 8KB of RAM. See psk1.h.
 
 static idteck_codec *idteck_alloc(void) {
     idteck_codec *d = malloc(sizeof(idteck_codec));
@@ -63,11 +63,7 @@ static bool idteck_decoder_feed(idteck_codec *d, uint16_t val) {
 // payload; the CLI layer is responsible for composing them.
 static const nrf_pwm_sequence_t *idteck_modulator(idteck_codec *d, uint8_t *buf) {
     (void)d;
-
-    size_t n = lf_psk1_build_sequence(buf, IDTECK_BIT_COUNT,
-                                      m_idteck_pwm_seq_vals, IDTECK_PWM_ENTRIES);
-    m_idteck_pwm_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
-    return &m_idteck_pwm_seq;
+    return lf_psk1_rf32_modulator(buf);
 }
 
 const protocol idteck = {

@@ -176,6 +176,8 @@ class Command(enum.IntEnum):
     JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
+    INDALA_SET_EMU_ID = 5014
+    INDALA_GET_EMU_ID = 5015
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -328,7 +330,7 @@ class TagSpecificType(enum.IntEnum):
     # Paradox
 
     # PSK Tag-Talk-First      300
-    # Indala
+    Indala = 300
     # Keri
     # NexWatch
     IDTECK = 310
@@ -419,6 +421,8 @@ class TagSpecificType(enum.IntEnum):
             return "Jablotron"
         elif self == TagSpecificType.IDTECK:
             return "IDTECK"
+        elif self == TagSpecificType.Indala:
+            return "Indala"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

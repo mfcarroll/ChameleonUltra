@@ -758,6 +758,28 @@ class LFJablotronIdArgsUnit(DeviceRequiredUnit):
 
 
 IDTECK_PREAMBLE_HEX = "4944544B"
+
+# ⭐ Indala's preamble is 33 bits, not 32: 1,0,1,0 then 28 zeros then a 1. The first four
+# bytes are therefore always a0000000, and the TOP BIT OF THE FIFTH BYTE is the 33rd
+# preamble bit and must be set. That is why every valid Indala raw word looks like
+# a0000000 8x-ff.. and never a0000000 0x...
+INDALA_PREAMBLE_HEX = "a0000000"
+
+
+def _indala_frame_info(frame: bytes) -> dict:
+    """Split a 64-bit Indala frame and check its fixed preamble.
+
+    ⚠ There is no checksum to verify here. Format-26 carries two Wiegand parity bits, but
+    they are ADVISORY only — a frame that was wrong in 20 bits once passed them (FINDINGS
+    C19) — and they mean nothing for the other Indala formats. The preamble is the only
+    structural check worth making."""
+    pre_ok = frame[:4].hex() == INDALA_PREAMBLE_HEX and bool(frame[4] & 0x80)
+    return {
+        "preamble_hex": frame[:4].hex().upper(),
+        "preamble_valid": pre_ok,
+        "payload_hex": frame[4:].hex().upper(),
+    }
+
 IDTECK_PREAMBLE_INT = 0x4944544B
 
 
@@ -811,6 +833,41 @@ def _idteck_frame_info(frame: bytes) -> dict:
         "checksum_valid": chksum == expected,
         "card_id": card_id,
     }
+
+
+class LFIndalaIdArgsUnit(DeviceRequiredUnit):
+    """Argument parser for Indala: 16 hex = the full 64-bit frame, preamble included."""
+
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        parser.add_argument(
+            "--id", type=str, required=required,
+            help="Indala frame in hex: 16 chars for the full 64-bit frame. The first 33 "
+                 "bits are the fixed preamble, so it always starts a0000000.",
+            metavar="<hex>"
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        if args.id is None:
+            return True
+        if not re.match(r"^[a-fA-F0-9]{16}$", args.id):
+            raise ArgsParserError("ID must be 16 HEX symbols")
+        info = _indala_frame_info(bytes.fromhex(args.id))
+        if not info["preamble_valid"]:
+            # ⚠ A warning, not a refusal. Indala has formats beyond 26 and this project
+            # has only ever verified the 64-bit one, so refusing would be claiming more
+            # certainty than we have — but a reader will almost certainly ignore a frame
+            # whose preamble is wrong, and silently emulating nothing is worse.
+            print(f"{color_string((CR, 'WARNING'))}: frame does not start with Indala's "
+                  f"33-bit preamble (a0000000 plus the top bit of the next byte) — "
+                  f"a reader will almost certainly reject it")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
 
 
 class LFIdteckIdArgsUnit(DeviceRequiredUnit):
@@ -6093,6 +6150,42 @@ class LFIndalaWrite(ReaderRequiredUnit):
             return uid.hex()
         except Exception:
             return None
+
+
+@lf_indala.command("econfig")
+class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set the Indala frame emulated on a slot. "
+            "Provide --id to set; omit it to read back the current value."
+        )
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.id is not None:
+            slotinfo = self.cmd.get_slot_info()
+            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+            if lf_tag_type != TagSpecificType.Indala:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Indala. "
+                      f"Set it with: hw slot type -s <n> -t Indala")
+            self.cmd.indala_set_emu_id(bytes.fromhex(args.id))
+            print(f" - Indala emu id set to {args.id.upper()}.")
+        else:
+            response = self.cmd.indala_get_emu_id()
+            info = _indala_frame_info(response)
+            print(f" - Indala emu id: {response.hex().upper()}")
+            print(f"   Preamble : {info['preamble_hex']}"
+                  + ("" if info["preamble_valid"] else
+                     f"  {color_string((CR, '(not the Indala preamble)'))}"))
+            print(f"   Payload  : {info['payload_hex']}")
+            # ⇒ The decoded view comes from the reader, which owns the de-scramble
+            # tables. Duplicating them here would be a second copy to keep in step.
+            print(f"   Decode it with {color_string((CG, 'lf indala read'))} against the "
+                  f"emulated slot on a second device.")
 
 
 @lf_ioprox.command("write")
