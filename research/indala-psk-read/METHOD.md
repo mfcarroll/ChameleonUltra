@@ -71,6 +71,26 @@ without saying so, and a verdict was read off it. Missing captures abort the run
 
 **M13. ⛔ Don't write `<placeholder>` in a shell command** — zsh reads `<` as a redirect.
 
+**M14. ⛔ A bootstrap that resamples WITH replacement measures its own resampling.**
+Testing "do two captures ever agree on a wrong answer?" by drawing from 40 capture results
+with replacement reported 0.32% — but every one of those was the *same capture file drawn
+twice*, which is not two captures agreeing, it is one capture counted twice. Sampled
+without replacement the rate is 0 in 20000. ⇒ When the question is whether independent
+trials agree, the resampling must be without replacement, or it manufactures exactly the
+correlation under test.
+
+**M15. ⚠ A decode rate is not a correct-answer rate, and the gap is large.** The offline
+work reported "51 of 160 captures decode" and never asked what the OTHER frames were.
+They were wrong answers, not failures: 24 wrong frames in 200 captures, one in five. A
+reader built on the decode rate alone would hand back a wrong credential 20% of the time.
+⇒ Always report recovered / correct / wrong as three numbers, never two.
+
+**M16. ⭐ Port it to a second implementation, and diff the outputs per input.** The C
+firmware decoder and the numpy research decoder share no code — integer vs float, 3-tap
+notch vs FFT — and agreeing word for word on 320 captures INCLUDING the failures is the
+independent check this project's ledger asks for. Matching *counts* would not have been:
+two decoders can both score 51/160 on different captures.
+
 ---
 
 ## Keeping these notes honest

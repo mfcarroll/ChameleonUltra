@@ -282,13 +282,15 @@ def selftest():
         if hits >= 19:
             thr = s          # keep descending; the last qualifying level is the threshold
     print(f"\n   lowest band SNR with >=19/20 recovery: {thr:.2f}x")
-    print(f"   Proxmark PSKDemod on the same signal    : 5.50x")
-    if thr:
-        print(f"   ⇒ matched filter is worth {20*np.log10(5.5/thr):+.1f} dB")
-    print(f"\n   measured Chameleon fc/2 at best phase   : 2.30x")
-    if thr:
-        v = "WITHIN REACH" if thr <= 2.30 else "still short by %.1f dB" % (20*np.log10(thr/2.30))
-        print(f"   ⇒ {v}")
+    # ⛔ THIS USED TO PRINT A VERDICT, AND THE VERDICT WAS RETRACTED. It compared the
+    # threshold above against "Proxmark PSKDemod 5.50x" and "measured Chameleon 2.30x" and
+    # announced a dB margin — but every one of those numbers was measured through the PSK2
+    # bug, on a synthetic that shared it, against a fc/2 band figure that is polarity-blind
+    # (METHOD.md M8). The threshold itself is still a useful thing to watch for regression;
+    # the comparison was not, and the real answer came from real captures, not from here.
+    print("   ⚠ synthetic white noise only. The boxcar is already matched to a rectangular")
+    print("     bit there, so this number does NOT predict performance on real captures —")
+    print("     where the low-pass is worth 51/160 against 0/160. Use it for regression.")
 
 
 if __name__ == '__main__':

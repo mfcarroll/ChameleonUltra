@@ -1,48 +1,57 @@
 # Next — ranked
 
-**State:** solved. The Chameleon Ultra reads Indala from a single 300 ms capture
-(`FINDINGS.md`). What remains is turning that into a device feature and re-testing the
-levers that were closed against a decoder that could not work.
+**State:** shipped. `lf indala read` runs on the device and returns the credential in
+~0.5 s (`FINDINGS.md`). What remains is closing the one gap in its validation, then
+re-testing the levers that were closed against a decoder that could not work.
 
 ⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
 
 ---
 
-## 1. ⭐⭐⭐ Port the decoder into firmware as `lf indala read`
+## 1. ⛔ Run the on-device empty-field null
 
-The whole read is integer arithmetic over 4096 samples — no float, no FFT. `FINDINGS.md`
-has the chain. `lf_reader_generic.c` already captures the samples; the low-pass can be a
-short FIR or a two-stage boxcar.
+**This is the only thing standing between C20 and a complete claim, and it needs the tag
+lifted off the antenna.** The offline null is strong — no frame at all in 160 empty
+captures, at any preamble tolerance — but the firmware adds two things the offline decoder
+does not have: a phase rotation, and the two-capture agreement rule. Neither has ever seen
+an empty field.
 
-⚠ **Three details are each individually fatal** (C02, C03, C04): the PSK1 mapping — the
-phase *is* the data; the baseband low-pass — 32/35 with it, **0/35** without; and **not**
-discarding the settle window — 43/160 with the full capture, **0/160** without.
+```bash
+cd software/script && for i in $(seq 1 20); do .venv/bin/python cu.py "lf indala read"; done
+```
 
-## 2. ⭐⭐ Pick the sample phase, and check the window generalises
+Expect `LF tag not found` twenty times. ⚠ It should also take ~500 ms each — the full
+timeout — where a successful read takes ~100 ms of capture. A *fast* failure would mean
+something is aborting the rotation early.
 
-Ticks 12–36 decode best; nothing decodes past 60. **The stock trigger is phase 0, which
-decodes 0/5** — so stock firmware would fail even with a correct decoder, which is worth
-knowing before anyone blames an antenna.
+## 2. ⭐⭐ Check a second Indala tag, and a second Chameleon
 
-⚠ The window's position may be specific to this tag's coupling and this unit. Check a
-second Indala tag, and ideally a second Chameleon, before hard-coding a phase. Scanning
-three or four phases is cheap insurance and probably the right production behaviour.
+The phase window is **not stable even across sessions on the same tag and unit** — phase 12
+went from 5/5 to 4/10 correct overnight while phase 28 went the other way. The rotation
+absorbs that, which is why it is a rotation. What is still untested is whether a different
+tag or a different unit lands *outside* ticks 4–60 entirely, which the rotation would not
+absorb.
 
-## 3. ⭐ Check the Indala parity to reject near-misses
+⚠ A second tag also tests something the parity cannot: `descramble26()` assumes format 26.
+A 29-bit or other-format Indala tag should still return a raw frame, with the Wiegand-26
+parity reported as failing — check it does not do something worse.
 
-Most failures are one or two bits inside the zero run (`a0100000e6bd0e92` for
-`a0000000e6bd0e92`). Indala carries a parity — the Proxmark prints `Parity: 11` — so
-checking it would reject most near-misses and turn a 27% raw decode rate into a much higher
-effective rate with retries.
+## 3. ⭐⭐ Make the failure cheaper, or the success more certain
+
+A read costs a median of 2–3 captures at ~35 ms; a failure costs the whole 500 ms timeout.
+Two things are worth measuring now that decode rate is a real metric:
+
+- **Sort the rotation by live evidence, not by the committed sweep.** The order is
+  `20, 12, 28, 36, ...`, taken from a sweep whose phase ranking has since moved.
+- **Longer settle.** A T5577 charges off the field before transmitting at full amplitude,
+  and 2 ms has never been varied against a working decoder (L34 invalidated the old test).
+  The Indala read restarts the field for every capture, so this is paid 2–3 times per read.
 
 ## 4. ⭐ Re-test the levers closed against the broken decoder
 
 Air gap, settle and oversampling were all closed pre-BLE-fix on a tag carrying
 `DEADBEEF/12345678` (L34), and every dB measured since went through a decoder that could
-not decode. There is now a real success metric — **decode rate** — so each is worth a few
-minutes.
-
-Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe. Start there.
+not decode. Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe.
 
 ## 5. ⚠ The per-lever sweep scripts score the wrong thing
 
@@ -51,6 +60,13 @@ score the fc/2 **skirt**, which is transition energy and is polarity-blind (`MET
 They can rank coupling, but they cannot tell you whether something decodes. Port them to
 decode rate the way `phasebits.py` was, or retire them.
 
+## 6. Upstreamable?
+
+Nothing in `lf_indala_psk.c` is bench-specific and it has no nRF dependency. The pieces a
+PR would need beyond what is here: emulation (`lf_tag_em.c` has a transmit-only `psk1.c`
+already), `lf indala write` to T5577, and the tag-type registration that
+`tag_base_type.h:61` leaves as a commented-out placeholder under `//////// PSK Tag-Talk-First 300`.
+
 ## Closed — do not re-open without new evidence
 
 | | why |
@@ -58,3 +74,5 @@ decode rate the way `phasebits.py` was, or retire them.
 | `LF_RSSI` / AIN0 as a signal tap | C08/C09: no fc/2, flat to 0.5 dB, though demonstrably alive |
 | SAADC gain | C10: the floor is analog-referred and tracks gain |
 | Folding at 2048 samples | C14: odd parity inverts the subcarrier every frame; it cancels the data |
+| Indala parity as an acceptance gate | C19: it passed a frame that was wrong in 20 bits |
+| A 12 kHz cutoff for the baseband filter | C16: the cutoff was never the point; the null at fs/2 was |

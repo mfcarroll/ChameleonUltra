@@ -62,10 +62,19 @@ static void uninit_saadc_hw(void) {
     lf_125khz_radio_saadc_disable();
 }
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
-                        bool raw16, uint16_t settle_ms) {
-    *outlen = 0;
+/* ⭐ ONE COPY OF THE CAPTURE PROLOGUE, because there are now two entry points.
+ *
+ * Everything load-bearing about starting an LF capture lives here: suspending BLE,
+ * allocating a batch-sized ring, starting the field, waiting out the settle, and
+ * discarding what was sampled while waiting. lf_reader_data.h already carries a scar from
+ * a hand-maintained duplicate of raw_read_to_buffer's prototype going stale twice; a
+ * duplicated *body* would be the same mistake with worse symptoms, since it would drift
+ * silently rather than failing the build. */
+typedef struct {
+    bool adv_paused;
+} lf_capture_ctx_t;
 
+static bool capture_begin(lf_capture_ctx_t *ctx, uint16_t settle_ms) {
     /* ⭐ SUSPEND BLE ADVERTISING FOR THE DURATION.
      *
      * The bursts that this code's comments have long blamed on "USB transfer overruns"
@@ -81,18 +90,18 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
      *
      * ⚠ Only when not connected: dropping advertising is harmless, dropping a live link
      * is not. */
-    bool adv_paused = false;
+    ctx->adv_paused = false;
     if (!g_is_ble_connected) {
         advertising_stop();
-        adv_paused = true;
+        ctx->adv_paused = true;
     }
 
     m_cb_dropped = 0;
     if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
-        /* malloc failed — returning true here would hand back an empty buffer that
+        /* malloc failed — reporting success here would hand back an empty buffer that
          * looks like a legitimately quiet capture. */
-        NRF_LOG_ERROR("lf sniff: could not allocate %d-sample ring", CIRCULAR_BUFFER_SIZE);
-        if (adv_paused) {
+        NRF_LOG_ERROR("lf capture: could not allocate %d-sample ring", CIRCULAR_BUFFER_SIZE);
+        if (ctx->adv_paused) {
             advertising_start(false);
         }
         return false;
@@ -116,11 +125,42 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
      * filling the ring during the delay above, so without this the head of the buffer
      * holds the startup transient and the capture returns it FIRST -- making a longer
      * settle return the same early samples rather than later ones, which would show up
-     * as "settle does nothing" no matter how long it is set. */
+     * as "settle does nothing" no matter how long it is set.
+     *
+     * ⚠ THIS IS NOT THE SAME AS DISCARDING A SETTLE WINDOW FROM THE CAPTURE ITSELF. It
+     * drops what was sampled BEFORE the window opens. Dropping the first samples of the
+     * window instead takes the Indala decode from 51/160 to 0/160 — see the note in
+     * lf_indala_psk.h. */
     {
         uint16_t discard = 0;
         while (cb_pop_front(&cb, &discard)) {
         }
+    }
+    return true;
+}
+
+static void capture_end(lf_capture_ctx_t *ctx) {
+    stop_lf_125khz_radio();
+    uninit_saadc_hw();
+    cb_free(&cb);
+
+    if (ctx->adv_paused) {
+        advertising_start(false);
+    }
+
+    if (m_cb_dropped) {
+        NRF_LOG_WARNING("lf capture: dropped %lu samples — capture is discontinuous",
+                        (unsigned long)m_cb_dropped);
+    }
+}
+
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                        bool raw16, uint16_t settle_ms) {
+    *outlen = 0;
+
+    lf_capture_ctx_t ctx;
+    if (!capture_begin(&ctx, settle_ms)) {
+        return false;
     }
 
     /* raw16 costs two bytes per sample, so stop one short of the end rather than
@@ -146,17 +186,37 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
     }
 
     bsp_return_timer(p_at);
-    stop_lf_125khz_radio();
-    uninit_saadc_hw();
-    cb_free(&cb);
-
-    if (adv_paused) {
-        advertising_start(false);
-    }
-
-    if (m_cb_dropped) {
-        NRF_LOG_WARNING("lf sniff: dropped %lu samples — capture is discontinuous",
-                        (unsigned long)m_cb_dropped);
-    }
+    capture_end(&ctx);
     return true;
+}
+
+/* Fill a caller's array with raw 14-bit conversions, for decoders that run over a whole
+ * buffer rather than sample by sample.
+ *
+ * ⚠ UNLIKE raw_read_to_buffer THIS INSISTS ON A FULL BUFFER. A short capture is not a
+ * degraded Indala read, it is a failed one: the demodulator needs two whole 64-bit frames
+ * (4096 samples) to guarantee that one of them lands entirely inside the window, so
+ * returning 3000 samples would merely produce a confident wrong answer. */
+bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
+                      uint16_t settle_ms) {
+    *outlen = 0;
+
+    lf_capture_ctx_t ctx;
+    if (!capture_begin(&ctx, settle_ms)) {
+        return false;
+    }
+
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < count) {
+        uint16_t val = 0;
+        while (*outlen < count && cb_pop_front(&cb, &val)) {
+            /* 14-bit, so the cast to int16_t is always in range and always positive. */
+            samples[(*outlen)++] = (int16_t)(val & 0x3FFF);
+        }
+        bsp_wdt_feed();
+    }
+
+    bsp_return_timer(p_at);
+    capture_end(&ctx);
+    return *outlen == count;
 }

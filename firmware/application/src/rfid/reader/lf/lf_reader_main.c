@@ -8,6 +8,7 @@
 #include "lf_reader_data.h"
 #include "protocols/em410x.h"
 #include "protocols/ioprox.h"
+#include "lf_indala_data.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
 #include "protocols/t55xx.h"
@@ -39,6 +40,24 @@ uint8_t scan_em410x(uint8_t *uid) {
  */
 uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
     if (hidprox_read(data, format_hint, g_timeout_readem_ms)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+/**
+ * @brief Search Indala tag (PSK1, RF/32, fc/2 subcarrier)
+ *
+ * ⚠ UNLIKE EVERY OTHER LF SCAN HERE, this one is not a streaming edge decoder — it takes
+ * whole 4096-sample SAADC captures and demodulates them. It therefore needs a bigger time
+ * budget than the 500ms default: a capture is ~35ms and it insists on two that agree, so
+ * 500ms buys ~14 attempts against a measured 95th percentile of 5.
+ *
+ * @param data INDALA_READ_DATA_SIZE bytes; see lf_indala_data.h for the layout
+ * @return STATUS_LF_TAG_OK on success
+ */
+uint8_t scan_indala(uint8_t *data) {
+    if (indala_read(data, g_timeout_readem_ms)) {
         return STATUS_LF_TAG_OK;
     }
     return STATUS_LF_TAG_NO_FOUND;

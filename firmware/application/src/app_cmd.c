@@ -17,6 +17,7 @@
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
+#include "lf_indala_data.h"
 #include "lf_em4x05_data.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
@@ -736,6 +737,19 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
 static data_frame_tx_t *cmd_processor_hidprox_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[16] = {0x00};
     status = scan_hidprox(card_data, data[0]);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
+/* ⭐ Indala is the only LF scan on this device that demodulates a captured BUFFER rather
+ * than streaming edges, because its subcarrier is at fc/2 — exactly Nyquist for the
+ * carrier-locked sampler — and recovering it needs a chosen sample phase, a notch at
+ * fs/2 and a whole 4096-sample frame pair. See rfid/reader/lf/lf_indala_psk.h. */
+static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[INDALA_READ_DATA_SIZE] = { 0x00 };
+    status = scan_indala(card_data);
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }
@@ -3172,6 +3186,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
     {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
+    {    DATA_CMD_INDALA_SCAN,                  before_reader_run,           cmd_processor_indala_scan,                   NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },

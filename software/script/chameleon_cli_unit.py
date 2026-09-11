@@ -913,6 +913,7 @@ lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
+lf_indala = lf.subgroup("indala", "Indala commands")
 
 
 @root.command("clear")
@@ -5985,6 +5986,32 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
         print(f"   Facility: {color_string((CG, f'{fc} [0x{fc:02X}]'))}")
         print(f"   ID: {color_string((CY, cn))}")
         print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
+
+
+@lf_indala.command("read")
+class LFIndalaRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an Indala credential (PSK1, RF/32). Slower than the "
+                              "other LF reads: the firmware demodulates whole captures at "
+                              "a rotating sample phase and returns only once two agree.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        uid, fc, csn, flags, phase, offset = self.cmd.indala_scan()
+        parity_ok = bool(flags & 0x04)
+        print(f"Indala PSK1")
+        print(f"   Raw: {color_string((CY, uid.hex()))}")
+        print(f"   Fmt 26 FC: {color_string((CG, fc))} Card: {color_string((CY, csn))} "
+              f"Parity: {color_string((CG if parity_ok else CR, f'{(flags >> 1) & 1}{flags & 1}'))}")
+        if not parity_ok:
+            # ⚠ Advisory. The firmware already required two captures to agree, which is
+            # the check that actually rejects bit errors; this one is two bits and only
+            # means anything for format 26, so a failure here on a non-26 tag is expected
+            # rather than alarming.
+            print(f"   {color_string((CR, 'Wiegand-26 parity does not check out'))} — "
+                  f"expected for a non-format-26 Indala tag")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}")
 
 
 @lf_ioprox.command("write")

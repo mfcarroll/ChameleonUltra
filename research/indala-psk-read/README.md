@@ -1,14 +1,19 @@
 # Indala PSK read on Chameleon Ultra
 
-**The Chameleon Ultra reads Indala.** A single 300 ms capture decodes the credential.
+**The Chameleon Ultra reads Indala** — on the device, as a command.
 
 ```
-lf sniff --timeout 300 --phase 24   ->   a0000000e6bd0e92
-                                         Fmt 26  FC 52  Card 63612
+lf indala read   ->   Indala PSK1
+                      Raw: a0000000e6bd0e92
+                      Fmt 26 FC: 52 Card: 63612 Parity: 11
 ```
 
-43 of 160 single captures decode exactly; the empty field produced the truth 0 times in
-160. No stacking, no averaging, and it works at the stock 8-bit sample width.
+20 of 20 consecutive reads, 0.41–0.55 s each. The demodulation is integer arithmetic on
+the nRF52840 — no float, no FFT, 8 KB of buffer.
+
+⚠ **One recovered frame in five is WRONG**, so the firmware returns a credential only once
+two captures agree. A reader that trusts a single decode returns a wrong card number about
+20% of the time. ⛔ The on-device empty-field null has not been run — `NEXT.md` §1.
 
 ⛔ **This was believed impossible for most of the investigation** — "31.2 dB below the
 Proxmark", "7.6 dB short", "detectable but not decodable". All retracted. The deficit was a
@@ -51,12 +56,19 @@ Expect `a0000000e6bd0e92`, `Fmt 26 FC: 52 Card: 63612`.
 | `inputtest.py` | AIN5 vs AIN0 paired comparison. |
 | `sweep.py` `phasesweep.py` `gaintest.py` `gapsweep.py` `oversample_test.py` | Per-lever sweeps. ⚠ these score the fc/2 *skirt*, which is polarity-blind — see `METHOD.md` M8. |
 | `cu.py` (in `software/script/`) | Run CLI commands non-interactively. |
+| `ctest/` | ⭐ Host build of the **firmware** decoder. `make check` diffs it against `mfdemod.py` per capture. |
 | `checkdocs.sh` | ⭐ Verify the notes have not drifted. Run it before committing a notes change. |
 
 Decode the committed captures:
 
 ```bash
 ../../software/script/.venv/bin/python mfdemod.py --selftest && ../../software/script/.venv/bin/python mfdemod.py caps/phasebits/tag_p024_r*.bin
+```
+
+⭐ Cross-check the firmware decoder against the research one, per capture, no hardware:
+
+```bash
+cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read/ctest && make check
 ```
 
 Reproduce the phase sweep result from committed data (no hardware needed):
@@ -109,6 +121,13 @@ mkdir -p /Users/Shared/code/personal/rfid/.tools/bin && curl -sL -o /Users/Share
 ## `lf sniff` flags added by this work
 
 `--bits 16` full 14-bit conversion instead of `>>5` · `--phase N` sample phase, 0–127 ticks
-of 62.5 ns (**12–36 is the working window**; stock 0 fails) · `--input {5,0}` AIN5 or
-AIN0/`LF_RSSI` (measured dead) · `--rate N` free-running kHz · `--gain N` divisor ·
+of 62.5 ns (**ticks 4–60 work, stock 0 fails**; the ranking inside that window moves
+between sessions, so `lf indala read` rotates rather than picking one) · `--input {5,0}`
+AIN5 or AIN0/`LF_RSSI` (measured dead) · `--rate N` free-running kHz · `--gain N` divisor ·
 `--settle N` ms
+
+## `lf indala read`
+
+New command, `DATA_CMD_INDALA_SCAN` = 3033. Firmware in
+`firmware/application/src/rfid/reader/lf/lf_indala_psk.{c,h}` (the demodulator, portable
+integer C) and `lf_indala_data.{c,h}` (capture, phase rotation, agreement rule).

@@ -669,6 +669,26 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def indala_scan(self):
+        """
+        Read an Indala credential (PSK1, RF/32, fc/2 subcarrier).
+
+        ⚠ SLOWER THAN THE OTHER LF SCANS, by design. Indala's subcarrier lands at exactly
+        Nyquist for the carrier-locked sampler, so the firmware demodulates whole
+        4096-sample captures at a rotating sample phase and returns only once two of them
+        agree. A capture is ~35ms and the measured median is 2 of them; the 95th
+        percentile is 5.
+
+        Returns (id, fc, csn, flags, phase, offset) where id is the raw 64-bit frame,
+        flags bit2 is "the Wiegand-26 parity checks out" and bits 1..0 are the parity bits
+        themselves, and phase/offset say where in the carrier cycle the read came from.
+        """
+        resp = self.device.send_cmd_sync(Command.INDALA_SCAN)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack(">8sBHBBB2x", resp.data[:16])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
         Write ioProx card data to a T55XX tag.

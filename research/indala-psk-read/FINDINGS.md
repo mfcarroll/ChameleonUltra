@@ -8,17 +8,20 @@ If a claim is not in the ledger below, it is not established.
 
 ## The result
 
-**The Chameleon Ultra reads Indala.** A single 300 ms capture at a sample phase inside the
-working window decodes the credential exactly.
+**The Chameleon Ultra reads Indala, on the device, as a command.**
 
 ```
-lf sniff --timeout 300 --phase 24   ->   a0000000e6bd0e92
-                                         Fmt 26  FC 52  Card 63612
+lf indala read   ->   Indala PSK1
+                      Raw: a0000000e6bd0e92
+                      Fmt 26 FC: 52 Card: 63612 Parity: 11
 ```
 
-43 of 160 single captures across a 32-phase sweep decode exactly; the empty field produced
-the truth **0 times in 160**. No stacking, no folding, no averaging, and it works at the
-stock 8-bit sample width.
+20 of 20 consecutive reads returned the credential, in 0.41–0.55 s each. The whole
+demodulation is integer arithmetic on the nRF52840 — no float, no FFT, 8 KB of buffer.
+
+Offline, the same decoder recovers the credential from 51 of 160 single 300 ms captures,
+and the empty field produced a frame **0 times in 160**. No stacking, no folding, no
+averaging.
 
 ## The decode, end to end
 
@@ -29,7 +32,9 @@ sample at 125 kHz, carrier-locked, phase in the working window
   -> mix by (-1)^n                    fc/2 is exactly fs/2, so this is the whole mixer:
                                       no oscillator, no phase estimate. DC and slow drift
                                       move UP to fs/2 and fall out.
-  -> low-pass the baseband (~12 kHz)  NOT optional, see C03
+  -> [1,2,1] notch at fs/2            NOT optional, see C03. And it is a NOTCH, not a
+                                      cutoff: its job is to remove what the mix just
+                                      moved up there, see C16.
   -> 32-sample boxcar per bit         the optimal filter for a rectangular bit at RF/32
   -> threshold: bit = (integrator > 0)  PSK1 — the phase IS the data, see C02
   -> search preamble64 = 1010 + 28 zeros + 1, normal and inverted
@@ -37,8 +42,13 @@ sample at 125 kHz, carrier-locked, phase in the working window
 ```
 
 ⚠ **Three details are each individually fatal.** Any one of them alone takes the decode
-from 43/160 to 0/160 or near it: the PSK1 mapping (C02), the baseband low-pass (C03), and
+from 51/160 to 0/160 or near it: the PSK1 mapping (C02), the baseband filter (C03), and
 **not** discarding the settle window (C04).
+
+⚠ **And a fourth detail is fatal to trusting the answer rather than getting one.** One in
+five recovered frames is WRONG (C17). A reader that returns the first frame it decodes
+returns a wrong credential about 20% of the time, so the firmware requires two captures to
+agree (C18).
 
 ## Claims ledger
 
@@ -54,9 +64,9 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 
 | id | claim | n | null | indep | ref |
 |---|---|---|---|---|---|
-| C01 | The Chameleon Ultra decodes Indala from one 300 ms capture: 43/160 exact | 160 | emptyfield 0/160 | ✓ Proxmark reads the same tag | L44 |
+| C01 | The Chameleon Ultra decodes Indala from one 300 ms capture: 51/160 exact | 160 | emptyfield 0/160 | ✓ Proxmark reads the same tag | L44, L46 |
 | C02 | **PSK1: the phase IS the data.** Not differential — differential is `psk1TOpsk2`, the Proxmark's *fallback* | — | — | ✓ `cmdlfindala.c:1259` vs `:1293` | L44 |
-| C03 | The baseband low-pass is load-bearing: **32/35** real captures decode with it, **0/35** without | 35 | — | ✓ real captures, not synthetic | L44 |
+| C03 | The baseband filter is load-bearing: **51/160** real captures decode with it, **0/160** without | 160 | — | ✓ real captures, not synthetic | L44, L46 |
 | C04 | Discarding the 400-sample settle window is fatal: **43/160** with the full capture, **0/160** without | 160 | — | ✓ real captures | L44 |
 | C05 | The preamble needs an exact search, not a correlator — the template is dominated by a 28-bit constant run and the peak lands a nibble out | — | — | ✓ Proxmark `preambleSearch()` | L44 |
 | C06 | Working phase window is ticks 4–60; best 12–36. **Stock phase 0 decodes 0/5** | 5/phase | emptyfield | — | L44 |
@@ -68,7 +78,13 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 | C12 | Zero-offset cross-capture stacking gives √N: +7.3 dB at N=7, empty floor falling exactly 2.65x | 7 | emptyfield + arithmetic null | — | L40 |
 | C13 | The frame is visible in the sideband envelope — the 28-zero run as a reproducible null at the 2048-sample period | 7 | emptyfield | — | L40 |
 | C14 | The word has **19 ones — odd parity** — so the subcarrier inverts every frame and the true repetition period is 4096 samples, not 2048 | — | — | ✓ arithmetic on the known word | L41 |
-| C15 | Stock firmware has no PSK demodulator: `reader/lf/*_data.c` are ASK or FSK, `psk1.c` is transmit-only | — | — | ✓ source | L01 |
+| C15 | Stock firmware *had* no PSK demodulator: `reader/lf/*_data.c` were all ASK or FSK, `psk1.c` transmit-only. `lf_indala_psk.c` is the first | — | — | ✓ source | L01, L47 |
+| C16 | **The filter's job is a NULL AT fs/2, not a low cutoff.** [1,2,1] beats the 12 kHz FFT brick wall 51 vs 43, strictly (McNemar b=0 c=8, p=0.008) — and [1,1,1], which smooths as hard but nulls at fs/3, is the worst of the set at 31/160 | 160 paired | emptyfield 0/160 at every variant | ✓ mechanism control: same smoothing, wrong null | L46 |
+| C17 | **One recovered frame in five is WRONG.** 24 bad frames from 200 captures across two sessions — and all 24 were DISTINCT, while the truth recurred 77 times | 200 | emptyfield: no frame at all, 0/160 | ✓ two sessions, two geometries | L46, L47 |
+| C18 | Requiring two captures to agree removes them: **0 wrong in 40000** resampling trials on either pool, at a median of 2–3 captures | 2x20000 | ✓ vs need=1 at 20/22% wrong | ✓ replicated on live captures taken after the design was fixed | L47 |
+| C19 | The Wiegand-26 parity is **not** a sufficient gate: it rejects 13 of 17 bad frames but passed `a0000000b9be47a4`, which is wrong in 20 bits | 200 | — | ✓ a counter-example, not a rate | L47 |
+| C20 | The firmware read works: **20/20** consecutive `lf indala read`, 0.41–0.55 s each, integer-only on the nRF52840 | 20 | ⚠ **the on-device empty-field null has not been run** | ✓ agrees with the Proxmark's read of the tag | L47 |
+| C21 | The C decoder and the numpy decoder agree **word for word on all 320 committed captures**, including the failures | 320 | — | ✓ *this is the independent check* — integer vs float, notch vs FFT, no shared code | L47 |
 
 ### Firmware bugs found and fixed
 
@@ -93,6 +109,7 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 | "coherent frame averaging is dead" | the circularity argument was wrong — captures are frame-locked, so there is no alignment step | L40 |
 | "folding at 2048 samples improves things" | it averages a frame against its own inverse; only the polarity-blind skirt survives | L41 |
 | "settle has no effect" / "air gap is flat" | both measured pre-BLE-fix on a tag carrying `DEADBEEF/12345678` | L34 |
+| "the baseband low-pass needs a ~12 kHz cutoff" | the cutoff was incidental. What the filter must do is NULL fs/2, where the mixer just put the carrier ripple; a 3-tap notch does it better and cheaper (C16) | L46 |
 
 ### Open / untested
 
@@ -100,8 +117,31 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 |---|---|
 | Tag position is worth ~5.7 dB | n=1, from an accidental probe. Large, concentrated at high frequency, and plausible — but one capture |
 | Settle, air gap, oversampling | closures invalid (L34); never re-measured against a working decoder |
-| Is the phase window tag- or unit-specific? | untested. Check a second Indala tag and a second Chameleon before hard-coding a phase |
-| Indala parity | unused. Most near-misses are 1–2 bits in the zero run; the parity would reject them |
+| Is the phase window tag- or unit-specific? | ⚠ worse than that — it is **not stable across sessions on the same tag and unit**. Phase 12 was 5/5 in the sweep and 4/10 correct a day later; phase 28 went the other way. ⇒ do not hard-code a phase, rotate. Still untested on a second tag or unit |
+| On-device empty-field null | ⛔ **not run.** The offline null is strong (no frame in 160) but the firmware adds a phase rotation and an agreement rule, and neither has been exercised against an empty field. C20 is incomplete until it is |
+| Indala parity | reported, deliberately **not** a gate — see C19. It only covers format 26, and a badly wrong frame passed it |
+
+## What runs on the device
+
+| | |
+|---|---|
+| `rfid/reader/lf/lf_indala_psk.c` | the demodulator. Pure integer, no nRF dependency, so it host-compiles for `research/indala-psk-read/ctest/` |
+| `rfid/reader/lf/lf_indala_data.c` | capture, phase rotation, the two-capture agreement rule |
+| `rfid/reader/lf/lf_reader_generic.c` | `capture_begin`/`capture_end` extracted so `lf sniff` and the Indala read share one copy of the BLE suspend, the ring and the settle discard |
+| `DATA_CMD_INDALA_SCAN` = 3033 | `lf indala read` |
+
+Cost: 8 KB of `.bss` for the sample buffer, ~1 KB of stack, 92 KB of RAM still free.
+The decode is ~32 x 4096 adds and runs inside the inter-capture gap.
+
+⭐ **The filter is free.** Summing a [1,2,1]-filtered signal over a 32-sample window is
+identically a weighted sum of the *unfiltered* signal over 34 samples with weights
+`1,3,4,4,...,4,3,1`, so the notch folds into the bit integrator as
+
+```
+integrator = 4*sum(y[a..a+31]) + y[a-1] - y[a] - y[a+31] + y[a+32]
+```
+
+— four extra adds per bit rather than three per sample, and no second buffer.
 
 ## Hardware reference
 
