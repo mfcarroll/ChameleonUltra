@@ -74,6 +74,31 @@ along with the signal. Nothing in the converter's configuration helps.
   0% to 7%, and 1/3 can read lower than 1/4 despite sitting nearer the rail. Those are
   USB-overrun bursts hitting the rails. Relabelled, and flagged as a glitch indicator.
 
+### 0a2. ⛔ SETTLE CLOSED: no effect on fc/2 across a 125x range
+
+`--settle` added (field-on time before the capture window, samples taken during settle
+discarded so the capture genuinely begins after it). Swept 2–250ms, 3 repeats each, tag
+in place:
+
+| settle | 2ms | 5 | 10 | 20 | 40 | 80 | 160 | 250 |
+|---|---|---|---|---|---|---|---|---|
+| sb @ 62.5kHz | 15.62 | 15.92 | 14.91 | 15.20 | 14.10 | 14.89 | 16.46 | 15.99 |
+| sb @ 31kHz | 44.04 | 55.44 | 48.13 | 42.20 | 43.58 | 43.60 | 46.25 | 44.23 |
+| deglitched std | 363 | 424 | 461 | 439 | 348 | 552 | 390 | 463 |
+
+⇒ **Flat.** ±8% at fc/2 across a 125x range of settle. The T5577 is evidently already at
+full amplitude by 2ms, so the Momentum `t5577-deep-read` analogy does not carry over —
+that finding was about a Flipper read path, not this one.
+
+⛔⛔ **AND I NEARLY REPORTED THE OPPOSITE, FROM THREE SINGLE CAPTURES.** At settle 2 / 50 /
+200ms the peak-to-peak read 16380 / 5372 / 2884 and looked like a clean convergence. With
+3 repeats per point the same measure runs 2776, 16380, 6500, 16380, 2920, 16380, 16380,
+4848 — **random, no relationship to settle.** It was the overrun lottery, documented in
+§0b of this very note, believed anyway on n=1.
+
+⇒ Principle, earned three times now: on this device a single capture is not evidence of
+anything. Not for a sweep, not for a spot check, not for "just looking".
+
 ### 0b. ⛔⛔ THE MEASUREMENT TRAP THAT INVALIDATED TWO SWEEPS
 
 `lf sniff` captures land randomly in one of two states: clean, or carrying a **USB-transfer
@@ -208,18 +233,17 @@ default to `[p]` — that is correct for a modulation PM3 cannot read back.
 ⇒ Nothing in the converter, its clock, its phase or its gain moves fc/2. The limit is in
 the analog chain ahead of it.
 
-⭐ **Still open, and worth trying in this order:**
+⭐ **Still open:**
 
-1. **Settle / field-on time.** `raw_read_to_buffer` waits a hardcoded `bsp_delay_ms(2)` and
-   then captures 10–16ms. A T5577 must charge before it transmits at full amplitude, and
-   this has never been varied. ⭐ This is the direct analogue of the Momentum `t5577-deep-read`
-   finding where apparent air-gap effects turned out to be settle — same shape of confound,
-   and every measurement in this note was taken at ONE settle.
-2. **Air gap.** Every capture here is `--gap flat`. The harness already stamps the axis.
-3. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}` with `top_value 4` — a hardcoded
+1. **Air gap.** Every capture in this note is `--gap flat`. The harness already stamps the
+   axis and the measurement is now repeatable, so this is cheap.
+2. **Field drive.** `m_lf_125khz_pwm_seq_val = {2,0,0,0}` with `top_value 4` — a hardcoded
    50% duty. Changes tag power and the detector's operating point.
-4. **Fix the overruns.** 10–20% of windows are discarded, and the bursts have produced three
-   false verdicts in this investigation. Worth doing for the measurement quality alone.
+3. **Fix the overruns.** 10–20% of windows discarded, and the bursts have now produced
+   FOUR false readings in this investigation. Worth doing for measurement quality alone,
+   whatever happens to Indala.
+
+⛔ **Also closed:** settle (§0a2) — flat across 2–250ms.
 
 ⚠ **And the honest possibility**: if settle, gap and drive all come back flat, the answer is
 the front end's bandwidth and only a component change moves it.

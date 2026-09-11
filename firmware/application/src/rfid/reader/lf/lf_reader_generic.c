@@ -41,17 +41,35 @@ static void uninit_saadc_hw(void) {
 }
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
-                        bool raw16) {
+                        bool raw16, uint16_t settle_ms) {
     *outlen = 0;
 
     cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
     init_saadc_hw();
     start_lf_125khz_radio();
 
-    /* Wait for antenna to settle before capturing.
-     * The LC circuit rings for ~400µs on field startup, then takes
-     * another ~800µs to reach steady state. Skip 2ms to be safe. */
-    bsp_delay_ms(2);
+    /* Wait for the antenna -- and the TAG -- to settle before capturing.
+     * The LC circuit rings for ~400µs on field startup, then takes another ~800µs to
+     * reach steady state, which is where the historical 2ms came from. A tag needs
+     * longer: it charges off the field before it transmits at full amplitude. */
+    if (settle_ms == 0) {
+        settle_ms = 2;
+    }
+    for (uint16_t i = 0; i < settle_ms; i++) {
+        bsp_delay_ms(1);
+        bsp_wdt_feed();     /* a long settle must not look like a hung main loop */
+    }
+
+    /* ⭐ DISCARD WHAT WAS SAMPLED WHILE WAITING. The SAADC is already running and
+     * filling the ring during the delay above, so without this the head of the buffer
+     * holds the startup transient and the capture returns it FIRST -- making a longer
+     * settle return the same early samples rather than later ones, which would show up
+     * as "settle does nothing" no matter how long it is set. */
+    {
+        uint16_t discard = 0;
+        while (cb_pop_front(&cb, &discard)) {
+        }
+    }
 
     /* raw16 costs two bytes per sample, so stop one short of the end rather than
      * writing half a sample the host would then parse as a whole one. */

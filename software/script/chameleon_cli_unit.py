@@ -7719,6 +7719,13 @@ class LFSniff(ReaderRequiredUnit):
             help='Print hex dump of samples to screen'
         )
         parser.add_argument(
+            '--settle', type=int, default=0, metavar='MS',
+            help='Field-on time before the capture window, 0..255ms (0 = the historical '
+                 '2ms). Samples taken during settle are discarded. A T5577 charges off '
+                 'the field before transmitting at full amplitude, so a short settle '
+                 'measures a tag that is not yet fully awake.'
+        )
+        parser.add_argument(
             '--gain', type=int, default=6, choices=(1, 2, 3, 4, 5, 6), metavar='DIV',
             help='SAADC gain as a DIVISOR; 6 (default) is stock 1/6 = 3.6V full scale. '
                  'The signal rides on ~1.2V of bias, so single-ended, 3 (1.8V FS) is '
@@ -7753,6 +7760,9 @@ class LFSniff(ReaderRequiredUnit):
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(10000, args.timeout))
+        if not 0 <= args.settle <= 255:
+            print(f"{CR}--settle must be 0..255 ms{C0}")
+            return
         if args.rate and not 10 <= args.rate <= 200:
             print(f"{CR}--rate must be 0 (carrier-locked) or 10..200 kHz{C0}")
             return
@@ -7769,7 +7779,8 @@ class LFSniff(ReaderRequiredUnit):
             print(f"{CR}--phase must be 0..127 ticks{C0}")
             return
         resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase,
-                                 rate_khz=args.rate, gain=args.gain)
+                                 rate_khz=args.rate, gain=args.gain,
+                                 settle_ms=args.settle)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")

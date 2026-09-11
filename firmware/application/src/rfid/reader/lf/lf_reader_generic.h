@@ -25,10 +25,18 @@
  * @param outlen      Actual number of BYTES written
  * @param raw16       false: one byte per sample, 14-bit >> 5, clamped to 0xFF.
  *                    true:  two bytes per sample, big-endian, full 14-bit value.
+ * @param settle_ms   Field-on time BEFORE the capture window, 0 = the historical 2ms.
+ *                    Everything sampled during settle is discarded, so the capture
+ *                    genuinely begins after it — otherwise the samples taken while
+ *                    waiting sit at the head of the buffer and get returned first.
+ *                    ⚠ A tag is not a signal generator: a T5577 charges off the field
+ *                    before it transmits at full amplitude, so too short a settle
+ *                    measures a tag that is not yet fully awake. 2ms has never been
+ *                    varied, and every LF measurement on this device inherits it.
  * @return            true on success
  */
 /** Maximum bytes a single raw capture can return (USB frame limit). */
 #define LF_SNIFF_MAX_SAMPLES  4000
 
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
-                        bool raw16);
+                        bool raw16, uint16_t settle_ms);

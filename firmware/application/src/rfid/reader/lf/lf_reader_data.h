@@ -25,10 +25,11 @@ bool pac_read(uint8_t *data, uint32_t timeout_ms);
 bool viking_read(uint8_t *data, uint32_t timeout_ms);
 bool jablotron_read(uint8_t *data, uint32_t timeout_ms);
 
-/* Definitive prototype and docs live in lf_reader_generic.h; kept in step by hand.
- * raw16: false = one byte per sample (14-bit >> 5), true = two bytes, full value. */
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
-                        bool raw16);
+/* ⛔ DO NOT RE-DECLARE raw_read_to_buffer HERE. This header carried a hand-maintained
+ * copy of the prototype, and it went stale on BOTH occasions the signature changed --
+ * once adding raw16, once adding settle_ms -- each time as a build break that looked
+ * like it came from the file actually being edited. Include the owner instead. */
+#include "lf_reader_generic.h"
 
 #ifdef __cplusplus
 }

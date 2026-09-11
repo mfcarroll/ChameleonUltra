@@ -934,7 +934,8 @@ static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status
     }
 
     size_t outlen = 0;
-    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen, false)) {
+    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen,
+                            false, 0)) {
         free(outdata);
         return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     };
@@ -2059,10 +2060,12 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
     lf_125khz_radio_saadc_rate_set(length >= 5 ? data[4] : 0);
     /* Optional 6th byte: SAADC gain divisor (0 or 6 = stock 1/6). */
     lf_adc_set_gain(length >= 6 ? data[5] : 6);
+    /* Optional 7th byte: field-on settle in ms before the capture window (0 = 2ms). */
+    uint16_t settle_ms = (length >= 7) ? data[6] : 0;
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
     size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16);
+    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen, raw16, settle_ms);
     lf_125khz_radio_saadc_phase_set(0);   /* never leave a phase set for other readers */
     lf_125khz_radio_saadc_rate_set(0);
     lf_adc_set_gain(6);
