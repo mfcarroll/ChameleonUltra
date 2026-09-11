@@ -6,42 +6,40 @@
 
 ## Task
 
-Continue the investigation into reading Indala (PSK1, RF/32, fc/2 = 62.5 kHz subcarrier) on
-a Chameleon Ultra. Work item 1 of `research/indala-psk-read/NEXT.md` unless I say otherwise.
+Indala on the Chameleon Ultra. ⭐⭐⭐ **It reads.** Work item 1 of
+`research/indala-psk-read/NEXT.md` — port the decoder into firmware — unless I say otherwise.
 
-**Read first, in this order:** `research/indala-psk-read/NEXT.md` (ranked next steps and the
-method rules), then `SUMMARY.md`. `README.md` has the full working with every retraction
-banded in place — consult it, don't read it front to back. `ADVERSARIAL.md` is a hostile
-review prompt if you want to attack the conclusions instead of extending them.
+**Read first, in this order:** `research/indala-psk-read/NEXT.md`, then `SUMMARY.md`.
+`README.md` §0! has the result and §0!b the retraction table — consult it, don't read it
+front to back.
 
 ## Where things stand, in five lines
 
-- ⭐ **It is NOT SNR.** A synthetic PSK1 frame injected into the REAL measured empty-field
-  noise, at HALF the tag's own fc/2 amplitude, decodes at 0/31 credential bits from ONE
-  capture. The real tag, at 4x the band SNR after stacking, gets 7/31 and never improves.
-- ⇒ **The amplitude is there and the phase is not.** The question is "where does the
-  polarity go?", not "how do we find 7.6 dB". `README.md` §0z.
-- ⛔ Three old numbers are **retracted** (§0z2): folding at 2048 samples cancels the data
-  (19 ones = odd parity, so the true period is 4096); the fc/2 band-SNR criterion is
-  polarity-blind; and "52/64 bits vs a 45/64 null" was a constant preamble run scoring
-  itself — on the 31 credential bits the tag gets 6/31 and the **null gets 4/31**.
-- What holds: zero-offset stacking (+7.3 dB, all controls pass), the frame visible in the
-  sideband envelope, and `LF_RSSI`/AIN0 **closed** (flat to 0.5 dB, alive but no bandwidth).
+- ⭐ **43 of 160 single 300ms captures decode `a0000000e6bd0e92` EXACTLY.** 5/5 at ticks
+  12, 20 and 36; working window ticks 4–60. Empty field: **0 hits in 160**. No stacking,
+  no folding, stock 8-bit sample width.
+- ⛔ **The old "31.2 dB / 7.6 dB short" conclusion is retracted.** `mfdemod.py` was
+  demodulating **PSK2 against a PSK1 tag** — in PSK1 the phase IS the data. `synth()`
+  encoded with the same wrong convention, so the self-test was self-consistent and passed
+  forever.
+- Three things are load-bearing, each takes it to zero alone: the PSK1 mapping; the
+  baseband low-pass (32/35 vs **0/35**); and **not** discarding the 400-sample settle
+  window (43/160 vs **0/160**).
+- Still standing: `LF_RSSI`/AIN0 dead, gain floor analog-referred, and the three real
+  firmware bugs fixed (`>>5` truncation, BLE collapsing the field, DMA ring dropping 75%).
 - Everything is on branch `indala-psk-read` (ChameleonUltra) and `t5577-deep-read`
   (Momentum-Firmware), both pushed to `origin` = the user's own fork.
 
 ## The immediate next step
 
-**Sweep sample phase while scoring BIT RECOVERY, not sideband amplitude.** The 32-tick
-optimum was found by maximising the skirt, and the skirt is transition energy —
-polarity-blind. The polarity lives at 62.5 kHz = Nyquist, recovered as `2A·cos φ`, which
-has a hard null the skirt does not. They have no reason to share an optimum, and 32 ticks
-may sit at or near the polarity null. That one possibility explains every observation:
-full skirt amplitude, frame structure visible in the envelope, and no recoverable sign.
+Port the decoder to firmware as `lf indala read`. The whole read is: sample at 125kHz at a
+phase in the working window → mix by `(-1)^n` → low-pass → 32-sample boxcar per bit →
+threshold → search `preamble64` → read 64 bits. Integer arithmetic over 4096 samples; no
+float, no FFT, and the low-pass can be a short FIR or a two-stage boxcar.
 
-Modify `phasesweep.py` to score `stack.py`'s data-bit errors at each phase, sweep all 128
-ticks with the tag on, and take paired empty captures — the null lands around 4–5 errors
-and is what makes a low count mean anything. `NEXT.md` §1.
+⚠ The stock trigger is phase 0, which sits at the edge of the window and decodes 0/5 — so
+stock firmware would fail even with a correct decoder. Check the window on a second tag
+before hard-coding a phase. `NEXT.md` §1-2.
 
 ## Environment
 
@@ -84,7 +82,7 @@ frames, transferred in chunks.
 Demodulate a capture:
 
 ```bash
-cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read && ../../software/script/.venv/bin/python mfdemod.py --selftest && ../../software/script/.venv/bin/python stack.py --dir caps/inputtest
+cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read && cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read && ../../software/script/.venv/bin/python mfdemod.py --selftest && ../../software/script/.venv/bin/python mfdemod.py caps/phasebits/tag_p024_r*.bin
 ```
 
 ## ⚠ Tag state — check this before trusting any measurement

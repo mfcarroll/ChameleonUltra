@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
-"""Sweep the SAADC sample phase scoring BIT RECOVERY, not sideband amplitude.
+"""Sweep the SAADC sample phase and count DECODES. The Chameleon Ultra reads Indala.
 
     ./phasebits.py [--step 4] [--repeats 5] [--timeout 300] [--keep DIR]
 
-⭐ THE HYPOTHESIS. The 32-tick "optimum" in this project was found by maximising the fc/2
-modulation SKIRT. The skirt is TRANSITION energy and it is polarity-blind — it is measured
-at 57.5-62.3kHz precisely to avoid the 62.5kHz bin, because BPSK suppresses its own
-carrier and 62.5kHz is exactly Nyquist.
+⭐ WHAT THIS ESTABLISHED. 43 of 160 single 300ms captures decode a0000000e6bd0e92
+EXACTLY, with 5/5 at ticks 12, 20 and 36, across a working window of ticks 4-60 — and the
+empty field produced the truth 0 times in 160. No stacking, no folding, and it works at
+the stock 8-bit sample width.
 
-But the credential lives in the polarity, and the polarity lives in the component AT
-Nyquist, recovered as 2A*cos(phi). That has a HARD NULL where the skirt has none. The two
-have no reason to share an optimum — and if 32 ticks sits at or near the polarity null,
-that single fact explains every observation on this bench: full skirt amplitude, frame
-structure plainly visible in the envelope, and no recoverable sign.
+⛔ THE ORIGINAL HYPOTHESIS HERE WAS WRONG, AND SO WAS EVERYTHING IT WAS BUILT ON. This
+script was written to test whether the sample phase sat at a polarity null. It does not.
+The reason nothing decoded was that mfdemod.py demodulated PSK2 against a PSK1 tag — in
+PSK1 the phase IS the data, and it was differential-decoding. See mfdemod.py
+polarity_from_bits(). The sweep still matters, because phase DOES set a working window,
+but "31.2 dB of analog deficit" and "7.6 dB short" were never real.
 
-⛔ WHAT WOULD FALSIFY IT: bit errors flat across all 128 ticks, never dropping below the
-empty-field null; or a bit minimum that coincides with the skirt maximum.
-
-⭐ WHY THIS IS WORTH BENCH TIME AT ALL. A synthetic PSK1 frame injected into the REAL
-measured noise at HALF the tag's amplitude decodes at 0/31 from a SINGLE capture, while
-the real tag at 4x the band SNR gets 7/31. The amplitude is there and the phase is not.
-This sweep is the cheapest test of where the phase went.
+⚠ Load captures with mfdemod.load16, NOT stack.load16. The latter drops the first 400
+samples as "settle", and that discard alone takes this from 43/160 to 0/160: it removes
+the first frame's preamble and leaves too few bits after the second. The turn-on transient
+needs no discarding here — baseband() moves it to fs/2 and the low-pass removes it.
 
 ⚠ READ THE EMPTY COLUMN. Brute-forcing 31 bits over 2048 positions x 64 rotations finds a
 low score in pure noise — the empty field lands around 4-5 errors. A tag number only means
@@ -109,59 +107,69 @@ def main():
         return np.array(xs).mean(0), xs
 
     print("\n" + "=" * 86)
-    print(" PHASE vs BIT RECOVERY — does the credential come out anywhere?")
-    print(" %d repeats stacked at zero offset per phase, LPF %gHz" % (a.repeats, LPF))
+    print(" PHASE vs DECODE RATE — single captures, no stacking")
+    print(" ⛔ The empty column is the null: a single hit there sinks the result.")
     print("=" * 86)
-    print(" %6s %7s | %9s %9s %10s | %9s %10s | %6s" %
-          ("ticks", "deg", "tag fc/2", "empty", "tag/empty", "tag data", "empty data", "coh"))
-    rows = []
+    print(" %6s %7s | %-9s %-9s | %9s | %s" %
+          ("ticks", "deg", "tag", "empty", "tag fc/2", "near-misses"))
+    rows, th, eh, tn, en = [], 0, 0, 0, 0
+
+    def load_raw(state, p, r):
+        fp = capture_path(out, state, p, r)
+        if not os.path.exists(fp):
+            sys.exit("⛔ missing capture %s — aborted rather than guessed." % fp)
+        x = M.load16(fp)          # ⚠ M.load16, NOT stack.load16: see below
+        if x is None:
+            sys.exit("⛔ %s is not 16-bit — is the firmware current?" % fp)
+        return x
+
     for p in phases:
-        t, txs = stack_at("tag", p)
-        e, _ = stack_at("empty", p)
-        st, se = sideband(t), sideband(e)
-        dt, de = score(t, LPF)[1], score(e, LPF)[1]
-        coh = coherence(txs)
-        rows.append((p, st, se, st / se if se else float("nan"), dt, de, coh))
-        print(" %6d %6.1f° | %9.2f %9.2f %9.2fx | %6d/31 %7d/31 | %6.2f"
-              % (p, p * 360.0 / 128, st, se, st / se if se else float("nan"), dt, de, coh))
+        h, bad = 0, []
+        for r in range(a.repeats):
+            d = M.demod(load_raw("tag", p, r))
+            tn += 1
+            if d and d["word"] == M.TRUTH:
+                h += 1
+                th += 1
+            elif d:
+                bad.append(d["hex"])
+        e = 0
+        for r in range(a.repeats):
+            d = M.demod(load_raw("empty", p, r))
+            en += 1
+            if d and d["word"] == M.TRUTH:
+                e += 1
+                eh += 1
+        sk = sideband(np.array([load_raw("tag", p, r)[SETTLE:]
+                                for r in range(a.repeats)]).mean(0))
+        rows.append((p, h, e))
+        print(" %6d %6.1f° | %-9s %-9s | %9.2f | %s" %
+              (p, p * 360.0 / 128, "%d/%d" % (h, a.repeats), "%d/%d" % (e, a.repeats),
+               sk, " ".join(bad[:2])))
 
     print("\n" + "=" * 86)
     print(" VERDICT")
     print("=" * 86)
-    ratio = np.array([r[3] for r in rows])
-    tbits = np.array([r[4] for r in rows])
-    ebits = np.array([r[5] for r in rows])
-    ph = np.array([r[0] for r in rows])
-    skirt_best = ph[int(np.argmax(ratio))]
-    bits_best = ph[int(np.argmin(tbits))]
-    print(" skirt maximum      at %3d ticks (%.1f°), tag/empty %.2fx"
-          % (skirt_best, skirt_best * 360.0 / 128, ratio.max()))
-    print(" bit-error minimum  at %3d ticks (%.1f°), %d/31 credential errors"
-          % (bits_best, bits_best * 360.0 / 128, tbits.min()))
-    print(" empty-field null across all phases: %d-%d errors, median %.0f"
-          % (ebits.min(), ebits.max(), np.median(ebits)))
-    # ⛔ No threshold. Report where things sit and how far apart, and let the reader judge.
-    print("\n tag range %d-%d errors, null range %d-%d." % (tbits.min(), tbits.max(),
-                                                            ebits.min(), ebits.max()))
-    if len(rows) < 3:
-        print("\n ⚠ %d phase(s) is not a sweep — no comparison of optima is possible."
-              % len(rows))
-        print("   Run without --step 128 to sweep properly.")
-        print("\n captures in %s" % out)
+    print(" TAG   : %d / %d single captures decoded %016x EXACTLY (%.0f%%)"
+          % (th, tn, M.TRUTH, 100.0 * th / max(tn, 1)))
+    print(" EMPTY : %d / %d  <- the null" % (eh, en))
+    if eh:
+        print("\n ⛔ THE NULL FIRED. The empty field produced the truth, so the decoder is")
+        print("   finding it in noise and every tag number above is worthless. Stop here.")
         return
-    if bits_best == skirt_best:
-        print(" ⇒ The two optima COINCIDE. The hypothesis that the skirt and the polarity")
-        print("   peak at different phases is not supported by this sweep.")
-    else:
-        print(" ⇒ The two optima are %d ticks (%.1f°) apart — the skirt and the polarity do"
-              % (abs(int(bits_best) - int(skirt_best)),
-                 abs(int(bits_best) - int(skirt_best)) * 360.0 / 128))
-        print("   NOT share an optimum, which is what the hypothesis predicts.")
-    print("\n ⚠ Neither statement is a decode. Only 0/31 is, and the null beside it at the")
-    print("   same phase is the only thing that makes a low count mean anything.")
-    if np.nanmin([r[6] for r in rows]) < 0.15:
-        print("\n ⚠ Coherence dropped below 0.15 at some phases — the stack there is not")
-        print("   valid and its bit score is noise. Check the coh column.")
+    win = [p for p, h, e in rows if h >= 1]
+    best = [p for p, h, e in rows if h >= max(1, a.repeats - 1)]
+    if not win:
+        print("\n ⇒ No phase decoded. Check the tag is present and carries the Indala")
+        print("   credential (lf indala reader -> a0000000e6bd0e92).")
+        return
+    print("\n best phases (>=%d/%d): %s" % (a.repeats - 1, a.repeats,
+                                            ", ".join(str(p) for p in best)))
+    print(" any decode at all   : %d..%d ticks (%.0f-%.0f deg), %.0f%% of the range"
+          % (min(win), max(win), min(win) * 360.0 / 128, max(win) * 360.0 / 128,
+             100.0 * (max(win) - min(win)) / 128))
+    print("\n ⚠ Near-misses are usually one or two bits in the zero run. Indala carries a")
+    print("   parity (the Proxmark prints it), so checking it would reject most of them.")
     print("\n captures in %s" % out)
 
 

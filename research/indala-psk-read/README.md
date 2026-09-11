@@ -1,4 +1,4 @@
-## Indala on Chameleon Ultra — the phase is gone before the ADC, not the amplitude
+## Indala on Chameleon Ultra — IT READS. The deficit was a software bug, not the hardware.
 
 ⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
 
@@ -20,7 +20,95 @@ Indala is **PSK1, RF/32, 64 or 224 bits** (proxmark3 `client/src/cmdlfindala.c:1
 Ultra reads no PSK tag of any kind. §7 documents the firmware gap, which is certain. **§0 is what
 else stands in the way, and how much of that is fixable in firmware.**
 
-### 0z. ⭐⭐⭐ 2026-09-11 — IT IS NOT SNR. A KNOWN SIGNAL AT THE TAG'S OWN AMPLITUDE DECODES.
+### 0!. ⭐⭐⭐ 2026-09-11 — SOLVED. `a0000000e6bd0e92`, from a single 300ms capture.
+
+**43 of 160 single captures decode the credential EXACTLY** — 5/5 at ticks 12, 20 and 36,
+4/5 at 24, across a working window of ticks 4–60 (11°–169°, 44% of the phase range). **The
+empty field produced the truth 0 times in 160.** No stacking, no folding, no averaging.
+And it works at the **stock 8-bit** sample width, so the 16-bit path is not required.
+
+```
+lf sniff --timeout 300 --phase 24    ->  a0000000e6bd0e92   Fmt 26 FC 52 Card 63612
+```
+
+### 0!a. ⛔⛔⛔ THE ROOT CAUSE: `mfdemod.py` demodulated PSK2 against a PSK1 tag
+
+**In PSK1 the phase IS the data.** It is not a differential encoding. The authority is the
+Proxmark, which reads this tag every time: `PSKDemod()` emits the phase per bit,
+`cmdlfindala.c:1259` matches `preamble64` against that stream **directly**, and only if
+that fails does it call `psk1TOpsk2()` and try again (`cmdlfindala.c:1293`).
+
+`mfdemod.py` did this instead:
+
+```python
+bits.append(1 if pol[k] != pol[k - 1] else 0)      # running difference
+```
+
+That is `psk1TOpsk2` — the **fallback** path — applied as the primary. Every real capture
+in this project was decoded with the wrong convention.
+
+⚠⚠ **AND THE SELF-TEST COULD NEVER HAVE CAUGHT IT.** `synth()` *encoded* with the same
+`bits_to_polarity()` running XOR that `decode_from()` inverted. A self-consistent bug
+passes every round trip, at every SNR, forever. It reported "PASS", then "+8.2 dB over
+PSKDemod", and the threshold numbers it produced were used to conclude the hardware was
+31.2 dB short.
+
+⇒ **Method rule, the most expensive one here: a round-trip self-test proves the encoder
+and decoder agree with each other, not with the world.** The only thing that could have
+exposed this was a real capture — or generating the synthetic from an independent source.
+
+### 0!b. ⛔ EVERYTHING DOWNSTREAM OF THAT IS RETRACTED
+
+| claim | status |
+|---|---|
+| "31.2 dB below the Proxmark on identical stimulus" | ⛔ the channel measurement stands; the conclusion drawn from it does not |
+| "demodulation gap of 7.6 dB, confirmed twice" | ⛔ **retracted** — both routes measured a decoder that could not have worked at any SNR |
+| "detectable but not decodable, 52/64 vs a 45/64 null" | ⛔ **retracted twice over** — first as a constant preamble run scoring itself, now as the wrong decoder entirely |
+| "the phase is gone before the ADC" (§0z) | ⛔ **retracted** — the phase was there; it was being read as a derivative |
+| "matched filter worth +8.2 dB" | ⛔ **retracted** — measured on a self-consistent synthetic |
+| `LF_RSSI`/AIN0 is dead (§0z5) | ✓ stands — measured, 7 repeats, independent of the decoder |
+| gain floor is analog-referred (§0a) | ✓ stands — same reason |
+| BLE advertising collapsing the field (§0a4) | ✓ stands — a real firmware bug, really fixed |
+
+⚠ **The injection test in §0z was RIGHT about its own question and led to the wrong
+answer.** A synthetic frame at half the tag's amplitude decoded while the tag did not —
+true, and correctly measured. But the synthetic was built with the *decoder's own* wrong
+convention, so it was only ever testing self-consistency again. It looked like proof the
+hardware destroyed the phase. ⇒ **When a synthetic beats reality, suspect the synthetic.**
+
+### 0!c. ⭐ TWO OTHER THINGS WERE ALSO LOAD-BEARING
+
+**The baseband low-pass is not optional.** Across 35 real single captures in the good phase
+window: **32/35 decode with it, 0/35 without.** After `baseband()` the data sits near DC
+and everything originally low-frequency sits near fs/2, where the 32-sample boxcar rejects
+only ~2.8% — against ~316 counts of carrier ripple on a ~10-count subcarrier that is ~9
+counts leaking into every bit decision.
+
+⚠ Against **white** noise the boxcar already IS the matched filter for a rectangular bit,
+so the same filter is strictly suboptimal and costs the synthetic threshold 2.13x → 2.86x.
+**That it helps real captures and hurts synthetic ones is the finding**, and it is why
+`lpf` defaults on for files and off for `synth()`.
+
+**⛔ Discarding the first 400 samples as "settle" costs the whole decode.** With the settle
+discard this project has used throughout: **0/160**. Without it: **43/160**. It removes the
+first frame's preamble and leaves too few bits after the second. The turn-on transient
+needs no discarding — `baseband()` moves it to fs/2 and the low-pass removes it.
+
+**And the preamble correlator had to go.** The preamble is `1010` then 28 **zeros** then
+`1`, so as a template it is dominated by a 28-bit constant run that slides against itself
+almost as well 8 bits off as on. The peak is inherently broad, and it was landing a nibble
+out — returning `bea0000000e6bd0e` where the bits were right and the window was wrong. The
+Proxmark does not correlate either; `preambleSearch()` is an exact match on the
+demodulated stream. Ranking the 32 sample offsets by preamble match alone is also not
+enough — several match exactly while straddling the bit boundaries — so they are ranked by
+bit **margin** among the preamble-clean ones, and the two frames in a capture are
+majority-voted.
+
+### 0z. ⛔ SUPERSEDED BY §0! — the synthetic was built with the decoder's own bug
+
+⚠ Kept because the measurements are sound and the reasoning is the instructive part.
+
+#### originally: ⭐⭐⭐ 2026-09-11 — IT IS NOT SNR. A KNOWN SIGNAL AT THE TAG'S OWN AMPLITUDE DECODES.
 
 **The single test that reframes the whole project.** Take the real empty-field captures —
 the actual measured noise of this chain, not a model of it — and add a synthetic PSK1

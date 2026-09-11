@@ -38,15 +38,37 @@ def load16(path):
     return (r[0::2].astype(np.uint16) << 8 | r[1::2]).astype(float)
 
 
-def bits_to_polarity(bits, start=1):
-    """PSK1 is differential: a '1' flips the subcarrier phase, a '0' holds it. So the
-    transmitted polarity sequence is the running XOR of the data bits."""
-    pol, p = [], start
-    for b in bits:
-        if b:
-            p = -p
-        pol.append(p)
-    return np.array(pol, float)
+def polarity_from_bits(bits):
+    """⭐ PSK1: THE PHASE *IS* THE DATA. Not a differential encoding.
+
+    ⛔ This function used to be bits_to_polarity(), a running XOR — "a '1' flips the
+    phase" — and that is PSK2, not PSK1. It cost this project its central conclusion.
+    The authority is the Proxmark, which reads this tag: PSKDemod() emits the phase per
+    bit, cmdlfindala.c:1259 matches preamble64 against that stream DIRECTLY, and only
+    if that fails does it call psk1TOpsk2() and try again (cmdlfindala.c:1293).
+
+    ⚠ AND THE SELF-TEST COULD NEVER HAVE CAUGHT IT, because synth() encoded with the
+    same wrong convention that demod() decoded with. A self-consistent bug passes every
+    round trip. Real captures were the only thing that could expose it, and for weeks
+    they were read as "31.2 dB of analog deficit"."""
+    return np.where(np.asarray(bits) > 0, 1.0, -1.0)
+
+
+def bits_from_polarity(pol):
+    """The inverse of polarity_from_bits. PSK1, so it is just a threshold."""
+    # ⚠ plain Python ints: a numpy int64 accumulator overflows to negative on the 64th
+    # shift in demod(), which reads as a failed decode when the bits were in fact right.
+    return [int(v) for v in (np.asarray(pol) > 0)]
+
+
+def psk1_to_psk2(bits):
+    """The Proxmark's fallback path (lfdemod.c:2116): only transitions become 1s. Kept
+    because an Indala tag programmed PSK2 or PSK3 needs it, and because it documents
+    exactly what this file used to do to a PSK1 tag."""
+    out = [0]
+    for k in range(1, len(bits)):
+        out.append(1 if bits[k] != bits[k - 1] else 0)
+    return out
 
 
 def baseband(x):
@@ -77,15 +99,17 @@ def lowpass(b, fc=12000.0):
 def preamble_correlate(b, dc_free=False):
     """Matched filter for the 33-bit preamble. Returns (position, peak, noise_rms).
 
-    ⛔ dc_free USED TO BE ON AND IT THREW AWAY THE PREAMBLE. bits_to_polarity(PREAMBLE)
+    ⚠ peak is SIGNED: a negative peak is the inverted preamble, which the Proxmark
+    handles as preamble64_i (cmdlfindala.c:1255). The absolute subcarrier phase is not
+    knowable, so both must be accepted.
+
+    ⛔ dc_free USED TO BE ON AND IT THREW AWAY THE PREAMBLE. polarity_from_bits(PREAMBLE)
     is two -1s, thirty +1s and one -1, so subtracting its mean leaves 90.9% of the
     template's energy in 3 of its 33 bits: the 28-zero run — the most distinctive thing
     in an Indala frame — contributes almost nothing. It was there so residual drift could
     not bias the peak, but baseband() already moves DC to fs/2 and the per-bit boxcar
-    nulls exactly there, so it was guarding against something that cannot happen.
-    Measured on synthetic frames: raw beats DC-free 15/20 vs 12/20 at amp 5, 9/20 vs
-    5/20 at amp 4."""
-    tpl = np.repeat(bits_to_polarity(PREAMBLE), BIT)
+    nulls exactly there, so it guarded against something that cannot happen."""
+    tpl = np.repeat(polarity_from_bits(PREAMBLE), BIT)
     if dc_free:
         tpl = tpl - tpl.mean()
     tpl /= np.linalg.norm(tpl)
@@ -93,8 +117,7 @@ def preamble_correlate(b, dc_free=False):
         return None, 0.0, 0.0
     c = np.correlate(b, tpl, mode='valid')
     pos = int(np.argmax(np.abs(c)))
-    peak = float(abs(c[pos]))
-    # noise estimate: the correlator output away from the peak
+    peak = float(c[pos])
     mask = np.ones(len(c), bool)
     lo, hi = max(0, pos - len(tpl)), min(len(c), pos + len(tpl))
     mask[lo:hi] = False
@@ -102,49 +125,107 @@ def preamble_correlate(b, dc_free=False):
     return pos, peak, noise
 
 
-def decode_from(b, pos, nbits=64):
+def decode_from(b, pos, nbits=64, invert=False):
     """Per-bit matched filter (a 32-sample boxcar is the optimal filter for a rectangular
-    bit), then differential decode."""
+    bit), then read the polarity straight off — PSK1, so the phase IS the data."""
     need = pos + nbits * BIT
     if need > len(b):
         return None
-    seg = b[pos:need].reshape(nbits, BIT)
-    integ = seg.sum(axis=1)
-    pol = np.where(integ >= 0, 1, -1)
-    # data bit = polarity changed. The bit before the first is unknown, so recover it from
-    # the preamble's own first bit, which is always 1.
-    bits = [1]
-    for k in range(1, nbits):
-        bits.append(1 if pol[k] != pol[k - 1] else 0)
-    return bits, integ
+    integ = b[pos:need].reshape(nbits, BIT).sum(axis=1)
+    if invert:
+        integ = -integ
+    return bits_from_polarity(integ), integ
 
 
-def demod(x, verbose=False, lpf=None):
-    """⚠ lpf DEFAULTS OFF, AND THAT IS DELIBERATE. Against WHITE noise the 32-sample
-    boxcar in decode_from() is already the matched filter for a rectangular bit, so any
-    extra filter is strictly suboptimal — switching a 12kHz low-pass on costs the
-    synthetic threshold 2.13x -> 2.86x. Against the REAL chain it helps, because that
-    noise is strongly coloured and carries a large component near fs/2 the boxcar barely
-    touches. Pass lpf=12000 for real captures; leave it off for synthetic ones. That the
-    same filter helps one and hurts the other IS the finding."""
+def bit_stream(b, offset):
+    """Slice the baseband into 32-sample bits starting at `offset` and threshold. A
+    32-sample boxcar is the optimal filter for a rectangular bit."""
+    n = (len(b) - offset) // BIT
+    if n < 1:
+        return np.empty(0, int), np.empty(0)
+    integ = b[offset:offset + n * BIT].reshape(n, BIT).sum(axis=1)
+    return np.asarray(bits_from_polarity(integ)), integ
+
+
+def find_preamble(bits, max_err=0):
+    """Every position where the 33-bit preamble matches, normal or inverted.
+
+    ⭐ THIS REPLACED A CORRELATOR, AND IT HAD TO. The preamble is 1010 then 28 ZEROS then
+    1, so as a template it is dominated by a 28-bit constant run — which slides against
+    itself almost as well 8 bits off as on. The correlation peak is inherently broad and
+    it was landing a nibble or two out, returning the right bits in the wrong 64-bit
+    window: bea0000000e6bd0e instead of a0000000e6bd0e92. The Proxmark does not correlate
+    either; preambleSearch() in cmdlfindala.c is an exact match on the demodulated stream.
+
+    Returns a list of (index, inverted, errors)."""
+    tpl = np.asarray(PREAMBLE)
+    n = len(bits) - len(tpl)
+    hits = []
+    for inv in (False, True):
+        t = 1 - tpl if inv else tpl
+        for i in range(max(0, n) + 1):
+            e = int(np.count_nonzero(bits[i:i + len(t)] != t))
+            if e <= max_err:
+                hits.append((i, inv, e))
+    return hits
+
+
+def demod(x, verbose=False, lpf=12000.0, max_err=2):
+    """⚠ lpf DEFAULTS ON AND IT IS LOAD-BEARING. Measured on 35 real single captures
+    across the good phase window: 32/35 decode with it, 0/35 without. After baseband()
+    the data sits near DC and everything originally low-frequency sits near fs/2, where
+    the 32-sample boxcar rejects only ~2.8% — against ~316 counts of carrier ripple on a
+    ~10-count subcarrier that is ~9 counts leaking into every bit decision.
+
+    ⚠ But against WHITE noise the boxcar is already the matched filter for a rectangular
+    bit, so the same filter is strictly suboptimal there. That it helps real captures and
+    hurts synthetic ones IS the finding; pass lpf=None for synthetic work.
+
+    ⚠ The bit phase within the 32-sample period is unknown, so all 32 are tried. Ranking
+    them by preamble errors ALONE is not enough — several offsets match the preamble
+    exactly while straddling the true bit boundaries, and those returned a0000000e69d0e82
+    where the aligned one returns a0000000e6bd0e92. Rank by bit MARGIN among the
+    preamble-clean offsets: the best-aligned boxcar is the one with the largest
+    integrators."""
     b = lowpass(baseband(x), lpf)
-    pos, peak, noise = preamble_correlate(b)
-    if pos is None:
+    cands = []
+    for off in range(BIT):
+        bits, integ = bit_stream(b, off)
+        if len(bits) < 64:
+            continue
+        for i, inv, err in find_preamble(bits, max_err):
+            if i + 64 > len(bits):
+                continue
+            cands.append((err, -float(np.mean(np.abs(integ[i:i + 64]))), off, i, inv,
+                          bits, integ))
+    if not cands:
         return None
-    out = decode_from(b, pos)
-    if out is None:
-        return None
-    bits, integ = out
+    cands.sort(key=lambda c: (c[0], c[1]))
+    err, negmag, off, _, _, _, integ0 = cands[0]
+
+    # ⭐ A 4096-sample capture is two frames, so the word is transmitted more than once.
+    # Decode every preamble hit at the chosen offset and majority-vote — free error
+    # correction, and it needs no alignment because the preamble search located each one.
+    # ⚠ An odd-parity word inverts the subcarrier every frame, so the second copy appears
+    # INVERTED; find_preamble already searches both, and each copy is un-inverted here.
+    words = []
+    for e, _, o, i, inv, bits, integ in cands:
+        if o != off or e > err:
+            continue
+        w = bits[i:i + 64]
+        words.append(1 - w if inv else w)
+    votes = np.mean(np.array(words), axis=0)
+    final = (votes >= 0.5).astype(int)
     word = 0
-    for bit in bits:
-        word = (word << 1) | bit
-    conf = peak / noise if noise > 0 else float('inf')
-    # margin: how decisively each bit's integrator cleared zero, in units of its own spread
-    margin = float(np.min(np.abs(integ)) / (np.std(integ) + 1e-9))
+    for bit in final:
+        word = (word << 1) | int(bit)
+    seg = integ0
+    margin = float(np.min(np.abs(seg)) / (np.std(seg) + 1e-9))
     if verbose:
-        print(f"   preamble corr peak {peak:.1f} vs noise {noise:.1f} -> {conf:.2f}x, "
-              f"pos {pos}, bit margin {margin:.2f}")
-    return {'word': word, 'hex': f"{word:016x}", 'conf': conf, 'pos': pos, 'margin': margin}
+        print(f"   sample offset {off}, {err} preamble errors, {len(words)} copies voted,"
+              f" bit margin {margin:.2f}")
+    return {'word': word, 'hex': f"{word:016x}", 'conf': -negmag / (np.std(seg) + 1e-9),
+            'pos': off, 'margin': margin, 'preamble_err': err, 'copies': len(words)}
 
 
 TRUTH = 0xa0000000e6bd0e92
@@ -153,7 +234,7 @@ TRUTH = 0xa0000000e6bd0e92
 def synth(n, amp, noise_std, seed=0):
     rng = np.random.default_rng(seed)
     bits = [(TRUTH >> (63 - i)) & 1 for i in range(64)]
-    pol = bits_to_polarity(bits)
+    pol = polarity_from_bits(bits)
     # ⚠ THIS RESTARTS THE POLARITY EVERY FRAME. A real tag does not: PSK1 carries the
     # running polarity across the frame boundary, and a0000000e6bd0e92 has 19 ones — ODD
     # — so the subcarrier INVERTS every 64 bits and the true repetition period is 4096
@@ -176,7 +257,7 @@ def band_snr(x, f=62500.0):
 
 def selftest():
     print("\n=== SELF-TEST: clean signal, no noise ===")
-    r = demod(synth(4096, 40, 0.0), verbose=True)
+    r = demod(synth(4096, 40, 0.0), lpf=None, verbose=True)
     ok = r and r['word'] == TRUTH
     print(f"   recovered {r['hex'] if r else None}  expected {TRUTH:016x}  -> "
           f"{'PASS' if ok else 'FAIL'}")
@@ -222,7 +303,7 @@ if __name__ == '__main__':
         if x is None:
             print(f" {p.split('/')[-1]:40s} not a 16-bit capture")
             continue
-        r = demod(x, lpf=12000.0)         # real capture: coloured noise, filter helps
+        r = demod(x)                      # lpf defaults on; real captures need it
         hit = r and r['word'] == TRUTH
         print(f" {p.split('/')[-1]:40s} {len(x):5d} samples  "
               f"{'*** ' + r['hex'] + ' ***' if hit else (r['hex'] if r else '—')}"

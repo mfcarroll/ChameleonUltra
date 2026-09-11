@@ -1,5 +1,44 @@
 # Indala on Chameleon Ultra — investigation summary
 
+## ⭐⭐⭐ SOLVED 2026-09-11 — THE CHAMELEON ULTRA READS INDALA
+
+**43 of 160 single 300ms captures decode `a0000000e6bd0e92` exactly** — 5/5 at ticks 12,
+20 and 36, working window ticks 4–60. **The empty field produced the truth 0 times in
+160.** No stacking, no folding, no averaging, and it works at the **stock 8-bit** sample
+width.
+
+⛔ **The root cause was a software bug, not the hardware.** `mfdemod.py` demodulated
+**PSK2 against a PSK1 tag**. In PSK1 the phase *is* the data; it was differential-decoding,
+which is the Proxmark's `psk1TOpsk2()` **fallback** path used as the primary
+(`cmdlfindala.c:1259` matches `preamble64` directly against `PSKDemod()`'s output first).
+
+⚠⚠ **And the self-test could never have caught it**: `synth()` encoded with the same
+running-XOR that `decode_from()` inverted. A self-consistent bug passes every round trip
+at every SNR. It reported PASS, produced a "+8.2 dB over PSKDemod" figure, and that figure
+was used to conclude the hardware was 31 dB short.
+
+⇒ **Retracted:** "31.2 dB below the Proxmark" as a *conclusion*, the "7.6 dB demodulation
+gap" (both routes measured a decoder that could not work at any SNR), "detectable but not
+decodable / 52 of 64 bits", the matched filter's "+8.2 dB", and "the phase is gone before
+the ADC". `README.md` §0!b tables what stands and what does not.
+
+**Still standing, because they never depended on the decoder:** `LF_RSSI`/AIN0 is dead
+(flat to 0.5 dB across 1–62kHz, tag/empty 1.04x inside a 1.28x scatter, but alive — the
+tag shifts its DC by +16 counts with ±0 spread over 7 repeats); the noise floor is
+analog-referred; and the three real firmware bugs found and fixed — the `>>5` truncation,
+BLE advertising collapsing the field, and the DMA ring dropping 75% of every batch.
+
+**Two other things turned out to be load-bearing.** The baseband low-pass: 32/35 real
+captures decode with it, **0/35** without — though against *white* noise the boxcar is
+already matched and the same filter hurts, which is why it defaults on for files and off
+for synthetics. And **not** discarding the first 400 samples as "settle": 43/160 with the
+full capture, **0/160** with the discard this project used throughout.
+
+**Next:** port it to firmware. The whole read is sample → mix by `(-1)^n` → low-pass →
+32-sample boxcar → threshold → `preamble64` search → 64 bits. No float, no FFT. `NEXT.md` §1.
+
+
+
 ## ⭐⭐⭐ STATUS 2026-09-11 (later) — IT IS NOT SNR, AND THAT CHANGES THE QUESTION
 
 A synthetic PSK1 frame of `a0000000e6bd0e92`, injected into the **real measured

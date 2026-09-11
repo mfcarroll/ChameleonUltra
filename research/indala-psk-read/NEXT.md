@@ -2,108 +2,100 @@
 
 ⭐ **Resuming in a fresh session? Paste `RESUME.md`** — self-contained context, environment and commands.
 
-**State at 2026-09-11 (updated).** The framing has changed, and for the better: the problem
-is **not SNR**. A synthetic PSK1 frame of `a0000000e6bd0e92`, injected into the **real
-measured empty-field noise** at **half** the tag's own fc/2 amplitude, decodes at **0/31**
-data-bit errors from a **single** capture. The real tag, at **four times** the band SNR
-after stacking, gets **7/31** and never improves.
+**State at 2026-09-11 (final).** ⭐⭐⭐ **THE CHAMELEON ULTRA READS INDALA.** 43 of 160
+single 300ms captures decode `a0000000e6bd0e92` exactly — 5/5 at ticks 12, 20 and 36,
+across a working window of ticks 4–60. The empty field produced the truth **0 times in
+160**. No stacking, no folding, and it works at the **stock 8-bit** sample width.
 
-⇒ **What reaches the converter has the right fc/2 amplitude and the wrong phase
-structure.** The question is no longer "how do we find 7.6 dB" — it is **"where does the
-polarity go?"** See `README.md` §0z.
+⛔ **The deficit was a software bug.** `mfdemod.py` demodulated **PSK2 against a PSK1
+tag** — in PSK1 the phase *is* the data, and it was differential-decoding, which is the
+Proxmark's `psk1TOpsk2()` **fallback** path applied as the primary. `synth()` encoded with
+the same wrong convention, so the self-test was self-consistent and passed forever. See
+`README.md` §0! and §0!a.
 
-⛔ **Three numbers that used to look like progress are retracted** (`README.md` §0z2):
-folding at 2048 samples *cancels* the data (19 ones = odd parity, so the true period is
-4096); the fc/2 band-SNR criterion is polarity-blind; and "52/64 bits vs a 45/64 null" was
-a constant preamble run scoring itself — on the 31 credential bits the tag gets 6/31 and
-the **null gets 4/31**.
+⇒ **"31.2 dB short", "7.6 dB demodulation gap", "detectable but not decodable" and "the
+phase is gone before the ADC" are all retracted.** `README.md` §0!b has the full table of
+what stands and what does not.
 
 ---
 
-## 1. ⭐⭐⭐ Sweep sample phase while scoring BIT RECOVERY. Never done.
+## 1. ⭐⭐⭐ Port the decoder into firmware — this is now a feature, not a research question
 
-The 32-tick optimum was found by maximising the **sideband skirt**. The skirt is
-transition energy and is **polarity-blind**. The polarity lives in the component *at*
-62.5kHz = Nyquist, recovered as `2A·cos φ` — which has a **hard null** where the skirt has
-none. There is no reason the two should share an optimum, and every reason they should not.
+The whole read is: sample at 125kHz with a phase in the working window → mix by `(-1)^n` →
+low-pass → 32-sample boxcar per bit → threshold → search `preamble64` → read 64 bits.
 
-⇒ **The 32-tick "optimum" may sit at or near the polarity null.** That single possibility
-explains every observation: full skirt amplitude, frame structure visible in the envelope,
-and no recoverable sign.
+**Everything it needs already exists on the device.** `lf_reader_generic.c` captures the
+samples; the rest is integer arithmetic over 4096 samples. No float, no FFT — the low-pass
+can be a short FIR or a two-stage boxcar.
 
-**Do:** modify `phasesweep.py` to score `stack.py`'s data-bit errors at each phase instead
-of the sideband amplitude, and sweep all 128 ticks with the tag on. Cheap, one bench run,
-and it directly tests the leading hypothesis.
+⚠ **Three things are load-bearing and each one alone takes it to zero:**
+- **the PSK1 mapping** — the phase IS the data (`mfdemod.py:polarity_from_bits`);
+- **the baseband low-pass** — 32/35 with it, **0/35** without;
+- **NOT discarding the settle window** — 43/160 with the full capture, **0/160** with the
+  400-sample discard this project used throughout.
 
-⚠ Take paired empty captures at each phase as usual — the null is what makes a low error
-count mean anything, and at 31 bits brute-forced over 2048 positions × 64 rotations the
-null lands around 4–5 errors.
+Then `lf indala read` alongside `lf em410x read` and the rest.
 
-## 2. ⭐⭐ Longer captures — the current 4096 samples is 1.8 frames, less than one period
+## 2. ⭐⭐ Set the sample phase, and check it on a second tag
 
-The true repetition period is **4096 samples** (odd parity inverts the subcarrier every
-frame). A capture of 4096 samples minus 400 settle is **0.9 super-frames** — not enough to
-fold even once at the true period. `LF_SNIFF_MAX_SAMPLES` is 8192 **bytes** = 4096 samples
-at 16-bit; the chunked transfer already handles the retrieval.
+Ticks 12–36 decode best, and nothing decodes past tick 60. The stock trigger is phase 0,
+which sits at the edge of the window (0/5) — so **the stock firmware would fail even with
+a correct decoder**, which is worth knowing before blaming an antenna.
 
-⇒ Raising it to 16384 bytes (8192 samples = 2 super-frames) costs 8KB more static RAM and
-makes within-capture folding at 4096 possible. Worth doing before any long campaign.
+⚠ The window's position may be specific to this tag's coupling and this unit. Check a
+second Indala tag and, ideally, a second Chameleon before hard-coding a phase. A short
+scan across three or four phases is cheap insurance.
 
-## 3. ⭐ Re-test air gap — position measured ~5.7 dB, n=1
+## 3. ⭐ Check the Indala parity to reject near-misses
 
-An accidental probe at a different placement gave tag/empty **3.49x** where the paired run
-gave **1.80x**, with the difference concentrated at high frequency (1.08x at 1–5k rising
-to 1.79x at 55–62k), so it is the tag's contribution and not the reader's ripple. `§0a3`'s
-"air gap closed" was already invalid — pre-BLE-fix, wrong payload. Redo it with
-`--repeats` and score bits, not just the skirt.
+Most failures are one or two bits in the zero run (`a0100000e6bd0e92` for
+`a0000000e6bd0e92`). Indala carries a parity — the Proxmark prints `Parity: 11` — so
+checking it would reject most near-misses and turn a 27% raw decode rate into a much
+higher effective rate with retries.
 
-## 4. Re-test settle — the closure is invalid for the same reasons as air gap
+## 4. ⭐ Re-test the levers that were closed against a broken decoder
 
-Pre-BLE-fix, and on a tag carrying `DEADBEEF/12345678` rather than an Indala frame. The
-conclusion was a **null**, and a null is exactly what noisy data manufactures.
+Air gap and settle were closed pre-BLE-fix on a tag carrying `DEADBEEF/12345678`, and every
+"dB" measured since was measured through a decoder that could not decode. Now that there
+is a real success metric — **decode rate** — they are worth a few minutes each.
 
 ## 5. ⛔ CLOSED — `LF_RSSI` (AIN0) carries no fc/2
 
-Measured, 7 repeats, `README.md` §0z5. Within-node tag/empty **1.04x against a 1.28x
-scatter**; spectrum flat to **0.5 dB** across 1–62kHz where AIN5 rolls off **31.6 dB**.
-Not clipped (zero samples at full scale, 419 counts of headroom vs 18 counts of σ) and
-demonstrably **alive** — the tag shifts its DC by +16 counts with ±0 spread across 7
-repeats. It is a DC field-strength indicator whose corner is below 1kHz. Nothing here.
+`README.md` §0z5, 7 repeats. Within-node tag/empty **1.04x against a 1.28x scatter**;
+spectrum flat to **0.5 dB** across 1–62kHz where AIN5 rolls off 31.6 dB. Not clipped, and
+demonstrably alive — the tag shifts its DC by +16 counts with ±0 spread. A DC
+field-strength indicator, corner below 1kHz. Independent of the decoder, so it stands.
 
 ## 6. ⛔ CLOSED — gain. The floor is analog-referred
 
-`README.md` §0a, 7 repeats, deglitched. Unchanged by today's work.
-
-## 7. ⛔ Do NOT fold or average at 2048 samples
-
-It averages a frame against its own inverse. The **skirt** survives, so band SNR improves
-as sqrt(N) and looks like progress while not one bit is recovered. Zero-offset **stacking**
-(`stack.py`) is the polarity-preserving method — validated at +7.3 dB with all three
-controls — but it buys SNR and, per item 1, SNR is not what is missing.
-
-⚠ The old ⛔ on coherent frame averaging gave the wrong REASON. The circularity argument
-("you need SNR to align frames and alignment to gain SNR") does not apply: captures are
-frame-locked to field-on and cross-correlate at lag 0 with one sign, so there is no
-alignment step at all. The method works; it just does not solve this problem.
+`README.md` §0a, 7 repeats, deglitched. Also independent of the decoder.
 
 ---
 
 ## Method rules this project paid for
 
-1. ⛔ **A single capture is not evidence.** Pre-fix, 41% of captures carried a field
-   dropout and six consecutive captures at one setting spread **49x**.
-2. ⛔ **Always run the null.** And the null must be the **empty field**, not white noise —
-   white noise is a far weaker control against a chain whose floor spans 17x across bands.
-3. ⛔ **Confirm the tag state, and understand what the confirmation says.**
-4. ⛔ **A synthetic threshold is not a real threshold.** The matched filter's +8.2 dB held
-   against white noise and vanished on real captures — and the 12kHz low-pass that helps
-   real captures *hurts* synthetic ones, because the boxcar is already optimal for white.
-5. ⛔ **No thresholds in verdicts.** Fit the shape and report the fit.
-6. ⛔ **Check that a measure is comparable before comparing it.** Band RMS across bands
-   whose floors differ 17x; AIN0's absolute counts against AIN5's floor; a phase-32
-   capture against a phase-0 baseline. Three separate instances of the same error.
-7. ⛔ **Make sure the measure can see the thing you are claiming.** The band-SNR criterion
-   is polarity-blind and a whole-frame Hamming score credits a constant run. Both passed
-   while nothing was decoded.
-8. ⭐ **Inject a known signal into the real noise.** One test settled what a dozen sweeps
-   could not: the amplitude is there and the phase is not.
+1. ⭐⭐⭐ **A round-trip self-test proves the encoder and decoder agree with each other,
+   not with the world.** `synth()` encoded with the same wrong convention `demod()`
+   inverted. It passed at every SNR, produced a "+8.2 dB" figure, and that figure was used
+   to conclude the hardware was 31 dB short. Generate test vectors from an INDEPENDENT
+   source — here, the Proxmark's own `preamble64` and a real capture.
+2. ⭐⭐ **When a synthetic beats reality, suspect the synthetic.** A synthetic frame at
+   half the tag's amplitude decoded while the tag did not. That was read as proof the
+   hardware destroyed the phase. It was proof the synthetic shared the decoder's bug.
+3. ⭐⭐ **Check the reference implementation's ORDER, not just its existence.** The
+   Proxmark has both `psk1TOpsk2()` and a direct preamble match. Reading which one is the
+   primary and which the fallback was the entire answer, and it was two greps away.
+4. ⛔ **A single capture is not evidence** — pre-fix, 41% carried a field dropout and six
+   consecutive captures spread 49x.
+5. ⛔ **Always run the null, and make it the empty field**, not white noise.
+6. ⛔ **Confirm the tag state, and understand what the confirmation says.**
+7. ⛔ **No thresholds in verdicts.** Fit the shape and report the fit.
+8. ⛔ **Check that a measure is comparable before comparing it.** Band RMS across bands
+   whose floors differ 17x; AIN0's counts against AIN5's floor; a phase-32 capture against
+   a phase-0 baseline.
+9. ⛔ **Make sure the measure can see the thing you are claiming.** The fc/2 band-SNR
+   criterion is polarity-blind, and a whole-frame Hamming score credits a constant run.
+   Both passed while nothing was decoded.
+10. ⚠ **Question the conventions, including the ones that look like hygiene.** Discarding
+    400 "settle" samples was never questioned and it alone took the decode from 43/160
+    to 0/160.
