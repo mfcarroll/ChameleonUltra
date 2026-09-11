@@ -106,7 +106,8 @@ cd research/indala-psk-read && ../../software/script/.venv/bin/python lfprobe.py
   --band 10000 18000 --monitor 5
 # 2. tag on, same band — confirm it is loud, then run the null
 ../../software/script/.venv/bin/python lfprobe.py --band 10000 18000 --monitor 5 --floor <N>
-cd ../../software/script && .venv/bin/python cu.py $(printf '"lf indala read" %.0s' {1..10})
+cd ../../software/script && args=(); for i in $(seq 10); do args+=("lf indala read"); done
+.venv/bin/python cu.py "${args[@]}"    # ⚠ NOT $(printf '"..." %.0s') — quotes do not survive re-parsing
 ```
 
 ⚠ EM410x/Viking/PAC/Jablotron subcarriers are NOT at 10–18kHz. Set `--band` per tag, and
