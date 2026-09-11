@@ -41,6 +41,24 @@ if [[ "${1:-}" != "--no-build" ]]; then
   docker compose up --pull=always build-ultra
 fi
 [[ -f $PKG ]] || { echo "No $PKG — build first (drop --no-build)."; exit 1; }
+
+# ⛔ REFUSE TO FLASH A STALE PACKAGE. --no-build skips the Docker build+sign, and the
+# package it reuses is NOT produced by a host `make -C application` — that writes
+# objects/application.hex and leaves the signed zip untouched. So editing firmware,
+# running make to check it compiles, then flashing with --no-build silently reflashes
+# whatever was last signed, reports "100% Programmed", and leaves the old build running.
+# Measured: it cost a full flash cycle and a confusing `hw version` before anyone noticed
+# the git hash had not moved.
+if [[ "${1:-}" == "--no-build" ]]; then
+  stale=$(find application/src application/Makefile \
+            \( -name '*.c' -o -name '*.h' -o -name 'Makefile' \) -newer "$PKG" -print -quit 2>/dev/null)
+  if [[ -n "$stale" ]]; then
+    echo "⛔ $PKG is OLDER than the sources — e.g. $stale"
+    echo "   --no-build would flash a stale build and report success."
+    echo "   Re-run without --no-build to rebuild and re-sign in Docker."
+    exit 1
+  fi
+fi
 [[ -x $NRFUTIL ]] || { echo "nrfutil not found — see the install note at the top of this script."; exit 1; }
 
 echo "==> Package: $PKG ($(stat -f%z $PKG) bytes)"
