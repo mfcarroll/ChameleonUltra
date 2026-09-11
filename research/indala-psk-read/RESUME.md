@@ -16,26 +16,32 @@ review prompt if you want to attack the conclusions instead of extending them.
 
 ## Where things stand, in five lines
 
-- The **channel is measured and trustworthy**: fc/2 arrives **31.2 dB** below the Proxmark
-  on identical stimulus; ~2.8 dB of that is recoverable by ADC sample phase.
-- The **demodulation gap is 7.6 dB**, confirmed twice independently — spectral band SNR
-  (2.30x measured vs 5.50x needed), and a ~19% bit-error rate implying ~7.7 dB.
-- The signal **is detectable but not decodable**: 52/64 bits vs a 45/64 white-noise null.
-- ⛔ **It is NOT established that 7.6 dB is unbridgeable.** Only sample phase and gain's
-  confound test were ever measured under fully valid conditions.
+- ⭐ **It is NOT SNR.** A synthetic PSK1 frame injected into the REAL measured empty-field
+  noise, at HALF the tag's own fc/2 amplitude, decodes at 0/31 credential bits from ONE
+  capture. The real tag, at 4x the band SNR after stacking, gets 7/31 and never improves.
+- ⇒ **The amplitude is there and the phase is not.** The question is "where does the
+  polarity go?", not "how do we find 7.6 dB". `README.md` §0z.
+- ⛔ Three old numbers are **retracted** (§0z2): folding at 2048 samples cancels the data
+  (19 ones = odd parity, so the true period is 4096); the fc/2 band-SNR criterion is
+  polarity-blind; and "52/64 bits vs a 45/64 null" was a constant preamble run scoring
+  itself — on the 31 credential bits the tag gets 6/31 and the **null gets 4/31**.
+- What holds: zero-offset stacking (+7.3 dB, all controls pass), the frame visible in the
+  sideband envelope, and `LF_RSSI`/AIN0 **closed** (flat to 0.5 dB, alive but no bandwidth).
 - Everything is on branch `indala-psk-read` (ChameleonUltra) and `t5577-deep-read`
   (Momentum-Firmware), both pushed to `origin` = the user's own fork.
 
 ## The immediate next step
 
-`LF_RSSI` (AIN0) taps `LF_OA` — the raw peak-detector output, **upstream of both filter
-poles**. Every capture in this project sampled AIN5, downstream of both. If the deficit lives
-in the filter stages, this is the only node upstream of them that reaches a pin.
+**Sweep sample phase while scoring BIT RECOVERY, not sideband amplitude.** The 32-tick
+optimum was found by maximising the skirt, and the skirt is transition energy —
+polarity-blind. The polarity lives at 62.5 kHz = Nyquist, recovered as `2A·cos φ`, which
+has a hard null the skirt does not. They have no reason to share an optimum, and 32 ticks
+may sit at or near the polarity null. That one possibility explains every observation:
+full skirt amplitude, frame structure visible in the envelope, and no recoverable sign.
 
-In `firmware/application/src/ble_main.c`, `register_lf_adc_callback()`, change
-`NRF_SAADC_INPUT_AIN5` to AIN0, rebuild, flash, and take paired empty/tag captures at the
-optimal phase (32 ticks) to compare fc/2 against AIN5. `NEXT.md` §1 has the caveats — 470k
-source impedance is the likely killer, which is why it needs measuring rather than arguing.
+Modify `phasesweep.py` to score `stack.py`'s data-bit errors at each phase, sweep all 128
+ticks with the tag on, and take paired empty captures — the null lands around 4–5 errors
+and is what makes a low count mean anything. `NEXT.md` §1.
 
 ## Environment
 
@@ -69,7 +75,8 @@ Run CLI commands non-interactively (the stock client has no batch mode):
 cd /Users/Shared/code/personal/rfid/ChameleonUltra/software/script && .venv/bin/python cu.py "hw version" "hw mode -r" "lf sniff --timeout 500 --bits 16 --phase 32 --out /tmp/x.bin"
 ```
 
-`lf sniff` flags added by this work: `--bits 16` (full 14-bit, not `>>5`), `--phase N`
+`lf sniff` flags added by this work: `--input {5,0}` (5 = AIN5/LF_OA_OUT stock, 0 =
+AIN0/LF_RSSI — measured dead, see `NEXT.md` §5), `--bits 16` (full 14-bit, not `>>5`), `--phase N`
 (0–127 ticks of 62.5 ns; **32 is the measured optimum**), `--rate N` (free-running kHz),
 `--gain N` (divisor), `--settle N` (ms). A 16-bit capture returns 4096 samples = 2 Indala
 frames, transferred in chunks.
@@ -77,7 +84,7 @@ frames, transferred in chunks.
 Demodulate a capture:
 
 ```bash
-cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read && ../../software/script/.venv/bin/python mfdemod.py --selftest && ../../software/script/.venv/bin/python mfdemod.py /tmp/x.bin
+cd /Users/Shared/code/personal/rfid/ChameleonUltra/research/indala-psk-read && ../../software/script/.venv/bin/python mfdemod.py --selftest && ../../software/script/.venv/bin/python stack.py --dir caps/inputtest
 ```
 
 ## ⚠ Tag state — check this before trusting any measurement
