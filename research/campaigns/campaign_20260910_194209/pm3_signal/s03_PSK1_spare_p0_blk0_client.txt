@@ -1,0 +1,24 @@
+[=] Session log ~/.proxmark3/logs/log_20260911024340.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf config ; lf t55xx read -b 0 ; data save -f /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_194209/pm3_signal/s03_PSK1_spare_p0_blk0
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf config
+[usb|script] pm3 --> lf t55xx read -b 0
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[#] LF Sampling config
+[#]   [q] divisor............. 95 ( 125.00 kHz )
+[#]   [b] bits per sample..... 8
+[#]   [d] decimation.......... 1
+[#]   [a] averaging........... no
+[#]   [t] trigger threshold... 0
+[#]   [s] samples to skip..... 0 
+[#] 
+[usb|script] pm3 --> data save -f /Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_194209/pm3_signal/s03_PSK1_spare_p0_blk0
+[+] Saved 12000 bytes to PM3 file `/Users/Shared/code/personal/rfid/ChameleonUltra/research/campaigns/campaign_20260910_194209/pm3_signal/s03_PSK1_spare_p0_blk0.pm3`

@@ -1,0 +1,198 @@
+[=] Session log ~/.proxmark3/logs/log_20260911024246.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 8FF40C6A | 10001111111101000000110001101010 | .�.j
+[+]  01 | 9D52B4CD | 10011101010100101011010011001101 | .R��
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | AAAAAAAA | 10101010101010101010101010101010 | ����
+[+]  05 | 55AB5A55 | 01010101101010110101101001010101 | U�ZU
+[+]  06 | 54AAAA55 | 01010100101010101010101001010101 | T��U
+[+]  07 | AAAAAAAA | 10101010101010101010101010101010 | ����
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | E0501D65 | 11100000010100000001110101100101 | �P.e
+[+]  01 | DB852A4C | 11011011100001010010101001001100 | �.*L
+[+]  02 | A4CE537B | 1010010011001110010100110110.011 | ��S{
+[+]  03 | 54BAA555 | 01010100101110101010010101010101 | T��U
+
+---- re-dump 1 ----
+[=] Session log ~/.proxmark3/logs/log_20260911024249.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | AB828D95 | 10101011100000101000110110010101 | �...
+[+]  01 | 1B524AD2 | 00011011010100100100101011010010 | .RJ�
+[+]  03 | 95ABACB4 | 1001010110101001.010110010110100 | .���
+[+]  04 | 552AAAAA | 01010101001010101010101010101010 | U*��
+[+]  05 | 4A555555 | 01001010010101010101010101010101 | JUUU
+[+]  06 | B5556AAD | 10110101010101010110101010101101 | �Uj.
+[+]  07 | 52AAAAAA | 01010010101010101010101010101010 | R���
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | C0407E35 | 11000000010000000111111000110101 | �@~5
+[+]  01 | C2E525B3 | 11000010111001010010010110110011 | ��%�
+[+]  02 | A9A396CD | 10101001101000111001011011001101 | ��.�
+[+]  03 | 56D55552 | 01010110110101010101010101010010 | V�UR
+
+---- re-dump 2 ----
+[=] Session log ~/.proxmark3/logs/log_20260911024252.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | B80F8395 | 10111000000011111000001110010101 | �...
+[+]  01 | 3AADB732 | 00111010101011011011011100110010 | :.�2
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | 6B564AAA | 01101011010101100100101010101010 | kVJ�
+[+]  05 | AAAAAAAA | 10101010101010101010101010101010 | ����
+[+]  06 | 54AAAAAA | 01010100101010101010101010101010 | T���
+[+]  07 | 55552E95 | 01010101010101010010111010010101 | UU..
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 5701F9CA | 01010111000000011111100111001010 | W.��
+[+]  01 | 3BC53A4B | 00111011110001010011101001001011 | ;�:K
+[+]  02 | A4E9DC99 | 10100100111010011101110010011001 | ���.
+[+]  03 | 555552AA | 01010101010101010101001010101010 | UUR�
+
+---- rot-fix: block0 -> 00088840 ----
+[=] Session log ~/.proxmark3/logs/log_20260911024255.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx write -b 0 -d 00088840 ; lf t55xx detect ; lf t55xx dump
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx write -b 0 -d 00088840
+[=] Writing page 0  block: 00  data: 0x00088840 
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ ASK
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... Yes
+[=]  Block0............ 00088840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
+[usb|script] pm3 --> lf t55xx dump
+
+[=] ------------------------- T55xx tag memory -----------------------------
+
+[+] Page 0
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 00088840 | 00000000000010001000100001000000 | ...@
+[+]  01 | DEADBEEF | 11011110101011011011111011101111 | �.��
+[+]  02 | 12345678 | 00010010001101000101011001111000 | .4Vx
+[+]  03 | 95A95969 | 10010101101010010101100101101001 | .�Yi
+[+]  04 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  05 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  06 | 00000000 | 00000000000000000000000000000000 | ....
+[+]  07 | 00000000 | 00000000000000000000000000000000 | ....
+
+[+] Page 1
+[+] blk | hex data | binary                           | ascii
+[+] ----+----------+----------------------------------+-------
+[+]  00 | 00088840 | 00000000000010001000100001000000 | ...@
+[+]  01 | E0150A4C | 11100000000101010000101001001100 | �..L
+[+]  02 | 5B020499 | 01011011000000100000010010011001 | [...
+[+]  03 | 00000000 | 00000000000000000000000000000000 | ....
+[+] Saved 48 bytes to binary file `~/lf-t55xx-DEADBEEF-12345678-95A95969-dump-018.bin`
+[+] Saved to json file ~/lf-t55xx-DEADBEEF-12345678-95A95969-dump-018.json
+
+---- rot-fix: restore block0 -> 00081840 ----
+[=] Session log ~/.proxmark3/logs/log_20260911024259.txt
+[+] loaded `~/.proxmark3/preferences.json`
+[+] execute command from commandline: lf t55xx write -b 0 -d 00081840 ; lf t55xx detect
+
+[+] Using UART port /dev/tty.usbmodemiceman1
+[+] Communicating with PM3 over USB-CDC
+[+] Max frame size: 624 bytes
+[=] No previous history could be loaded
+[usb|script] pm3 --> lf t55xx write -b 0 -d 00081840
+[=] Writing page 0  block: 00  data: 0x00081840 
+[usb|script] pm3 --> lf t55xx detect
+[=]  Chip type......... T55x7
+[=]  Modulation........ PSK1
+[=]  Bit rate.......... 2 - RF/32
+[=]  Inverted.......... No
+[=]  Offset............ 33
+[=]  Seq. terminator... No
+[=]  Block0............ 00081840 (auto detect)
+[=]  Downlink mode..... default/fixed bit length
+[=]  Password set...... No
+
