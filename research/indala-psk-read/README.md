@@ -281,4 +281,12 @@ reuses its `exec_cmd()` the way `tests/test_ultra.py` does.
 
     cd software/script && .venv/bin/python cu.py "hw version" "lf em 410x read"
 
-Analysis needs `numpy` in `software/script/.venv` (2.5.3 used here).
+⚠ **Two interpreters, one per half — do not try to use one for both.**
+
+| half | interpreter | why |
+|---|---|---|
+| campaign harness (`t5577_campaign.py`) | `Momentum-Firmware/toolchain/arm64-darwin/bin/python3` (3.11.9) | has **pyserial 3.5** for the Flipper port; no numpy |
+| analysis (`analyse.py`, `sweep.py`) | `ChameleonUltra/software/script/.venv/bin/python` (3.14.7) | has **numpy 2.5.3**; no pyserial |
+
+⇒ Do **not** install numpy into the Momentum toolchain to unify them — that is a build toolchain,
+not a scratch environment.
