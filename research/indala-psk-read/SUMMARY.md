@@ -1,5 +1,8 @@
 # Indala on Chameleon Ultra — investigation summary
 
+⭐ **Picking this up again? `NEXT.md`** — ranked next steps, the untried
+upstream levers, and the method rules this project paid for.
+
 **2026-09-10/11.** Chameleon Ultra v3 (chip `a461ebf3b85fb19c`), Proxmark3 Iceman as
 reference, T5577 as the tag under test. Branch `indala-psk-read` on
 `mfcarroll/ChameleonUltra`. Full working and every retraction: `README.md`.

@@ -1,5 +1,8 @@
 ## Indala on Chameleon Ultra — 7.6 dB short; not yet shown unbridgeable
 
+⭐ **Picking this up again? `NEXT.md`** — ranked next steps, the untried
+upstream levers, and the method rules this project paid for.
+
 ⭐ **Start here instead if you want the short version:** `SUMMARY.md`.
 ⭐ **Before building on any of this:** `ADVERSARIAL.md` — a review prompt written to attack
 these conclusions, because nine earlier ones were wrong and every one failed on an artefact
