@@ -6036,7 +6036,19 @@ class LFIndalaWrite(ReaderRequiredUnit):
         if len(raw) != 16 or any(c not in "0123456789abcdef" for c in raw):
             print(f"{color_string((CR, 'Need exactly 16 hex digits'))}")
             return
-        word = int(raw, 16)
+        # ⭐ READ BEFORE WRITING — this is the coupling bracket, and it is the whole
+        # reason this command can now say anything at all. A T5577 that cannot be heard
+        # cannot be shown to have been written, and F05 is the scar: six bracketing reads
+        # failed while a tag sat at 90x the empty floor. If the tag is audible BEFORE the
+        # write, a failure after it is a failure of the WRITE and not of the placement.
+        before = self._try_read()
+        if before is None:
+            print(f"   {color_string((CY, 'No Indala frame before the write.'))} That is "
+                  f"expected for a blank or non-Indala tag, but it also means there is no "
+                  f"proof this tag is coupled — so a failure after the write will not be "
+                  f"distinguishable from a tag the reader cannot hear.")
+        else:
+            print(f"   before: {color_string((CY, before))}")
 
         # ⛔ NOT three lf_t55xx_write_block() calls. That was the first version and it
         # DOES NOT RELIABLY WORK — measured on a real tag, one of three writes landed, and
@@ -6047,18 +6059,40 @@ class LFIndalaWrite(ReaderRequiredUnit):
         # what every other protocol writer on this device uses.
         self.cmd.indala_write_to_t55xx(bytes.fromhex(raw))
 
-        # ⛔ NOT "Wrote". A T5577 SENDS NO ACKNOWLEDGEMENT, so the firmware returns
-        # STATUS_LF_TAG_OK unconditionally and this command has no way to know whether a
-        # single bit landed. Printing a success message here cost an hour: the tag stopped
-        # reading as HID, which looked like confirmation, on a bench where that same tag
-        # had already gone from 5/5 to 0/15 with nothing done to it at all (L51). The
-        # Proxmark dump later showed only ONE of the three blocks had changed.
-        print(f"{color_string((CY, 'Sent'))} {raw} — "
-              f"{color_string((CR, 'NOT verified'))}: a T5577 does not acknowledge a "
-              f"write, so this reports what was transmitted, not what landed.")
-        print(f"   Verify with {color_string((CG, 'lf indala read'))}, and confirm the "
-              f"blocks independently with:")
-        print(f"   {color_string((CG, 'pm3 -c \'lf t55xx detect; lf t55xx dump\''))}")
+        # ⭐ A SUCCESSFUL READ-BACK VERIFIES EVERYTHING, not just the payload. If the
+        # config block had not landed the tag would not be transmitting PSK1 at RF/32 at
+        # all, so it could not be read — which means one read covers block 0, block 1 and
+        # block 2 together. This is why §8's old plan (add a T5577 block read first) is no
+        # longer on the critical path: the reader IS the verifier.
+        after = self._try_read()
+        if after == raw:
+            print(f"{color_string((CG, 'VERIFIED'))} {raw} — read back off the tag. The "
+                  f"config block landed too, or it could not have been read at all.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after. "
+                  f"The tag may be uncoupled rather than unwritten; reposition it on the "
+                  f"FRONT of the device and try `lf indala read` first.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — the tag read {before} before "
+                  f"and nothing after, so it was coupled and is now not transmitting a "
+                  f"readable frame. Dump it with "
+                  f"{color_string((CG, 'pm3 -c \'lf t55xx detect; lf t55xx dump\''))}.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — the tag still reads "
+                  f"{after}, unchanged. Nothing was written.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {raw}, read "
+                  f"back {after}. Some blocks landed and some did not.")
+
+    def _try_read(self):
+        """The credential currently on the tag, or None. ⚠ None is NOT proof of absence —
+        see F05 in the research notes — which is why every caller above distinguishes
+        'nothing there' from 'cannot tell'."""
+        try:
+            uid = self.cmd.indala_scan()[0]
+            return uid.hex()
+        except Exception:
+            return None
 
 
 @lf_ioprox.command("write")

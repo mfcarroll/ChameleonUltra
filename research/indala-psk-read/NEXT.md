@@ -157,23 +157,29 @@ revision from the same batch, so this tests unit-to-unit tolerance — antenna t
 component spread, trimmer position — and NOT whether the design generalises to a Chameleon
 Ultra in general. A pass is weak evidence; a failure would be very strong.
 
-## 5. ⭐⭐ Make the failure cheaper, or the success more certain
+## 5–6. ✅ CLOSED AS UNMOTIVATED — there is no deficit left to hunt
 
-A read costs a median of 2–3 captures at ~35 ms (0.08–0.22 s of device time, measured); a
-failure costs the whole 500 ms timeout (0.47–0.53 s, measured).
-Two things are worth measuring now that decode rate is a real metric:
+⛔ **Read this before re-opening any of the signal-hunting work.** §2's remaining entries
+(`LF_RSSI`/AIN0, SAADC gain), §5 (make the failure cheaper) and §6 (re-test the levers) all
+existed for one reason: the read did not work and we were looking for missing signal. Both
+causes turned out to be elsewhere — ~26 dB was the tag being on the wrong side of the device
+(C36) and the rest was the decoder demodulating PSK2 against a PSK1 tag.
 
-- **Sort the rotation by live evidence, not by the committed sweep.** The order is
-  `20, 12, 28, 36, ...`, taken from a sweep whose phase ranking has since moved.
-- **Longer settle.** A T5577 charges off the field before transmitting at full amplitude,
-  and 2 ms has never been varied against a working decoder (L34 invalidated the old test).
-  The Indala read restarts the field for every capture, so this is paid 2–3 times per read.
+On hardware now: **60 of 60 reads succeeded, on two tags and two units, every one of them at
+the FIRST phase in the rotation, from a single capture.** There are no failures to make
+cheaper, no rotation order to tune, and no deficit for a better signal tap to close.
 
-## 6. ⭐ Re-test the levers closed against the broken decoder
+| | why it is closed |
+|---|---|
+| `LF_RSSI` / AIN0 (C08, C09) | was a search for a better signal tap. Nothing needs one |
+| SAADC gain (C10) | same. The conclusion may or may not hold; it no longer matters |
+| Rotation order (§5) | entry 1 wins 60/60. There is nothing to sort |
+| Longer settle (§5) | paid per capture, and reads take one capture |
+| Air gap / settle / oversampling (§6) | all closed against the broken decoder, all hunting the same phantom |
 
-Air gap, settle and oversampling were all closed pre-BLE-fix on a tag carrying
-`DEADBEEF/12345678` (L34), and every dB measured since went through a decoder that could
-not decode. Tag position looks worth ~5.7 dB but rests on n=1 from an accidental probe.
+⚠ They become live again **only** if someone cares about the back-side case, where the read
+is 32% and stacking is doing real work (C58). That is the wrong placement, so caring about it
+is a product decision, not a technical one. ⇒ Do not spend a day here without that decision.
 
 ## 7. ✅ RETIRE the per-lever sweep scripts — do not port them
 
@@ -189,30 +195,39 @@ energy, not coupling.
 decodes, against an empty arm at the same setting. `lfprobe.py` remains useful because it
 measures a *ratio against the live empty floor* for coupling, which is a different job.
 
-## 8. ⚠ T5577 WRITE reliability on the Chameleon — backlog
+## 8. ⭐⭐⭐ T5577 WRITE — the last real gap, and it is no longer blocked
 
-`lf indala write` exists and is **not known to work**. Two paths were tried:
+`lf indala write` ships in this branch and is **not known to work**. That is worse than
+absent: it reports what it transmitted, and a T5577 sends no acknowledgement, so the command
+cannot tell success from silence. Two paths were tried:
 
 | | result |
 |---|---|
-| three raw `lf_t55xx_write_block` calls | **one of three blocks landed** — the Proxmark dump showed block 2 took, blocks 0 and 1 did not |
+| three raw `lf_t55xx_write_block` calls | **one of three blocks landed** — a Proxmark dump showed block 2 took, blocks 0 and 1 did not |
 | `write_indala_to_t55xx` via the proven `write_t55xx` | spectrum unchanged; the config block did not take either |
 
-The raw path is weaker by construction — it cycles the field per block, so each block is
-written to a tag charging from cold for 1 ms, once, with no retry, where `write_t55xx`
-holds the field on and writes every block twice. That difference is real and the change was
-right. It did not make the write work here, so something else is wrong too.
+⭐ **THE BLOCKER IS GONE, AND IT WAS NEVER THE T5577 READ.** §8 used to say the fix was to
+add a T5577 block read, because verifying a write cost a physical Proxmark round trip. It
+does not any more: **this project built the verifier.** `lf indala read` is now 60/60 on two
+tags and two units with 220 nulls and no false positive, and a successful read-back proves
+*everything* that matters — if the config block had not landed the tag would not be
+transmitting PSK1 RF/32 at all, so it could not read. ⇒ Write then read, in one command, on
+one device.
 
-⚠ The obvious suspect is the one that sank §1: **a tag a Proxmark writes, verifies and reads
-back can be completely inaudible to the Chameleon**, and writing needs more field than
-reading. Nothing so far separates "the writer is broken" from "this tag was never coupled
-well enough to be written".
+That turns an afternoon-per-attempt loop into seconds, which is the whole reason this was
+backlogged.
 
-⛔ **The blocker is instrumentation, not code.** The Chameleon has no T5577 *read*, so every
-write attempt costs a physical Proxmark round trip to verify — which is why two attempts ate
-an afternoon. ⇒ Add a T5577 block read before debugging the writer: `t55xx_send_cmd`
-already carries the read opcodes and the protocol decoders already recover data off the
-air. That turns a round trip into one command and makes the writer debuggable at all.
+**Order of work:**
+1. Make `lf indala write` verify by reading back, and say plainly which of the two it is.
+2. With a fast loop, find out whether the writer is broken or the tag was never coupled well
+   enough to be written — ⚠ the question §8 has never been able to separate, and the one that
+   sank the original investigation (a tag a Proxmark writes and verifies can be inaudible to
+   the Chameleon).
+3. Only then consider a T5577 block read, which is still worth having for other protocols but
+   is no longer on this path.
+
+⚠ If the writer cannot be made to work, **remove the command** rather than shipping one that
+silently does nothing. That is a real option, not a formality.
 
 ## 9. Upstreamable?
 
