@@ -14,6 +14,7 @@ conversion by 5 (lf_reader_generic.c:59) before it leaves the device. The protoc
 decoders do NOT -- lf_hidprox_data.c feeds decoder.feed() the raw value. So a
 sub-LSB reading here is up to 32x larger on the path a real demodulator would use.
 """
+import os
 import sys
 import glob
 import numpy as np
@@ -40,6 +41,24 @@ def classify(path):
 
 
 WIDTH = {}          # path -> 8 or 16, for the mixing guard
+
+
+def deglitch(x, w=50, k=4.0):
+    """Drop windows whose peak-to-peak is far above the median window's.
+
+    ⛔⛔ NOT OPTIONAL ON THIS DEVICE. `lf sniff` captures land randomly clean or carrying
+    a USB-transfer buffer overrun (lf_reader_generic.c:30) — a full-scale discontinuity,
+    measured at single-sample jumps of 16380 of 16383, which dumps broadband energy into
+    every bin. Six repeats at one fixed phase spread 49x raw and 1.1x deglitched.
+    Scale-free by design: a fixed LSB threshold tuned on 8-bit data once discarded 100%
+    of a strong 14-bit capture and returned nan."""
+    n = len(x) // w
+    if n == 0:
+        return x
+    pp = np.array([np.ptp(x[i * w:(i + 1) * w]) for i in range(n)])
+    med = np.median(pp)
+    keep = [x[i * w:(i + 1) * w] for i in range(n) if pp[i] <= k * med]
+    return np.concatenate(keep) if keep else np.array([])
 
 
 def load(path):
@@ -113,12 +132,17 @@ def main(paths):
         # same sweep then collide on the same subcarrier key and the later silently
         # wins -- which happened, mixing an 8-bit run with a 14-bit one and producing
         # a plausible-looking table from two different instruments-worth of data.
-        if (inst, hz) in seen:
-            sys.exit("⛔ two %s captures both claim %s:\n  %s\n  %s\n"
+        # ⭐ REPEATS OF ONE CONFIG AGGREGATE; TWO CAMPAIGNS COLLIDE. `--reads "sniff16 x5"`
+        # writes _r1.._r5 in one campaign dir and all five belong together. Files from
+        # DIFFERENT directories claiming the same config are the glob mistake that once
+        # silently mixed an 8-bit run with a 14-bit one, and still stop the analysis.
+        d = os.path.dirname(os.path.abspath(p))
+        if (inst, hz) in seen and seen[(inst, hz)] != d:
+            sys.exit("⛔ two different directories both claim %s for %s:\n  %s\n  %s\n"
                      "Point at ONE campaign, not a glob across all of them."
-                     % (inst, LABEL[hz], seen[(inst, hz)], p))
-        seen[(inst, hz)] = p
-        target[hz] = load(p)
+                     % (LABEL[hz], inst, seen[(inst, hz)], d))
+        seen[(inst, hz)] = d
+        target.setdefault(hz, []).append(load(p))
 
     widths = {WIDTH[p] for p in WIDTH if not p.endswith('.pm3')}
     if len(widths) > 1:
@@ -136,21 +160,35 @@ def main(paths):
     print("\n" + "=" * 74)
     print(" T5577 PSK CARRIER SWEEP")
     print("=" * 74)
+    def med_sb(caps, hz):
+        """Median sideband across repeats, each deglitched first."""
+        if not caps:
+            return float('nan'), 0, float('nan')
+        vals = [sideband_rms(deglitch(c), hz) for c in caps if len(deglitch(c)) > 300]
+        if not vals:
+            return float('nan'), 0, float('nan')
+        spread = max(vals) / min(vals) if min(vals) > 0 else float('inf')
+        return float(np.median(vals)), len(vals), spread
+
     print(f" {'PSKCF':6s}{'subcarrier':>11s}{'smp/cyc':>8s}"
-          f"{'CHAM band':>11s}{'PM3 band':>10s}{'CHAM bin':>10s}{'PM3 bin':>9s}")
+          f"{'CHAM band':>11s}{'n':>3s}{'spread':>8s}{'PM3 band':>10s}{'n':>3s}")
     for hz in order:
         if hz not in cham and hz not in pm3:
             continue
-        cb_ = sideband_rms(cham[hz], hz) if hz in cham else float('nan')
-        pb_ = sideband_rms(pm3[hz], hz) if hz in pm3 else float('nan')
-        c = amplitude_at(cham[hz], hz) if hz in cham else float('nan')
-        p = amplitude_at(pm3[hz], hz) if hz in pm3 else float('nan')
-        deg = " <- degenerate" if hz == 62500.0 else ""
-        print(f" {LABEL[hz]:6s}{hz:10.0f}Hz{FS/hz:8.1f}{cb_:11.3f}{pb_:10.2f}"
-              f"{c:10.3f}{p:9.2f}{deg}")
+        cb_, cn, csp = med_sb(cham.get(hz, []), hz)
+        pb_, pn, _ = med_sb(pm3.get(hz, []), hz)
+        deg = " <- Nyquist" if hz == 62500.0 else ""
+        print(f" {LABEL[hz]:6s}{hz:10.0f}Hz{FS/hz:8.1f}{cb_:11.3f}{cn:3d}{csp:7.2f}x"
+              f"{pb_:10.2f}{pn:3d}{deg}")
+    print("\n band = PSK modulation skirt, median of N deglitched captures.")
+    print(" spread = max/min across repeats; anything far above 1 means the screen")
+    print(" did not fully clean those captures and the median is doing real work.")
     print("\n band = PSK modulation skirt (primary). bin = exact subcarrier: BPSK suppresses")
     print(" its own carrier there, and at fc/2 the bin is at Nyquist and reads 0-2x the truth.")
 
+    for d in (cham, pm3):
+        for hz in list(d):
+            d[hz] = [c for c in d[hz] if len(c)]
     if not (len(cham) >= 2 and len(pm3) >= 2):
         print("\n Need both instruments at >=2 subcarriers for the verdict.")
         print(" Pass the campaign's pm3_signal/*.pm3 alongside raw/*.bin.")
@@ -159,14 +197,15 @@ def main(paths):
     print("\n" + "=" * 74)
     print(" ROLLOFF FROM RF/8 — each instrument against itself")
     print("=" * 74)
-    c0, p0 = sideband_rms(cham[15625.0], 15625.0), sideband_rms(pm3[15625.0], 15625.0)
+    c0 = med_sb(cham[15625.0], 15625.0)[0]
+    p0 = med_sb(pm3[15625.0], 15625.0)[0]
     excess = {}
     print(f" {'PSKCF':6s}{'Proxmark':>12s}{'Chameleon':>12s}{'excess loss':>14s}")
     for hz in order[1:]:
         if hz not in cham or hz not in pm3:
             continue
-        dp = 20 * np.log10(sideband_rms(pm3[hz], hz) / p0)
-        dc = 20 * np.log10(sideband_rms(cham[hz], hz) / c0)
+        dp = 20 * np.log10(med_sb(pm3[hz], hz)[0] / p0)
+        dc = 20 * np.log10(med_sb(cham[hz], hz)[0] / c0)
         excess[hz] = dc - dp
         print(f" {LABEL[hz]:6s}{dp:+11.1f}dB{dc:+11.1f}dB{dc - dp:+13.1f}dB")
     print("\n The Proxmark column is the TAG's own behaviour, common to both instruments.")
