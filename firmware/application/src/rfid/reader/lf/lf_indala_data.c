@@ -200,7 +200,7 @@ static void stack_add(indala_stack_t *s, const int16_t *x, size_t n) {
 }
 
 /** Scale the accumulator back to a 14-bit range and decode it. */
-static bool stack_decode(indala_stack_t *s, size_t n) {
+static bool stack_decode(indala_stack_t *s, size_t n, lf_psk1_decode_fn decode) {
     if (s->n == 0) {
         return false;
     }
@@ -214,7 +214,7 @@ static bool stack_decode(indala_stack_t *s, size_t n) {
         }
         m_scratch[i] = (int16_t)v;
     }
-    if (!indala_psk1_decode(m_scratch, n, &s->res)) {
+    if (!decode(m_scratch, n, &s->res)) {
         return false;
     }
     memcpy(s->word, s->res.id, 8);
@@ -222,7 +222,14 @@ static bool stack_decode(indala_stack_t *s, size_t n) {
     return true;
 }
 
-bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+/* ⭐ THE CAPTURE ENGINE IS SHARED, AND THAT IS THE POINT OF §1c. Everything here — the
+ * sample-phase rotation, the two independent accumulators, the agreement rule, the timeout
+ * discipline — is a property of PSK1-at-RF/32 on this hardware, not of Indala. IDTECK is the
+ * same physical layer, so it gets all of it, including the 32KB of accumulators, for the cost
+ * of one function pointer. Copying this file for a second protocol would have copied the
+ * 320-capture validation with it, and then the two copies would have drifted. */
+bool lf_psk1_read(lf_psk1_decode_fn decode, lf_psk1_read_t *out,
+                  uint32_t timeout_ms, int32_t *energy_out) {
     bool ok = false;
     uint8_t winner_phase = 0;
     const indala_stack_t *winner = NULL;
@@ -255,7 +262,7 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
             indala_stack_t *other = (k & 1u) ? &m_stack_a : &m_stack_b;
 
             stack_add(cur, m_samples, got);
-            bool decoded = stack_decode(cur, got);
+            bool decoded = stack_decode(cur, got, decode);
             /* Set by indala_psk1_decode() either way — see lf_indala_psk.h. */
             if (cur->res.energy > loudest) {
                 loudest = cur->res.energy;
@@ -295,25 +302,69 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
         return false;
     }
 
-    memcpy(&data[0], winner->res.id, 8);
-    data[8]  = winner->res.fc;
-    data[9]  = (uint8_t)(winner->res.csn >> 8);
-    data[10] = (uint8_t)(winner->res.csn & 0xFF);
-    data[11] = (uint8_t)((winner->res.wiegand26_ok ? 0x04u : 0x00u) |
-                         (winner->res.parity & 0x03u));
+    out->res = winner->res;
+    out->phase = winner_phase;
+    out->stacked = (uint8_t)winner->n;
+    return true;
+}
+
+bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(indala_psk1_decode, &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    const indala_psk_result_t *res = &r.res;
+    uint8_t winner_phase = r.phase;
+
+    memcpy(&data[0], res->id, 8);
+    data[8]  = res->fc;
+    data[9]  = (uint8_t)(res->csn >> 8);
+    data[10] = (uint8_t)(res->csn & 0xFF);
+    data[11] = (uint8_t)((res->wiegand26_ok ? 0x04u : 0x00u) |
+                         (res->parity & 0x03u));
     data[12] = winner_phase;
-    data[13] = winner->res.offset;
-    data[14] = (uint8_t)winner->n;   /* captures stacked to get this */
+    data[13] = res->offset;
+    data[14] = r.stacked;   /* captures stacked to get this */
     data[15] = 0;
 
     /* ⚠ NRF_LOG takes at most six format arguments (LOG_INTERNAL_0..6); more is a build
      * error deep inside the macro expansion rather than anything that names this line. */
-    uint32_t hi = ((uint32_t)winner->res.id[0] << 24) | ((uint32_t)winner->res.id[1] << 16) |
-                  ((uint32_t)winner->res.id[2] << 8)  | winner->res.id[3];
-    uint32_t lo = ((uint32_t)winner->res.id[4] << 24) | ((uint32_t)winner->res.id[5] << 16) |
-                  ((uint32_t)winner->res.id[6] << 8)  | winner->res.id[7];
+    uint32_t hi = ((uint32_t)res->id[0] << 24) | ((uint32_t)res->id[1] << 16) |
+                  ((uint32_t)res->id[2] << 8)  | res->id[3];
+    uint32_t lo = ((uint32_t)res->id[4] << 24) | ((uint32_t)res->id[5] << 16) |
+                  ((uint32_t)res->id[6] << 8)  | res->id[7];
     NRF_LOG_INFO("indala %08lx%08lx fc %u phase %u stacked %u",
                  (unsigned long)hi, (unsigned long)lo,
-                 winner->res.fc, winner_phase, winner->n);
+                 res->fc, winner_phase, r.stacked);
+    return true;
+}
+
+/* ⭐ THE WHOLE IDTECK READER. Everything above is shared; this is the payload layout and
+ * nothing else, which is what §1c predicted when it said the physical layers are identical.
+ *
+ * IDTECK packs its 32-bit payload after the "IDTK" preamble as a checksum byte and then a
+ * BYTE-REVERSED 24-bit card number — `4944544B55667788` is checksum 0x55 and card 0x887766,
+ * which is what the Proxmark prints for the bench tag and what `idteck.c` describes on the
+ * emulation side. */
+bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(idteck_psk1_decode, &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    const indala_psk_result_t *res = &r.res;
+
+    memcpy(&data[0], res->id, 8);
+    data[8]  = res->id[4];                      /* checksum byte */
+    data[9]  = res->id[7];                      /* card number, most significant first */
+    data[10] = res->id[6];
+    data[11] = res->id[5];
+    data[12] = r.phase;
+    data[13] = res->offset;
+    data[14] = r.stacked;
+    data[15] = 0;
+
+    uint32_t card = ((uint32_t)res->id[7] << 16) | ((uint32_t)res->id[6] << 8) | res->id[5];
+    NRF_LOG_INFO("idteck card %lu chksum %02x phase %u stacked %u",
+                 (unsigned long)card, res->id[4], r.phase, r.stacked);
     return true;
 }

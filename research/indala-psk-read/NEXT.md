@@ -55,7 +55,7 @@ registered `TAG_TYPE_*`.
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
 | **Indala 224-bit** | ⛔ **MISSING** | ⛔ | ⛔ | ✓ |
-| **IDTECK** | ⛔ **MISSING** | ✓ | ✓ | ✓ |
+| **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | AWID | ✗ | ✗ | ✗ | ✓ |
 | FDX-A | ✗ | ✗ | ✗ | ✓ |
@@ -70,7 +70,7 @@ registered `TAG_TYPE_*`.
 | Noralsy | ✗ | ✗ | ✗ | ✓ |
 | InstaFob | ✗ | ✗ | ✗ | ✓ (ASK, RF/32) |
 
-⇒ **Twelve protocols absent, two read paths missing, two readers unreliable.**
+⇒ **Twelve protocols absent, one read path missing (Indala224), two readers unreliable.**
 
 ⛔ **Indala is NOT finished.** Momentum implements **Indala224** as well as Indala26, and our
 decoder is hard-wired to 64 bits (`INDALA_PSK_FRAME_BITS 64`). That belongs in Phase 1, and it
@@ -142,6 +142,7 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | Flipper read driver (§0) | `flipper.py` committed and bracketed: **PSK 4/4, ASK 0/4**. L83 |
 | Undecodable-signal status (§1) | `0x43` shipped and verified on four arms, **20 reads**. C89, L85 |
 | Wrong credential from IDTECK (§0) | vetoed by decoding IDTECK: **0 of 10**, was 4 of 8. C90, C91, L87 |
+| IDTECK reader (§1c) | `lf idteck read`, **6/6** with two nulls. C92, L88 |
 
 ---
 
@@ -164,34 +165,16 @@ nothing.
 
 ⇒ Every loud-signal null in the project now rests on a valid bracket.
 
-## 1c. ⭐⭐ Implement the IDTECK READER — the cheapest protocol on the board
+## 1c. ✅ IDTECK reader — shipped
 
-IDTECK is the only protocol where we can write and emulate but not read (see the grid). It is
-also the cheapest thing on the list, because **its physical layer is identical to Indala's**:
-64-bit PSK1 at RF/32, subcarrier fc/2, and a T5577 config word that differs from Indala's only
-in not setting `T5577_PWD` (C54, and `t55xx.h`).
+`lf idteck read`, built as the shared capture engine plus a decode function: **6 of 6** on the
+bench tag, **4 of 4** not found on an empty antenna, and **5 of 5** reporting 0x43 rather than
+a credential against an Indala source that `lf indala read` reads 3 of 3 in the same minute
+(C92, L88). No new RAM — `lf_psk1_read()` takes the protocol as a parameter.
 
-⇒ `lf_indala_psk.c` already does the whole demodulation. What differs is 33 bits of preamble
-and the payload interpretation:
-
-| | Indala | IDTECK |
-|---|---|---|
-| preamble | `1010` + 28 zeros + `1` (33 bits) | `0x4944544B` — "IDTK" (32 bits) |
-| payload | 31 bits, de-scrambled to FC/CN | checksum byte + 24-bit card number |
-
-**Approach:** parameterise the preamble search rather than copying the decoder. The
-straddle gate, the bit integrator, the offset ranking and the capture path are all
-protocol-agnostic and already validated on 640 captures.
-
-⚠ **It inherits the carrier-lock limitation** (C80, C82). An IDTECK reader built on this
-decoder will read real tags and will NOT read an emulated one, for the same reason
-`lf indala read` does not. ⇒ §1's status code must live in the shared path, not in
-Indala-specific code, so both protocols report it.
-
-⭐ **It also gives us the null we currently have to borrow.** Today the only way to show the
-Indala reader rejects IDTECK is an amplitude bracket (C85); with an IDTECK reader, each
-protocol's reader becomes the positive control for the other's null — on the same tag, same
-placement, same moment.
+⭐ It delivered the control it promised: each PSK1 reader is now the other's positive control,
+on the same signal at the same moment, so cross-protocol nulls no longer need an amplitude
+proxy.
 
 ## 1d. ⚠ Indala 224-bit — Indala is not finished without it
 

@@ -6516,6 +6516,26 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         print(f" - Viking ID(8H): {id_hex} write done.")
 
 
+@lf_idteck.command("read")
+class LFIdteckRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an IDTECK credential (PSK1, RF/32). Shares the Indala "
+                              "capture path, so it is slower than the ASK reads for the same "
+                              "reason: whole captures at a rotating sample phase, returning "
+                              "only once two of them agree.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, chksum, card, phase, offset, stacked = self.cmd.idteck_scan()
+        print("IDTECK PSK1")
+        print(f"   Raw: {color_string((CY, raw.hex()))}")
+        print(f"   Card: {color_string((CG, card))} ({card:#08x})  "
+              f"Checksum byte: {color_string((CY, f'{chksum:02x}'))}")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{stacked} capture{'' if stacked == 1 else 's'} stacked")
+
+
 @lf_idteck.command("write")
 class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:

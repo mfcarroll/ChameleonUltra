@@ -86,6 +86,23 @@ uint8_t scan_indala(uint8_t *data) {
 }
 
 /**
+ * @brief Search IDTECK tag
+ *
+ * Same budget and same failure reporting as Indala — it is the same demodulation against a
+ * different preamble, so a marginal read costs the same captures.
+ *
+ * @param data IDTECK_READ_DATA_SIZE bytes; see lf_indala_data.h for the layout
+ * @return STATUS_LF_TAG_OK on success
+ */
+uint8_t scan_idteck(uint8_t *data) {
+    int32_t energy = 0;
+    if (idteck_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return lf_psk1_failure_status(energy);
+}
+
+/**
  * @brief Search ioProx tag
  * @param output 16 bytes ioprox_codec_t->data layout: version, facility code, card number, raw8
  * @return STATUS_LF_TAG_OK on success

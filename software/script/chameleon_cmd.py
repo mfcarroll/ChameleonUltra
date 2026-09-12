@@ -722,6 +722,26 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def idteck_scan(self):
+        """
+        Read an IDTECK credential (PSK1, RF/32, fc/2 subcarrier).
+
+        ⭐ The same physical layer as Indala and the same shared capture engine, so the same
+        timing applies — see indala_scan for why this needs a 10s host timeout against a 3s
+        device budget.
+
+        Returns (id, chksum, card, phase, offset, stacked) where id is the raw 64-bit frame
+        (the first four bytes are always "IDTK") and card is the 24-bit card number.
+        """
+        resp = self.device.send_cmd_sync(Command.IDTECK_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, chk, c_hi, c_mid, c_lo, phase, offset, stacked = struct.unpack(
+                ">8sBBBBBBB1x", resp.data[:16])
+            card = (c_hi << 16) | (c_mid << 8) | c_lo
+            resp.parsed = (raw, chk, card, phase, offset, stacked)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
         Write ioProx card data to a T55XX tag.

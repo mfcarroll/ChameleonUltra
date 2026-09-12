@@ -183,6 +183,7 @@ class Command(enum.IntEnum):
     LF_SNIFF = 3031
     INDALA_SCAN = 3033
     INDALA_WRITE_TO_T55XX = 3034
+    IDTECK_SCAN = 3035
 
 
 @enum.unique

@@ -372,6 +372,14 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
     return true;
 }
 
+/* ⛔ NO REJECT PREAMBLE HERE, and that asymmetry is deliberate — see lf_psk1_decode_ex.
+ * Indala's preamble matches a loud IDTECK tag, so Indala must veto on IDTECK; the reverse
+ * never happened in 480 captures, so vetoing here would only throw away genuine reads. */
+bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_psk1_decode(samples, n, LF_PSK1_PREAMBLE_IDTECK,
+                          IDTECK_PSK_PREAMBLE_BITS, out);
+}
+
 bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     if (!lf_psk1_decode_ex(samples, n,
                            LF_PSK1_PREAMBLE_INDALA, INDALA_PSK_PREAMBLE_BITS,

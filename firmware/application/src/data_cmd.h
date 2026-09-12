@@ -210,5 +210,6 @@
 #define DATA_CMD_LF_SNIFF                       (3031)
 #define DATA_CMD_INDALA_SCAN                    (3033)
 #define DATA_CMD_INDALA_WRITE_TO_T55XX          (3034)
+#define DATA_CMD_IDTECK_SCAN                    (3035)
 
 #endif

@@ -205,3 +205,10 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
                        const uint8_t *preamble, uint8_t preamble_bits,
                        const uint8_t *reject, uint8_t reject_bits,
                        indala_psk_result_t *out);
+
+/** IDTECK's decode: the same demodulation against the "IDTK" preamble, and no veto. */
+bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** What a reader hands the capture engine: one protocol's whole decode, preamble and any
+ *  veto included, so the engine stays protocol-agnostic. */
+typedef bool (*lf_psk1_decode_fn)(int16_t *samples, size_t n, indala_psk_result_t *out);
