@@ -120,6 +120,20 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 
 ---
 
+## 0. ⚠ Prerequisite — commit a Flipper serial-CLI read driver
+
+Rig A's whole value is that the Flipper reads what we emulate without anyone pressing a
+button, and C81 and C83 were both taken that way — but the driver was a scratch file and is
+gone. Nothing can verify an emulation change until it is back.
+
+`rfid read indala` selects PSK, `rfid read normal` selects ASK; running both gives the
+control for free, since a PSK hit with an ASK miss says the reader was looking and found a
+*PSK* tag rather than any tag.
+
+⛔ Build it under M28. Match on what the success path uniquely prints — a decoded credential
+— never on a protocol name that also appears in help text or in the command echo, and have it
+refuse to print a count larger than the number of attempts.
+
 ## 1. ⭐⭐⭐ Tell the user WHY a read failed — the undecodable-signal status
 
 Our reader cannot decode a non-carrier-locked source, so a Flipper or Proxmark emulating
