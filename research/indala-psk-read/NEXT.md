@@ -20,6 +20,7 @@ under **The bench** and **Working conventions**.
 | | why a person is required |
 |---|---|
 | **An Indala tag for rig B** | ✅ The bench geometry is confirmed — Proxmark — T5577 — Chameleon #2, one tag — and that tag is **IDTECK**, not Indala (C90). ⇒ Rig B can no longer verify an Indala read against a real tag. Reprogramming it to Indala is one Proxmark command, but which protocol the tag should carry is the user's call, and §1c wants it on IDTECK |
+| ⛔ **Rig A's emulation is broken — power-cycle it** | Chameleon #1 read 3/3 and 4/4 on the Flipper early today and reads 0 of 4 now, surviving a forced sense re-enable, `hw slot store` and a **full DFU reboot**, with slot 1 verified as Indala carrying the right payload. The rig is otherwise fine: the Flipper emitting Indala is read 3 of 3 by that same Chameleon. ⇒ A true power cycle (USB out) is the one reset not available to me, and it is the obvious next thing to try (C93, L89) |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces a tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -213,24 +214,22 @@ the clean test of C47.
 ⛔ Do not read the em410x 95% as evidence either way: it is on the GPIO path and never
 touches the SAADC, which is why C47 was wrongly weakened once already.
 
-## 3. ⛔ Firmware bug: changing a slot to a PSK1 type while emulating leaves the PWM clock wrong
+## 3. ⚠ PWM clock on a type change — NOT reproduced, and not refuted either
 
-Affects IDTECK identically — pre-existing, not introduced here.
+The code reading still holds: `pwm_init()` picks the base clock from `IS_PSK1_TYPE(m_tag_type)`
+and runs only from `lf_sense_enable()`, so `hw slot type` changes the type with nothing
+re-initialising the PWM.
 
-`pwm_init()` picks `IS_PSK1_TYPE(m_tag_type) ? 1MHz : 125kHz`, but runs only from
-`lf_sense_enable()`, which fires only on a sense DISABLE→ENABLE transition. `hw slot type`
-changes `m_tag_type` long afterwards and nothing re-inits.
+⛔ **But it does not show up.** Switching slot 1 ASK↔PSK1 with the Flipper's field held
+continuously kept reading 4/4, and the failure that did appear survives a full reboot — which
+re-runs `pwm_init` by construction, so it cannot be the stale clock (C93, L89).
 
-| base clock | entry | subcarrier | |
-|---|---|---|---|
-| 1 MHz (PSK1) | 16 µs | 62.5 kHz | correct |
-| 125 kHz | 128 µs | 7.8 kHz | **8x slow, unrecognisable** |
+⇒ Re-open this only with a test that reads the base clock directly, or one that can show a
+protocol emulating CORRECTLY before and INCORRECTLY after a type change, with a positive
+control on both sides. The attempt logged in L89 had neither.
 
-Broken both ways. **Workaround:** `hw mode -r` then `-e`, or reboot, after changing type.
-**Fix:** re-init when `IS_PSK1_TYPE(m_tag_type)` changes. ⚠ `lf_sense_disable()` also releases
-the HFXO request and nulls `m_pwm_seq`, so a naive disable/enable drops the loaded sequence.
-
-⚠ Real by inspection; never confirmed as the cause of any symptom (L70).
+⚠ Blocked behind the power-cycle item at the top of this file: rig A cannot currently emulate
+anything, so no emulation test can be run there at all.
 
 ## 4–5 preamble. ⭐ Burst length and carrier lock are DIFFERENT problems
 
