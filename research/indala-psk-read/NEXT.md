@@ -166,6 +166,46 @@ all 15 readers get it, not pasted into `hidprox_read()` alone.
 ⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
 (`lfprobe.py`) for presence, per §3.
 
+## 3a. ⛔⛔ INDALA EMULATION TRANSMITS BUT ITS PHASE IS DESTROYED — and the modulator is innocent
+
+Sniffed from the second Chameleon in reader mode, against an empty control (C63, C64, C65, L71).
+
+| | fc/2 skirt | longest constant-phase run | frame autocorrelation |
+|---|---|---|---|
+| real tag | 201450 | **912 samples** (28.5 bits) | lag 2048, r=+0.41 |
+| **emulator, front** | 62524 | **102 samples** (3.2 bits) | lag 2070, r=+0.34 |
+| emulator, other side | ~5000 | 45 | r=+0.02 |
+| empty | 6399 | 34 | r=+0.01 |
+
+It IS modulating, at very nearly the right frame rate. The 28-zero preamble needs a 896-sample
+constant-phase run and there is nothing longer than 102.
+
+**Ruled out:**
+- ⭐ **The modulator.** Host-tested in the `ctest` style: `lf_psk1_rf32_modulator` on
+  `a0000000e6bd0e92` gives polarity-per-bit IDENTICAL to the frame, all 16 entries per bit
+  agreeing, counter_top 16, duty 8. It is correct.
+- **The data path.** `lf indala econfig` reads the frame back off the device.
+- **NEXT §3c** (stale PWM clock) — a power cycle did not fix it, and an 8x-slow clock would
+  show a 7.8 kHz subcarrier, which is not what the spectrum shows.
+
+⚠ **LEADING HYPOTHESIS, UNTESTED: a PWM cannot emulate PSK1 because it is not phase-locked to
+the reader.** A real T5577 *divides the reader's own field* to make its fc/2 subcarrier, so
+the subcarrier is coherent with the carrier by construction — and that coherence is the whole
+premise of this project's decoder: mix by (-1)^n, no oscillator, no phase estimate, because
+fc/2 IS fs/2. A PWM free-running from the emulator's own crystal has no such relationship, so
+the phase rotates and the data is destroyed while the envelope timing survives. Which is
+exactly the measured shape.
+
+⛔ **TEST IT WITH IDTECK BEFORE BELIEVING IT, AND BEFORE WRITING ANY CODE.** IDTECK shares the
+entire transmit path, and nothing in this tree records it ever being verified end to end. If
+IDTECK emulates correctly, the hypothesis is wrong and something Indala-specific is at fault.
+If IDTECK is equally broken, PSK1 emulation has never worked on this device and the fix is a
+design change — deriving the subcarrier from the field — not a patch.
+
+⚠ Do not skip to "make the PWM coherent". Nothing has yet established that the nRF52 PWM
+*can* be locked to the recovered carrier, and the LF path may not even expose a usable clock
+to lock to. Establish the failure first.
+
 ## 3c. ⛔ FIRMWARE BUG: changing a slot to a PSK1 type while emulating leaves the PWM clock wrong
 
 **Affects IDTECK as much as Indala — pre-existing, not introduced by this work.**
