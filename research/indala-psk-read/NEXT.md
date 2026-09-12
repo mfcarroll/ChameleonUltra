@@ -527,6 +527,28 @@ specification and never tested on hardware is worth less than nothing — it loo
 That is the whole lesson of `idteck.c`, which shipped an emulation nobody had ever verified
 end to end and a reader that does not exist.
 
+## ⭐ What the saturation lever REOPENS — a review of older conclusions
+
+⛔ **Why this section exists.** C140 established that the LF amplifier clips on a well-coupled
+tag, and C144 that the reader's own field strength is the control for it. Neither existed while
+most of this project's measurements were taken, so any conclusion whose evidence was *an
+amplitude, a ratio, or a "the signal is present and constant"* may have been reading a railed
+path rather than a healthy one. This is M30's shape: the conclusions were not wrong when made,
+and nothing has said so since.
+
+⚠ Ranked by how much the conclusion would move. **None of these is retracted here** — they are
+flagged for a measurement that can now be made and could not be before.
+
+| | why it may need another look |
+|---|---|
+| ⭐⭐⭐ **C45 — "the RF path is provably flat, so the HID intermittency is the DECODER"** | The evidence was a subcarrier amplitude that did not move: 6034358 / 6023801 / 6020802, "1.00x throughout", while reads went 8/8, 7/8, 7/8. ⛔ **A SATURATED path is also flat** — that is what clipping does to an amplitude measurement. So "flat" cannot distinguish a healthy path from a railed one, and the inference to "therefore the decoder" does not follow. ⚠ Partly reassured already: HID on the current bench shows **0.0% railed samples** (C146), so its path is not clipping *here*. C45 was measured on the white coin at a different coupling, so the check is to re-take it with the rail fraction recorded alongside the amplitude |
+| ⭐⭐ **Every "Nx the empty floor" bracket** — C44 (88-100x), C52 (18.1-18.9x), C55 (22.65x, 16-19x), and `emutest.py`'s "real tag 33.85" reference | A ratio measured through a saturating path is **compressed**: the loud arm clips and the floor does not, so the true ratio is HIGHER than reported. ⇒ This does not weaken the nulls — a tag that loud still produced no false frame, and clipping only makes it louder than stated. But the numbers are not linear and should not be used as calibration, which is exactly what `emutest.py`'s 33.85 reference is used for |
+| ⭐⭐ **C40 / C48 — the straddle gate** | C40 found that on the front (strong) the decoder returns REPEATING wrong frames where on the back (26 dB down) they scatter, and concluded "wrong words never repeat is a property of low SNR". ⛔ Deterministic wrong output at high signal is also the signature of a clipped input. C48's gate was built to reject exactly those front-side frames. ⇒ If they are a clipping artefact, a weaker drive may remove them at the source — and the gate would be a workaround outliving its problem (M30). **Cheap to test now:** re-run the front-side capture set at reduced drive and count wrong frames |
+| ⭐ **C41 — the fs/2 notch reversed sign between back and front** | It helped at 26 dB down and costs decodes on the front. A parameter that reverses between weak and strong signal is what a nonlinearity looks like. Re-measure on the front at a drive where nothing rails |
+| ⭐ **The Indala sample-phase window and the 43/160 rate** | "Ticks 4-60 work, stock 0 fails" is a core project finding, measured entirely at stock drive. If clipping is part of why phase matters, the window may widen, move, or stop mattering at a drive where the path is linear — and the single-capture decode rate may rise. Directly testable with `lf sniff --drive` plus the committed host decoders |
+| ⛔ **`LF_RSSI` / AIN0 as a tap — TESTED, STAYS CLOSED** | I expected this to reopen: AIN0 reads `0xff-0xff` and was closed as "measured dead", which looked like saturation. It is not recoverable by weakening the field — at drives 4, 6 and 7 it reads `0xff-0xff`, `0xff-0xff` and `0xeb-0xff`, the last being 20 counts of range out of 255. Still dead. ⭐ A negative result, and the one item here that can be struck off |
+| ⚠ **SAADC gain, closed as C10** | Closed because 1/6 is the LOWEST gain available, so it could not help a clipping signal. That argument only ever ran downward. At a drive weak enough that nothing rails, a HIGHER gain becomes usable and would buy resolution on weak tags — the opposite question, never asked |
+
 ## Closed — do not re-open without new evidence
 
 | | why |
