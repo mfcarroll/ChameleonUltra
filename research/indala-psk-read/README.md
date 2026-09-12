@@ -239,6 +239,19 @@ regression test against that is a test of the previous build, and it looks exact
 passing one — it happened here and the version string is what caught it. ⇒ Retry the trigger
 until `nrfutil device list` shows `nordicDfu`, then check the version afterwards.
 
+⛔ **CHECK WHAT IS ACTUALLY ON THE T5577 BEFORE RUNNING ANYTHING AGAINST IT.** One
+`lf search` on the Proxmark. The tag has worn five different credentials in a single day, and
+`drivesoak.py` cycles it through four more; the row in `NEXT.md` has gone stale twice and both
+times it sent experiments at the wrong specimen — once producing a "PAC reads 0/10 regression"
+that was simply a HID tag.
+
+⛔ **CONFIRM THE DRIVE CONTROL IS LIVE BEFORE BELIEVING ANY `--drive` NUMBER.** One capture at
+`--drive 7` against one at `--drive 4`: live is roughly 2x apart, inert is identical. The
+control silently stops taking effect mid-session (C148), a reboot restores it, and while it is
+inert every drive produces the stock field — which invalidated a PAC result and cost four wrong
+explanations in a row. ⚠ If it looks inert, run `hw lfdebug` **before** touching anything: a
+reboot clears the state and destroys the evidence.
+
 ⭐ **A change and the note describing it belong in the same commit**, so the tree is never in
 a state where the code and the notes disagree. `./checkdocs.sh` passes before every commit.
 
