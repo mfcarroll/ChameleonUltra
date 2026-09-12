@@ -764,6 +764,15 @@ static data_frame_tx_t *cmd_processor_lf_emu_debug(uint16_t cmd, uint16_t status
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(buf), buf);
 }
 
+/* ⛔ Instrumentation for C148 — see lf_125khz_radio.c. Reads the LF radio's drive value and
+ * PWM0's live registers, which is the one measurement that says whether the value is wrong or
+ * the peripheral is ignoring a correct value. */
+static data_frame_tx_t *cmd_processor_lf_radio_debug(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t buf[LF_RADIO_DEBUG_SIZE] = { 0x00 };
+    lf_125khz_radio_debug_get(buf);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(buf), buf);
+}
+
 static data_frame_tx_t *cmd_processor_indala224_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[INDALA224_READ_DATA_SIZE] = { 0x00 };
     status = scan_indala224(card_data);
@@ -3278,6 +3287,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IDTECK_SCAN,                  before_reader_run,           cmd_processor_idteck_scan,                   NULL                   },
     {    DATA_CMD_INDALA224_SCAN,               before_reader_run,           cmd_processor_indala224_scan,                NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
+    {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },

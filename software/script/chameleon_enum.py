@@ -188,6 +188,7 @@ class Command(enum.IntEnum):
     LF_EMU_DEBUG = 3037
 
 
+    LF_RADIO_DEBUG = 3038
 @enum.unique
 class Status(enum.IntEnum):
     HF_TAG_OK = 0x00  # IC card operation is successful

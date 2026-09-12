@@ -213,5 +213,6 @@
 #define DATA_CMD_IDTECK_SCAN                    (3035)
 #define DATA_CMD_INDALA224_SCAN                 (3036)
 #define DATA_CMD_LF_EMU_DEBUG                   (3037)
+#define DATA_CMD_LF_RADIO_DEBUG                 (3038)
 
 #endif

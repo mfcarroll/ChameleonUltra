@@ -217,8 +217,20 @@ drive 4 never moved and only the weak arm did.
 had the disease (0.0% railed samples). ⚠ What remains open is not §2 but the **instrument**:
 C148's drive inertness is intermittent, cleared by a reboot, and has no identified trigger. It
 cost this session four wrong explanations and one wasted request to the user to check their
-bench. ⇒ Anything measured with `--drive` should confirm the control is live first — one
-capture at drive 7 against one at drive 4 — before the numbers are believed.
+bench. ⇒ **`hw lfdebug` is the trap** (C149): it reports the drive the PWM was handed *at playback
+start* plus PWM0's live registers, which decides in one call between "the RAM was clobbered",
+"the peripheral ignored a correct value" and "another module holds the sequence pointer".
+⚠ Run it the moment a `--drive` measurement looks wrong, **before** changing anything — the
+state is cleared by a reboot, so a reflash destroys the evidence.
+
+⇒ And still confirm the control is live before believing any `--drive` number: one capture at
+drive 7 against one at drive 4. Live is roughly 2x apart; inert is identical.
+
+⚠ **Leading suspect, not demonstrated (C150):** `lf_tag_em.c` and `lf_125khz_radio.c` both drive
+`NRFX_PWM_INSTANCE(0)`, the same peripheral, with separate beliefs about ownership — the tag
+path calls `nrfx_pwm_uninit()` on it from two places while the reader's `m_reader_inited` stays
+true. A mode cycle does not reproduce the fault, which weakens it, but it is the only
+shared-resource collision in the LF path.
 
 Three tags with byte-identical memory read **0/6, 3/6 and 7/9** on the Chameleon and 3/3 on a
 Proxmark (C46). The RF path is flat while reads fail (C45). `lf pac read` scored 0/5 and 2/5

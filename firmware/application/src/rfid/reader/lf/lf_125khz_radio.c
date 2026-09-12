@@ -11,6 +11,15 @@
 #include "rfid_main.h"
 
 static bool m_reader_inited = false;
+
+/* ⛔ C148 instrumentation — the value the PWM was ACTUALLY handed, snapshotted at the moment
+ * playback starts. A readback after the fact is useless: the capture path deliberately restores
+ * the stock drive when it finishes, so querying afterwards always reports the default no matter
+ * what the capture ran at. That is not a bug, it is why the snapshot has to be here. */
+static uint8_t  m_dbg_drive_at_start = 0xFF;
+static uint32_t m_dbg_ptr_at_start = 0;
+static uint16_t m_dbg_starts = 0;
+
 nrfx_pwm_t m_pwm = NRFX_PWM_INSTANCE(0);
 nrfx_timer_t m_pwm_timer_counter = NRFX_TIMER_INSTANCE(2);
 nrf_ppi_channel_t m_pwm_saadc_sample_ppi_channel;
@@ -75,6 +84,55 @@ uint8_t lf_125khz_radio_drive_get(void) {
     return (uint8_t)m_lf_125khz_pwm_seq_val[0].channel_0;
 }
 
+/* ⭐ A TRAP FOR C148, AND THE POINT IS THE FORK IT SETTLES.
+ *
+ * The drive control works from a fresh boot and goes inert partway through a session; a reboot
+ * restores it exactly. Every test so far has been behavioural — inferring the peripheral's
+ * condition from a decode rate — which is how this session produced four wrong explanations
+ * and sent the user to check a bench that was fine.
+ *
+ * ⇒ One readback splits the hypothesis space in two:
+ *
+ *   `drive` wrong        → the RAM the PWM reads by DMA is being CLOBBERED. `m_lf_125khz_pwm_seq_val`
+ *                          is a static, and a write past the end of a neighbouring buffer would
+ *                          rewrite it silently. Nothing about the peripheral is at fault.
+ *   `drive` right        → the value is correct and the PWM is IGNORING it. Then `seq_ptr` says
+ *                          whether the peripheral is still pointed at our array — ⚠ `lf_tag_em.c`
+ *                          drives `NRFX_PWM_INSTANCE(0)` too, the same peripheral, with its own
+ *                          separate belief about who owns it — and `countertop`/`decoder` say
+ *                          whether the config is ours or the tag path's.
+ *
+ * ⛔ Instrumentation. Remove with `hw emudebug` before upstreaming (§9). */
+void lf_125khz_radio_debug_get(uint8_t *out) {
+    uint32_t ptr = NRF_PWM0->SEQ[0].PTR;
+    uint32_t own = (uint32_t)(uintptr_t)m_lf_125khz_pwm_seq_val;
+    out[0]  = (uint8_t)m_lf_125khz_pwm_seq_val[0].channel_0;
+    out[1]  = m_reader_inited ? 1 : 0;
+    out[2]  = (uint8_t)(NRF_PWM0->COUNTERTOP >> 8);
+    out[3]  = (uint8_t)NRF_PWM0->COUNTERTOP;
+    out[4]  = (uint8_t)NRF_PWM0->PRESCALER;
+    out[5]  = (uint8_t)NRF_PWM0->DECODER;          /* LOAD in bits 0-2, MODE in bit 8 */
+    out[6]  = (uint8_t)(NRF_PWM0->DECODER >> 8);
+    out[7]  = (uint8_t)NRF_PWM0->ENABLE;
+    out[8]  = (uint8_t)(NRF_PWM0->SEQ[0].CNT >> 8);
+    out[9]  = (uint8_t)NRF_PWM0->SEQ[0].CNT;
+    /* ⭐ The whole question in one bit: is the peripheral still reading OUR array? */
+    out[10] = (ptr == own) ? 1 : 0;
+    out[11] = (uint8_t)(ptr >> 24);
+    out[12] = (uint8_t)(ptr >> 16);
+    out[13] = (uint8_t)(ptr >> 8);
+    out[14] = (uint8_t)ptr;
+    out[15] = (uint8_t)(NRF_PWM0->MODE);
+    /* ⭐ The load-bearing fields: what the PWM was handed at the last playback start, which is
+     * the only moment the value matters. `drive_at_start` wrong ⇒ the RAM was clobbered before
+     * the capture; right, with the capture still inert ⇒ the peripheral ignored a correct value
+     * and `ptr_at_start` says whether it was even reading our array at the time. */
+    out[16] = m_dbg_drive_at_start;
+    out[17] = (m_dbg_ptr_at_start == own) ? 1 : 0;
+    out[18] = (uint8_t)(m_dbg_starts >> 8);
+    out[19] = (uint8_t)m_dbg_starts;
+}
+
 nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
     .values.p_individual = m_lf_125khz_pwm_seq_val,
     .length = NRF_PWM_VALUES_LENGTH(m_lf_125khz_pwm_seq_val),
@@ -105,6 +163,9 @@ static void gpiote_init(void) {
  */
 void start_lf_125khz_radio(void) {
     nrfx_pwm_simple_playback(&m_pwm, &m_lf_125khz_pwm_seq_obj, 1, NRFX_PWM_FLAG_LOOP);
+    m_dbg_drive_at_start = (uint8_t)m_lf_125khz_pwm_seq_val[0].channel_0;
+    m_dbg_ptr_at_start = NRF_PWM0->SEQ[0].PTR;
+    m_dbg_starts++;
     TAG_FIELD_LED_ON();
 }
 

@@ -7586,6 +7586,40 @@ class HWEmuDebug(DeviceRequiredUnit):
         print(f"   frames per burst : {d['frames_per_burst']}")
 
 
+@hw.command("lfdebug")
+class HWLfRadioDebug(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("⛔ C148 instrumentation: dump the LF radio drive value and "
+                              "PWM0's live registers. The drive control goes inert partway "
+                              "through a session and a reboot restores it; this says whether "
+                              "the VALUE is wrong or the peripheral is ignoring a right one.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        d = self.cmd.lf_radio_debug()
+        load = {0: "COMMON", 1: "GROUPED", 2: "INDIVIDUAL", 3: "WAVEFORM"}.get(
+            d["decoder_load"], "?")
+        pre = {0: "16MHz", 1: "8MHz", 2: "4MHz", 3: "2MHz", 4: "1MHz",
+               5: "500kHz", 6: "250kHz", 7: "125kHz"}.get(d["prescaler"], "?")
+        print(f"   drive value      : {d['drive']}   (stock 4, range 1-7)")
+        print(f"   reader_inited    : {bool(d['reader_inited'])}")
+        print(f"   PWM0 base clock  : {pre}")
+        print(f"   PWM0 COUNTERTOP  : {d['countertop']}   (reader expects 8)")
+        print(f"   PWM0 DECODER load: {load}   (reader expects INDIVIDUAL)")
+        print(f"   PWM0 ENABLE      : {d['enable']}")
+        print(f"   PWM0 SEQ[0].CNT  : {d['seq0_cnt']}   (reader expects 4)")
+        ok = bool(d["ptr_is_ours"])
+        print(f"   SEQ[0].PTR ours  : {ok}   0x{d['seq0_ptr']:08X}"
+              + ("" if ok else "   ⛔ PWM0 IS NOT READING OUR SEQUENCE"))
+        # ⭐ The fields that actually answer C148. A readback after a capture always shows the
+        # stock drive, because the capture path restores it on the way out — so what matters is
+        # what the PWM was handed when playback STARTED.
+        print(f"   at last start    : drive {d['drive_at_start']}, "
+              f"seq ptr ours {bool(d['ptr_ours_at_start'])}, "
+              f"{d['starts']} starts")
+
+
 @hw.command("battery")
 class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?

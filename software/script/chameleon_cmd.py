@@ -747,6 +747,38 @@ class ChameleonCMD:
             }
         return resp
 
+    @expect_response(Status.SUCCESS)
+    def lf_radio_debug(self):
+        """
+        ⛔ C148 instrumentation: read the LF RADIO's drive value and PWM0's live registers.
+
+        The drive control works from a fresh boot and goes inert partway through a session.
+        Every test of that so far has been behavioural — inferring the peripheral's state from
+        a decode rate — which produced four wrong explanations in one session. This reads the
+        state directly, and it splits the question in two: if `drive` is wrong the RAM the PWM
+        reads by DMA is being clobbered; if `drive` is right the peripheral is ignoring it, and
+        `ptr_is_ours` says whether PWM0 is even pointed at our sequence any more.
+
+        ⚠ lf_tag_em.c drives NRFX_PWM_INSTANCE(0) as well — the same peripheral, with its own
+        separate belief about ownership. That is the leading suspect. ⛔ Remove with the
+        firmware side.
+        """
+        resp = self.device.send_cmd_sync(Command.LF_RADIO_DEBUG)
+        d = resp.data
+        resp.parsed = {
+            "drive": d[0], "reader_inited": d[1],
+            "countertop": (d[2] << 8) | d[3], "prescaler": d[4],
+            "decoder_load": d[5] & 0x07, "decoder_mode": d[6],
+            "enable": d[7], "seq0_cnt": (d[8] << 8) | d[9],
+            "ptr_is_ours": d[10],
+            "seq0_ptr": (d[11] << 24) | (d[12] << 16) | (d[13] << 8) | d[14],
+            "pwm_mode": d[15],
+            "drive_at_start": d[16], "ptr_ours_at_start": d[17],
+            "starts": (d[18] << 8) | d[19],
+        }
+        return resp
+
+
     @expect_response(Status.LF_TAG_OK)
     def indala224_scan(self):
         """

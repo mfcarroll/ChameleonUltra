@@ -52,6 +52,11 @@ void lf_125khz_radio_saadc_rate_set(uint16_t khz);
 void lf_125khz_radio_drive_set(uint8_t duty);
 uint8_t lf_125khz_radio_drive_get(void);
 
+/* ⛔ Instrumentation for C148 — the drive control going inert mid-session. 16 bytes.
+ * Remove with `hw emudebug` before upstreaming. See the note in lf_125khz_radio.c. */
+#define LF_RADIO_DEBUG_SIZE 20
+void lf_125khz_radio_debug_get(uint8_t *out);
+
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb);
 void lf_125khz_radio_gpiote_enable(void);
 void lf_125khz_radio_saadc_disable(void);
