@@ -24,6 +24,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 |---|---|
 | ⚠ **The bench tag is currently PAC/Stanley `CD4F5552`, not IDTECK** | Left that way deliberately: it is §2's first REPRODUCIBLE failure (`lf pac read` 0/10 on a tag the Proxmark reads) and the specimen to debug against. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
+| ⚠ **A physically WEAK-COUPLING HID fob — not HID data** | ⛔ Not a Proxmark command: writing HID to the T5577 is already done and reads **12/12** (C108). C46's failures were three *different physical packages* with byte-identical memory reading 0/6, 3/6 and 7/9, and its conclusion was that the PACKAGE is the variable. C47 only predicts an effect where reads are marginal, so testing it needs one of those fobs on rig B. No write can synthesise poor coupling |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -114,7 +115,7 @@ can run to completion now and work that has to wait.
 | §1 status code | **nothing** — empty arm on rig A, loud-undecodable arm from the Flipper emulating IDTECK into our Indala reader. ⚠ A genuinely free-running source still needs hands (C87) |
 | §1c IDTECK reader | **nothing** — the Proxmark writes IDTECK to the T5577 and Chameleon #2 reads it. Rig B is exactly this test |
 | §1d Indala224 | **nothing** — §8 is settled, so the RAM is available. `lf indala clone --224` on rig B |
-| §2 HID / PAC readers | **nothing** — the Proxmark may rewrite the T5577 freely now. ⚠ C46 used three real HID tags; a T5577 wearing HID is a different specimen, so say which was used, and restore the IDTECK contents `00081040 / 4944544B / 55667788` afterwards because C90-C92 regress against them |
+| §2 HID / PAC readers | **PAC: nothing** — it fails 0/10 on the T5577 right now (C109), which is the specimen to debug against. ⚠ **HID: needs a weak-coupling fob**, not a write; the T5577 wearing HID reads 12/12 either way (C108). ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` when done — C90-C92 regress against them |
 | §3 PWM clock bug | **nothing** — the slot is changed over the CLI and the Flipper reads the result on rig A |
 | §4 burst length | ⚠ hands — the Proxmark has to face the emulator, and it faces the tag |
 | §5 carrier locking | ⛔ **a person.** A scope decision, not a task |
@@ -219,8 +220,10 @@ reprogram the T5577 reversibly.
 ⚠ **C47 IS UNTESTED AND THE GUARD IS NOT THE FIX.** Measured paired on one T5577 wearing
 H10301, one session, one recompile apart: **12/12 with the guard off, 12/12 with it on**
 (C108). The guard cannot be shown to help a specimen that already reads perfectly, and C47
-predicts an effect only on MARGINAL reads. ⇒ Testing it needs a marginal specimen — one of
-C46's three real HID tags, which needs hands. ioProx never fitting the theory stands too.
+predicts an effect only on MARGINAL reads. ⇒ Testing it needs a marginal specimen: one of C46's three
+HID fobs, physically on the pad. ⛔ NOT a tag to write — writing HID to the T5577 is done and
+reads 12/12; what is missing is weak coupling, which no Proxmark command can produce. ioProx
+never fitting the theory stands too.
 
 ⭐⭐ **But PAC reproduces, and that is the real prize.** The same T5577 written PAC/Stanley
 `CD4F5552`, which the Proxmark reads perfectly, gives `lf pac read` **0 of 10** (C109). ⇒ §2
