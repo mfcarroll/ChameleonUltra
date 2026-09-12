@@ -39,6 +39,7 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     /* ⛔ The IDTECK veto, one-directional on purpose — C90/C91. */
     .reject_preamble = LF_PSK1_PREAMBLE_IDTECK,
     .reject_preamble_bits = IDTECK_PSK_PREAMBLE_BITS,
+    .try_differential = false,
     .require_repeat = false,
 };
 
@@ -48,6 +49,7 @@ const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK = {
     .frame_bits = INDALA_PSK_FRAME_BITS,
     .reject_preamble = NULL,
     .reject_preamble_bits = 0,
+    .try_differential = false,
     .require_repeat = false,
 };
 
@@ -57,6 +59,8 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224 = {
     .frame_bits = INDALA224_PSK_FRAME_BITS,
     .reject_preamble = NULL,
     .reject_preamble_bits = 0,
+    /* ⛔ Indala224 tags are PSK2 on the wire — see try_differential in the header. */
+    .try_differential = true,
     /* ⛔ NOT OPTIONAL for this format. 29 of its 30 preamble bits are a constant run. */
     .require_repeat = true,
 };
@@ -210,8 +214,19 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
     }
     const uint16_t FB = fmt->frame_bits;
     bool rejected = false;
-    if (n > INDALA_PSK_CAPTURE_SAMPLES) {
-        n = INDALA_PSK_CAPTURE_SAMPLES;
+    /* ⛔ CLAMP TO THE BUFFER, NOT TO ONE FORMAT'S CAPTURE LENGTH. This read
+     * `INDALA_PSK_CAPTURE_SAMPLES` — 4096, the 64-bit capture — for as long as 4096 was the
+     * only size there was. Once Indala224 started handing in 14336 samples the clamp silently
+     * threw away 70% of every capture, leaving less than one 224-bit frame, so every sample
+     * offset was skipped and the read reported "LF tag not found" on a tag the 64-bit reader
+     * could hear perfectly.
+     *
+     * ⚠ A CONSTANT THAT MEANT TWO THINGS. "The size of the buffer" and "how many samples this
+     * format captures" were the same number for months, so one name served both; the moment
+     * they diverged, every use had to be re-read to see which meaning it had, and this one was
+     * missed. */
+    if (n > LF_PSK1_MAX_CAPTURE_SAMPLES) {
+        n = LF_PSK1_MAX_CAPTURE_SAMPLES;
     }
     out->energy = 0;
     baseband_in_place(samples, n);
@@ -233,6 +248,10 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
 
     int32_t integ[INDALA_PSK_MAX_BITS];
     uint8_t bits[INDALA_PSK_MAX_BITS];
+    /* The PSK2 view of the same capture: dbits[k] = bits[k] XOR bits[k-1], dbits[0] unused.
+     * Only built when the format asks for it. */
+    uint8_t dbits[INDALA_PSK_MAX_BITS];
+    bool best_diff = false;
 
     /* ⭐ WHOLE-CAPTURE ENERGY, so a failed read can say WHICH failure it was. The preamble
      * search below only ever reports frames it recognises, so on its own it cannot tell an
@@ -252,11 +271,11 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
 
     for (size_t off = 0; off < INDALA_PSK_BIT_SAMPLES; off++) {
         size_t nb = (n - off) / INDALA_PSK_BIT_SAMPLES;
-        if (nb < FB) {
-            continue;
-        }
         if (nb > INDALA_PSK_MAX_BITS) {
             nb = INDALA_PSK_MAX_BITS;
+        }
+        if (nb == 0) {
+            continue;
         }
         int32_t sum_abs = 0;
         for (size_t k = 0; k < nb; k++) {
@@ -268,6 +287,21 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
         int32_t mean_abs = sum_abs / (int32_t)nb;
         if (mean_abs > best_energy) {
             best_energy = mean_abs;
+        }
+
+        /* ⚠ ENERGY IS MEASURED BEFORE THE FRAME HAS TO FIT. A capture too short for this
+         * format still tells the user whether anything was on the antenna, and reporting
+         * "nothing there" when the real answer is "your capture was too short" is exactly the
+         * confusion §1's status exists to remove. */
+        if (nb < FB) {
+            continue;
+        }
+
+        if (fmt->try_differential) {
+            dbits[0] = 0;
+            for (size_t k = 1; k < nb; k++) {
+                dbits[k] = (uint8_t)(bits[k] ^ bits[k - 1]);
+            }
         }
 
         for (size_t i = 0; i + FB <= nb; i++) {
@@ -282,8 +316,20 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                     }
                 }
             }
-            for (uint8_t inv = 0; inv < 2; inv++) {
-                uint8_t err = preamble_err(bits, i, inv != 0, fmt->preamble,
+            /* ⭐ Stream 0 is the direct (PSK1) view, stream 1 the differential (PSK2) one.
+             * Direct first, matching the Proxmark's order, so a PSK1 tag never reaches the
+             * fallback. The differential needs no polarity search — XOR of consecutive bits
+             * is invariant under inversion — so it runs inv=0 only. */
+            const uint8_t nstreams = fmt->try_differential ? 2u : 1u;
+            for (uint8_t st = 0; st < nstreams; st++) {
+              const uint8_t *stream = (st == 0) ? bits : dbits;
+              /* dbits[0] is not a real bit, so a differential frame cannot start at 0. */
+              if (st == 1 && i == 0) {
+                  continue;
+              }
+              const uint8_t ninv = (st == 0) ? 2u : 1u;
+              for (uint8_t inv = 0; inv < ninv; inv++) {
+                uint8_t err = preamble_err(stream, i, inv != 0, fmt->preamble,
                                            fmt->preamble_bits);
                 if (err > PREAMBLE_MAX_ERR) {
                     continue;
@@ -308,11 +354,13 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                     best_pos = (uint8_t)i;
                     best_inv = (inv != 0);
                     for (size_t k = 0; k < FB; k++) {
-                        uint8_t b = bits[i + k];
+                        uint8_t b = stream[i + k];
                         best_word[k] = (inv != 0) ? (uint8_t)(1u - b) : b;
                     }
+                    best_diff = (st == 1);
                     found = true;
                 }
+              }
             }
         }
     }
@@ -404,6 +452,15 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
         for (size_t k = 0; k < nb_all; k++) {
             int32_t v = bit_integrator(samples, n, best_off + k * INDALA_PSK_BIT_SAMPLES);
             bits[k] = (v > 0) ? 1u : 0u;
+        }
+        /* ⚠ Compare in the stream the frame was MATCHED in. A PSK2 frame repeats in the
+         * differential view; its direct view does not have to. */
+        if (best_diff) {
+            dbits[0] = 0;
+            for (size_t k = 1; k < nb_all; k++) {
+                dbits[k] = (uint8_t)(bits[k] ^ bits[k - 1]);
+            }
+            memcpy(bits, dbits, nb_all);
         }
 
         size_t compared = 0, same = 0;

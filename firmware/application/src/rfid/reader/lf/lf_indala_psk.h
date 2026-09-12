@@ -119,6 +119,26 @@ typedef struct {
      *  NULL for none, and it must stay NULL wherever the confusion is one-directional. */
     const uint8_t *reject_preamble;
     uint8_t  reject_preamble_bits;
+    /** ⭐⭐ ALSO SEARCH THE DIFFERENTIAL STREAM — the PSK2 fallback.
+     *
+     * A T5577 written as PSK2 encodes the data in phase CHANGES, so the absolute phase this
+     * demodulator recovers is the differential of what the reader wants. XOR-ing consecutive
+     * bits inverts that. ⛔ Indala224 tags are written PSK2 by the Proxmark's own clone
+     * command — config `000820E0`, not `00081040` (C99) — so without this the format cannot
+     * be read at all.
+     *
+     * ⭐ The Proxmark does exactly this and in this order: match the preamble on the direct
+     * stream first, and only on failure call `psk1TOpsk2()` and try again
+     * (cmdlfindala.c:1293). Our own header has cited that ordering since the beginning.
+     *
+     * ⚠ OFF FOR THE 64-BIT FORMATS ON PURPOSE. A second stream is a second chance to match,
+     * and C90 is what a spurious preamble match costs. The bench tags are PSK1 and the direct
+     * search reads them 110/160; nothing is gained by giving that path another way to be
+     * wrong.
+     *
+     * ⭐ The differential stream needs no polarity search: XOR of consecutive bits is
+     * invariant under global inversion, which is the whole point of differential encoding. */
+    bool     try_differential;
     /** ⭐ Require the frame to REPEAT at its own period before accepting it. For a format
      *  whose preamble is mostly a constant run this is the real acceptance test: 224 bits of
      *  self-agreement instead of 30 bits of pattern. */

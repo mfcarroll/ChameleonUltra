@@ -128,9 +128,22 @@ static const uint8_t PHASE_ROTATION[] = {
  * now, which is what that rule always needed.
  */
 
-/** Per-capture ceiling. 4096 samples at 125kHz is 32.8ms of sampling; 200ms is headroom
- *  for the settle and the ring drain, not a budget anything is expected to use. */
-#define INDALA_CAPTURE_TIMEOUT_MS 200
+/* ⛔ A PER-CAPTURE TIMEOUT MUST SCALE WITH THE CAPTURE, and a flat one silently broke the
+ * long format.
+ *
+ * Sampling is real time on the wire: at 125kHz, `count` samples take count/125 ms. The flat
+ * 200ms was ~6x headroom for 4096 samples (32.8ms) and only 1.7x for 14336 (114.7ms) — and
+ * the margin is not decoration, because a ring overflow loses samples that then have to be
+ * re-collected, costing wall time. The 224-bit read therefore never completed a single
+ * capture: `raw_read_samples` returned false every time, the decoder never ran, and the read
+ * reported "LF tag not found" on a tag the 64-bit read could hear perfectly.
+ *
+ * ⚠ THE SYMPTOM NAMED THE WRONG THING. "Not found" is what an empty antenna reports, so the
+ * failure looked like a signal problem rather than a budget one. What isolated it was running
+ * the 64-bit read on the SAME TAG in the same minute: it reported "subcarrier is present",
+ * proving the antenna, the tag and the energy measure were all fine and only the longer
+ * capture was failing. */
+#define INDALA_CAPTURE_TIMEOUT_MS(count) (200u + ((uint32_t)(count) / 125u) * 2u)
 
 /** Captures attempted per sample phase before moving on. Was the stacking depth; it is now
  *  simply how many independent tries each phase gets, and two of them must agree. */
@@ -179,7 +192,7 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
             }
             size_t got = 0;
             if (!raw_read_samples(m_samples, capture_samples,
-                                  INDALA_CAPTURE_TIMEOUT_MS, &got, 0)) {
+                                  INDALA_CAPTURE_TIMEOUT_MS(capture_samples), &got, 0)) {
                 continue;
             }
 
