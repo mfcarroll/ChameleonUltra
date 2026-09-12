@@ -169,12 +169,15 @@ so `lf indala read` is specialised rather than defective, and the emulation alre
 against everything except us. ⇒ Worth doing only if device-to-device RF transfer matters more
 than the complexity — and §1's status message is the cheap alternative.
 
-## 6. ⚠ Re-test IDTECK emulation
+## 6. ✅ IDTECK emulation re-tested — works, 4/4
 
-Its retraction was collateral damage from a discredited instrument (C66 retracted). Nobody has
-shown IDTECK emulation working OR broken on a trustworthy one. It shares this transmit path,
-and the Flipper reads IDTECK too, so the same three-reader bar applies. All three readers can
-now be driven from this machine.
+Flipper `rfid read indala` returns **Idteck 4944544B00000000** on 4 of 4 attempts, with the
+ASK-mode arm returning nothing as a control (C83, L80). ⇒ The shared PSK1 transmit path in
+`utils/psk1.c` carries both protocols correctly, and C66's retraction is confirmed from the
+other side — IDTECK is working, not merely unproven.
+
+⚠ Not tested against the Proxmark, which would need the device moved off the Flipper pad. The
+Flipper result plus its own ASK null is already a bracketed pass.
 
 ## 7. ⚠ Drive the Chameleon over BLE for testing
 
