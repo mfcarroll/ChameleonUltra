@@ -72,6 +72,17 @@ def load16(path):
 
     ⚠ Confirm the Proxmark is actually sampling at 125 kHz before trusting a trace:
         lf config          # expect divisor 95, i.e. a 125 kHz carrier
+
+    ⭐ CALIBRATED ON BOTH INSTRUMENTS against a real Indala tag carrying a0000000e6bd0e92,
+    whose frame demands a 928-sample constant-phase run:
+
+                          peak-to-peak   fs/2 skirt   phase run   autocorrelation
+        Proxmark, tag              239       415835         929   lag 2048 r=+0.94
+        Proxmark, empty             22         3426          49   r=+0.03
+        Chameleon, tag               —       181000         912   lag 2048 r=+0.41
+
+    The Proxmark is the better instrument here — 929 against a predicted 928, and r=0.94
+    where the Chameleon manages 0.41 — and both devices can stay plugged in at once.
     """
     raw = open(path, "rb").read()
     # A .pm3 trace is text: one decimal sample per line.
@@ -133,7 +144,7 @@ def report(path):
     # sidebands, which is what the band measure below catches and that one does not.
     mixed = y * ((-1.0) ** np.arange(len(y)))
     print(f"  fs/2 skirt 60-65kHz        {band(S, f, 60000, 65000):8.0f}   "
-          f"(14-bit Chameleon captures: real tag ~181000, empty ~4300;\n                                     meaningless for an 8-bit Proxmark trace)")
+          f"(Chameleon 14-bit: tag ~181000 empty ~4300;\n                                     Proxmark 8-bit: tag ~415000 empty ~3400)")
 
     print("  raw peaks 500 Hz - 20 kHz :", "  ".join(
         f"{q:.0f}Hz({a:.2f})" for q, a in peaks(S, f, 500, 20000)))
