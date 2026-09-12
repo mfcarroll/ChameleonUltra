@@ -24,7 +24,8 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 |---|---|
 | ⚠ **The bench tag is currently PAC/Stanley `CD4F5552`, not IDTECK** | Left that way deliberately: it is §2's first REPRODUCIBLE failure (`lf pac read` 0/10 on a tag the Proxmark reads) and the specimen to debug against. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
-| ⭐ **An AIR GAP under the HID tag, to test C47** | Paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
+| ~~⭐ **An AIR GAP under the HID tag, to test C47**~~ ⛔ **scrapped 2026-09-12 — the user dropped the HID test** | Kept for the record: paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
+| ⭐⭐ **A CARRIER-LOCKED TAG IN FRONT OF THE PROXMARK — the null for C137** | ⛔ The load-bearing measurement of this session has no control. `clockoffset.py` reads **131 ppm** off our emulator; a T5577 divides the reader's own carrier, so it must read **below the 20 ppm floor**. If it does not, the estimator is measuring itself and C137 falls. Measured, not assumed: `lf search` on the Proxmark finds nothing, so the re-aim took the tag out of its field. **One placement — any LF tag between the Proxmark and the Chameleon, close enough that `lf search` identifies it.** Everything after that is unattended |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | ~~**§4 burst length**~~ ✅ done | The Proxmark had to face the emulator and faced the tag. Rig B was turned so the two face each other directly, and §4 was measured there (C135) |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -347,9 +348,9 @@ bench session.
 | | why |
 |---|---|
 | ⭐ **Re-take the arms with `offsetsweep.py`** | `emutest.py` scores the longest decodable PREFIX, so one bad patch early poisons every longer prefix — a 131 ms window decodes at offset 65.5 ms in the capture whose prefix ceiling was 66 ms (C136). The SHAPE of the curve survives that; the numbers are lower bounds |
-| ⭐ **Explain the 131–197 ms ceiling at long bursts** | it is not the boundary, and it is the one thing here with no mechanism behind it. Two free-running oscillators are the suspect, which makes it §5's question rather than §4's |
+| ✅ ~~**Explain the 131–197 ms ceiling at long bursts**~~ | **done — it is clock slip, 131 ppm, one subcarrier cycle every 122 ms** (C137). Measured with `clockoffset.py`, which never looks at whether anything decoded. ⇒ It was §5's question all along, and §5 now has a number |
 | **A carrier-locked positive control** | without one, that ceiling might belong to the Proxmark's demodulator at this amplitude rather than to our emulator. Needs a real tag in front of the Proxmark — ⚠ hands |
-| **The knee between 33 ms and 508 ms** | unmeasured, and not worth chasing by reflashing: one build per arm rules out interleaving, and the within-arm spread (0 to 197 ms) is as large as the differences between the long arms. ⇒ Make the budget settable at runtime first, the way `hw emudebug` was added for §3 |
+| **The knee between 33 ms and 508 ms** | ⚠ **deprioritised by C137.** With the coherent window sized at ~122 ms, any burst comfortably longer than that should behave alike, so the knee is a latency optimisation (500 ms → perhaps 250 ms) rather than a readability question. ⛔ Not worth a reflash per arm: the within-arm spread is as large as the between-arm differences. If it is taken up, make the budget settable at runtime first, the way `hw emudebug` was added for §3 |
 
 ## 5. ⚠ Carrier locking — optional, and the decision belongs to a person
 
@@ -362,6 +363,16 @@ it is not a port of the Flipper's approach — and the question a person is bein
 longer "should we do this" but "is there a second way to do it on hardware that discards the
 clock". ⚠ Until that is answered, treat everything below as describing the *problem*, not an
 available fix.
+
+⭐ **The cost of not locking is now sized: a ~122 ms coherent window** (C137). Our subcarrier
+runs 131 ppm off the reader's clock, so one whole subcarrier cycle of phase error accumulates
+every 122 ms — which is the ceiling §4 measured from the other side. ⇒ That reframes the whole
+section. This is not a defect with a fix available; it is a **hardware-imposed property** of an
+emulator that cannot see the reader's clock. A reader that re-acquires inside 122 ms is
+unaffected, which is why the Flipper reads our emulation 6/6 and only the Proxmark — which
+demodulates one long buffer coherently — ever sees it. ⇒ The decision a person is being asked
+for is now cheap: **document it and move on**, unless someone wants to chase a way to recover a
+clock the front end rectifies away.
 
 The Flipper clocks its emulation timer from the reader's own carrier (`LL_TIM_CLOCKSOURCE_EXT_MODE2`
 + `LL_TIM_ConfigETR`), so its subcarrier divides that carrier exactly as a T5577 does (C74).
