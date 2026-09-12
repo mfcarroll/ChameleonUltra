@@ -225,11 +225,24 @@ HID fobs, physically on the pad. ⛔ NOT a tag to write — writing HID to the T
 reads 12/12; what is missing is weak coupling, which no Proxmark command can produce. ioProx
 never fitting the theory stands too.
 
-⭐⭐ **But PAC reproduces, and that is the real prize.** The same T5577 written PAC/Stanley
-`CD4F5552`, which the Proxmark reads perfectly, gives `lf pac read` **0 of 10** (C109). ⇒ §2
-now has a failure that happens on demand rather than one that is merely believed. Debug that:
-the tag is still on the bench, and `lf_pac_data.c` starts the field 10 ms before enabling the
-SAADC for a documented reason worth re-reading before changing.
+⭐⭐ **PAC reproduces, and it is now narrowed to interpretation.** `lf pac read` gives **0 of
+10** on a T5577 the Proxmark reads perfectly (C109). Captured at 14336 samples and demodulated
+on the host, independently of the firmware:
+
+| | |
+|---|---|
+| per-bit levels | sharply bimodal, clusters **2803** and **7037** |
+| periodicity | **99.1% at lag 128** — the exact frame length — vs 53–65% at every other lag |
+| match to the tag's blocks | ⛔ best **102/128**, on a plateau, not a peak |
+
+⇒ A real, correctly-clocked 128-bit frame reaches the ADC, so neither coupling nor the front
+end is at fault (C110). Either the on-air bits are not the raw blocks, or level-thresholding
+is the wrong recovery for T5577 NRZ.
+
+⭐ **Next test, cheap and decisive:** have the Proxmark dump its own samples of this tag
+(`lf read`, then `data save`) and compare bitstreams. It reads the tag correctly, so whichever
+demodulation differs from its own is the wrong one — and that settles which of the two
+explanations holds without touching firmware.
 
 ⭐ **Start with the shared capture path.** The LF readers are two families:
 
