@@ -57,9 +57,34 @@ def longest_bit_run(hexframe):
 
 
 def load16(path):
-    r = np.frombuffer(open(path, "rb").read(), dtype=np.uint8)
+    """A Chameleon `lf sniff --bits 16` capture, or a Proxmark `data save` trace.
+
+    ⭐ BOTH SAMPLE AT ~125 kHz, ONE SAMPLE PER CARRIER CYCLE, CARRIER-LOCKED, which is the
+    only property the analysis below depends on — so a Proxmark trace can be read here and
+    serves as an INDEPENDENT instrument. Every measurement in L71/L72 came from a Chameleon
+    reading a Chameleon: same clock architecture, same assumptions. An unexplained ~640 Hz
+    beat deserves a second opinion from different silicon.
+
+    ⚠ WHAT DOES NOT TRANSFER IS SCALE. Proxmark LF traces are 8-bit and the Chameleon's are
+    14-bit, so the absolute fs/2 skirt figures quoted here (real tag ~181000, empty ~4300)
+    are meaningless for a .pm3 file. The measures that DO transfer are the ones that matter:
+    the constant-phase run and the frame autocorrelation are both scale-free.
+
+    ⚠ Confirm the Proxmark is actually sampling at 125 kHz before trusting a trace:
+        lf config          # expect divisor 95, i.e. a 125 kHz carrier
+    """
+    raw = open(path, "rb").read()
+    # A .pm3 trace is text: one decimal sample per line.
+    head = raw[:64]
+    if all(c in b"0123456789+-.\r\n \t" for c in head):
+        vals = [float(t) for t in raw.split() if t.strip()]
+        if len(vals) < 64:
+            raise SystemExit(f"⛔ {path}: looks like text but holds {len(vals)} samples")
+        return np.array(vals, dtype=float)
+    r = np.frombuffer(raw, dtype=np.uint8)
     if len(r) < 4 or len(r) % 2 or r[0::2].max() > 0x3F:
-        raise SystemExit(f"⛔ {path}: not a 16-bit capture — use `lf sniff --bits 16`")
+        raise SystemExit(f"⛔ {path}: not a 16-bit capture — use `lf sniff --bits 16`, "
+                         f"or pass a Proxmark `data save` text trace")
     return ((r[0::2].astype(np.uint16) << 8) | r[1::2]).astype(float)
 
 
@@ -83,6 +108,7 @@ def peaks(S, f, lo, hi, n=4, sep=800):
 
 def report(path):
     x = load16(path)
+    is_text = all(c in b"0123456789+-.\r\n \t" for c in open(path, "rb").read(64))
     y = x - x.mean()
     w = np.hanning(len(y))
     S = np.abs(np.fft.rfft(y * w))
@@ -107,7 +133,7 @@ def report(path):
     # sidebands, which is what the band measure below catches and that one does not.
     mixed = y * ((-1.0) ** np.arange(len(y)))
     print(f"  fs/2 skirt 60-65kHz        {band(S, f, 60000, 65000):8.0f}   "
-          f"(real tag ~181000, empty ~4300)")
+          f"(14-bit Chameleon captures: real tag ~181000, empty ~4300;\n                                     meaningless for an 8-bit Proxmark trace)")
 
     print("  raw peaks 500 Hz - 20 kHz :", "  ".join(
         f"{q:.0f}Hz({a:.2f})" for q, a in peaks(S, f, 500, 20000)))
@@ -142,8 +168,13 @@ def report(path):
     lag = 1500 + int(np.argmax(ac[1500:2600]))
     print(f"  frame autocorrelation       lag {lag} r={ac[lag]:+.2f}   (true frame = 2048)")
 
+    # ⚠ The C harness reads only the binary 16-bit format. Printing "decoder: -" for a text
+    # trace would look like a failed decode rather than a file it cannot open — say so
+    # instead, because a spurious negative is worse here than no line at all.
     cdemod = os.path.join(HERE, "ctest", "cdemod")
-    if os.path.exists(cdemod):
+    if is_text:
+        print("  decoder: skipped — cdemod reads the binary 16-bit format, not a text trace")
+    elif os.path.exists(cdemod):
         out = subprocess.run([cdemod, path], capture_output=True, text=True).stdout.strip()
         print(f"  decoder: {out.split('samples')[-1].strip() if 'samples' in out else out}")
 
