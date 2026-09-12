@@ -185,3 +185,17 @@ aligned, so stack them rolled by a random offset and compare. Aligned 67%, rolle
 and the consequence test is usually both cheaper and harder to fool. Ask "what would stop
 working if this were false?" before building a better instrument for the thing itself.
 
+**M26. ⛔⛔ A POSITIVE CONTROL MUST MATCH THE GEOMETRY, NOT ONLY THE INSTRUMENT.** Four
+claims were retracted at once — including the most emphatic sentence in the ledger, "PSK1
+tag emulation has never worked on this device" — because the control was a real tag lying
+flat on the antenna while the thing under test was a second device at an unproven distance
+and orientation. Same reader, same analysis, same sample rate, same empty-field baseline:
+everything matched except the one variable that mattered. The measurements were all correct;
+they measured coupling.
+⇒ The control must be taken in the SAME session and the SAME position, with the only change
+being what is under test. An empty-field control proves the instrument hears nothing when
+nothing is there; it says nothing about whether the instrument can hear THIS thing HERE.
+⚠ And note what made it convincing: an independent-looking second experiment (IDTECK) agreed
+precisely — because it shared the flaw. Agreement between two measurements that share a
+defect is not corroboration, and it feels exactly like corroboration.
+
