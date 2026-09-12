@@ -61,7 +61,7 @@ registered `TAG_TYPE_*`.
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
 | Paradox | ✗ | ✗ | ✗ | ✓ |
 | Pyramid | ✗ | ✗ | ✗ | ✓ |
-| **Keri** | ◐ **4/4 on captures, 4 nulls — NOT on device (C157, C159)** | ◐ built, unverified | ◐ built, unverified | ✓ |
+| **Keri** | ◐ **4/4 on captures, 4 nulls — NOT on device (C157, C159)** | ◐ built, unverified | ◐ **round trip exact — not on air** | ✓ |
 | Gallagher | ✗ | ✗ | ✗ | ✓ |
 | NexWatch | ✗ | ✗ | ✗ | ✓ |
 | Securakey | ✗ | ✗ | ✗ | ✓ |

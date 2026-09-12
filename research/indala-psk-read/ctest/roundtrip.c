@@ -113,6 +113,12 @@ int main(void) {
     bad += trial("IDTECK    PSK1", "4944544b55667788", 64,
                  LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_IDTECK);
 
+    /* ⭐ Keri shares the encoder whole — same mode, same buffer, only the preamble differs.
+     * This is the ONLY verification its emulate arm has: the bench lost coupling before it
+     * could be read off the air (C159), and the grid says so. */
+    bad += trial("Keri      PSK1", "e000000080003039", 64,
+                 LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_KERI);
+
     /* ⭐ C152's frame. Its bits XOR to 1, so the encoder MUST emit two copies. */
     bad += trial("Indala224 PSK2 odd parity",
                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 224,
