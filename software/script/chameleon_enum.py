@@ -247,11 +247,12 @@ class Status(enum.IntEnum):
             # ⛔ The device measured "a subcarrier is present, no frame decoded". It did NOT
             # measure "this is an emulator" — a detuned or damaged real tag presents the same
             # way, so the likely cause is offered here and never encoded in the status byte.
-            return ("A tag-like subcarrier is present but no frame could be decoded. "
-                    "This is usually an emulated tag rather than a real one — the reader "
-                    "assumes a subcarrier locked to its own carrier, which every real tag "
-                    "provides and a free-running emulator may not. A detuned or damaged "
-                    "real tag can also look like this.")
+            return ("A tag-like subcarrier is present but no frame of the requested type "
+                    "could be decoded. Retry or reposition first — a real tag that reads "
+                    "intermittently looks exactly like this. If it persists, it is usually "
+                    "a DIFFERENT protocol sharing the carrier (Indala and IDTECK do), or an "
+                    "emulated tag whose subcarrier is not locked to the reader's own "
+                    "carrier.")
         elif self == Status.PAR_ERR:
             return "API request fail, param error"
         elif self == Status.DEVICE_MODE_ERROR:

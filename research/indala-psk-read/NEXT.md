@@ -15,6 +15,17 @@ under **The bench** and **Working conventions**.
 
 ---
 
+## ⚠ Needs hands — queued, in the order they block things
+
+| | why a person is required |
+|---|---|
+| **Confirm what is actually on the bench** | `README.md` describes rig B as Chameleon #2 facing a T5577 on the Proxmark pad. Measured 2026-09-11: Chameleon #2 reads Indala **a0000000801119c0** (FC 144 Card 10504), while the Proxmark reads an **IDTECK** T5577 **4944544B55667788** and no Indala at all. So there are two PSK1 tags and they are not where the description puts them. ⛔ Until this is pinned down, "the Proxmark writes the tag Chameleon #2 reads" is UNVERIFIED, and the needs table below leans on it for §1c and §2 |
+| **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
+| **§4 burst length** | The Proxmark must face the emulator, and it faces a tag |
+| **§7 BLE transport** | The point of it is measuring with the cable out |
+
+---
+
 ## The grid — where we stand against the Flipper
 
 ⚠ Flipper column is the **local Momentum firmware** (`/Users/Shared/code/personal/rfid/Momentum-Firmware`),
@@ -118,59 +129,19 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | Indala emulation (§3a) | Flipper **6/6**, Proxmark to 262 ms. C81, L79 |
 | Stacking and frame lock (§2) | resolved in opposite directions. C58, C59, L67 |
 | Flipper read driver (§0) | `flipper.py` committed and bracketed: **PSK 4/4, ASK 0/4**. L83 |
+| Undecodable-signal status (§1) | `0x43` shipped and verified on four arms, **20 reads**. C89, L85 |
 
 ---
 
-## 1. ⭐⭐⭐ Tell the user WHY a read failed — the undecodable-signal status
+## 1. ✅ Undecodable-signal status — shipped
 
-Our reader cannot decode a FREE-RUNNING source, so another Chameleon emulating Indala reads as
-`LF tag not found` — **the same message as an empty antenna** (C79). That is a trap: we fell
-into it ourselves with far better instruments than a user will have.
+`STATUS_LF_SIGNAL_NOT_DECODED (0x43)` returns from `lf_psk1_failure_status()` in the shared
+LF path, so §1c's IDTECK reader inherits it. Verified on four arms, 20 reads (C89, L85).
+`LF_TAG_LOGIN_REQUIRED (0x42)` added to the host enum in the same pass.
 
-⚠ **Not the Flipper, though** — it clocks its subcarrier from our carrier and we read it 8 of
-8 (C87). The undecodable case is narrower than this section originally claimed, and the loud
-source that reproduces it without hands is the Flipper emulating **IDTECK**: valid PSK1 at
-full strength carrying a preamble the Indala decoder will never match.
-
-⚠ This is a genuine limitation and the fix is to REPORT it, not to hide it. See §5 for why
-tolerating unlocked sources is not worth the complexity.
-
-**The framework already exists.** `app_status.h` defines `STATUS_LF_*` codes in the 0x40
-block, and `chameleon_enum.py`'s `Status` is an `IntEnum` whose `__str__` carries the human
-message. Every client — CLI, mobile app, any GUI — reads the same status byte, so one new
-code reaches all of them.
-
-```
-firmware/application/src/app_status.h
-    STATUS_LF_TAG_OK              0x40
-    STATUS_LF_TAG_NO_FOUND        0x41
-    STATUS_LF_TAG_LOGIN_REQUIRED  0x42
-    STATUS_LF_SIGNAL_NOT_DECODED  0x43   <- new
-```
-
-**Design:**
-
-1. In `indala_read()`, when no capture yields a frame, compute one cheap integer measure of
-   fc/2 energy over the last capture — the mean absolute value of the `(-1)^n`-mixed buffer
-   is a single pass and needs no FFT. Calibrated figures are in `emuprobe.py`.
-2. Strong energy but no frame ⇒ return `STATUS_LF_SIGNAL_NOT_DECODED` instead of
-   `STATUS_LF_TAG_NO_FOUND`.
-3. Add it to `Status` in `chameleon_enum.py` with a message naming the likely cause:
-   *"An Indala-like subcarrier is present but could not be decoded. This usually means an
-   emulated tag (Flipper, Proxmark, another Chameleon) rather than a real one."*
-
-⛔ **Name the status for what is MEASURED, not what is inferred.** We observe "fc/2 energy
-present, no frame recovered". "It is an emulator" is the likely cause, not the observation —
-a detuned real tag or a damaged one could present the same way. The message may offer the
-inference; the status code must not encode it.
-
-⚠ **Pick the threshold against both arms.** An empty field must never produce this status, or
-it becomes noise. `emuprobe.py` has the calibration: on a Chameleon capture a real tag reads
-~181000 in the fc/2 band and an empty field ~4300.
-
-⚠ **While in there:** `STATUS_LF_TAG_LOGIN_REQUIRED (0x42)` exists in the firmware and is
-MISSING from the host `Status` enum, so any client hitting it today gets a bare number. Fix
-in the same pass.
+⚠ It fires on a marginal REAL tag as well as on a wrong-protocol one — 2 of 5 on rig B — so
+the message leads with "retry or reposition" rather than with the emulator diagnosis. That is
+the honest reading of what is measured: energy present, no frame.
 
 ## 1b. ✅ IDTECK null re-run and bracketed — passes
 
