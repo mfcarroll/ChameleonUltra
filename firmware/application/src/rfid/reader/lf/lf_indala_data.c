@@ -222,10 +222,15 @@ static bool stack_decode(indala_stack_t *s, size_t n) {
     return true;
 }
 
-bool indala_read(uint8_t *data, uint32_t timeout_ms) {
+bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     bool ok = false;
     uint8_t winner_phase = 0;
     const indala_stack_t *winner = NULL;
+    /* ⚠ The LOUDEST capture, not the last one. A read spends up to eight captures per sample
+     * phase across several phases; a source that is present for only part of that budget
+     * still means "something was there", and taking the final capture's value would report
+     * whatever the antenna happened to be hearing when the timeout expired. */
+    int32_t loudest = 0;
 
     autotimer *p_at = bsp_obtain_timer(0);
 
@@ -250,7 +255,12 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms) {
             indala_stack_t *other = (k & 1u) ? &m_stack_a : &m_stack_b;
 
             stack_add(cur, m_samples, got);
-            if (!stack_decode(cur, got)) {
+            bool decoded = stack_decode(cur, got);
+            /* Set by indala_psk1_decode() either way — see lf_indala_psk.h. */
+            if (cur->res.energy > loudest) {
+                loudest = cur->res.energy;
+            }
+            if (!decoded) {
                 continue;
             }
 
@@ -276,6 +286,10 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms) {
     /* ⚠ Never leave a sample phase set: every other LF reader on this device shares the
      * trigger and expects the stock PWMPERIODEND one. */
     lf_125khz_radio_saadc_phase_set(0);
+
+    if (energy_out != NULL) {
+        *energy_out = loudest;
+    }
 
     if (!ok || winner == NULL) {
         return false;

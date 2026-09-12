@@ -9,6 +9,7 @@
 #include "protocols/em410x.h"
 #include "protocols/ioprox.h"
 #include "lf_indala_data.h"
+#include "lf_indala_psk.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
 #include "protocols/t55xx.h"
@@ -56,16 +57,32 @@ uint8_t scan_hidprox(uint8_t *data, uint8_t format_hint) {
  * @param data INDALA_READ_DATA_SIZE bytes; see lf_indala_data.h for the layout
  * @return STATUS_LF_TAG_OK on success
  */
+/**
+ * ⭐ SHARED BY EVERY PSK1 READER, WHICH IS THE WHOLE POINT OF ITS BEING HERE rather than
+ * inside the Indala scan. IDTECK is the same physical layer — 64-bit PSK1 at RF/32 on an
+ * fc/2 subcarrier — so a reader for it inherits the same inability to demodulate a source
+ * whose subcarrier is not locked to our carrier, and must report it the same way.
+ *
+ * ⛔ The status names the MEASUREMENT, not the diagnosis. "fc/2 energy present, no frame
+ * recovered" is what the device observed. "It is an emulator" is the likely cause and
+ * belongs in the host's message, where a detuned or damaged real tag can be named beside it.
+ */
+static inline uint8_t lf_psk1_failure_status(int32_t energy) {
+    return (energy >= INDALA_PSK_ENERGY_PRESENT) ? STATUS_LF_SIGNAL_NOT_DECODED
+                                                 : STATUS_LF_TAG_NO_FOUND;
+}
+
 uint8_t scan_indala(uint8_t *data) {
     /* ⚠ NOT g_timeout_readem_ms. 500ms was right when a read was 2-4 captures; stacking
      * spends up to 8 per sample phase to buy sqrt(N) of signal, and the tags that NEED
      * stacking are exactly the ones that will use the whole budget. A tag that reads in
      * 100ms still returns in 100ms — this only changes how long a hard one is given
      * before being called absent. */
-    if (indala_read(data, INDALA_READ_TIMEOUT_MS)) {
+    int32_t energy = 0;
+    if (indala_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
         return STATUS_LF_TAG_OK;
     }
-    return STATUS_LF_TAG_NO_FOUND;
+    return lf_psk1_failure_status(energy);
 }
 
 /**

@@ -159,6 +159,7 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     if (n > INDALA_PSK_CAPTURE_SAMPLES) {
         n = INDALA_PSK_CAPTURE_SAMPLES;
     }
+    out->energy = 0;
     baseband_in_place(samples, n);
 
     /* ⚠ THE BIT PHASE WITHIN THE 32-SAMPLE PERIOD IS UNKNOWN, so all 32 are tried, and
@@ -179,6 +180,22 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     int32_t integ[INDALA_PSK_MAX_BITS];
     uint8_t bits[INDALA_PSK_MAX_BITS];
 
+    /* ⭐ WHOLE-CAPTURE ENERGY, so a failed read can say WHICH failure it was. The preamble
+     * search below only ever reports frames it recognises, so on its own it cannot tell an
+     * empty antenna from a source it is unable to demodulate — and those two have printed
+     * the identical "LF tag not found" at the user, which is the trap this project fell
+     * into itself with far better instruments than a user will have.
+     *
+     * The measure is the offset loop's own integrators: no extra pass, no extra buffer.
+     * A carrier-locked subcarrier drives them hard at the aligned offset; an empty antenna
+     * leaves noise that averages toward zero whatever the offset. A source that is fc/2 but
+     * NOT carrier-locked drifts in phase across the capture and partially cancels, so it
+     * reads well below a real tag — and still far above nothing, which is exactly the
+     * discrimination wanted.
+     *
+     * ⚠ Bound: |integ| <= 4*32*16383 = 2.1e6 and nb <= 128, so the sum stays inside int32. */
+    int32_t best_energy = 0;
+
     for (size_t off = 0; off < INDALA_PSK_BIT_SAMPLES; off++) {
         size_t nb = (n - off) / INDALA_PSK_BIT_SAMPLES;
         if (nb < INDALA_PSK_FRAME_BITS) {
@@ -187,10 +204,16 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
         if (nb > INDALA_PSK_MAX_BITS) {
             nb = INDALA_PSK_MAX_BITS;
         }
+        int32_t sum_abs = 0;
         for (size_t k = 0; k < nb; k++) {
             integ[k] = bit_integrator(samples, n, off + k * INDALA_PSK_BIT_SAMPLES);
             /* PSK1: the phase IS the data, so the bit is simply the integrator's sign. */
             bits[k] = (integ[k] > 0) ? 1u : 0u;
+            sum_abs += (integ[k] < 0) ? -integ[k] : integ[k];
+        }
+        int32_t mean_abs = sum_abs / (int32_t)nb;
+        if (mean_abs > best_energy) {
+            best_energy = mean_abs;
         }
 
         for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
@@ -227,6 +250,8 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
             }
         }
     }
+
+    out->energy = best_energy;
 
     if (!found) {
         return false;

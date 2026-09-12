@@ -58,7 +58,10 @@ int main(int argc, char **argv) {
 
         indala_psk_result_t r;
         if (!indala_psk1_decode(buf, n, &r)) {
-            if (!quiet) printf(" %-40s %5zu samples  -\n", argv[i], n);
+            /* ⭐ energy is valid here and nowhere else is it visible — this line is the
+             * calibration for INDALA_PSK_ENERGY_PRESENT. */
+            if (!quiet) printf(" %-40s %5zu samples  -%50s energy %7ld\n",
+                               argv[i], n, "", (long)r.energy);
             continue;
         }
         decoded++;
@@ -75,6 +78,7 @@ int main(int argc, char **argv) {
                    r.offset, r.bit_pos, r.inverted ? "inv" : "   ", (long)r.amp,
                    r.fc, r.csn, (r.parity >> 1) & 1, r.parity & 1,
                    r.wiegand26_ok ? "parity-ok" : "parity-BAD");
+            printf(" %-40s %*senergy %7ld\n", "", 57, "", (long)r.energy);
         }
     }
     fprintf(stderr, "%d files, %d produced a frame, %d matched %s\n",

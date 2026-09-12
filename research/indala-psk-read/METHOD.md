@@ -150,6 +150,21 @@ two decoders can both score 51/160 on different captures.
   `--amend` orphans the hash you just wrote in, and until `checkdocs.sh` was taught to ask
   about *reachability* rather than existence it passed anyway.
 
+**M29. ⛔ A CLEANUP THAT ONLY RUNS ON THE HAPPY PATH WILL CONTAMINATE THE NULL, AND THE NULL
+IS THE ARM THAT MATTERS.** `flipper.py emulate` stops the Flipper in a `finally`. It was
+launched under `timeout`, which sends SIGTERM — and SIGTERM kills the process without running
+`finally`. The Flipper therefore went on emulating, and the captures taken next, labelled
+"idle", decoded the emulated credential perfectly. For several minutes that read as "our
+reader decodes a free-running source", contradicting the project's central claim on the
+strength of a control that was not a control.
+⇒ The failure is structural, not careless: a positive arm that is still running looks
+exactly like a positive arm that worked. **Do not infer that a source stopped — stop it
+explicitly and confirm, then take the null.** Here the confirmation was one ETX and the `^C`
+it echoed, after which the same captures gave 0 of 4.
+⭐ What saved it was running the null at all, on the same device in the same session (M26).
+The real result survived and came out stronger, because the difference between the arms now
+tracks the one variable that changed.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

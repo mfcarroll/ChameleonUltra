@@ -85,7 +85,46 @@ typedef struct {
                                 relative to its average is an integrator sitting across bit
                                 boundaries, which decodes to a repeatable WRONG word. See
                                 the gate in lf_indala_psk.c. */
+    int32_t  energy;       /**< ⭐ SET EVEN WHEN NO FRAME DECODES — this is the one field
+                                that distinguishes "nothing is there" from "something is
+                                there that I cannot read". The largest mean |bit
+                                integrator| over the WHOLE capture, across all 32 sample
+                                offsets: same units as `amp`, and computed from integrators
+                                the offset loop already builds, so it costs one abs and one
+                                add per bit. See INDALA_PSK_ENERGY_PRESENT. */
 } indala_psk_result_t;
+
+/* ⭐ "A SUBCARRIER IS THERE BUT I COULD NOT READ IT" — the level above which `energy`
+ * means a real source rather than an empty antenna.
+ *
+ * ⛔ This is a MEASURED LEVEL, not a guess, and like INDALA_PSK_STRADDLE_AMP it is
+ * coupling-dependent (C43). It exists to drive a STATUS MESSAGE, never a credential, so its
+ * failure mode is a misleading hint rather than a wrong card number — which is why it can be
+ * a single absolute number where the straddle gate needed two conditions.
+ *
+ * ⚠ Name what is MEASURED, not what is inferred. Energy present with no frame is the
+ * observation; "it is an emulator" is the likely cause and belongs in the host's message,
+ * not in this constant or in the status code.
+ *
+ * MEASURED, 336 captures, `research/indala-psk-read/ctest` over the committed sets plus a
+ * paired pair taken on one device minutes apart:
+ *
+ *                                   n     min     p50     max
+ *     empty, front                160     190     282    1312
+ *     empty, back                 160     237     298    1330
+ *     empty, rig A same session     4     294     633    1772
+ *     real tag, front             160    5075    8767   11720
+ *     Flipper emulation, rig A      4    8451    8523    8685
+ *     real tag, back              160     286     740    1793   <- ⛔ overlaps empty
+ *
+ * ⛔ THIS CANNOT DETECT A WEAK UNDECODABLE SOURCE AND MUST NOT CLAIM TO. A back-side tag is
+ * quieter than a front-side empty antenna, so no absolute level separates them. The bar is
+ * set by the EMPTY distribution — 1.7x above the loudest empty ever seen and 1.7x below the
+ * quietest real tag — which makes a false "signal present" on a bare antenna the thing it is
+ * engineered against. A weak source that fails to decode still reports plain "not found",
+ * exactly as before, and that is the correct conservative failure.
+ */
+#define INDALA_PSK_ENERGY_PRESENT  3000
 
 /**
  * Demodulate one Indala PSK1 frame from a carrier-locked capture.
@@ -95,7 +134,8 @@ typedef struct {
  *
  * @param samples  raw 14-bit SAADC conversions, one per carrier cycle, 0..16383.
  * @param n        sample count; must be >= INDALA_PSK_MIN_SAMPLES.
- * @param out      filled in only on success.
+ * @param out      filled in on success. ⚠ `out->energy` is filled in EITHER WAY, and is
+ *                 the only field that may be read after a false return.
  * @return         true if a frame was recovered.
  */
 bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);

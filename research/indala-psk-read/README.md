@@ -158,14 +158,20 @@ placement change.
 same CLI — `rfid emulate Indala26 <4 bytes>`, `rfid emulate Idteck 4944544B00000000` — into
 Chameleon #1, which already sits in the front-to-back geometry C81 used in the other
 direction. That is a non-carrier-locked PSK1 source in front of our own reader, with no hands.
-⚠ **Untested in that direction.** C81 proves the Flipper hears our emulation there; it does
-not prove our reader hears the Flipper's, and an active emitter beside an active reader is a
-different electrical case from a reader beside a near-passive one. Try it, do not assume it.
+⭐ **Tested, and it works** — 8 of 8, with a paired null at 0 of 4 (C87). ⚠ Stop the Flipper
+explicitly before taking that null: `timeout` kills `flipper.py` with SIGTERM, which skips the
+`finally` that sends ETX, so the emulation outlives the script and the "idle" arm decodes
+(M29).
+
+⭐ **And it works — our reader decodes the Flipper's emulation 8 of 8** (C87). That is not a
+contradiction of M27/C82: the Flipper clocks its emulation from the reader's own carrier
+(C74), so it is carrier-locked exactly as a T5577 is. ⇒ The limitation is **free-running**
+sources, and the only one known is our own PWM.
 
 ⛔ **What genuinely needs a person:** a second *Chameleon* emulating in front of a Chameleon
-reader, since the two rigs do not face each other; the Proxmark pointed at an emulator rather
-than at the tag; and anything measured with the cable out. The reader's own inability to
-decode an unlocked source is M27/C82 — a property of the decoder, not of the bench.
+reader — the only free-running source on this bench, and the two rigs do not face each other;
+the Proxmark pointed at an emulator rather than at the tag; and anything measured with the
+cable out.
 
 ⚠ **Both Chameleons are cabled, and the cable costs ~40% of the coupling by detuning the
 antenna (C72).** Emulation is still read reliably by the Flipper in this state, so functional

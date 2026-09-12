@@ -30,4 +30,13 @@
  *                    A capture costs ~35ms, and the measured median is 2.
  * @return            true if two captures agreed.
  */
-bool indala_read(uint8_t *data, uint32_t timeout_ms);
+/**
+ * @param data        INDALA_READ_DATA_SIZE bytes, written only on success.
+ * @param timeout_ms  total budget across all sample phases.
+ * @param energy_out  ⭐ optional; the LOUDEST whole-capture fc/2 energy seen across every
+ *                    capture this call took, set whether or not a frame decoded. This is
+ *                    what lets a failed read say WHICH failure it was — see
+ *                    INDALA_PSK_ENERGY_PRESENT. Pass NULL if the caller does not care.
+ * @return            true if two independent captures agreed on a frame.
+ */
+bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);

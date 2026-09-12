@@ -84,7 +84,7 @@ can run to completion now and work that has to wait.
 
 | item | needs |
 |---|---|
-| §1 status code | **nothing, probably** — the empty arm runs on either rig, and rig A supplies the positive arm backwards: the Flipper emulates into Chameleon #1 over its CLI. ⚠ That direction is untested; the Proxmark simulating into rig B is the fallback, and only if neither couples does it need hands |
+| §1 status code | **nothing** — empty arm on rig A, loud-undecodable arm from the Flipper emulating IDTECK into our Indala reader. ⚠ A genuinely free-running source still needs hands (C87) |
 | §1c IDTECK reader | **nothing** — the Proxmark writes IDTECK to the T5577 and Chameleon #2 reads it. Rig B is exactly this test |
 | §1d Indala224 | **nothing**, once §8 is settled — `lf indala clone --224` on rig B |
 | §2 HID / PAC readers | **nothing** — the Proxmark writes HID or PAC to the T5577 on rig B. ⚠ C46 used three real HID tags; a T5577 wearing HID is a different specimen, so say which was used |
@@ -123,9 +123,14 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 
 ## 1. ⭐⭐⭐ Tell the user WHY a read failed — the undecodable-signal status
 
-Our reader cannot decode a non-carrier-locked source, so a Flipper or Proxmark emulating
-Indala reads as `LF tag not found` — **the same message as an empty antenna** (C79, C81).
-That is a trap: we fell into it ourselves with far better instruments than a user will have.
+Our reader cannot decode a FREE-RUNNING source, so another Chameleon emulating Indala reads as
+`LF tag not found` — **the same message as an empty antenna** (C79). That is a trap: we fell
+into it ourselves with far better instruments than a user will have.
+
+⚠ **Not the Flipper, though** — it clocks its subcarrier from our carrier and we read it 8 of
+8 (C87). The undecodable case is narrower than this section originally claimed, and the loud
+source that reproduces it without hands is the Flipper emulating **IDTECK**: valid PSK1 at
+full strength carrying a preamble the Indala decoder will never match.
 
 ⚠ This is a genuine limitation and the fix is to REPORT it, not to hide it. See §5 for why
 tolerating unlocked sources is not worth the complexity.

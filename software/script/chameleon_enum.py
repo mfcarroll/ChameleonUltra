@@ -201,6 +201,10 @@ class Status(enum.IntEnum):
     LF_TAG_OK = 0x40
     # Unable to search for a valid EM410X tag
     LF_TAG_NO_FOUND = 0x41
+    # Tag requires LOGIN before it can be read
+    LF_TAG_LOGIN_REQUIRED = 0x42
+    # A subcarrier is present on the antenna but no frame could be decoded from it
+    LF_SIGNAL_NOT_DECODED = 0x43
 
     # The parameters passed by the BLE instruction are wrong, or the parameters passed
     # by calling some functions are wrong
@@ -237,6 +241,17 @@ class Status(enum.IntEnum):
             return "LF tag operation succeeded"
         elif self == Status.LF_TAG_NO_FOUND:
             return "LF tag not found"
+        elif self == Status.LF_TAG_LOGIN_REQUIRED:
+            return "LF tag requires a login before it can be read"
+        elif self == Status.LF_SIGNAL_NOT_DECODED:
+            # ⛔ The device measured "a subcarrier is present, no frame decoded". It did NOT
+            # measure "this is an emulator" — a detuned or damaged real tag presents the same
+            # way, so the likely cause is offered here and never encoded in the status byte.
+            return ("A tag-like subcarrier is present but no frame could be decoded. "
+                    "This is usually an emulated tag rather than a real one — the reader "
+                    "assumes a subcarrier locked to its own carrier, which every real tag "
+                    "provides and a free-running emulator may not. A detuned or damaged "
+                    "real tag can also look like this.")
         elif self == Status.PAR_ERR:
             return "API request fail, param error"
         elif self == Status.DEVICE_MODE_ERROR:
