@@ -42,6 +42,12 @@ def main():
                     help="refuse to score below this fc/2 amplitude (empty field is 3.0)")
     a = ap.parse_args()
 
+    # ⭐ WAKE THE TAG FIRST, AND DISCARD THAT READ. An emulating Chameleon is asleep until
+    # a field appears; the first `lf read` wakes it but is over before it starts modulating,
+    # so it captures an empty field and the bracket refuses. Two runs back to back worked
+    # where one did not — the second caught the device already awake. Costs one throwaway
+    # capture and removes a failure mode that looks exactly like "not coupled".
+    pm3("lf read")
     for f in glob.glob(TMP + "*.pm3"):
         os.remove(f)
     pm3(f"lf read; data save -f {TMP}")
@@ -53,6 +59,7 @@ def main():
     y = x - x.mean()
     amp = float(np.sqrt(np.mean((y * ((-1.0) ** np.arange(len(y)))) ** 2)))
 
+    print("  0. woke the tag with a throwaway read (it sleeps until a field appears)")
     print(f"  1. BRACKET — fc/2 amplitude {amp:.2f}   "
           f"(real tag 33.85, empty 2.99, threshold {a.min:.1f})")
     if amp < a.min:
