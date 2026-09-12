@@ -2121,6 +2121,12 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
+/* The chunk index is the 8th byte, and the drive setting above must key off it before the
+ * variable itself is parsed further down. Absent means chunk 0. */
+static inline bool chunk_arg_is_zero(uint16_t length, const uint8_t *data) {
+    return length < 8 || data[7] == 0;
+}
+
 static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
     uint32_t timeout_ms = 2000;
@@ -2158,8 +2164,18 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
 
     /* Optional 10th byte: reader drive duty, 1..7 against top_value 8 (0 or absent = stock 4).
      * ⭐ Weakening our own field is the only way to reduce the signal into the LF amplifier
-     * without moving the tag, and C140 says that amplifier saturates on a loud one. */
-    lf_125khz_radio_drive_set((length >= 10 && data[9] != 0) ? data[9] : 4);
+     * without moving the tag, and C140 says that amplifier saturates on a loud one.
+     *
+     * ⛔ APPLIED ONLY FOR CHUNK 0, WHICH IS THE ONE THAT CAPTURES. It used to run for every
+     * chunk while the reset to stock ran only inside the `chunk == 0` block below — so a host
+     * that fetched chunks 1..15 (which is every host, that is how the capture is retrieved)
+     * left the field at the requested duty afterwards, and the NEXT reader to run inherited
+     * a weakened field it never asked for. The capture itself was always correct, which is
+     * exactly why it survived: the bug was invisible in the thing being measured and only
+     * showed up in whatever ran next. */
+    if (chunk_arg_is_zero(length, data)) {
+        lf_125khz_radio_drive_set((length >= 10 && data[9] != 0) ? data[9] : 4);
+    }
 
     static uint8_t sniff_buf[LF_SNIFF_MAX_BYTES];
     static size_t sniff_len = 0;

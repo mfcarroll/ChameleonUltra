@@ -209,8 +209,9 @@ true frame in all four captures (C106).
 ⚠ **Read C146 and C147 before trusting anything below.** Two claims made earlier in this
 section's history did not survive the day: HID does **not** have the saturation disease (0.0% of
 its samples are railed, against PAC's 33-37%), and C144's PAC fix — verified at 10 of 10 — reads
-**0 of 10** at the bench's current, higher coupling, because every step of the drive sweep is
-saturated and drive 7 is the weakest the PWM's top_value allows.
+**0 of 10** because the drive control itself goes inert partway through a session (C148), so
+every step of the sweep plays the stock field. ⛔ The "coupling rose" explanation in C147 is
+RETRACTED: drive 4 is unchanged throughout and only the weak arm moved.
 
 ⇒ **What is actually true:** the saturation model is intact and predicted both results; PAC's
 fix works within a coupling range; that range is currently too narrow for this bench. The next
