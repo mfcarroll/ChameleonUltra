@@ -21,6 +21,7 @@ under **The bench** and **Working conventions**.
 |---|---|
 | **An Indala tag for rig B** | ✅ The bench geometry is confirmed — Proxmark — T5577 — Chameleon #2, one tag — and that tag is **IDTECK**, not Indala (C90). ⇒ Rig B can no longer verify an Indala read against a real tag. Reprogramming it to Indala is one Proxmark command, but which protocol the tag should carry is the user's call, and §1c wants it on IDTECK |
 | ⛔ **Rig A's emulation is broken — power-cycle it** | Chameleon #1 read 3/3 and 4/4 on the Flipper early today and reads 0 of 4 now, surviving a forced sense re-enable, `hw slot store` and a **full DFU reboot**, with slot 1 verified as Indala carrying the right payload. The rig is otherwise fine: the Flipper emitting Indala is read 3 of 3 by that same Chameleon. ⇒ A true power cycle (USB out) is the one reset not available to me, and it is the obvious next thing to try (C93, L89) |
+| ⭐ **A HID or PAC tag, to finish §2** | The advertising guard is in and untested — the read-rate comparison that would confirm or refute C47 needs a tag this bench does not have. ⇒ **Offer:** the Proxmark can write HID onto the existing T5577 and I hold its exact contents (`00081040 / 4944544B / 55667788`), so it can be restored byte-for-byte afterwards. Say the word and it needs no hands — otherwise it needs a HID tag on rig B |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces a tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -196,6 +197,19 @@ usual.
 Three tags with byte-identical memory read **0/6, 3/6 and 7/9** on the Chameleon and 3/3 on a
 Proxmark (C46). The RF path is flat while reads fail (C45). `lf pac read` scored 0/5 and 2/5
 with its tag at 16x the empty floor (L66). `lf em 410x read` sits at 95%, not 100%.
+
+✅ **Done: the advertising guard is now shared and applied to all four SAADC readers.**
+`lf_adv_suspend`/`lf_adv_resume` in `lf_reader_data.c` replace `lf_reader_generic`'s private
+copy; hidprox, PAC and ioProx now call them. Regression on the shared path is clean — IDTECK
+6/6, Indala 0 credentials (C95, L91).
+
+⛔ **Its effect is UNMEASURED.** The before/after read rate on HID and PAC is the whole point
+and there is no HID or PAC tag on this bench. Queued at the top of this file with an offer to
+reprogram the T5577 reversibly.
+
+⚠ **And ioProx already argues against C47 being the whole story**: it lacked the guard too and
+is not on the unreliable list. If a burst that hits 4 captures in 10 were sufficient to break
+a reader, ioProx should be broken as well.
 
 ⭐ **Start with the shared capture path.** The LF readers are two families:
 

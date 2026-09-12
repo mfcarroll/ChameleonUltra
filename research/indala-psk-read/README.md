@@ -208,6 +208,14 @@ rewrite the hash, `LOG.md` cites hashes, and `checkdocs.sh` asks whether each is
 from HEAD. The rule already written for LOG pointers covers signatures too: land it, then fix
 it forward in a follow-up commit.
 
+⛔ **Confirm the firmware version after every flash — the DFU trigger fails silently.**
+`hw version` carries the build's `git describe`, so a stale build is visible in one command.
+The device does not always enter DFU on the first trigger; `nrfutil` then reports "No devices
+with requested serial number(s) or trait(s) found" and the old firmware keeps running. A
+regression test against that is a test of the previous build, and it looks exactly like a
+passing one — it happened here and the version string is what caught it. ⇒ Retry the trigger
+until `nrfutil device list` shows `nordicDfu`, then check the version afterwards.
+
 ⭐ **A change and the note describing it belong in the same commit**, so the tree is never in
 a state where the code and the notes disagree. `./checkdocs.sh` passes before every commit.
 

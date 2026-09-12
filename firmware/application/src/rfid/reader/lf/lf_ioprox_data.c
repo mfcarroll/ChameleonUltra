@@ -88,6 +88,14 @@ bool ioprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
     codec = ioprox.alloc();
     ioprox.decoder.start(codec, format_hint);
 
+    /* C47: suspend advertising for the capture — see lf_reader_data.h.
+     * ⚠ ioProx is NOT on the unreliable list, so this is consistency rather than a fix, and
+     * it means ioProx can no longer serve as the unguarded control the note describes. That
+     * control was never worth keeping a known defect for: the comparison that matters is
+     * HID and PAC before versus after, and those numbers are already recorded (C45, C46). */
+    lf_adv_guard_t adv;
+    lf_adv_suspend(&adv);
+
     cb_init(&cb, IOPROX_BUFFER_SIZE, sizeof(uint16_t));
     init_ioprox_hw();
 
@@ -104,6 +112,7 @@ bool ioprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
 
     bsp_return_timer(p_at);
     uninit_ioprox_hw();
+    lf_adv_resume(&adv);
     cb_free(&cb);
     ioprox.free(codec);
 

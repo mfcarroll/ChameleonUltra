@@ -71,7 +71,7 @@ static void uninit_saadc_hw(void) {
  * duplicated *body* would be the same mistake with worse symptoms, since it would drift
  * silently rather than failing the build. */
 typedef struct {
-    bool adv_paused;
+    lf_adv_guard_t adv;
 } lf_capture_ctx_t;
 
 static bool capture_begin(lf_capture_ctx_t *ctx, uint16_t settle_ms) {
@@ -90,20 +90,14 @@ static bool capture_begin(lf_capture_ctx_t *ctx, uint16_t settle_ms) {
      *
      * ⚠ Only when not connected: dropping advertising is harmless, dropping a live link
      * is not. */
-    ctx->adv_paused = false;
-    if (!g_is_ble_connected) {
-        advertising_stop();
-        ctx->adv_paused = true;
-    }
+    lf_adv_suspend(&ctx->adv);
 
     m_cb_dropped = 0;
     if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
         /* malloc failed — reporting success here would hand back an empty buffer that
          * looks like a legitimately quiet capture. */
         NRF_LOG_ERROR("lf capture: could not allocate %d-sample ring", CIRCULAR_BUFFER_SIZE);
-        if (ctx->adv_paused) {
-            advertising_start(false);
-        }
+        lf_adv_resume(&ctx->adv);
         return false;
     }
     init_saadc_hw();
@@ -144,9 +138,7 @@ static void capture_end(lf_capture_ctx_t *ctx) {
     uninit_saadc_hw();
     cb_free(&cb);
 
-    if (ctx->adv_paused) {
-        advertising_start(false);
-    }
+    lf_adv_resume(&ctx->adv);
 
     if (m_cb_dropped) {
         NRF_LOG_WARNING("lf capture: dropped %lu samples — capture is discontinuous",

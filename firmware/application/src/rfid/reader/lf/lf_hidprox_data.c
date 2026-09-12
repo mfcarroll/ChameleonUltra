@@ -43,6 +43,9 @@ bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
     void *codec = hidprox.alloc();
     hidprox.decoder.start(codec, format_hint);
 
+    /* C47: suspend advertising for the capture — see lf_reader_data.h. */
+    lf_adv_guard_t adv;
+    lf_adv_suspend(&adv);
     cb_init(&cb, HIDPROX_BUFFER_SIZE, sizeof(uint16_t));
     init_hidprox_hw();
     start_lf_125khz_radio();
@@ -63,6 +66,7 @@ bool hidprox_read(uint8_t *data, uint8_t format_hint, uint32_t timeout_ms) {
     bsp_return_timer(p_at);
     stop_lf_125khz_radio();
     uninit_hidprox_hw();
+    lf_adv_resume(&adv);
     cb_free(&cb);
 
     hidprox.free(codec);
