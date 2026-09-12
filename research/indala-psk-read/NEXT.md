@@ -22,6 +22,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
+| ⚠ **The bench tag is currently 224-bit Indala, not IDTECK** | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents: `000820E0 / 80000001 / B23523A6 / C2E31EBA / BCBEE4AF / B3C6AD1F / CF649393 / 928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -224,8 +225,14 @@ written came back different, at "len 235" (C100). Use the memory dump, as IDTECK
 1. ✅ Frame length parameterised by format descriptor.
 2. ✅ One capture buffer at 14336 samples, capture length per protocol.
 3. ✅ The periodicity check, as the acceptance test.
-4. ⛔ **NEXT: the PSK2 fallback.** Search the preamble in the differential stream when the
-   direct one fails, exactly as the Proxmark does.
+4. ✅ The PSK2 fallback — the differential stream is searched only when a format asks for it,
+   direct stream first as the Proxmark does, and no polarity search on the differential
+   because XOR of consecutive bits is inversion-invariant.
+5. ⛔ **NEXT: raise `lf sniff`'s 4096-sample cap.** The decode fails with energy present and
+   no frame, 4 of 4 (C102), and it cannot be diagnosed from the device: a 224-bit frame is
+   7168 samples and sniff returns 4096, so `mfdemod.py` and `ctest` — which have settled every
+   previous decode question in this project — cannot be pointed at it. That cap is the
+   blocker now, not the decoder.
 5. Verify: `lf indala clone -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5`
    writes the tag — confirmed working, and the write/restore cycle is proven: the tag was
    written, dumped, and put back to `00081040 / 4944544B / 55667788` with the IDTECK reader
