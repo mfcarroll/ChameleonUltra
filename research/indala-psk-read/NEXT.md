@@ -182,18 +182,41 @@ a credential against an Indala source that `lf indala read` reads 3 of 3 in the 
 on the same signal at the same moment, so cross-protocol nulls no longer need an amplitude
 proxy.
 
-## 1d. ⚠ Indala 224-bit — Indala is not finished without it
+## 1d. ⚠ Indala 224-bit — and its preamble is WEAKER than the one that already failed
 
-Momentum implements `Indala224` alongside `Indala26`; our decoder is hard-wired to 64 bits.
-A 224-bit frame is 7168 samples at RF/32, so the two-frame guarantee needs 14336 samples —
-**28 KB against the current 8 KB**.
+✅ **§8 is settled**, so the RAM is there: 28 KB decoding in place against 89.8 KB free (C97).
 
-✅ **§8 is settled** — stacking goes, so the RAM is there: 28 KB decoding in place against
-49.6 KB free (C94). ⇒ Do §8 first anyway, so the buffer is sized once.
+⛔⛔ **Read this before trusting a preamble match.** Momentum's `protocol_indala224.c` gives
+the preamble as **a 1 followed by 29 zeros** — 30 bits, of which 29 are a constant run. That
+is strictly weaker than Indala26's 33-bit preamble, and Indala26's is the one a loud IDTECK
+tag already forged at sample phase 28, producing a confident wrong credential (C90).
 
-⚠ Needs a real 224-bit tag to verify against. The Proxmark can write one
-(`lf indala clone --224`), and Momentum can read it — so the three-reader bar applies as
-usual.
+⇒ **A preamble match cannot be the acceptance test for Indala224.** It would be the C90 bug
+with a larger target.
+
+⭐ **Use periodicity instead — it is 224 bits of evidence rather than 30, and it is free.** A
+224-bit frame repeats continuously, so within a two-frame capture (14336 samples) one whole
+frame is guaranteed and the remaining 7168 samples are the neighbouring copies, split before
+and after it. Comparing the whole frame against those two partials covers all 224 bits. A
+frame that repeats exactly is a frame; noise and a wrong-protocol source do not repeat.
+
+⚠ Momentum reaches the same conclusion by a different route: it requires two consecutive
+frames and accepts the second preamble either normal OR inverted. ⇒ Do not assume the
+polarity of the repeat — PSK2-style cards alternate it, and our decoder searches both
+polarities already for the same reason.
+
+**Plan, in order:**
+
+1. Parameterise the frame length. `INDALA_PSK_FRAME_BITS` is hard-wired to 64 and the result
+   struct carries `id[8]`; both need to take the larger of the supported formats.
+2. One capture buffer sized for the longest frame (14336 samples), with the CAPTURE LENGTH
+   per protocol — 4096 for the 64-bit formats so they keep their 33 ms reads rather than
+   paying 114 ms for a buffer they do not use.
+3. The periodicity check above, as the acceptance test.
+4. Verify: `lf indala clone -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5` on the
+   Proxmark writes a 224-bit tag to rig B's T5577 — that raw value is the Proxmark's own
+   documented example. ⛔ Restore the IDTECK contents `00081040 / 4944544B / 55667788`
+   afterwards; C90-C92 regress against them.
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 
