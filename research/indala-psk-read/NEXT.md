@@ -166,6 +166,130 @@ all 15 readers get it, not pasted into `hidprox_read()` alone.
 ⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
 (`lfprobe.py`) for presence, per §3.
 
+## 3a. ⛔⛔⛔ PSK1 EMULATION HAS NEVER WORKED — IDTECK IS BROKEN TOO, AND IT PREDATES US
+
+Paired test, same frame `4944544b00000000`, same reader, same session (C66, C67, L72):
+
+| | fc/2 skirt | longest constant-phase run | frame autocorrelation |
+|---|---|---|---|
+| **real IDTECK tag** | 80165 | **1042 samples** (needs 1024) ✓ | lag 2048, r=+0.38 |
+| emulated IDTECK | 70183 | **100 samples** ⛔ | lag 2071, r=+0.18 |
+| emulated Indala | 62524 | **102 samples** ⛔ | lag 2070, r=+0.34 |
+| empty | 4591 | 34 | lag 1520, r=+0.01 |
+
+⇒ **It is not `indala.c`.** The Indala emulator inherited a transmit path that was already
+broken in a protocol nobody had verified. Both emulators modulate strongly and neither
+carries phase, in numerically identical ways.
+
+⭐ The real tag is also the control on the INSTRUMENT: 1042 against 1024 expected. The
+measurement is sound, which was worth establishing before building on it.
+
+**Ruled out, with evidence:**
+- the modulator — host test gives polarity-per-bit identical to the frame (C63)
+- the data path — `econfig` reads the frame back
+- NEXT §3c stale clock — survives a power cycle, and 8x slow would show a 7.8 kHz subcarrier
+
+⚠ **Mechanism still OPEN, and the obvious answer does not add up.** The mixed baseband peaks
+at **641 Hz** (IDTECK) and **671 Hz** (Indala) with nothing comparable on an empty field, and
+a ~640 Hz beat flips the apparent phase every ~98 samples — matching the observed 100–102
+exactly. But 640 Hz is **1.03% of 62.5 kHz**, and two independent crystals at 20 ppm beat at
+~2.5 Hz. So "the PWM is not phase-locked to the reader" predicts the right SHAPE and the
+wrong SIZE by three orders of magnitude. Something is setting the subcarrier ~1% off, or the
+beat is not a clock beat at all.
+
+⭐ **THE NEXT EXPERIMENT — emulate a frame with NO phase transitions.**
+
+```bash
+.venv/bin/python cu.py "lf idteck econfig --id 0000000000000000"   # warns about the preamble; allow it
+```
+
+An all-zero frame makes `lf_psk1_build_sequence` emit one constant polarity for all 1024
+entries — a pure unmodulated 62.5 kHz subcarrier with no data on it. Then any phase rotation
+in the capture is the clock offset and nothing else:
+
+- a clean ~640 Hz sinusoid in the mixed baseband ⇒ the subcarrier really is ~1% off fs/2, and
+  the question becomes WHY (PWM period, prescaler, or the reader's own carrier)
+- constant phase ⇒ the subcarrier IS locked, the beat came from the modulation itself, and
+  the polarity bit is not doing what `lf_psk1_build_sequence` assumes
+
+⛔ Do not start writing a fix before that distinction. They lead to completely different
+repairs, and one of them means the shipping `psk1.c` is wrong rather than merely unlocked.
+
+## 3a-note. Upstream impact
+
+`idteck.c` ships a PSK1 emulation that does not work. That is worth reporting upstream
+independently of anything here, and it means **emulation must not be part of an Indala PR**
+until the transmit path is fixed — see §9.
+
+## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
+
+⭐⭐ **START HERE: the SAADC readers duplicate a capture path that one of them gets right.**
+The LF readers are two families, and it matters which:
+
+| family | readers | capture |
+|---|---|---|
+| GPIO/comparator | em410x, jablotron, viking | `register_rio_callback`, 128-entry ring, no SAADC |
+| **SAADC** | **hidprox, ioprox, pac** + lf_reader_generic | own `saadc_cb`, own 6144 ring, own field start/stop |
+
+Only `lf_reader_generic.c` also suspends BLE advertising — and its own comment records why:
+a burst collapses the 125 kHz field for ~1.6 ms and hit **4 captures in 10**. The three that
+duplicate the prologue instead of sharing it are HID, ioProx and PAC, and HID and PAC are
+exactly the two measured failing on loud tags. The SAADC reader that HAS the guard is Indala,
+at 60/60.
+
+⇒ `capture_begin()`/`capture_end()` already exist and are already shared by two entry points.
+Moving HID onto them is a small mechanical change that also happens to be **the clean test of
+C47** — same protocol, same tag, same bench, one variable.
+
+⛔ **Do not read the em410x 95% as evidence either way.** It is on the GPIO path and never
+touches the SAADC, so it cannot test this. That mistake is why C47 was wrongly weakened in
+L64.
+
+
+Not this project's decoder, but it is the comparison instrument for everything here and it
+has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
+
+**What is established:** three tags with byte-identical memory read 0/6, 3/6 and 7/9 on the
+Chameleon and 3/3 on a Proxmark (C46). The RF path is flat while reads fail (C45). So the
+decoder's tolerance is narrower than the Proxmark's, and package-level differences cross it.
+
+⚠ **`lf pac read` has the same disease**: 0/5 on one unit and 2/5 on the other while its tag
+sat at 16x the empty floor and a Proxmark read it perfectly (L66). So this is not one broken
+decoder — HID Prox and PAC both fail on tags that are loudly present, and `lf em 410x read`
+sits at 95% (76/80) rather than 100%. ⇒ Whatever is wrong may be shared across the LF reader
+family rather than specific to FSK. Fix HID first because it fails hardest (0/6, one tag
+never reading at all), but measure PAC in the same session — a fix that moves both is a very
+different fix from one that moves only HID.
+
+⚠ The Indala reader is the only LF reader in this tree with its own capture path
+(`raw_read_samples`, which suspends BLE and hands the decoder a whole buffer). It is also the
+only one at 100% — 40/40 today across two units. That may be the cleanest clue available, or
+it may be that Indala is simply the only one anybody has tuned. Do not assume which.
+
+**⭐ Test this first — it is one line and it explains an old observation.**
+`advertising_stop()` appears in **1 of 15** LF reader files. Only `lf_reader_generic.c`
+suspends BLE advertising; `hidprox_read()` does not. That file's comment records the
+measurement that put it there: an advertising burst collapses the 125 kHz field for ~1.6 ms
+and hit **4 captures in 10**. And it predicts the thing nobody could explain in L51 —
+*"after connecting it to my phone and/or a reboot, it does read"* — because connecting a BLE
+central is precisely what stops advertising (C47).
+
+```bash
+# the discriminating test, ~5 minutes, needs the BLUE DUAL (the 0/6 tag — the others
+# have too little headroom to show an improvement)
+cd software/script && for i in $(seq 1 15); do .venv/bin/python cu.py "lf hid prox read" | tail -1; done
+# then connect a phone over BLE so advertising stops, and repeat
+```
+
+⚠ **If it works, resist generalising it.** It cannot explain the blue dual reading 0/6
+deterministically — an intermittent field collapse does not produce a clean zero. Expect two
+causes: a BLE-induced intermittency affecting every LF reader, and a per-tag waveform
+tolerance in the FSK demodulator. ⇒ The fix belongs in `capture_begin()`-style shared code so
+all 15 readers get it, not pasted into `hidprox_read()` alone.
+
+⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
+(`lfprobe.py`) for presence, per §3.
+
 ## 3a. ⛔⛔ INDALA EMULATION TRANSMITS BUT ITS PHASE IS DESTROYED — and the modulator is innocent
 
 Sniffed from the second Chameleon in reader mode, against an empty control (C63, C64, C65, L71).
