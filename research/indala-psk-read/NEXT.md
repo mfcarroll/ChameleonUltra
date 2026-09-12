@@ -19,10 +19,52 @@ under **The bench** and **Working conventions**.
 
 | | why a person is required |
 |---|---|
-| **Confirm what is actually on the bench** | `README.md` describes rig B as Chameleon #2 facing a T5577 on the Proxmark pad. Measured 2026-09-11: Chameleon #2 reads Indala **a0000000801119c0** (FC 144 Card 10504), while the Proxmark reads an **IDTECK** T5577 **4944544B55667788** and no Indala at all. So there are two PSK1 tags and they are not where the description puts them. ⛔ Until this is pinned down, "the Proxmark writes the tag Chameleon #2 reads" is UNVERIFIED, and the needs table below leans on it for §1c and §2 |
+| **An Indala tag for rig B** | ✅ The bench geometry is confirmed — Proxmark — T5577 — Chameleon #2, one tag — and that tag is **IDTECK**, not Indala (C90). ⇒ Rig B can no longer verify an Indala read against a real tag. Reprogramming it to Indala is one Proxmark command, but which protocol the tag should carry is the user's call, and §1c wants it on IDTECK |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces a tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
+
+---
+
+## 0. ⛔⛔ WRONG CREDENTIAL — `lf indala read` misreads an IDTECK tag
+
+**This outranks everything else in Phase 1.** A reader that returns a confident wrong card
+number is worse than one that returns nothing, and this one does it repeatably.
+
+`lf indala read`, pointed at a T5577 whose memory is `00081040 / 4944544B / 55667788` — an
+IDTECK frame, confirmed by the Proxmark and by the dump — returns **`a0000000801119c0`,
+"FC 144 Card 10504", on 4 of 8 reads** (C90, L86).
+
+⭐ **Isolated to sample phase 28**, which `PHASE_ROTATION` uses:
+
+| | result |
+|---|---|
+| 8 single captures at phase 0 | 0 frames |
+| 4 host-stacked depths (2,3,4,8) at phase 0 | 0 frames |
+| 1 capture at phase 28 | **the false frame**, amp 5788, Wiegand-26 parity FAILING |
+
+⛔ **Neither existing safety mechanism can see it.** The straddle gate needs the frame to be
+loud AND ragged; this one is loud and *well shaped*, at 2.8x the amplitude bar. The
+two-capture agreement rule needs errors to be independent; this one is deterministic at that
+phase, so both captures agree — the same failure mode M23 already recorded, arriving from a
+different direction.
+
+⇒ The root cause is that **Indala's preamble is 33 bits of which 28 are a constant run**,
+which is too weak a pattern to survive a loud non-Indala PSK1 source sampled at the wrong
+phase. Options, none yet measured:
+
+1. ⭐ **Decode IDTECK too and refuse to report Indala when the capture yields a valid IDTECK
+   frame.** §1c builds the decoder anyway, and this is the reason to do it first. Costs one
+   extra preamble search per offset.
+2. **Enforce Wiegand-26 parity** when the frame parses as format 26. Rejects this specimen —
+   its parity fails — but a genuine non-26 64-bit Indala tag would be rejected too, and we
+   have not measured how common those are.
+3. **Drop phase 28 from the rotation.** ⛔ Cheap and wrong: the ⛔⛔ block in
+   `lf_indala_data.c` already warns that the winning phase is a property of the tag's frame
+   timing, not a fixed bad list. Another phase would do the same against another specimen.
+
+⚠ Whatever is chosen, the null must be re-measured at more than one coupling. C85 passed this
+exact test at a different coupling and has been retracted because of it.
 
 ---
 

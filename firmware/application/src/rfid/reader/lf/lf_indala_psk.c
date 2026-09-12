@@ -1,4 +1,5 @@
 #include <limits.h>
+#include <string.h>
 #include "lf_indala_psk.h"
 
 /*
@@ -7,11 +8,21 @@
  * the first 33 bits of the bench tag a0000000e6bd0e92 — 1010, then the 28-bit zero run,
  * then a 1.
  */
-static const uint8_t PREAMBLE[INDALA_PSK_PREAMBLE_BITS] = {
+const uint8_t LF_PSK1_PREAMBLE_INDALA[INDALA_PSK_PREAMBLE_BITS] = {
     1, 0, 1, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     1
+};
+
+/* IDTECK: 0x4944544B, "IDTK" in ASCII, MSB first on air. Unlike Indala's this one has no
+ * long constant run, so it is a far more selective pattern — which is why an Indala reader
+ * cannot mistake an IDTECK tag for a credential, only for noise (C85). */
+const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS] = {
+    0, 1, 0, 0, 1, 0, 0, 1,   /* 0x49 'I' */
+    0, 1, 0, 0, 0, 1, 0, 0,   /* 0x44 'D' */
+    0, 1, 0, 1, 0, 1, 0, 0,   /* 0x54 'T' */
+    0, 1, 0, 0, 1, 0, 1, 1    /* 0x4B 'K' */
 };
 
 /*
@@ -115,10 +126,11 @@ static int32_t bit_integrator(const int16_t *y, size_t n, size_t a) {
 
 /** Match the preamble at `i`, normal or inverted. Returns the error count, or 0xFF once
  *  it exceeds the tolerance (so a hopeless position costs a few comparisons, not 33). */
-static uint8_t preamble_err(const uint8_t *bits, size_t i, bool inverted) {
+static uint8_t preamble_err(const uint8_t *bits, size_t i, bool inverted,
+                            const uint8_t *preamble, uint8_t preamble_bits) {
     uint8_t err = 0;
-    for (size_t j = 0; j < INDALA_PSK_PREAMBLE_BITS; j++) {
-        uint8_t want = inverted ? (uint8_t)(1u - PREAMBLE[j]) : PREAMBLE[j];
+    for (size_t j = 0; j < preamble_bits; j++) {
+        uint8_t want = inverted ? (uint8_t)(1u - preamble[j]) : preamble[j];
         if (bits[i + j] != want) {
             if (++err > PREAMBLE_MAX_ERR) {
                 return 0xFF;
@@ -152,8 +164,12 @@ static void descramble26(const uint8_t *w, indala_psk_result_t *out) {
                         ((out->parity & 1u) == want_odd);
 }
 
-bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
-    if (samples == NULL || out == NULL || n < INDALA_PSK_MIN_SAMPLES) {
+bool lf_psk1_decode(int16_t *samples, size_t n,
+                    const uint8_t *preamble, uint8_t preamble_bits,
+                    indala_psk_result_t *out) {
+    if (samples == NULL || out == NULL || preamble == NULL ||
+            preamble_bits == 0 || preamble_bits > LF_PSK1_MAX_PREAMBLE_BITS ||
+            n < INDALA_PSK_MIN_SAMPLES) {
         return false;
     }
     if (n > INDALA_PSK_CAPTURE_SAMPLES) {
@@ -218,7 +234,7 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
 
         for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
             for (uint8_t inv = 0; inv < 2; inv++) {
-                uint8_t err = preamble_err(bits, i, inv != 0);
+                uint8_t err = preamble_err(bits, i, inv != 0, preamble, preamble_bits);
                 if (err > PREAMBLE_MAX_ERR) {
                     continue;
                 }
@@ -324,6 +340,21 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
      * but it does NOT reject a frame here: it is two bits, it only covers format 26, and
      * the preamble search already produced 0 false positives in 160 empty captures. Making
      * it a gate would discard real reads of other formats for no measured gain. */
-    descramble26(best_word, out);
+    /* Format-26 is an INDALA view of the frame and is meaningless for any other preamble,
+     * so it is zeroed here and filled in only by the Indala wrapper below. */
+    out->fc = 0;
+    out->csn = 0;
+    out->parity = 0;
+    out->wiegand26_ok = false;
+    memcpy(out->word_bits, best_word, INDALA_PSK_FRAME_BITS);
+    return true;
+}
+
+bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    if (!lf_psk1_decode(samples, n, LF_PSK1_PREAMBLE_INDALA,
+                        INDALA_PSK_PREAMBLE_BITS, out)) {
+        return false;
+    }
+    descramble26(out->word_bits, out);
     return true;
 }

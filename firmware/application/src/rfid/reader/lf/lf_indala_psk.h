@@ -41,6 +41,21 @@
 /** Bits in the fixed preamble (cmdlfindala.c:50) — and the first 33 bits of every ID. */
 #define INDALA_PSK_PREAMBLE_BITS 33
 
+/** IDTECK's preamble is 0x4944544B, "IDTK", the first 32 bits of every IDTECK frame. */
+#define IDTECK_PSK_PREAMBLE_BITS 32
+
+/** Longest preamble any format here uses, for fixed-size storage. */
+#define LF_PSK1_MAX_PREAMBLE_BITS 33
+
+/* ⭐ THE PREAMBLES ARE THE ONLY THING THAT DIFFERS BETWEEN THESE TWO PROTOCOLS at this
+ * layer. Indala and IDTECK are both 64-bit PSK1 at RF/32 on an fc/2 subcarrier, written by
+ * the same T5577 config word but for `T5577_PWD` — so the mixer, the notch, the bit
+ * integrator, the offset ranking and the straddle gate are shared verbatim, and only the
+ * bit pattern being searched for changes. Duplicating the decoder to add IDTECK would have
+ * duplicated the 320-capture validation with it. */
+extern const uint8_t LF_PSK1_PREAMBLE_INDALA[INDALA_PSK_PREAMBLE_BITS];
+extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
+
 /** Samples in one capture. 4096 = two whole 64-bit frames at RF/32.
  *
  * ⭐ ONE FRAME IS NOT ENOUGH, ever, at any SNR: the preamble can start anywhere in the
@@ -85,6 +100,9 @@ typedef struct {
                                 relative to its average is an integrator sitting across bit
                                 boundaries, which decodes to a repeatable WRONG word. See
                                 the gate in lf_indala_psk.c. */
+    uint8_t  word_bits[INDALA_PSK_FRAME_BITS]; /**< the frame as one byte per bit, which is
+                                what a format de-scramble wants. `id` is the same 64 bits
+                                packed. */
     int32_t  energy;       /**< ⭐ SET EVEN WHEN NO FRAME DECODES — this is the one field
                                 that distinguishes "nothing is there" from "something is
                                 there that I cannot read". The largest mean |bit
@@ -139,3 +157,17 @@ typedef struct {
  * @return         true if a frame was recovered.
  */
 bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/**
+ * The same demodulation, searching for an arbitrary preamble.
+ *
+ * `indala_psk1_decode` is this plus the format-26 de-scramble; IDTECK calls it directly and
+ * reads its checksum and card number out of `out->id`. The format-26 fields (`fc`, `csn`,
+ * `parity`, `wiegand26_ok`) are ZEROED here and are meaningless for any other protocol.
+ *
+ * @param preamble       one byte per bit, 0 or 1, MSB of the frame first.
+ * @param preamble_bits  length, at most LF_PSK1_MAX_PREAMBLE_BITS.
+ */
+bool lf_psk1_decode(int16_t *samples, size_t n,
+                    const uint8_t *preamble, uint8_t preamble_bits,
+                    indala_psk_result_t *out);
