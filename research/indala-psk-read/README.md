@@ -144,7 +144,7 @@ make.
 | rig | layout | what it drives |
 |---|---|---|
 | **A — emulate** | Chameleon #1 alone on the Flipper pad, its face towards the Flipper's back | the Chameleon emulates, the Flipper reads over its serial CLI |
-| **B — the sandwich** | ⭐ **Proxmark, T5577, Chameleon #2, in that order** — re-aimed 2026-09-12 so the two devices face each other with the tag between them | ⭐ strictly better than the old layout: it runs **all three** pairings. Proxmark↔tag (write and verify), Chameleon↔tag (reads it 4/4), and Proxmark↔Chameleon for emulation work — that last one by lifting the tag out, since otherwise both sources modulate the same field |
+| **B — the sandwich** | ⭐ **Proxmark, T5577, Chameleon #2, in that order** — re-aimed 2026-09-12 so the two devices face each other with the tag between them | ⭐ strictly better than the old layout: it runs **all three** pairings. Proxmark↔tag (write and verify), Chameleon↔tag (reads it 4/4), and Proxmark↔Chameleon for emulation work — that last one by lifting the tag out, since otherwise both sources modulate the same field. ⭐ The converse needs NO hands: to measure the tag alone, put Chameleon #2 into reader mode over USB (`hw mode -r`) and it stops emulating — which is how C138's control was taken |
 
 | device | port |
 |---|---|
