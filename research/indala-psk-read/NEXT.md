@@ -15,29 +15,23 @@ under **The bench** and **Working conventions**.
 
 ---
 
-## ⚠ Needs hands — queued, in the order they block things
+## ⚠ Needs hands — what is still queued
+
+**Cleared 2026-09-12:** both Chameleons power-cycled (rig A emulates again, 3/3); stacking
+approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
-| **An Indala tag for rig B** | ✅ The bench geometry is confirmed — Proxmark — T5577 — Chameleon #2, one tag — and that tag is **IDTECK**, not Indala (C90). ⇒ Rig B can no longer verify an Indala read against a real tag. Reprogramming it to Indala is one Proxmark command, but which protocol the tag should carry is the user's call, and §1c wants it on IDTECK |
-| ⛔ **Rig A's emulation is broken — power-cycle it** | Chameleon #1 read 3/3 and 4/4 on the Flipper early today and reads 0 of 4 now, surviving a forced sense re-enable, `hw slot store` and a **full DFU reboot**, with slot 1 verified as Indala carrying the right payload. The rig is otherwise fine: the Flipper emitting Indala is read 3 of 3 by that same Chameleon. ⇒ A true power cycle (USB out) is the one reset not available to me, and it is the obvious next thing to try (C93, L89) |
-| ⭐ **A HID or PAC tag, to finish §2** | The advertising guard is in and untested — the read-rate comparison that would confirm or refute C47 needs a tag this bench does not have. ⇒ **Offer:** the Proxmark can write HID onto the existing T5577 and I hold its exact contents (`00081040 / 4944544B / 55667788`), so it can be restored byte-for-byte afterwards. Say the word and it needs no hands — otherwise it needs a HID tag on rig B |
-| **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
-| **§4 burst length** | The Proxmark must face the emulator, and it faces a tag |
+| **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
+| **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
 
+⚠ **A soft reboot is not a power cycle.** Rig A's emulation died during §3 work and survived a
+forced sense re-enable, `hw slot store` and a **full DFU reflash**, then came back on a USB
+unplug (C96). ⇒ When emulation misbehaves in a way that makes no sense, the power cycle is a
+real diagnostic step, not a superstition — and it is one only a person can take.
+
 ---
-
-## 0. ✅ Wrong credential from an IDTECK tag — FIXED
-
-`lf_psk1_decode_ex()` takes a reject preamble; a capture carrying a valid IDTECK frame yields
-no Indala credential. **0 wrong credentials in 10 reads** where it was 4 of 8, the Flipper's
-Indala still **6 of 6**, and 480 committed Indala/empty captures untouched (C91, L87).
-
-⚠ Option 2, enforcing Wiegand-26 parity, was rejected on measurement: 13 of 17 wrong
-back-side frames fail parity, so four would still pass. Option 3, dropping phase 28, was
-rejected on principle — the ⛔⛔ block in `lf_indala_data.c` already says the winning phase is
-a property of the tag, not a fixed bad list.
 
 ## The grid — where we stand against the Flipper
 
@@ -91,7 +85,14 @@ Indala and IDTECK, so those two should reuse the PSK1 path nearly whole.
 
 **Phase 1 — finish Indala and IDTECK.** They share a physical layer, so IDTECK is nearly free
 once Indala is done, and the pair is the proving ground for everything after it.
-> §1 undecodable-signal status · §1c IDTECK reader · §1d Indala224 · §4 burst length · §5 carrier locking
+> ✅ §0 wrong-credential fix · ✅ §1 undecodable-signal status · ✅ §1c IDTECK reader · §1d Indala224 · §4 burst length · §5 carrier locking
+
+⭐ **Do §8 first, out of phase order.** It is the only item that changes the reader's core, it
+is decided (drop stacking), and §1d is impossible until it lands. Sizing the Indala224 buffer
+before removing 40 KB would mean sizing it twice.
+
+⇒ **The order now: §8 → §1d → §2 → §3.** Everything in it runs unattended on the bench as it
+stands; §4, §5 and §7 are what remain for a person.
 
 **Phase 2 — fix what already exists.** Two readers are unreliable on loud tags and there are
 known bugs with reproductions attached. ⛔ Nothing new is added until these are closed:
@@ -110,13 +111,13 @@ can run to completion now and work that has to wait.
 |---|---|
 | §1 status code | **nothing** — empty arm on rig A, loud-undecodable arm from the Flipper emulating IDTECK into our Indala reader. ⚠ A genuinely free-running source still needs hands (C87) |
 | §1c IDTECK reader | **nothing** — the Proxmark writes IDTECK to the T5577 and Chameleon #2 reads it. Rig B is exactly this test |
-| §1d Indala224 | **nothing**, once §8 is settled — `lf indala clone --224` on rig B |
-| §2 HID / PAC readers | **nothing** — the Proxmark writes HID or PAC to the T5577 on rig B. ⚠ C46 used three real HID tags; a T5577 wearing HID is a different specimen, so say which was used |
+| §1d Indala224 | **nothing** — §8 is settled, so the RAM is available. `lf indala clone --224` on rig B |
+| §2 HID / PAC readers | **nothing** — the Proxmark may rewrite the T5577 freely now. ⚠ C46 used three real HID tags; a T5577 wearing HID is a different specimen, so say which was used, and restore the IDTECK contents `00081040 / 4944544B / 55667788` afterwards because C90-C92 regress against them |
 | §3 PWM clock bug | **nothing** — the slot is changed over the CLI and the Flipper reads the result on rig A |
 | §4 burst length | ⚠ hands — the Proxmark has to face the emulator, and it faces the tag |
 | §5 carrier locking | ⛔ **a person.** A scope decision, not a task |
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
-| §8 reader RAM | ⛔ **a person**, and now quantified: Indala224 needs 168 KB with stacking and 28 KB without, against 49.6 KB free. Not a trade-off — a blocker |
+| §8 reader RAM | ✅ **decided 2026-09-12: drop stacking.** Now a task, and the first one — it changes the reader's core, so do it before §1d builds on it |
 
 ⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §4
 and §7 need hands, and only §5 and §8 need a decision.
@@ -145,6 +146,8 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | Undecodable-signal status (§1) | `0x43` shipped and verified on four arms, **20 reads**. C89, L85 |
 | Wrong credential from IDTECK (§0) | vetoed by decoding IDTECK: **0 of 10**, was 4 of 8. C90, C91, L87 |
 | IDTECK reader (§1c) | `lf idteck read`, **6/6** with two nulls. C92, L88 |
+| Advertising guard shared (§2) | all four SAADC readers; effect on HID/PAC **unmeasured**. C95, L91 |
+| §8 decided | drop stacking — the user's call, 2026-09-12. C94, L92 |
 
 ---
 
@@ -184,9 +187,8 @@ Momentum implements `Indala224` alongside `Indala26`; our decoder is hard-wired 
 A 224-bit frame is 7168 samples at RF/32, so the two-frame guarantee needs 14336 samples —
 **28 KB against the current 8 KB**.
 
-⛔ **Settle §8 first.** The reader already holds 48 KB, of which 32 KB is stacking
-accumulators that buy nothing at the correct placement (C58). Freeing that is what makes
-Indala224 affordable; doing them in the other order means sizing a buffer twice.
+✅ **§8 is settled** — stacking goes, so the RAM is there: 28 KB decoding in place against
+49.6 KB free (C94). ⇒ Do §8 first anyway, so the buffer is sized once.
 
 ⚠ Needs a real 224-bit tag to verify against. The Proxmark can write one
 (`lf indala clone --224`), and Momentum can read it — so the three-reader bar applies as
@@ -242,8 +244,10 @@ re-runs `pwm_init` by construction, so it cannot be the stale clock (C93, L89).
 protocol emulating CORRECTLY before and INCORRECTLY after a type change, with a positive
 control on both sides. The attempt logged in L89 had neither.
 
-⚠ Blocked behind the power-cycle item at the top of this file: rig A cannot currently emulate
-anything, so no emulation test can be run there at all.
+✅ **Unblocked** — rig A emulates again after the power cycle (3/3). ⭐ And that is itself a
+clue worth following here: the failure survived a DFU reflash and died on a USB unplug (C96),
+so whatever stuck was peripheral state that a soft reset does not clear — which is the same
+family of problem §3 describes, even though §3's specific mechanism was ruled out.
 
 ## 4–5 preamble. ⭐ Burst length and carrier lock are DIFFERENT problems
 
@@ -320,60 +324,34 @@ is a new transport behind the existing command layer. ⚠ A live BLE connection 
 is itself uncharacterised, and C47 has advertising bursts collapsing the field — measure with
 and without before trusting it.
 
-## 8. ⚠ DECISION FOR A PERSON — drop stacking? The arithmetic now says it is not optional
+## 8. ⭐ DECIDED 2026-09-12 — drop stacking. Do this FIRST.
 
-⛔ **Nothing here is mine to decide.** What has changed is that the numbers are no longer
-estimates: the RAM headroom is measured from the link map, and the Indala224 requirement is
-arithmetic rather than a guess.
+The user's call, given the arithmetic in C94: stacking returns **0%** at the documented
+placement and is the only thing making Indala224 impossible. ⇒ Remove it.
 
-**Measured RAM, `firmware/objects/application.map`:** `.data` + `.bss` end at `__HeapBase`
-`0x20025988`; the heap is 16 KB to `__HeapLimit` `0x20029988`; the stack is 8 KB down from
-`__StackTop`, so `__StackLimit` is `0x20036000`. ⇒ **49.6 KB free**, and the Indala reader's
-48 KB is the only large block that could be reclaimed — about **98 KB reachable in total**.
+**What goes:** the two `indala_stack_t` accumulators (32 KB) and `m_scratch` (8 KB). Without
+an accumulator to preserve, the decoder can work in place on `m_samples`, so the 64-bit
+reader drops from **48 KB to 8 KB** and Indala224 becomes a 28 KB buffer rather than 168 KB.
 
-**What each frame length costs**, at the current shape (samples + scratch + two int32
-accumulators):
+⛔ **The agreement rule is NOT stacking and must survive.** Two independent captures still have
+to agree before a credential is returned — that is what holds wrong words at 0, and it is
+cheaper without accumulators, not dearer: keep the last decoded word and compare the next
+against it.
 
-| | samples | scratch | 2 × accumulator | total |
-|---|---|---|---|---|
-| 64-bit, as shipped | 8 KB | 8 KB | 32 KB | **48 KB** |
-| 224-bit, same shape | 28 KB | 28 KB | 112 KB | ⛔ **168 KB** |
-| 224-bit, no stacking, decoding in place | 28 KB | — | — | ⭐ **28 KB** |
+**Re-measure after, all of it host-side and free except the last line:**
 
-⛔ **So §1d is not a trade-off, it is a blocker.** 168 KB does not exist on this part and
-cannot be made to: even halving the accumulators to int16 leaves 112 KB. **Indala224 is
-impossible while stacking exists at any depth**, and comfortable without it.
-
-**What stacking buys**, measured on 320 committed captures (C58, and re-confirmed this session
-by running the shipped decoder over single captures):
-
-| | front — the documented placement | back |
+| check | expected | where |
 |---|---|---|
-| no stacking | **68.75%** (110/160, all correct) | 32% (51/160 correct) |
-| stacking to 8 | **68.75%** — identical | 72% |
+| front decode rate | **68.75%**, 110/160, all correct — unchanged | `ctest`, `caps/front` |
+| back decode rate | 32%, 51/160 correct — **down from 72%, this is the accepted cost** | `ctest`, `caps/phasebits` |
+| straddle gate | still 0 wrong frames | `make check` |
+| both decoders agree | word for word on 320 | `make check` |
+| IDTECK veto | still 0 Indala credentials from the IDTECK tag | rig B |
+| bench arms | IDTECK 6/6, Flipper Indala reads | rigs A and B |
 
-⇒ Stacking buys **nothing at all** where the README tells users to put the tag, and roughly
-doubles the rate where it tells them not to.
-
-### Recommendation: drop it
-
-1. It costs 32 KB and returns 0% at the correct placement.
-2. It is the *only* reason Indala224 cannot be built.
-3. ⭐ §1 softens the loss. A back-side read that fails now reports "a subcarrier is present but
-   no frame could be decoded" rather than "not found", which is precisely the nudge to
-   reposition — the fix for a bad placement is to move the tag, not to spend 32 KB hiding it.
-4. Both PSK1 readers share the engine since §1c, so this is decided once for both.
-
-⚠ **Against:** 72% → 32% on the back is a real regression for anyone who holds the tag the
-Flipper way, and that is a habit, not a mistake they will notice.
-
-⛔ **If it goes, re-measure the straddle gate on the same 320 captures.** The existing note
-warns that stacking REINFORCES the dead-band straddle and the gate is what holds it at 0
-wrong; removing stacking should therefore only help, but "should" is not a measurement. ⭐ One
-data point already: stacking a loud IDTECK signal to depths 2, 3, 4 and 8 produced 0 frames
-(C90), so stacking did not manufacture that false positive either.
-
-⇒ **Ask:** keep 72% on the wrong side, or have Indala224? They are mutually exclusive.
+⚠ The existing note warns that stacking REINFORCES the dead-band straddle and the gate is what
+holds it at 0 wrong. Removing stacking should therefore only help — but "should" is not a
+measurement, and `make check` is the measurement.
 
 ## 9. Upstreamable?
 
