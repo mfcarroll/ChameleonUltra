@@ -226,7 +226,13 @@ state is cleared by a reboot, so a reflash destroys the evidence.
 ⇒ And still confirm the control is live before believing any `--drive` number: one capture at
 drive 7 against one at drive 4. Live is roughly 2x apart; inert is identical.
 
-⚠ **Leading suspect, not demonstrated (C150):** `lf_tag_em.c` and `lf_125khz_radio.c` both drive
+⚠ **Soaked and not reproducible (C151):** 112 operations of the session's own mix — drive
+sweeps, every sniff variant, mode cycles, slot changes, all four readers, and tag rewrites
+cycling PAC → HID → Indala → EM410x — never moved the drive control more than 0.020 from
+baseline, against a fault that moves it 0.41. ⛔ The fault has never been seen with the trap
+armed, so which of C149's three branches it is remains unknown.
+
+⚠ **Leading suspect, not demonstrated (C150, and the chunk leak):** `lf_tag_em.c` and `lf_125khz_radio.c` both drive
 `NRFX_PWM_INSTANCE(0)`, the same peripheral, with separate beliefs about ownership — the tag
 path calls `nrfx_pwm_uninit()` on it from two places while the reader's `m_reader_inited` stays
 true. A mode cycle does not reproduce the fault, which weakens it, but it is the only
