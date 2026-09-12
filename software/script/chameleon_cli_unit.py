@@ -6055,7 +6055,7 @@ class LFIndalaRead(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        uid, fc, csn, flags, phase, offset, stacked = self.cmd.indala_scan()
+        uid, fc, csn, flags, phase, offset, tries = self.cmd.indala_scan()
         parity_ok = bool(flags & 0x04)
         print(f"Indala PSK1")
         print(f"   Raw: {color_string((CY, uid.hex()))}")
@@ -6069,7 +6069,7 @@ class LFIndalaRead(ReaderRequiredUnit):
             print(f"   {color_string((CR, 'Wiegand-26 parity does not check out'))} — "
                   f"expected for a non-format-26 Indala tag")
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
-              f"{stacked} capture{'' if stacked == 1 else 's'} stacked")
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
 
 
 @lf_indala.command("write")
@@ -6527,13 +6527,13 @@ class LFIdteckRead(ReaderRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        raw, chksum, card, phase, offset, stacked = self.cmd.idteck_scan()
+        raw, chksum, card, phase, offset, tries = self.cmd.idteck_scan()
         print("IDTECK PSK1")
         print(f"   Raw: {color_string((CY, raw.hex()))}")
         print(f"   Card: {color_string((CG, card))} ({card:#08x})  "
               f"Checksum byte: {color_string((CY, f'{chksum:02x}'))}")
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
-              f"{stacked} capture{'' if stacked == 1 else 's'} stacked")
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
 
 
 @lf_idteck.command("write")

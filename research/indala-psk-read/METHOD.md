@@ -165,6 +165,21 @@ it echoed, after which the same captures gave 0 of 4.
 The real result survived and came out stronger, because the difference between the arms now
 tracks the one variable that changed.
 
+**M30. ⛔ A WORKAROUND OUTLIVES THE PROBLEM IT WORKED AROUND, AND NOBODY GOES BACK TO CHECK.**
+Capture stacking was added at 04:03 on 2026-09-11 to fix a real signal deficit: 31.9% → 71.9%,
+measured carefully, with a clean null at every depth. It cost two 16 KB accumulators and an
+8 KB scratch buffer. At 09:53 the SAME DAY the deficit turned out to be the tag sitting on the
+wrong side of the device — worth 21x — and on the correct side the rate is 68.75% at every
+stacking depth INCLUDING ONE. The workaround was then carried for a further day, and its 40 KB
+were what made Indala224 impossible (C94).
+⇒ The fix was not wrong when it was made; it was obsolete six hours later and nothing said so.
+**When a root cause is finally found, re-examine what was built to compensate for it** — every
+mitigation dated before the discovery is a candidate for deletion, and the expensive ones
+should be re-measured rather than assumed still to be earning their keep.
+⚠ Note how invisible this is: stacking kept working perfectly. It never failed, never produced
+a wrong answer, and its own measurements stayed true. A thing that still works is much harder
+to notice than a thing that breaks.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

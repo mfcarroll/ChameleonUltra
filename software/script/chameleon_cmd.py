@@ -708,7 +708,7 @@ class ChameleonCMD:
         agree. A capture is ~35ms and the measured median is 2 of them; the 95th
         percentile is 5.
 
-        Returns (id, fc, csn, flags, phase, offset, stacked) where id is the raw 64-bit frame,
+        Returns (id, fc, csn, flags, phase, offset, tries) where id is the raw 64-bit frame,
         flags bit2 is "the Wiegand-26 parity checks out" and bits 1..0 are the parity bits
         themselves, and phase/offset say where in the carrier cycle the read came from.
         """
@@ -730,15 +730,15 @@ class ChameleonCMD:
         timing applies — see indala_scan for why this needs a 10s host timeout against a 3s
         device budget.
 
-        Returns (id, chksum, card, phase, offset, stacked) where id is the raw 64-bit frame
+        Returns (id, chksum, card, phase, offset, tries) where id is the raw 64-bit frame
         (the first four bytes are always "IDTK") and card is the 24-bit card number.
         """
         resp = self.device.send_cmd_sync(Command.IDTECK_SCAN, timeout=10)
         if resp.status == Status.LF_TAG_OK:
-            raw, chk, c_hi, c_mid, c_lo, phase, offset, stacked = struct.unpack(
+            raw, chk, c_hi, c_mid, c_lo, phase, offset, tries = struct.unpack(
                 ">8sBBBBBBB1x", resp.data[:16])
             card = (c_hi << 16) | (c_mid << 8) | c_lo
-            resp.parsed = (raw, chk, card, phase, offset, stacked)
+            resp.parsed = (raw, chk, card, phase, offset, tries)
         return resp
 
     @expect_response(Status.LF_TAG_OK)

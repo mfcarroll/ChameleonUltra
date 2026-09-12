@@ -91,7 +91,7 @@ once Indala is done, and the pair is the proving ground for everything after it.
 is decided (drop stacking), and §1d is impossible until it lands. Sizing the Indala224 buffer
 before removing 40 KB would mean sizing it twice.
 
-⇒ **The order now: §8 → §1d → §2 → §3.** Everything in it runs unattended on the bench as it
+⇒ **The order now: ~~§8~~ → §1d → §2 → §3.** Everything in it runs unattended on the bench as it
 stands; §4, §5 and §7 are what remain for a person.
 
 **Phase 2 — fix what already exists.** Two readers are unreliable on loud tags and there are
@@ -117,7 +117,7 @@ can run to completion now and work that has to wait.
 | §4 burst length | ⚠ hands — the Proxmark has to face the emulator, and it faces the tag |
 | §5 carrier locking | ⛔ **a person.** A scope decision, not a task |
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
-| §8 reader RAM | ✅ **decided 2026-09-12: drop stacking.** Now a task, and the first one — it changes the reader's core, so do it before §1d builds on it |
+| §8 reader RAM | ✅ **done** — stacking removed, 89.8 KB free. C97 |
 
 ⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §4
 and §7 need hands, and only §5 and §8 need a decision.
@@ -148,6 +148,7 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | IDTECK reader (§1c) | `lf idteck read`, **6/6** with two nulls. C92, L88 |
 | Advertising guard shared (§2) | all four SAADC readers; effect on HID/PAC **unmeasured**. C95, L91 |
 | §8 decided | drop stacking — the user's call, 2026-09-12. C94, L92 |
+| Stacking removed (§8) | 48 KB → 8 KB, free RAM 49.6 → 89.8 KB, all arms pass. C97, L93 |
 
 ---
 
@@ -324,34 +325,16 @@ is a new transport behind the existing command layer. ⚠ A live BLE connection 
 is itself uncharacterised, and C47 has advertising bursts collapsing the field — measure with
 and without before trusting it.
 
-## 8. ⭐ DECIDED 2026-09-12 — drop stacking. Do this FIRST.
+## 8. ✅ Stacking removed — 48 KB → 8 KB
 
-The user's call, given the arithmetic in C94: stacking returns **0%** at the documented
-placement and is the only thing making Indala224 impossible. ⇒ Remove it.
+`.bss` down **41,176 bytes**, free RAM **49.6 → 89.8 KB**. The decoder works in place; the
+two-capture agreement rule stayed and now uses consecutive captures, which are a stricter
+independent pair than the two hand-separated accumulators were. Verified on four bench arms
+and 480 committed captures (C97, L93).
 
-**What goes:** the two `indala_stack_t` accumulators (32 KB) and `m_scratch` (8 KB). Without
-an accumulator to preserve, the decoder can work in place on `m_samples`, so the 64-bit
-reader drops from **48 KB to 8 KB** and Indala224 becomes a 28 KB buffer rather than 168 KB.
-
-⛔ **The agreement rule is NOT stacking and must survive.** Two independent captures still have
-to agree before a credential is returned — that is what holds wrong words at 0, and it is
-cheaper without accumulators, not dearer: keep the last decoded word and compare the next
-against it.
-
-**Re-measure after, all of it host-side and free except the last line:**
-
-| check | expected | where |
-|---|---|---|
-| front decode rate | **68.75%**, 110/160, all correct — unchanged | `ctest`, `caps/front` |
-| back decode rate | 32%, 51/160 correct — **down from 72%, this is the accepted cost** | `ctest`, `caps/phasebits` |
-| straddle gate | still 0 wrong frames | `make check` |
-| both decoders agree | word for word on 320 | `make check` |
-| IDTECK veto | still 0 Indala credentials from the IDTECK tag | rig B |
-| bench arms | IDTECK 6/6, Flipper Indala reads | rigs A and B |
-
-⚠ The existing note warns that stacking REINFORCES the dead-band straddle and the gate is what
-holds it at 0 wrong. Removing stacking should therefore only help — but "should" is not a
-measurement, and `make check` is the measurement.
+⚠ The accepted cost — back-side 72% → 32% — is **predicted from committed captures, not
+re-measured on hardware**, because it needs the tag on the far side of the device (C98). If a
+back-side arm is ever taken, that is the number to check.
 
 ## 9. Upstreamable?
 

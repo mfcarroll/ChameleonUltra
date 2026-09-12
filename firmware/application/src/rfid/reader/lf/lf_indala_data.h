@@ -44,14 +44,14 @@
 bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
 /** Bytes written by idteck_read(): the 8-byte frame, then checksum, then the 24-bit card
- *  number most significant first, then phase/offset/stacked — the same shape as Indala's. */
+ *  number most significant first, then phase/offset/tries — the same shape as Indala's. */
 #define IDTECK_READ_DATA_SIZE 16
 
 /** What one successful PSK1 read produced, before any protocol puts it in a payload. */
 typedef struct {
     indala_psk_result_t res;
     uint8_t phase;    /**< the sample phase that won, in 62.5ns ticks */
-    uint8_t stacked;  /**< captures stacked to reach it */
+    uint8_t tries;    /**< captures taken at the winning phase to reach it */
 } lf_psk1_read_t;
 
 /**
