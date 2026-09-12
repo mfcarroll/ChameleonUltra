@@ -22,10 +22,10 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
-| ⚠ **The bench tag is currently PAC/Stanley `CD4F5552`, not IDTECK** | Left that way deliberately: it is §2's first REPRODUCIBLE failure (`lf pac read` 0/10 on a tag the Proxmark reads) and the specimen to debug against. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
+| ⚠ **The bench tag is Indala `a0000000e6bd0e92` as of 2026-09-12** — it was found wearing HID Prox, not the PAC recorded here | ⭐ Left as Indala deliberately: it is now the **carrier-locked reference** C138 needs, and Chameleon #2 reads it 4/4 through the sandwich. ⛔ Its previous contents are dumped to `~/lf-t55xx-1D555955-5569A9A5-55A59569-D5B2649F-B3C6AD1F-CF649393-928C14E5-dump.json` and restore with `lf t55xx restore -f <that file>`. ⚠ §2's PAC specimen is no longer on this tag — but `pactest/` reproduces that failure on the host from a committed capture, so the physical tag is not the only specimen. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
 | ~~⭐ **An AIR GAP under the HID tag, to test C47**~~ ⛔ **scrapped 2026-09-12 — the user dropped the HID test** | Kept for the record: paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
-| ⭐⭐ **A CARRIER-LOCKED TAG IN FRONT OF THE PROXMARK — the null for C137** | ⛔ The load-bearing measurement of this session has no control. `clockoffset.py` reads **131 ppm** off our emulator; a T5577 divides the reader's own carrier, so it must read **below the 20 ppm floor**. If it does not, the estimator is measuring itself and C137 falls. Measured, not assumed: `lf search` on the Proxmark finds nothing, so the re-aim took the tag out of its field. **One placement — any LF tag between the Proxmark and the Chameleon, close enough that `lf search` identifies it.** Everything after that is unattended |
+| ~~⭐⭐ **A carrier-locked tag in front of the Proxmark — the null for C137**~~ ✅ **done, and clean** | The T5577 went back into the sandwich and the control landed: NO TONE 5 of 5 against the emulator's 131 ppm, and the full 290 ms decoded 5 of 5 against 0–197 ms (C138). ⭐ The sandwich is strictly better than the old rig B — see `README.md` |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | ~~**§4 burst length**~~ ✅ done | The Proxmark had to face the emulator and faced the tag. Rig B was turned so the two face each other directly, and §4 was measured there (C135) |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -364,7 +364,13 @@ longer "should we do this" but "is there a second way to do it on hardware that 
 clock". ⚠ Until that is answered, treat everything below as describing the *problem*, not an
 available fix.
 
-⭐ **The cost of not locking is now sized: a ~122 ms coherent window** (C137). Our subcarrier
+✅ **AND THE CONTROL LANDED — this is settled** (C138). A carrier-locked T5577 playing the
+*same frame* in the *same field* reads NO TONE where our emulator reads 131 ppm, and the
+Proxmark decodes the full 290 ms of it 5 of 5 where our emulator managed 0–197 ms — on **less**
+signal. Amplitude, the demodulator and the burst boundary are all excluded. ⇒ Nothing here is
+open any more except what to do about it.
+
+⭐ **The cost of not locking is sized: a ~122 ms coherent window** (C137). Our subcarrier
 runs 131 ppm off the reader's clock, so one whole subcarrier cycle of phase error accumulates
 every 122 ms — which is the ceiling §4 measured from the other side. ⇒ That reframes the whole
 section. This is not a defect with a fix available; it is a **hardware-imposed property** of an
