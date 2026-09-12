@@ -84,7 +84,7 @@ can run to completion now and work that has to wait.
 
 | item | needs |
 |---|---|
-| §1 status code | the empty arm runs on either rig. ⚠ The **positive** arm needs an unlocked PSK1 source in front of a Chameleon reader — try the Proxmark simulating into rig B first, since its antenna already sits under the tag Chameleon #2 faces; if that does not couple, it needs hands |
+| §1 status code | **nothing, probably** — the empty arm runs on either rig, and rig A supplies the positive arm backwards: the Flipper emulates into Chameleon #1 over its CLI. ⚠ That direction is untested; the Proxmark simulating into rig B is the fallback, and only if neither couples does it need hands |
 | §1c IDTECK reader | **nothing** — the Proxmark writes IDTECK to the T5577 and Chameleon #2 reads it. Rig B is exactly this test |
 | §1d Indala224 | **nothing**, once §8 is settled — `lf indala clone --224` on rig B |
 | §2 HID / PAC readers | **nothing** — the Proxmark writes HID or PAC to the T5577 on rig B. ⚠ C46 used three real HID tags; a T5577 wearing HID is a different specimen, so say which was used |
@@ -94,8 +94,8 @@ can run to completion now and work that has to wait.
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
 | §8 reader RAM | ⛔ **a person.** A trade-off between the back-side read rate and affording §1d |
 
-⇒ The unattended path through Phase 1 and Phase 2 is **§1c → §3 → §2**, with §1's code
-written and its positive arm queued.
+⇒ The unattended path through Phase 1 and Phase 2 is **§0 → §1 → §1c → §3 → §2**. Only §4
+and §7 need hands, and only §5 and §8 need a decision.
 
 ⚠ **Retired section numbers.** LOG.md is append-only and cites sections that have since moved.
 `§1d`, `§2b`, `§3a`, `§3b`, `§3c` were folded into the sections above during the 2026-09-12

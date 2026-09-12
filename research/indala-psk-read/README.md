@@ -153,11 +153,18 @@ it back, so a new reader can be exercised end to end against an independently-wr
 Rig A is the same for the emulate path. Most of `NEXT.md` needs neither a person nor a
 placement change.
 
-⛔ **What they cannot do.** A Chameleon cannot read an emulator — not a defect but the
-specialisation in M27/C82 — and the rigs do not face each other, so anything needing a
-Chameleon to read a non-carrier-locked source needs a person. So does anything needing the
-Proxmark pointed at an emulator rather than at the tag, and anything measured with the cable
-out.
+⭐ **Rig A can also run BACKWARDS, which is what §1 needs.** The Flipper emulates over the
+same CLI — `rfid emulate Indala26 <4 bytes>`, `rfid emulate Idteck 4944544B00000000` — into
+Chameleon #1, which already sits in the front-to-back geometry C81 used in the other
+direction. That is a non-carrier-locked PSK1 source in front of our own reader, with no hands.
+⚠ **Untested in that direction.** C81 proves the Flipper hears our emulation there; it does
+not prove our reader hears the Flipper's, and an active emitter beside an active reader is a
+different electrical case from a reader beside a near-passive one. Try it, do not assume it.
+
+⛔ **What genuinely needs a person:** a second *Chameleon* emulating in front of a Chameleon
+reader, since the two rigs do not face each other; the Proxmark pointed at an emulator rather
+than at the tag; and anything measured with the cable out. The reader's own inability to
+decode an unlocked source is M27/C82 — a property of the decoder, not of the bench.
 
 ⚠ **Both Chameleons are cabled, and the cable costs ~40% of the coupling by detuning the
 antenna (C72).** Emulation is still read reliably by the Flipper in this state, so functional
