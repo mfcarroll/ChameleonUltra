@@ -171,3 +171,37 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 bool lf_psk1_decode(int16_t *samples, size_t n,
                     const uint8_t *preamble, uint8_t preamble_bits,
                     indala_psk_result_t *out);
+
+/**
+ * ⛔⛔ THE SAME DECODE, PLUS A FORMAT THAT VETOES IT — the fix for C90.
+ *
+ * `lf indala read` returned `a0000000801119c0`, a confident WRONG credential, from a T5577
+ * whose memory is an IDTECK frame, on 4 of 8 reads. Neither existing safeguard can see it:
+ * the straddle gate wants a frame that is loud AND ragged and this one is loud and well
+ * shaped at 2.8x the amplitude bar, while the two-capture agreement rule wants errors to be
+ * independent and this one is deterministic at sample phase 28, so both captures agree.
+ *
+ * ⭐ The asymmetry is the whole mechanism. Indala's preamble is 33 bits of which 28 are a
+ * CONSTANT RUN, so a loud non-Indala PSK1 signal sampled at an unlucky phase can produce it.
+ * IDTECK's is "IDTK", 32 bits with no run longer than two — a far more selective pattern.
+ * Measured on the committed captures:
+ *
+ *     160 front-side Indala tag captures      IDTECK matched   0
+ *     160 front-side empty captures           IDTECK matched   0
+ *     160 back-side Indala tag captures       IDTECK matched   0
+ *       8 IDTECK tag captures, phases 0-112   IDTECK matched   8   (Indala falsely: 1)
+ *
+ * ⇒ "If IDTECK decodes from this capture, do not report an Indala credential" costs nothing
+ * on 480 captures of the thing it must not disturb, and catches the false positive.
+ *
+ * ⛔ IT IS ASYMMETRIC ON PURPOSE. An IDTECK reader must NOT veto on an Indala match: the
+ * false match goes one way only, so vetoing that direction would throw away genuine IDTECK
+ * reads for a pattern that appears BECAUSE the tag is IDTECK.
+ *
+ * ⚠ This rejects; it does not disambiguate. A capture containing both formats is a case
+ * nobody has produced, and it would be reported as "present but not decoded" (0x43).
+ */
+bool lf_psk1_decode_ex(int16_t *samples, size_t n,
+                       const uint8_t *preamble, uint8_t preamble_bits,
+                       const uint8_t *reject, uint8_t reject_bits,
+                       indala_psk_result_t *out);

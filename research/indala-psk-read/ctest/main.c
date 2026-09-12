@@ -56,8 +56,26 @@ int main(int argc, char **argv) {
             buf[k] = (int16_t)(((unsigned)raw[2 * k] << 8) | raw[2 * k + 1]);
         }
 
+        /* ⭐ BOTH FORMATS, SAME CAPTURE. The question C90 raises is whether an IDTECK frame
+         * that the Indala preamble falsely matches can be RECOGNISED as IDTECK from the same
+         * samples — if so, decoding IDTECK is the rejection test. Needs its own copy of the
+         * buffer because the decoder works in place. */
+        static int16_t buf2[INDALA_PSK_CAPTURE_SAMPLES];
+        memcpy(buf2, buf, n * sizeof(buf[0]));
+        indala_psk_result_t ri;
+        int idteck = lf_psk1_decode(buf2, n, LF_PSK1_PREAMBLE_IDTECK,
+                                    IDTECK_PSK_PREAMBLE_BITS, &ri);
+        char ihex[17] = "-";
+        if (idteck) {
+            for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
         indala_psk_result_t r;
         if (!indala_psk1_decode(buf, n, &r)) {
+            if (!quiet) printf(" %-40s %5zu samples  -   IDTECK %s\n", argv[i], n, ihex);
+            continue;
+        }
+        if (0) {
             /* ⭐ energy is valid here and nowhere else is it visible — this line is the
              * calibration for INDALA_PSK_ENERGY_PRESENT. */
             if (!quiet) printf(" %-40s %5zu samples  -%50s energy %7ld\n",
@@ -78,7 +96,7 @@ int main(int argc, char **argv) {
                    r.offset, r.bit_pos, r.inverted ? "inv" : "   ", (long)r.amp,
                    r.fc, r.csn, (r.parity >> 1) & 1, r.parity & 1,
                    r.wiegand26_ok ? "parity-ok" : "parity-BAD");
-            printf(" %-40s %*senergy %7ld\n", "", 57, "", (long)r.energy);
+            printf(" %-40s %*senergy %7ld   IDTECK %s\n", "", 57, "", (long)r.energy, ihex);
         }
     }
     fprintf(stderr, "%d files, %d produced a frame, %d matched %s\n",

@@ -26,47 +26,16 @@ under **The bench** and **Working conventions**.
 
 ---
 
-## 0. ⛔⛔ WRONG CREDENTIAL — `lf indala read` misreads an IDTECK tag
+## 0. ✅ Wrong credential from an IDTECK tag — FIXED
 
-**This outranks everything else in Phase 1.** A reader that returns a confident wrong card
-number is worse than one that returns nothing, and this one does it repeatably.
+`lf_psk1_decode_ex()` takes a reject preamble; a capture carrying a valid IDTECK frame yields
+no Indala credential. **0 wrong credentials in 10 reads** where it was 4 of 8, the Flipper's
+Indala still **6 of 6**, and 480 committed Indala/empty captures untouched (C91, L87).
 
-`lf indala read`, pointed at a T5577 whose memory is `00081040 / 4944544B / 55667788` — an
-IDTECK frame, confirmed by the Proxmark and by the dump — returns **`a0000000801119c0`,
-"FC 144 Card 10504", on 4 of 8 reads** (C90, L86).
-
-⭐ **Isolated to sample phase 28**, which `PHASE_ROTATION` uses:
-
-| | result |
-|---|---|
-| 8 single captures at phase 0 | 0 frames |
-| 4 host-stacked depths (2,3,4,8) at phase 0 | 0 frames |
-| 1 capture at phase 28 | **the false frame**, amp 5788, Wiegand-26 parity FAILING |
-
-⛔ **Neither existing safety mechanism can see it.** The straddle gate needs the frame to be
-loud AND ragged; this one is loud and *well shaped*, at 2.8x the amplitude bar. The
-two-capture agreement rule needs errors to be independent; this one is deterministic at that
-phase, so both captures agree — the same failure mode M23 already recorded, arriving from a
-different direction.
-
-⇒ The root cause is that **Indala's preamble is 33 bits of which 28 are a constant run**,
-which is too weak a pattern to survive a loud non-Indala PSK1 source sampled at the wrong
-phase. Options, none yet measured:
-
-1. ⭐ **Decode IDTECK too and refuse to report Indala when the capture yields a valid IDTECK
-   frame.** §1c builds the decoder anyway, and this is the reason to do it first. Costs one
-   extra preamble search per offset.
-2. **Enforce Wiegand-26 parity** when the frame parses as format 26. Rejects this specimen —
-   its parity fails — but a genuine non-26 64-bit Indala tag would be rejected too, and we
-   have not measured how common those are.
-3. **Drop phase 28 from the rotation.** ⛔ Cheap and wrong: the ⛔⛔ block in
-   `lf_indala_data.c` already warns that the winning phase is a property of the tag's frame
-   timing, not a fixed bad list. Another phase would do the same against another specimen.
-
-⚠ Whatever is chosen, the null must be re-measured at more than one coupling. C85 passed this
-exact test at a different coupling and has been retracted because of it.
-
----
+⚠ Option 2, enforcing Wiegand-26 parity, was rejected on measurement: 13 of 17 wrong
+back-side frames fail parity, so four would still pass. Option 3, dropping phase 28, was
+rejected on principle — the ⛔⛔ block in `lf_indala_data.c` already says the winning phase is
+a property of the tag, not a fixed bad list.
 
 ## The grid — where we stand against the Flipper
 
@@ -172,6 +141,7 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | Stacking and frame lock (§2) | resolved in opposite directions. C58, C59, L67 |
 | Flipper read driver (§0) | `flipper.py` committed and bracketed: **PSK 4/4, ASK 0/4**. L83 |
 | Undecodable-signal status (§1) | `0x43` shipped and verified on four arms, **20 reads**. C89, L85 |
+| Wrong credential from IDTECK (§0) | vetoed by decoding IDTECK: **0 of 10**, was 4 of 8. C90, C91, L87 |
 
 ---
 

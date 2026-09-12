@@ -167,11 +167,19 @@ static void descramble26(const uint8_t *w, indala_psk_result_t *out) {
 bool lf_psk1_decode(int16_t *samples, size_t n,
                     const uint8_t *preamble, uint8_t preamble_bits,
                     indala_psk_result_t *out) {
+    return lf_psk1_decode_ex(samples, n, preamble, preamble_bits, NULL, 0, out);
+}
+
+bool lf_psk1_decode_ex(int16_t *samples, size_t n,
+                       const uint8_t *preamble, uint8_t preamble_bits,
+                       const uint8_t *reject, uint8_t reject_bits,
+                       indala_psk_result_t *out) {
     if (samples == NULL || out == NULL || preamble == NULL ||
             preamble_bits == 0 || preamble_bits > LF_PSK1_MAX_PREAMBLE_BITS ||
             n < INDALA_PSK_MIN_SAMPLES) {
         return false;
     }
+    bool rejected = false;
     if (n > INDALA_PSK_CAPTURE_SAMPLES) {
         n = INDALA_PSK_CAPTURE_SAMPLES;
     }
@@ -233,6 +241,17 @@ bool lf_psk1_decode(int16_t *samples, size_t n,
         }
 
         for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
+            /* ⛔⛔ THE REJECT PREAMBLE — see the note above lf_psk1_decode_ex in the header.
+             * Costs almost nothing: preamble_err bails on the first wrong bit. */
+            if (reject != NULL && !rejected) {
+                for (uint8_t inv = 0; inv < 2; inv++) {
+                    if (preamble_err(bits, i, inv != 0, reject, reject_bits)
+                            <= PREAMBLE_MAX_ERR) {
+                        rejected = true;
+                        break;
+                    }
+                }
+            }
             for (uint8_t inv = 0; inv < 2; inv++) {
                 uint8_t err = preamble_err(bits, i, inv != 0, preamble, preamble_bits);
                 if (err > PREAMBLE_MAX_ERR) {
@@ -269,7 +288,10 @@ bool lf_psk1_decode(int16_t *samples, size_t n,
 
     out->energy = best_energy;
 
-    if (!found) {
+    /* ⛔ A capture carrying the reject format yields NO credential, even if a frame in the
+     * requested format was also found. `energy` is still reported, so the caller can still
+     * say "something is there" rather than "nothing is there". */
+    if (rejected || !found) {
         return false;
     }
 
@@ -351,8 +373,9 @@ bool lf_psk1_decode(int16_t *samples, size_t n,
 }
 
 bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
-    if (!lf_psk1_decode(samples, n, LF_PSK1_PREAMBLE_INDALA,
-                        INDALA_PSK_PREAMBLE_BITS, out)) {
+    if (!lf_psk1_decode_ex(samples, n,
+                           LF_PSK1_PREAMBLE_INDALA, INDALA_PSK_PREAMBLE_BITS,
+                           LF_PSK1_PREAMBLE_IDTECK, IDTECK_PSK_PREAMBLE_BITS, out)) {
         return false;
     }
     descramble26(out->word_bits, out);
