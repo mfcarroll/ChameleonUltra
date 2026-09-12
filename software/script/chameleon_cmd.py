@@ -743,6 +743,7 @@ class ChameleonCMD:
                 "pwm_inits": (d[5] << 8) | d[6],
                 "playbacks": (d[7] << 8) | d[8],
                 "hfclk_balance": d[9], "hfclk_running": d[10], "have_seq": d[11],
+                "frames_per_burst": (d[12] << 8) | d[13],
             }
         return resp
 

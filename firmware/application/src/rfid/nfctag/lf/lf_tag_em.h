@@ -36,5 +36,5 @@ bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);
 
 /** ⚠ §3 instrumentation: 12 bytes of LF emulation state. ⛔ Remove before upstreaming. */
-#define LF_TAG_EM_DEBUG_SIZE 12
+#define LF_TAG_EM_DEBUG_SIZE 14
 void lf_tag_em_debug_get(uint8_t *out);

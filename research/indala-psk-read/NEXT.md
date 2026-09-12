@@ -312,16 +312,30 @@ They are independent, and the evidence separates them cleanly:
 §5 does not remove burst boundaries. Neither is required for the emulation to be useful — two
 independent readers already accept it.
 
-## 4. ⚠ Choose the emulation burst length deliberately
+## 4. ◐ Burst length — the unit is fixed, the value still needs measuring
 
-`LF_TAG_FRAMES_PER_BURST` is **32** because I guessed it, and it worked (C75). The Proxmark
-decodes any window inside one burst and fails across a boundary; 32 frames = 524 ms moved the
-cliff from ~180 ms to ~275 ms.
+✅ **Done: it is a time budget.** `LF_TAG_BURST_TARGET_MS (500)`, converted per protocol by
+summing the sequence's own `counter_top` values. Indala 31 frames, EM410x 16, verified on
+device (C133, L114). The old frame count gave Indala224 a **1.83 s** field-loss latency.
 
-⚠ It does not remove boundaries — 290 ms still fails — and it costs **field-loss latency**:
-the device keeps modulating ~524 ms after the reader leaves.
-⛔ Do NOT simply maximise it. `NRFX_PWM_FLAG_LOOP` removes boundaries entirely and was already
-tried, breaking field detection through self-drive on LF_RSSI.
+⭐ **Neither reference implementation has this problem.** The Flipper emulates in `while(true)`
+on a DMA'd timer; the Proxmark loops until host or button. Both are tools under direct user
+control, so "emulate until cancelled" is right for them and there is nothing to copy. The
+Chameleon is a card that must sleep, so it must notice the reader leaving.
+
+⇒ **But both stay clock-locked to the reader's field while emulating** — the Flipper clocks
+its timer from the carrier, the Proxmark waits on the reader's clock edges. ⭐ That points at
+the real fix: **detect field loss by counting carrier edges**, which works *during*
+modulation and removes the need for a burst boundary at all. `TIMER2` in counter mode already
+exists in `lf_125khz_radio.c`. ⚠ Untested assumption: load modulation damps the carrier rather
+than removing it, so edges should survive — measure before building.
+
+⇒ That makes the edge counter a shared prerequisite for §5, and a better first step than
+treating carrier locking as one large port.
+
+**Still to measure:** the 500 ms value itself. It is where 32 Indala frames landed (524 ms),
+which is the only length with evidence (C70, C75). The sweep needs the Proxmark facing an
+emulating Chameleon — ✅ that geometry now exists on rig B.
 
 ## 5. ⚠ Carrier locking — optional, and the decision belongs to a person
 

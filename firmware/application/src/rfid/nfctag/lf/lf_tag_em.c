@@ -28,25 +28,48 @@ NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
 
-/* ⭐ HOW MANY TIMES TO PLAY THE FRAME BEFORE PAUSING TO CHECK THE FIELD.
+/* ⭐ HOW LONG TO PLAY THE FRAME BEFORE PAUSING TO CHECK THE FIELD — A TIME BUDGET, NOT A
+ * FRAME COUNT.
  *
- * This was 10, and for a PSK1 tag 10 frames is 10 x 2048 samples = 163.84 ms — which sat
- * exactly on a measured cliff. A Proxmark demodulating a saved trace of this device reads
- * the credential from 131 ms and 163 ms of capture and fails from 196 ms, while a real tag
- * decodes at every length (FINDINGS C70). The burst length and the failure threshold
- * matching to within a millisecond is why this constant is now named and documented.
+ * The device cannot watch for field loss while it modulates: LF_RSSI swings with the load
+ * modulation, so LPCOMP is disabled during emulation and the field is only re-checked between
+ * bursts. The burst length therefore buys two things against each other:
  *
- * ⚠ THAT COINCIDENCE IS NOT PROOF. Clock drift accumulating over the same interval predicts
- * the same cliff, and an attempt to separate them by looking for the burst gap in the
- * envelope was not conclusive. Raising this value is the experiment that distinguishes
- * them: if the Proxmark then reads a full 290 ms capture, the burst boundary was the cause;
- * if the cliff stays at ~163 ms, it is drift and the fix is carrier locking (NEXT.md §3a).
+ *   short  → notices the reader leaving quickly, but the transmission is interrupted often,
+ *            and a reader that demodulates ONE long capture fails across a boundary;
+ *   long   → fewer boundaries, but the device keeps modulating for up to a whole burst after
+ *            the reader has gone, which costs battery and responsiveness.
  *
- * ⚠ The cost of a longer burst is FIELD-LOSS LATENCY. The field is only re-checked between
- * bursts, so this bounds how long the device keeps modulating after the reader goes away —
- * 32 frames is ~524 ms. Do not raise it without a reason; battery and responsiveness pay.
- */
-#define LF_TAG_FRAMES_PER_BURST  (32)
+ * ⭐ It was `32 FRAMES`, and a frame count is the wrong unit because a frame is not a fixed
+ * duration. At RF/32 on a 125kHz carrier:
+ *
+ *     Indala 64-bit    16.4 ms/frame   → 32 frames =  524 ms
+ *     PAC, EM410x      32.8 ms/frame   → 32 frames = 1.05 s
+ *     Indala 224-bit   57.3 ms/frame   → 32 frames = 1.83 s   ⛔
+ *
+ * So the same constant meant a third of a second for one protocol and nearly two seconds for
+ * another, and the longest-frame protocol — the one where latency hurts most — got the worst
+ * of it. Nobody had noticed because Indala224 emulation does not exist yet.
+ *
+ * ⇒ Budget in MILLISECONDS and convert per protocol, using the sequence's own timing so it
+ * stays right for any protocol added later.
+ *
+ * ⚠ 500ms is the value that 32 Indala frames happened to give (524ms), which is the only
+ * length with evidence behind it: at 10 frames / 164ms a Proxmark failed beyond ~163ms of
+ * capture, and at 32 frames / 524ms it decodes to 262ms (C70, C75). Changing the number needs
+ * that measurement repeated, not an opinion.
+ *
+ * ⛔ DO NOT SIMPLY MAXIMISE IT. `NRFX_PWM_FLAG_LOOP` removes boundaries altogether and was
+ * tried: it breaks field detection, because the device's own drive feeds back into LF_RSSI.
+ * ⭐ The real fix is to stop needing bursts at all — detect field loss by counting carrier
+ * edges, the way the Proxmark and Flipper both stay locked to the reader's clock while
+ * emulating. See NEXT.md §4. */
+#define LF_TAG_BURST_TARGET_MS   (500)
+#define LF_TAG_BURST_MIN_FRAMES  (2)
+#define LF_TAG_BURST_MAX_FRAMES  (255)
+
+/** Frames per burst for the currently loaded sequence; recomputed whenever it changes. */
+static uint16_t m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
@@ -127,7 +150,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
     m_dbg_playbacks++;
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst,
                              NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
@@ -155,7 +178,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
         m_dbg_playbacks++;
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst,
                              NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
@@ -389,11 +412,47 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
     return 0;
 }
 
+/* ⭐ FRAME DURATION FROM THE SEQUENCE ITSELF, so a protocol added later is right for free.
+ *
+ * In wave-form mode every PWM entry carries its own `counter_top`, so the frame's duration is
+ * the SUM of those tops divided by the base clock — no per-protocol table to forget to
+ * update. `length` counts uint16 fields and there are four per entry.
+ *
+ * ⚠ Computed once per load rather than per playback: the playback call runs from the PWM
+ * handler, and a 224-bit frame is 3584 entries to walk. */
+static void recompute_frames_per_burst(void) {
+    m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+    if (m_pwm_seq == NULL || m_pwm_seq->values.p_wave_form == NULL) {
+        return;
+    }
+    const size_t entries = (size_t)m_pwm_seq->length / 4u;
+    uint64_t ticks = 0;
+    for (size_t i = 0; i < entries; i++) {
+        ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
+    }
+    const uint32_t hz = IS_PSK1_TYPE(m_tag_type) ? 1000000u : 125000u;
+    const uint64_t frame_us = (ticks * 1000000u) / hz;
+    if (frame_us == 0) {
+        return;
+    }
+    uint64_t n = ((uint64_t)LF_TAG_BURST_TARGET_MS * 1000u + frame_us - 1u) / frame_us;
+    if (n < LF_TAG_BURST_MIN_FRAMES) {
+        n = LF_TAG_BURST_MIN_FRAMES;
+    }
+    if (n > LF_TAG_BURST_MAX_FRAMES) {
+        n = LF_TAG_BURST_MAX_FRAMES;
+    }
+    m_frames_per_burst = (uint16_t)n;
+    NRF_LOG_INFO("lf burst: frame %lu us, %u frames per burst",
+                 (unsigned long)frame_us, m_frames_per_burst);
+}
+
 /* ⭐ The public loader is the inner one plus the clock re-init. Keeping them separate means
  * every early return in the loader still gets the re-init, which a check bolted onto each
  * `return` would not. */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     int ret = lf_tag_data_loadcb_inner(type, buffer);
+    recompute_frames_per_burst();
     pwm_reinit_if_clock_changed();
     return ret;
 }
@@ -592,4 +651,6 @@ void lf_tag_em_debug_get(uint8_t *out) {
     out[9]  = (uint8_t)(m_dbg_hf_req - m_dbg_hf_rel);
     out[10] = (uint8_t)hf;
     out[11] = (m_pwm_seq != NULL) ? 1u : 0u;
+    out[12] = (uint8_t)(m_frames_per_burst >> 8);
+    out[13] = (uint8_t)(m_frames_per_burst & 0xFF);
 }

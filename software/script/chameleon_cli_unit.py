@@ -7583,6 +7583,7 @@ class HWEmuDebug(DeviceRequiredUnit):
         print(f"   HFXO req-rel     : {d['hfclk_balance']}   (0 is balanced)")
         print(f"   HFXO running     : {bool(d['hfclk_running'])}")
         print(f"   have pwm seq     : {bool(d['have_seq'])}")
+        print(f"   frames per burst : {d['frames_per_burst']}")
 
 
 @hw.command("battery")
