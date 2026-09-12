@@ -180,6 +180,23 @@ should be re-measured rather than assumed still to be earning their keep.
 a wrong answer, and its own measurements stayed true. A thing that still works is much harder
 to notice than a thing that breaks.
 
+**M31. ⛔ TWO INDEPENDENT INSTRUMENTS THROUGH ONE ANALYSIS ARE ONE MEASUREMENT.** I captured the
+same PAC tag with the Chameleon and with the Proxmark — different antennas, different ADCs,
+different firmware, no shared code — and ran BOTH through the same level-threshold script of
+mine. They agreed: 99.1% and 99.0% periodicity, neither matching the tag's memory. That
+agreement was written up as two independent receivers corroborating each other, and the
+conclusion drawn was that the on-air bits differ from the block data.
+⇒ They agreed because they shared MY BUG. The tag's blocks turned out to be a flawless PAC
+frame — exact 19-bit preamble, twelve valid UART frames, correct XOR checksum — so the air data
+was right all along and the demodulation was wrong.
+⚠ This is M1 wearing different clothes. There, an encoder and decoder sharing a convention
+agreed forever. Here, two data sources sharing an analysis did. **Independence has to hold at
+the step that can be wrong**, and the step that can be wrong is usually not the one being
+varied.
+⭐ What caught it cost nothing: decoding the reference against the PROTOCOL'S OWN rules, in
+software, with no hardware at all. A format with a checksum will tell you whether you have
+read it correctly — ask it before building a theory about why it disagrees.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

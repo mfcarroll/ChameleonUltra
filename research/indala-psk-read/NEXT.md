@@ -239,10 +239,25 @@ on the host, independently of the firmware:
 end is at fault (C110). Either the on-air bits are not the raw blocks, or level-thresholding
 is the wrong recovery for T5577 NRZ.
 
-⭐ **Next test, cheap and decisive:** have the Proxmark dump its own samples of this tag
-(`lf read`, then `data save`) and compare bitstreams. It reads the tag correctly, so whichever
-demodulation differs from its own is the wrong one — and that settles which of the two
-explanations holds without touching firmware.
+⛔⛔ **The air data is FINE and the demodulation is the bug** (C113, retracting C111). The
+tag's blocks are a textbook PAC frame under `pac.c`'s own rules: first 19 bits `0x7F902` =
+`PAC_PREAMBLE` exactly, twelve valid 10-bit UART frames spelling **STX '2' '0' CD4F5552**, XOR
+checksum `0x72` matching the twelfth byte. A tag transmitting that is not the problem.
+
+⚠ **How the wrong conclusion happened, because it will happen again:** the Chameleon and the
+Proxmark are independent receivers, but I ran both captures through ONE level-threshold script
+of mine. Their agreement measured my bug, not the air (M31).
+
+⇒ **Next: fix the host demodulation until it recovers the frame**, then diff it against the
+firmware's. That is the pattern that has solved every decode question in this project —
+`mfdemod.py` against `lf_indala_psk.c`. Candidates for what is wrong, all testable on the
+committed captures with no hardware:
+- **Bit-boundary locking.** I averaged fixed 32-sample windows from a fixed offset; NRZ needs
+  the boundaries found, and `pac.c` works on EDGE INTERVALS rather than levels for that reason.
+- **A global threshold against a drifting baseline.** `pac.c` spike-clips at 3x the floor and
+  recalibrates every 20480 samples — it would not do that if a single threshold worked.
+- **Polarity and the dead zone.** `PAC_THRESH_FUZZ` keeps a 25-75% dead band; a hard threshold
+  turns every marginal sample into a bit.
 
 ⭐ **Start with the shared capture path.** The LF readers are two families:
 
