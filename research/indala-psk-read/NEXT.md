@@ -51,7 +51,7 @@ registered `TAG_TYPE_*`.
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
 | HID Prox (H10301, generic, ex-generic) | ⚠ **unreliable** | ✓ | ✓ | ✓ |
 | ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
-| PAC/Stanley | ◐ **fixed, range-limited (C144, C147)** | ✓ | ✓ | ✓ |
+| PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
@@ -204,20 +204,21 @@ specimen is PSK2, so the format decodes the differential view and only that one.
 ⚠ Momentum's exact two-preamble test is not available to us at ~2% bit error: it rejected the
 true frame in all four captures (C106).
 
-## 2. ◐ Fix the HID Prox and PAC readers — PAC fixed but OUT OF RANGE, HID was never sick
+## 2. ✅ Fix the HID Prox and PAC readers — PAC FIXED, HID was never sick
 
-⚠ **Read C146 and C147 before trusting anything below.** Two claims made earlier in this
+⚠ **Read C146, C147 and C148 before trusting anything below.** Two claims made earlier in this
 section's history did not survive the day: HID does **not** have the saturation disease (0.0% of
-its samples are railed, against PAC's 33-37%), and C144's PAC fix — verified at 10 of 10 — reads
-**0 of 10** because the drive control itself goes inert partway through a session (C148), so
-every step of the sweep plays the stock field. ⛔ The "coupling rose" explanation in C147 is
-RETRACTED: drive 4 is unchanged throughout and only the weak arm moved.
+its samples are railed, against PAC's 33-37%), and C144's PAC fix is **confirmed at 10 of 10, twice**. The
+0-of-10 scare in between was the drive control going inert partway through a session (C148) —
+a reboot restores it exactly, and the "coupling rose" explanation in C147 is RETRACTED, because
+drive 4 never moved and only the weak arm did.
 
-⇒ **What is actually true:** the saturation model is intact and predicted both results; PAC's
-fix works within a coupling range; that range is currently too narrow for this bench. The next
-move is a larger `top_value` so the sweep can reach weaker fields, then re-measure at both
-couplings. ⛔ Do not read the 0/10 as a refutation of C144 — the 10/10 and the 0/10 are each
-true at their own coupling, which is the model's own claim.
+⇒ **What is actually true:** the saturation model is intact, PAC reads 10 of 10, and HID never
+had the disease (0.0% railed samples). ⚠ What remains open is not §2 but the **instrument**:
+C148's drive inertness is intermittent, cleared by a reboot, and has no identified trigger. It
+cost this session four wrong explanations and one wasted request to the user to check their
+bench. ⇒ Anything measured with `--drive` should confirm the control is live first — one
+capture at drive 7 against one at drive 4 — before the numbers are believed.
 
 Three tags with byte-identical memory read **0/6, 3/6 and 7/9** on the Chameleon and 3/3 on a
 Proxmark (C46). The RF path is flat while reads fail (C45). `lf pac read` scored 0/5 and 2/5
