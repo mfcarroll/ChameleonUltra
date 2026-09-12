@@ -325,7 +325,38 @@ bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  *
  * ⚠ A capture is 114ms here against 33ms for the 64-bit formats, so the same 3s budget buys
  * ~26 attempts rather than ~90. */
+/* ⛔⛔ THE 224-BIT READER IS DISABLED AND MUST STAY DISABLED UNTIL ITS ACCEPTANCE RULE IS
+ * SOLVED. Set to 1 only with the measurement that justifies it.
+ *
+ * The demodulation WORKS: against a tag whose memory is known, the exact 224 bits come out of
+ * the differential view of all four committed captures (caps/indala224/). What does not work
+ * is deciding WHICH candidate is the frame:
+ *
+ *   - Indala224's preamble is a 1 and 29 zeros, so a one-bit-shifted alignment matches it
+ *     almost as well as the true one.
+ *   - The direct (PSK1) view of this PSK2 tag contains a preamble-matching candidate that
+ *     repeats at the frame period just as convincingly as the real one — ~98% either way —
+ *     so the repeat test cannot arbitrate between the two views.
+ *   - That impostor is IDENTICAL across captures, so the two-capture agreement rule would
+ *     confirm it rather than catch it. This is C90's failure mode in a weaker format.
+ *
+ * ⚠ Three acceptance rules were tried and all three returned wrong credentials on at least
+ * one capture: rank by amplitude (1 of 4 wrong), rank by repeat score (2 of 4 wrong, both
+ * wrong), and direct-stream-first-and-exclusive as the Proxmark orders it (3 of 4 wrong).
+ * ⇒ The next attempt needs a discriminator nobody has yet, not another weighting of the
+ * three we have. See NEXT.md §1d. */
+#define INDALA224_READER_TRUSTED 0
+
 bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+#if !INDALA224_READER_TRUSTED
+    /* Still report energy, so `lf indala read --224` says "a subcarrier is present but no
+     * frame could be decoded" rather than pretending the antenna is empty. */
+    lf_psk1_read_t probe;
+    (void)lf_psk1_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
+                       &probe, timeout_ms, energy_out);
+    (void)data;
+    return false;
+#else
     lf_psk1_read_t r;
     if (!lf_psk1_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
@@ -340,4 +371,5 @@ bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     NRF_LOG_INFO("indala224 %02x%02x%02x.. phase %u tries %u",
                  r.res.id[0], r.res.id[1], r.res.id[2], r.phase, r.tries);
     return true;
+#endif
 }

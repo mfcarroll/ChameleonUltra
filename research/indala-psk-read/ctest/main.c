@@ -24,11 +24,16 @@ static const char TRUTH[] = "a0000000e6bd0e92";
 
 int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
-    static int16_t buf[INDALA_PSK_CAPTURE_SAMPLES];
+    static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
+    int mode224 = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
             quiet = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--224")) {
+            mode224 = 1;
             continue;
         }
         FILE *f = fopen(argv[i], "rb");
@@ -36,7 +41,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "cannot open %s\n", argv[i]);
             return 2;
         }
-        static unsigned char raw[INDALA_PSK_CAPTURE_SAMPLES * 2];
+        static unsigned char raw[LF_PSK1_MAX_CAPTURE_SAMPLES * 2];
         size_t got = fread(raw, 1, sizeof(raw), f);
         fclose(f);
         files++;
@@ -60,13 +65,28 @@ int main(int argc, char **argv) {
          * that the Indala preamble falsely matches can be RECOGNISED as IDTECK from the same
          * samples — if so, decoding IDTECK is the rejection test. Needs its own copy of the
          * buffer because the decoder works in place. */
-        static int16_t buf2[INDALA_PSK_CAPTURE_SAMPLES];
+        static int16_t buf2[LF_PSK1_MAX_CAPTURE_SAMPLES];
         memcpy(buf2, buf, n * sizeof(buf[0]));
         indala_psk_result_t ri;
         int idteck = lf_psk1_decode_fmt(buf2, n, &LF_PSK1_FORMAT_IDTECK, &ri);
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (mode224) {
+            indala_psk_result_t r2;
+            if (!indala224_psk1_decode(buf, n, &r2)) {
+                printf(" %-44s %5zu samples  -            energy %7ld\n",
+                       argv[i], n, (long)r2.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 28; k++) printf("%02x", r2.id[k]);
+            printf("  off %2u pos %3u %s\n", r2.offset, r2.bit_pos,
+                   r2.inverted ? "inv" : "");
+            continue;
         }
 
         indala_psk_result_t r;

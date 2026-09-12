@@ -2148,12 +2148,12 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
      * LF_RSSI, which taps LF_OA upstream of both RC filter poles. See ble_main.h. */
     lf_adc_set_input(length >= 9 ? data[8] : 5);
 
-    static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
+    static uint8_t sniff_buf[LF_SNIFF_MAX_BYTES];
     static size_t sniff_len = 0;
 
     if (chunk == 0) {
         sniff_len = 0;
-        raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &sniff_len, raw16,
+        raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_BYTES, timeout_ms, &sniff_len, raw16,
                            settle_ms);
         lf_125khz_radio_saadc_phase_set(0);  /* never leave a phase set for other readers */
         lf_125khz_radio_saadc_rate_set(0);

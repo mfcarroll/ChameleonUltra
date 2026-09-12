@@ -164,6 +164,30 @@ static int32_t bit_integrator(const int16_t *y, size_t n, size_t a) {
     return v;
 }
 
+/* ⭐⭐ HOW WELL DOES THE FRAME AT `pos` REPEAT AT ITS OWN PERIOD?
+ *
+ * Returns the number of agreeing comparisons in `*agree` and the number made in `*compared`.
+ * ⚠ Either polarity counts: a PSK2-style card alternates phase frame to frame, so the
+ * neighbouring copy may be the exact inverse, and total disagreement is as good a period as
+ * total agreement. */
+static void repeat_score(const uint8_t *stream, size_t nb, size_t pos, uint16_t fb,
+                         size_t *compared, size_t *agree) {
+    size_t comp = 0, same = 0;
+    for (size_t k = 0; k < fb; k++) {
+        if (pos + k >= fb) {
+            comp++;
+            same += (stream[pos + k - fb] == stream[pos + k]) ? 1u : 0u;
+        }
+        if (pos + k + fb < nb) {
+            comp++;
+            same += (stream[pos + k + fb] == stream[pos + k]) ? 1u : 0u;
+        }
+    }
+    const size_t differ = comp - same;
+    *compared = comp;
+    *agree = (same > differ) ? same : differ;
+}
+
 /** Match the preamble at `i`, normal or inverted. Returns the error count, or 0xFF once
  *  it exceeds the tolerance (so a hopeless position costs a few comparisons, not 33). */
 static uint8_t preamble_err(const uint8_t *bits, size_t i, bool inverted,
@@ -240,6 +264,7 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
      * each neighbour and partially cancels. */
     int32_t  best_amp = -1;
     int32_t  best_min = 0;
+    size_t   best_agree = 0;
     uint8_t  best_err = 0xFF;
     uint8_t  best_word[LF_PSK1_MAX_FRAME_BITS];
     uint8_t  best_off = 0, best_pos = 0;
@@ -251,7 +276,6 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
     /* The PSK2 view of the same capture: dbits[k] = bits[k] XOR bits[k-1], dbits[0] unused.
      * Only built when the format asks for it. */
     uint8_t dbits[INDALA_PSK_MAX_BITS];
-    bool best_diff = false;
 
     /* ⭐ WHOLE-CAPTURE ENERGY, so a failed read can say WHICH failure it was. The preamble
      * search below only ever reports frames it recognises, so on its own it cannot tell an
@@ -322,6 +346,16 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
              * is invariant under inversion — so it runs inv=0 only. */
             const uint8_t nstreams = fmt->try_differential ? 2u : 1u;
             for (uint8_t st = 0; st < nstreams; st++) {
+              /* ⛔⛔ DIRECT FIRST AND EXCLUSIVELY — the differential is a FALLBACK, not a
+               * competitor. The Proxmark matches on the PSK1 stream and only calls
+               * psk1TOpsk2() when that finds nothing (cmdlfindala.c:1293); searching both at
+               * once and picking the better score is a different algorithm, and it decodes
+               * WRONG. The repeat test cannot arbitrate between them: a signal that repeats
+               * has a direct view that repeats AND a differential view that repeats, so both
+               * streams score ~98% and the choice falls to noise. */
+              if (st == 1 && found) {
+                  break;
+              }
               const uint8_t *stream = (st == 0) ? bits : dbits;
               /* dbits[0] is not a real bit, so a differential frame cannot start at 0. */
               if (st == 1 && i == 0) {
@@ -346,7 +380,38 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                         mn = v;
                     }
                 }
-                if (err < best_err || (err == best_err && amp > best_amp)) {
+                /* ⛔⛔ RANK BY THE REPEAT, NOT BY AMPLITUDE, WHEN THE FORMAT HAS ONE.
+                 *
+                 * Indala224's preamble is a 1 and 29 zeros, so it matches a bit-shifted
+                 * alignment almost as readily as the true one — shifting the frame by one
+                 * still presents a 1 followed by zeros. Ranking those candidates by
+                 * integrator amplitude picked the WRONG one on 1 capture in 4, returning a
+                 * confident wrong 224-bit credential: exactly C90 again, in the format whose
+                 * preamble is weaker still.
+                 *
+                 * ⭐ The repeat score IS the measure of correctness, so use it to choose and
+                 * not merely to veto. Measured on four captures of a known tag, the true
+                 * alignment scores 97.3-98.7%; that is what the acceptance bar below is set
+                 * against, and it is also what separates it from its neighbours. */
+                size_t rcomp = 0, ragree = 0;
+                if (fmt->require_repeat) {
+                    repeat_score(stream, nb, i, FB, &rcomp, &ragree);
+                    if (rcomp < (size_t)FB - (size_t)FB / 4u ||
+                            ragree * 8u < rcomp * 7u) {
+                        continue;
+                    }
+                }
+
+                bool better;
+                if (fmt->require_repeat) {
+                    /* higher agreement wins; amplitude only breaks ties */
+                    better = (ragree > best_agree) ||
+                             (ragree == best_agree && amp > best_amp);
+                } else {
+                    better = (err < best_err) || (err == best_err && amp > best_amp);
+                }
+                if (better) {
+                    best_agree = ragree;
                     best_err = err;
                     best_amp = amp;
                     best_min = mn;
@@ -357,7 +422,6 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                         uint8_t b = stream[i + k];
                         best_word[k] = (inv != 0) ? (uint8_t)(1u - b) : b;
                     }
-                    best_diff = (st == 1);
                     found = true;
                 }
               }
@@ -425,70 +489,9 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
         return false;
     }
 
-    /* ⭐⭐ THE REPEAT TEST — 224 bits of evidence where the preamble offers 30.
-     *
-     * A tag transmits its frame continuously, so the bits one frame period away from any
-     * position are the same bits. For a format whose preamble is almost entirely a constant
-     * run, that self-agreement is the only acceptance test worth having: C90 showed a loud
-     * wrong-protocol source forging Indala26's 33-bit preamble and returning a confident
-     * wrong credential, and Indala224's preamble is weaker still.
-     *
-     * ⚠ THE REPEAT MAY BE INVERTED. Momentum accepts the second frame's preamble normal OR
-     * inverted because PSK2-style cards alternate phase frame to frame, so this counts
-     * agreement and disagreement and requires one of them to be total. Comparing only
-     * "equal" would reject those cards entirely.
-     *
-     * ⚠ Only bits that actually exist in the capture are compared; whichever side of the
-     * frame the neighbouring copy falls on, the capture holds one whole period of it. A
-     * position with no neighbour contributes nothing rather than counting as agreement. */
-    if (fmt->require_repeat) {
-        /* ⚠ Rebuild the bit stream at the WINNING offset. `bits` was overwritten by every
-         * offset tried after it, and `samples` is untouched since baseband_in_place, so one
-         * extra pass is both correct and cheap — and only this format pays for it. */
-        size_t nb_all = (n - best_off) / INDALA_PSK_BIT_SAMPLES;
-        if (nb_all > INDALA_PSK_MAX_BITS) {
-            nb_all = INDALA_PSK_MAX_BITS;
-        }
-        for (size_t k = 0; k < nb_all; k++) {
-            int32_t v = bit_integrator(samples, n, best_off + k * INDALA_PSK_BIT_SAMPLES);
-            bits[k] = (v > 0) ? 1u : 0u;
-        }
-        /* ⚠ Compare in the stream the frame was MATCHED in. A PSK2 frame repeats in the
-         * differential view; its direct view does not have to. */
-        if (best_diff) {
-            dbits[0] = 0;
-            for (size_t k = 1; k < nb_all; k++) {
-                dbits[k] = (uint8_t)(bits[k] ^ bits[k - 1]);
-            }
-            memcpy(bits, dbits, nb_all);
-        }
-
-        size_t compared = 0, same = 0;
-        const size_t pos = best_pos;
-        for (size_t k = 0; k < FB; k++) {
-            /* ⚠ `best_word` is already de-inverted; `bits` is not. Compare against the raw
-             * stream in the same sense the frame was read in, or an inverted-preamble frame
-             * would score 0 agreement against its own neighbours. */
-            const uint8_t want = best_inv ? (uint8_t)(1u - best_word[k]) : best_word[k];
-            if (pos + k >= FB) {
-                compared++;
-                if (bits[pos + k - FB] == want) {
-                    same++;
-                }
-            }
-            if (pos + k + FB < nb_all) {
-                compared++;
-                if (bits[pos + k + FB] == want) {
-                    same++;
-                }
-            }
-        }
-        /* ⛔ Require a whole frame's worth of corroboration, and require it to be unanimous
-         * one way or the other. A partial match is a coincidence, not a period. */
-        if (compared < FB || (same != compared && same != 0)) {
-            return false;
-        }
-    }
+    /* ⭐ The repeat test ran per candidate inside the search, where the bit stream it needs
+     * is still in scope and where it can CHOOSE between candidates rather than only veto the
+     * one amplitude happened to pick. See the note at the ranking. */
 
     const size_t frame_bytes = (size_t)FB / 8;
     for (size_t k = 0; k < frame_bytes; k++) {

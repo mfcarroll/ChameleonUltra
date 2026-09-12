@@ -37,14 +37,24 @@
  */
 /** Maximum BYTES a single raw capture can return. Bounded by NETDATA_MAX_DATA_LENGTH.
  *
- * ⭐ 8192 bytes = 4096 samples at 16-bit = exactly two 64-bit Indala frames (2048 samples
- * each at RF/32). That is the point of the number: measured against Proxmark's PSKDemod,
- * demodulation needs >= 3584 samples and fails at 1.0 frames no matter how clean the
- * signal, because the 32-bit preamble can start anywhere in the capture.
- * ⚠ This EXCEEDS NETDATA_MAX_DATA_LENGTH, so a full capture cannot be returned in one
- * frame — cmd_processor_lf_sniff() hands it back in chunks. Raising the protocol cap
- * instead faults the device; see the note in netdata.h. */
-#define LF_SNIFF_MAX_SAMPLES  8192
+ * ⭐ SIZED FOR TWO WHOLE FRAMES OF THE LONGEST FORMAT, because one frame is never enough at
+ * any SNR: the preamble can start anywhere in the capture, so a one-frame buffer contains a
+ * complete frame for only one starting phase in `frame samples`. 28672 bytes = 14336 samples
+ * at 16-bit = two 224-bit Indala frames at RF/32.
+ *
+ * ⚠ IT WAS 8192 BYTES, WHICH WAS TWO 64-BIT FRAMES AND EXACTLY RIGHT UNTIL INDALA224. A
+ * 224-bit frame is 7168 samples, so the old buffer held less than one of them — and that made
+ * the host tooling blind to the very decode that needed it, since `mfdemod.py` and `ctest`
+ * can only see what a sniff returns. The device could hear the tag; nothing could look at it.
+ *
+ * ⛔ THE NAME SAID SAMPLES AND THE NUMBER WAS BYTES. At 16-bit those differ by two, and the
+ * mistake is invisible until a format needs a specific sample count. Renamed.
+ *
+ * ⚠ This EXCEEDS NETDATA_MAX_DATA_LENGTH many times over, so a full capture cannot be
+ * returned in one frame — cmd_processor_lf_sniff() hands it back in chunks of
+ * LF_SNIFF_CHUNK_BYTES and the host reassembles. Raising the protocol cap instead faults the
+ * device; see the note in netdata.h. 28672 bytes is 8 chunks, and the host loops to 16. */
+#define LF_SNIFF_MAX_BYTES  28672
 
 /** Bytes returned per response frame. The capture is sliced into chunks of this size. */
 #define LF_SNIFF_CHUNK_BYTES  4000

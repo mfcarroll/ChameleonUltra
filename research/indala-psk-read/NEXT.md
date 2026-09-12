@@ -228,15 +228,35 @@ written came back different, at "len 235" (C100). Use the memory dump, as IDTECK
 4. ✅ The PSK2 fallback — the differential stream is searched only when a format asks for it,
    direct stream first as the Proxmark does, and no polarity search on the differential
    because XOR of consecutive bits is inversion-invariant.
-5. ⛔ **NEXT: raise `lf sniff`'s 4096-sample cap.** The decode fails with energy present and
-   no frame, 4 of 4 (C102), and it cannot be diagnosed from the device: a 224-bit frame is
-   7168 samples and sniff returns 4096, so `mfdemod.py` and `ctest` — which have settled every
-   previous decode question in this project — cannot be pointed at it. That cap is the
-   blocker now, not the decoder.
-5. Verify: `lf indala clone -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5`
-   writes the tag — confirmed working, and the write/restore cycle is proven: the tag was
-   written, dumped, and put back to `00081040 / 4944544B / 55667788` with the IDTECK reader
-   returning card 8943462 afterwards. ⛔ Always restore; C90-C92 regress against those blocks.
+5. ✅ `lf sniff` raised from 8192 bytes to 28672 (it counted BYTES under a name saying
+   samples). 14336-sample captures are committed in `caps/indala224/`.
+6. ✅ **The demodulation works** — all four captures yield the tag's exact 224 bits in the
+   differential view (C103).
+7. ⛔⛔ **BLOCKED: no acceptance rule works.** Three tried, all returning wrong credentials
+   (C104). The obstacle is specific and worth stating plainly before the next attempt:
+
+   > Indala224's preamble is a 1 and 29 zeros, so a one-bit shift matches nearly as well.
+   > And the DIRECT view of a PSK2 tag carries a candidate that repeats at the frame period
+   > **as convincingly as the true one** — ~98% either way — so the repeat test cannot tell
+   > the two views apart. The impostor is identical across captures, so the two-capture
+   > agreement rule confirms it instead of catching it.
+
+   ⇒ What is needed is a discriminator none of the three rules has, not another weighting of
+   them. Ideas not yet tried, cheapest first:
+   - **Demand the frame decode in exactly one view.** If both the direct and differential
+     views yield a preamble-clean, well-repeating frame, return nothing — an ambiguous
+     capture is not a credential. Costs reads on tags where one view is marginal.
+   - **Use the bit-boundary alignment.** The true frame and the impostor won at different
+     `pos` (8 against 7) — is the winning sample offset systematically different? Measurable
+     from the committed captures with no hardware.
+   - **Ask what Momentum does.** It reads this format; its `protocol_indala224.c` requires
+     two consecutive frames and accepts the second preamble normal or inverted. That is a
+     stronger structural test than ours and it is already written down.
+
+   ⛔ Until then `INDALA224_READER_TRUSTED` stays 0: the command reports 0x43 and cannot
+   return a credential.
+
+8. ⛔ **The old step 5 is done; what remains is the rule above.**
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 
