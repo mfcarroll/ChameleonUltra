@@ -22,7 +22,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
-| ⚠ **The bench tag is currently 224-bit Indala, not IDTECK** | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents: `000820E0 / 80000001 / B23523A6 / C2E31EBA / BCBEE4AF / B3C6AD1F / CF649393 / 928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
+| ⚠ **The bench tag is currently 224-bit Indala, not IDTECK** | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |

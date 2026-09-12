@@ -198,7 +198,14 @@ which unit sits where is not knowable from software alone.
 
 ⚠ Keep those serials inside a full `/dev/...` path. Written bare, a serial starting with `C`
 and a digit parses as a claim citation to `checkdocs.sh` and fails the run — as the first
-draft of this very paragraph did.
+draft of this very paragraph did. ⛔ The same bites **T5577 block values**: write them with an
+`0x` prefix, because a block beginning with `C` and a digit reads, at a word boundary, as a
+citation of a claim number.
+
+⛔ **Run `./checkdocs.sh` WITHOUT a pipe when you are using it as a gate.** `./checkdocs.sh |
+tail -1 && git commit ...` always commits: a pipeline's exit status is the last command's, so
+`tail` returning 0 masks the failure. That is not hypothetical — it let a broken
+cross-reference through on this branch, and the shell reported success the whole way.
 
 ## Working conventions
 
