@@ -276,30 +276,20 @@ the clean test of C47.
 ⛔ Do not read the em410x 95% as evidence either way: it is on the GPIO path and never
 touches the SAADC, which is why C47 was wrongly weakened once already.
 
-## 3. ⛔⛔⛔ TOP PRIORITY — changing a slot's LF tag type kills emulation until a POWER CYCLE
+## 3. ✅ The emulation defects — all three fixed
 
-⛔ **Ahead of every new protocol, decided 2026-09-12.** Not because it is the worst bug on
-merit but because of what it costs: **every slot-type change needs a human to unplug the
-device**, so it puts a person in the loop of any automated run. It is the one defect that
-blocks unattended work outright, and breadth built on top of it would multiply the number of
-times someone has to walk over to the bench.
+| | fix | verified |
+|---|---|---|
+| **C129** a mode cycle disarmed emulation | `lf_sense_disable()` no longer nulls `m_pwm_seq` — the sequences are static and outlive the uninit | ASK **4/4** after a mode cycle, was 0/4 |
+| **C130** the PWM clock ignored type changes | `lf_tag_data_loadcb()` wraps the loader and re-inits the PWM when the required clock differs | clock follows 125kHz ↔ 1MHz; round trip reads both protocols |
+| **C131** `hw slot type` silently unpersisted | the CLI now says it is RAM-only until `hw slot store` | — |
 
-**Repro, one line:** with LF emulation working, `hw slot type -s <n> -t <any other LF type>`.
-Emulation stops and does not come back from a mode cycle or a DFU reflash — only from
-removing power. Receive is unaffected (C126, L110).
+⇒ **Round trip with no reboot and no power cycle:** Indala → EM410X ASK 4/4 → Indala PSK 4/4
+(C132, L113). This was the defect that most obstructed unattended work — a driver alternating
+read and emulate tripped C129 every cycle.
 
-⛔ **The old hypothesis is refuted.** A stale PWM base clock would be repaired by
-`lf_sense_enable()` re-running `pwm_init()`, which a mode cycle does. It is not repaired.
-⇒ Whatever is left stuck survives a software reset, so it is not anything `pwm_init` touches.
-Candidates worth instrumenting: the HFXO request refcount (`sd_clock_hfclk_request` /
-`_release` are paired across sense enable/disable and could unbalance), LPCOMP, and the
-PPI/GPIOTE wiring for `LF_MOD`.
-
-⚠ **This is user-facing and belongs in §9's upstream report** whatever we do about it: a user
-who changes a slot's type has a device that silently stops emulating until they unplug it.
-
-⚠ Blocked on nothing — but every test costs a power cycle, so batch the instrumentation
-before asking for one.
+⚠ `hw emudebug` and the counters behind it are instrumentation. ⛔ Remove before upstreaming,
+and keep them until §9 is written: they are what made these three visible.
 
 ## 4–5 preamble. ⭐ Burst length and carrier lock are DIFFERENT problems
 

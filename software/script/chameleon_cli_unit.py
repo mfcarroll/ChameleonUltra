@@ -7123,6 +7123,13 @@ class HWSlotType(TagTypeArgsUnit, SlotIndexArgsUnit):
         self.cmd.set_slot_tag_type(slot_num, tag_type)
         self.cmd.set_slot_data_default(slot_num, tag_type)
         print(f" - Set slot {slot_num} tag type success.")
+        # ⚠ SAY THAT THIS IS NOT PERSISTED. The device keeps slot changes in RAM until
+        # `hw slot store`, which is right — flash has a finite write budget — but it is
+        # invisible, and a reboot silently reverts the type. That cost two experiments here:
+        # once a reboot turned an EM410X arm back into an Indala one mid-test, and once three
+        # runs executed against a slot that had never changed at all.
+        print(f"   {color_string((CY, 'In RAM only'))} — a reboot reverts it. "
+              f"Run {color_string((CG, 'hw slot store'))} to persist.")
 
 
 @hw_slot.command("delete")

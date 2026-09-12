@@ -222,7 +222,21 @@ static void lf_sense_enable(void) {
 static void lf_sense_disable(void) {
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
-    m_pwm_seq = NULL;
+    /* ⛔⛔ DO NOT NULL m_pwm_seq HERE. It used to, and the result was that ANY sense cycle —
+     * `hw mode -r` then `hw mode -e`, which is what a host driver does every time it alternates
+     * reading and emulating — left the device in Tag Emulator mode, sense ENABLED, clock
+     * correct, and emitting NOTHING, because there was no waveform left to play. Nothing
+     * reloaded it: `lf_sense_enable()` re-runs `pwm_init()` but not the slot load, so only a
+     * reboot or an explicit slot reload brought emulation back (C129).
+     *
+     * ⭐ It is safe to keep, because a modulator returns a pointer to a STATIC sequence owned
+     * by its protocol module, not to anything the codec owns — see the note in utils/psk1.h,
+     * which exists precisely because the codec is freed immediately after. The buffer outlives
+     * the uninit.
+     *
+     * ⚠ What must NOT go stale is the pairing of sequence and CLOCK. A sequence built for a
+     * PSK1 type played at 125kHz is unreadable and vice versa, which is C130; that is handled
+     * where the tag type changes, in lf_tag_data_loadcb(). */
     m_is_lf_emulating = false;
     sd_clock_hfclk_release();
     m_dbg_hf_rel++;
@@ -258,11 +272,44 @@ void lf_tag_125khz_sense_switch(bool enable) {
     }
 }
 
+/* ⛔⛔ C130: THE PWM BASE CLOCK IS CHOSEN BY TAG TYPE AND WAS ONLY EVER SET AT SENSE-ENABLE.
+ *
+ * `pwm_init()` picks 1MHz for PSK1 types and 125kHz for everything else, and it ran only from
+ * `lf_sense_enable()`. `hw slot type` changes the loaded type long afterwards, so the waveform
+ * played at the PREVIOUS protocol's rate — 8x out, and unreadable. Measured: the same EM410X
+ * slot with the same id reads 0 of 4 at a stale 1MHz and 5 of 5 at the correct 125kHz.
+ *
+ * ⚠ The two defects interlocked, which is why this went unnoticed for so long: the only thing
+ * that re-ran `pwm_init()` was a sense cycle, and a sense cycle used to destroy the sequence
+ * (C129). "Correct clock AND loaded waveform" was unreachable without a reboot.
+ *
+ * ⇒ Re-init here, where the type is known to have changed, and only when the required clock
+ * actually differs so an unchanged type costs nothing. */
+static void pwm_reinit_if_clock_changed(void) {
+    if (m_lf_sense_state != LF_SENSE_STATE_ENABLE) {
+        return;   /* pwm_init has not run yet; sense-enable will pick the right clock */
+    }
+    const uint8_t want = (uint8_t)(IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz
+                                                            : NRF_PWM_CLK_125kHz);
+    if (want == m_dbg_pwm_clk) {
+        return;
+    }
+    nrfx_pwm_uninit(&m_broadcast);
+    /* uninit stops any playback, so the emulation flag no longer reflects reality */
+    m_is_lf_emulating = false;
+    pwm_init();
+    /* ⚠ If a reader is already in the field, nothing else will re-trigger playback: the
+     * LPCOMP UP event that normally starts it has long since fired. */
+    if (is_lf_field_exists()) {
+        lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
+    }
+}
+
 /** @brief lf card data loader
  * @param type     Refined tag type
  * @param buffer   Data buffer
  */
-int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
@@ -341,6 +388,16 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
+
+/* ⭐ The public loader is the inner one plus the clock re-init. Keeping them separate means
+ * every early return in the loader still gets the re-init, which a check bolted onto each
+ * `return` would not. */
+int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    int ret = lf_tag_data_loadcb_inner(type, buffer);
+    pwm_reinit_if_clock_changed();
+    return ret;
+}
+
 
 /** @brief Id card deposit card number before callback
  * @param type      Refined tag type
