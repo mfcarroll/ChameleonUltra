@@ -250,8 +250,31 @@ checksum `0x72` matching the twelfth byte. A tag transmitting that is not the pr
 Proxmark are independent receivers, but I ran both captures through ONE level-threshold script
 of mine. Their agreement measured my bug, not the air (M31).
 
-⇒ **Next: fix the host demodulation until it recovers the frame**, then diff it against the
-firmware's. That is the pattern that has solved every decode question in this project —
+⛔⛔ **THAT PLAN IS WRONG AND THE MEASUREMENTS RETIRE IT.** "Fix the host demodulation until
+it recovers the frame" assumes the frame's levels are in the capture. They are not: **33–37% of
+every PAC capture is pinned at the bottom rail** and the clipping happens in the op-amp chain
+*above* the ADC, where no gain setting reaches it — 1/6 is already the lowest, AIN0 is pinned
+the other way, and `lf sniff` prints the warning itself (C140). Scored against a known frame,
+no level-based recovery beats **6 errors of 128** (random baseline 47), and PAC has no error
+correction, so 6 is as useless as 60 (C142).
+
+⭐⭐ **What survives is TIMING: the frame period is exactly 4096.000 samples, 32.000 per bit**
+(C141). That converts L109's comparator recommendation from an analogy into a mechanism —
+clipping preserves transition times and destroys amplitudes, and NRZ needs only the former.
+
+⇒ **The work, in order:**
+
+| | |
+|---|---|
+| ⭐⭐ **Move PAC onto the comparator/GPIOTE path** | The one em410x, Viking and Jablotron already use successfully, and the one Momentum uses for PAC (C125, L109). It reads edge times, which is exactly what the saturated signal still has. This is now the main line of §2, not a candidate |
+| ⭐ **Check whether HID Prox has the same disease** | It is the other "fails on loud tags" reader and the other SAADC one. `pacber.py`'s approach transfers: write a known HID credential, score the capture, look at the rail fractions |
+| **Give `lf sniff` the advertising guard** | `cmd_processor_lf_sniff` lacks `lf_adv_suspend`/`lf_adv_resume` that every reader has (C143). ⚠ Not the PAC cause, and deliberately NOT changed mid-diagnosis — changing the instrument while it is measuring would strand the committed captures. Do it with a paired before/after |
+| **Re-test at reduced coupling** | ⚠ hands. Saturation is coupling-dependent, so an air gap should make the SAME tag read. It would confirm C140 end to end and is the cheapest confirmation available |
+
+⚠ **Superseded below.** The three candidates that follow — bit-boundary locking, global threshold
+against a drifting baseline, polarity and the dead zone — were reasonable when the frame was
+thought to be recoverable from levels. They are kept for the record; all three were tried in the
+scored sweep and none reaches a decode. That is the pattern that has solved every decode question in this project —
 `mfdemod.py` against `lf_indala_psk.c`. Candidates for what is wrong, all testable on the
 committed captures with no hardware:
 - **Bit-boundary locking.** I averaged fixed 32-sample windows from a fixed offset; NRZ needs

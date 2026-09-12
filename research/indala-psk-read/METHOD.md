@@ -212,6 +212,29 @@ bench session.
 label, `detector`, and it read as scenery. ⭐ So the check cannot be "do I remember this"; it has
 to be the grep, run at the moment a design is proposed rather than after it fails.
 
+**M33. ⛔ WHEN A DECODER FAILS, GET A SCORE, NOT A VERDICT — I RAN FOUR ROUNDS OF EXPERIMENTS
+THAT COULD NOT TELL ME ANYTHING.** Every PAC variant returned the same thing: `-`. Spike
+capping versus interpolation, min/max versus percentile thresholds, median filters at four
+widths, debouncing at three lengths, reset-versus-ignore on short intervals — thirty-two
+combinations, and the output was thirty-two identical dashes. A verdict carries one bit, and
+the question needed a gradient.
+⇒ The tag's frame was **knowable the whole time**: write a known credential and the same
+thirty-two experiments become a graded score. Scored, they separate at once — averaging a bit's
+32 samples gives 8, 15 and 18 errors of 128 across three captures where a majority VOTE of the
+same per-sample decisions gives 6, 8 and 6, against a random baseline of 47.
+⚠ The cost was not the four rounds. It was that the dashes made the spike-handling theory look
+neither confirmed nor refuted, so it stayed alive through three more rounds of variants built
+on top of it.
+⛔ **And the first scored run was itself wrong, in the classic way.** It reported the mean
+arm flooring at 26 errors against the vote's 6 — a 4x gap — because the sweep varied threshold
+for both arms but bit PHASE for only one. Given equal sweeps the gap is 1.3-3x. A graded score
+does not exempt you from giving the arms equal treatment; it just makes the inequality visible
+one round later instead of never.
+⭐ **The rule: before varying anything, arrange for the experiment to return a NUMBER.** For a
+decoder that means controlling the plaintext — write the tag rather than reading whatever is on
+it. For a detector it means a rate rather than a hit. `pacber.py` exists only for this, and it
+paid for itself on its first run.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on
