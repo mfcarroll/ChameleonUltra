@@ -332,9 +332,13 @@ two-capture agreement rule stayed and now uses consecutive captures, which are a
 independent pair than the two hand-separated accumulators were. Verified on four bench arms
 and 480 committed captures (C97, L93).
 
-⚠ The accepted cost — back-side 72% → 32% — is **predicted from committed captures, not
-re-measured on hardware**, because it needs the tag on the far side of the device (C98). If a
-back-side arm is ever taken, that is the number to check.
+✅ **The back-side rate is OUT OF SCOPE, decided 2026-09-12** — the reader is not trying to
+support that placement, so 72% → 32% is not a cost to verify, it is a number about a use case
+we do not have. No hardware arm is queued for it and none should be (C98).
+
+⭐ The back-side *captures* remain valuable and stay committed: they are the project's only
+low-SNR corpus, 26 dB down, and every gate and rule here is regression-tested against them by
+`make check`. Not supporting a placement is not the same as discarding data taken there.
 
 ## 9. Upstreamable?
 

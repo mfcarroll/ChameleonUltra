@@ -14,6 +14,11 @@ measurement in this project before 2026-09-11 was taken on the wrong side, which
 the deficit it spent days trying to explain. Claims measured that way are marked ⚠B in
 `FINDINGS.md` and are provisional.
 
+⛔ **The back is not a supported placement, decided 2026-09-12** — not merely worse. The
+reader is tuned for the front and stacking, which was the only thing propping the back side
+up, was removed for the RAM (C97, C98). A tag held the Flipper's way will often read as
+"a subcarrier is present but no frame could be decoded", which is the signal to move it.
+
 On the front: **114 of 160 single captures decode (71%) and 0 of 160 empty captures produce
 
 ⭐ **Emulation works too, verified against two independent readers**: a Flipper Zero reads the
