@@ -166,6 +166,117 @@ all 15 readers get it, not pasted into `hidprox_read()` alone.
 ⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
 (`lfprobe.py`) for presence, per §3.
 
+## 3a. ✅ INDALA EMULATION WORKS — verified against two independent readers
+
+| reader | result |
+|---|---|
+| **Flipper Zero** | **6/6** — `Indala26 FC 52 Card 63612 Parity +`, our exact credential |
+| **Proxmark3** | ✓ decodes to 262 ms of continuous capture |
+| Chameleon (ours) | **0/14**, with the emulator coupled at 15x and confirmed awake |
+
+Two readers that share no code with us — or with each other — accept it (C81).
+
+⭐ **The burst boundary was the limiting factor and lengthening it fixed it** (C75). The
+firmware played 10 frames = 163.84 ms per burst; the Proxmark decoded any window inside one
+burst and failed across a boundary. At 32 frames (524 ms) the cliff moved with it, 197 ms and
+262 ms both going ✗ -> ✓. Confirmed from the opposite direction too: forcing extra restarts
+by chaining reads breaks decoding at every length while coupling stays perfect (C77).
+
+⭐ **Our reader's failure is specialisation, not a defect** (C82). A real T5577 divides the
+reader's carrier, so its subcarrier is locked by construction — which is exactly what this
+decoder's exact-Nyquist demodulation assumes, and why it reads real tags 60/60 across two
+tags and two units. The intolerance appears only against a source that is NOT carrier-locked,
+and no real tag ever is.
+
+⇒ **Carrier locking (C74) buys SELF-CONSISTENCY, not correctness.** It would let the
+Chameleon read its own emulation, and it is what the Flipper does. It is no longer on the
+critical path for the emulation being usable.
+
+**What is left, smallest first:**
+
+1. ⚠ **Pick the burst length deliberately.** 32 was a guess that worked. It does not remove
+   boundaries — 290 ms still fails — and it costs field-loss latency: the device keeps
+   modulating ~524 ms after the reader leaves. ⛔ Do not simply maximise it; `FLAG_LOOP`
+   removes boundaries entirely and was already tried, breaking field detection via self-drive
+   on LF_RSSI.
+2. **Re-test IDTECK**, whose retraction was collateral (C66). It shares this transmit path,
+   and the Flipper reads IDTECK too — so the same three-reader bar applies.
+3. **Carrier locking**, if self-consistency is wanted. C74 has the design.
+
+⚠ **Testing notes that cost real time to learn:** the emulator SLEEPS and needs several field
+cycles to wake (C78) — `emutest.py` retries. The USB cable costs ~40% of the signal (C72
+retracted), so unplug it. And chained reads in one session restart the burst and destroy the
+decode (C77) — one read per invocation.
+
+## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
+
+⭐⭐ **START HERE: the SAADC readers duplicate a capture path that one of them gets right.**
+The LF readers are two families, and it matters which:
+
+| family | readers | capture |
+|---|---|---|
+| GPIO/comparator | em410x, jablotron, viking | `register_rio_callback`, 128-entry ring, no SAADC |
+| **SAADC** | **hidprox, ioprox, pac** + lf_reader_generic | own `saadc_cb`, own 6144 ring, own field start/stop |
+
+Only `lf_reader_generic.c` also suspends BLE advertising — and its own comment records why:
+a burst collapses the 125 kHz field for ~1.6 ms and hit **4 captures in 10**. The three that
+duplicate the prologue instead of sharing it are HID, ioProx and PAC, and HID and PAC are
+exactly the two measured failing on loud tags. The SAADC reader that HAS the guard is Indala,
+at 60/60.
+
+⇒ `capture_begin()`/`capture_end()` already exist and are already shared by two entry points.
+Moving HID onto them is a small mechanical change that also happens to be **the clean test of
+C47** — same protocol, same tag, same bench, one variable.
+
+⛔ **Do not read the em410x 95% as evidence either way.** It is on the GPIO path and never
+touches the SAADC, so it cannot test this. That mistake is why C47 was wrongly weakened in
+L64.
+
+
+Not this project's decoder, but it is the comparison instrument for everything here and it
+has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
+
+**What is established:** three tags with byte-identical memory read 0/6, 3/6 and 7/9 on the
+Chameleon and 3/3 on a Proxmark (C46). The RF path is flat while reads fail (C45). So the
+decoder's tolerance is narrower than the Proxmark's, and package-level differences cross it.
+
+⚠ **`lf pac read` has the same disease**: 0/5 on one unit and 2/5 on the other while its tag
+sat at 16x the empty floor and a Proxmark read it perfectly (L66). So this is not one broken
+decoder — HID Prox and PAC both fail on tags that are loudly present, and `lf em 410x read`
+sits at 95% (76/80) rather than 100%. ⇒ Whatever is wrong may be shared across the LF reader
+family rather than specific to FSK. Fix HID first because it fails hardest (0/6, one tag
+never reading at all), but measure PAC in the same session — a fix that moves both is a very
+different fix from one that moves only HID.
+
+⚠ The Indala reader is the only LF reader in this tree with its own capture path
+(`raw_read_samples`, which suspends BLE and hands the decoder a whole buffer). It is also the
+only one at 100% — 40/40 today across two units. That may be the cleanest clue available, or
+it may be that Indala is simply the only one anybody has tuned. Do not assume which.
+
+**⭐ Test this first — it is one line and it explains an old observation.**
+`advertising_stop()` appears in **1 of 15** LF reader files. Only `lf_reader_generic.c`
+suspends BLE advertising; `hidprox_read()` does not. That file's comment records the
+measurement that put it there: an advertising burst collapses the 125 kHz field for ~1.6 ms
+and hit **4 captures in 10**. And it predicts the thing nobody could explain in L51 —
+*"after connecting it to my phone and/or a reboot, it does read"* — because connecting a BLE
+central is precisely what stops advertising (C47).
+
+```bash
+# the discriminating test, ~5 minutes, needs the BLUE DUAL (the 0/6 tag — the others
+# have too little headroom to show an improvement)
+cd software/script && for i in $(seq 1 15); do .venv/bin/python cu.py "lf hid prox read" | tail -1; done
+# then connect a phone over BLE so advertising stops, and repeat
+```
+
+⚠ **If it works, resist generalising it.** It cannot explain the blue dual reading 0/6
+deterministically — an intermittent field collapse does not produce a clean zero. Expect two
+causes: a BLE-induced intermittency affecting every LF reader, and a per-tag waveform
+tolerance in the FSK demodulator. ⇒ The fix belongs in `capture_begin()`-style shared code so
+all 15 readers get it, not pasted into `hidprox_read()` alone.
+
+⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
+(`lfprobe.py`) for presence, per §3.
+
 ## 3a. ✅ INDALA EMULATION WORKS — and four claims had to be retracted to find out
 
 Proxmark capture, emulating Chameleon placed exactly where a real tag had just been proven to

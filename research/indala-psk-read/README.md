@@ -16,6 +16,12 @@ the deficit it spent days trying to explain. Claims measured that way are marked
 
 On the front: **114 of 160 single captures decode (71%) and 0 of 160 empty captures produce
 
+⭐ **Emulation works too, verified against two independent readers**: a Flipper Zero reads the
+emulated credential 6 times out of 6 (`Indala26 FC 52 Card 63612`) and a Proxmark decodes it
+from up to 262 ms of continuous capture. ⚠ Our own reader does NOT read our own emulator —
+not a defect but a specialisation, since its exact-Nyquist demodulation assumes a subcarrier
+locked to the reader's carrier, which every real tag provides and a free-running PWM does not.
+
 ⭐ **And `lf indala write` works: 9 of 9 verified writes.** It reads the tag before and after,
 so it reports VERIFIED, WRITE DID NOT LAND, WRITE FAILED, WRONG DATA or CANNOT TELL rather
 than claiming success it cannot know. A successful read-back covers all three T5577 blocks at
