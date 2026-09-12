@@ -51,7 +51,7 @@ registered `TAG_TYPE_*`.
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
-| **Indala 224-bit** | ⛔ **MISSING** | ⛔ | ⛔ | ✓ |
+| **Indala 224-bit** | ✓ | ⛔ | ⛔ | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | AWID | ✗ | ✗ | ✗ | ✓ |
@@ -67,7 +67,7 @@ registered `TAG_TYPE_*`.
 | Noralsy | ✗ | ✗ | ✗ | ✓ |
 | InstaFob | ✗ | ✗ | ✗ | ✓ (ASK, RF/32) |
 
-⇒ **Twelve protocols absent, one read path missing (Indala224), two readers unreliable.**
+⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK READ path now works.**
 
 ⛔ **Indala is NOT finished.** Momentum implements **Indala224** as well as Indala26, and our
 decoder is hard-wired to 64 bits (`INDALA_PSK_FRAME_BITS 64`). That belongs in Phase 1, and it
@@ -150,6 +150,7 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | Advertising guard shared (§2) | all four SAADC readers; effect on HID/PAC **unmeasured**. C95, L91 |
 | §8 decided | drop stacking — the user's call, 2026-09-12. C94, L92 |
 | Stacking removed (§8) | 48 KB → 8 KB, free RAM 49.6 → 89.8 KB, all arms pass. C97, L93 |
+| Indala 224-bit reader (§1d) | **6/6** with two nulls; PSK2-only was the answer. C107, L98 |
 
 ---
 
@@ -183,80 +184,21 @@ a credential against an Indala source that `lf indala read` reads 3 of 3 in the 
 on the same signal at the same moment, so cross-protocol nulls no longer need an amplitude
 proxy.
 
-## 1d. ⚠ Indala 224-bit — and its preamble is WEAKER than the one that already failed
+## 1d. ✅ Indala 224-bit — reads, 6 of 6
 
-✅ **§8 is settled**, so the RAM is there: 28 KB decoding in place against 89.8 KB free (C97).
+`lf indala read --224`. Verified on device against the tag's own memory: **6/6** correct,
+empty antenna **3/3 not found**, a loud IDTECK tag **3/3 at 0x43 with zero credentials**, and
+`lf idteck read` still 3/3 (C107, L98).
 
-⛔⛔ **Read this before trusting a preamble match.** Momentum's `protocol_indala224.c` gives
-the preamble as **a 1 followed by 29 zeros** — 30 bits, of which 29 are a constant run. That
-is strictly weaker than Indala26's 33-bit preamble, and Indala26's is the one a loud IDTECK
-tag already forged at sample phase 28, producing a confident wrong credential (C90).
+⭐ **The lesson worth keeping.** Three acceptance rules failed before the real obstacle was
+visible: the direct view of a PSK2 tag is the *running XOR* of its data — a deterministic
+transform, not noise — so it repeats at the frame period exactly as well as the data does and
+is identical across captures. **No test inside one capture can separate a frame from its own
+integral.** A reader has to be told the modulation; it cannot infer it. Every Indala224
+specimen is PSK2, so the format decodes the differential view and only that one.
 
-⇒ **A preamble match cannot be the acceptance test for Indala224.** It would be the C90 bug
-with a larger target.
-
-⭐ **Use periodicity instead — it is 224 bits of evidence rather than 30, and it is free.** A
-224-bit frame repeats continuously, so within a two-frame capture (14336 samples) one whole
-frame is guaranteed and the remaining 7168 samples are the neighbouring copies, split before
-and after it. Comparing the whole frame against those two partials covers all 224 bits. A
-frame that repeats exactly is a frame; noise and a wrong-protocol source do not repeat.
-
-⚠ Momentum reaches the same conclusion by a different route: it requires two consecutive
-frames and accepts the second preamble either normal OR inverted. ⇒ Do not assume the
-polarity of the repeat — PSK2-style cards alternate it, and our decoder searches both
-polarities already for the same reason.
-
-⛔⛔ **AND IT IS PSK2.** A 224-bit tag written by `lf indala clone -r` leaves the T5577 config
-at `000820E0` and detect reports **Modulation PSK2** — against `00081040`/PSK1 for the 64-bit
-bench tag (C99). Our demodulator recovers ABSOLUTE phase, which for a PSK2 tag is the
-DIFFERENTIAL of the data.
-
-⭐ **The fix is already written down in our own decoder header.** The Proxmark matches its
-preamble on the PSK1 stream first and only then calls `psk1TOpsk2()` (cmdlfindala.c:1293) —
-which is XOR-ing consecutive bits. So one demodulator serves both: search the preamble in the
-absolute-phase stream, and if that fails, in its differential. ⚠ The repeat gate is unaffected
-— a repeating frame differentiates to a repeating stream.
-
-⚠ **And the Proxmark cannot be the reference here.** Its own read-back of the tag it had just
-written came back different, at "len 235" (C100). Use the memory dump, as IDTECK did.
-
-**Plan, in order:**
-
-1. ✅ Frame length parameterised by format descriptor.
-2. ✅ One capture buffer at 14336 samples, capture length per protocol.
-3. ✅ The periodicity check, as the acceptance test.
-4. ✅ The PSK2 fallback — the differential stream is searched only when a format asks for it,
-   direct stream first as the Proxmark does, and no polarity search on the differential
-   because XOR of consecutive bits is inversion-invariant.
-5. ✅ `lf sniff` raised from 8192 bytes to 28672 (it counted BYTES under a name saying
-   samples). 14336-sample captures are committed in `caps/indala224/`.
-6. ✅ **The demodulation works** — all four captures yield the tag's exact 224 bits in the
-   differential view (C103).
-7. ⛔⛔ **BLOCKED: no acceptance rule works.** Three tried, all returning wrong credentials
-   (C104). The obstacle is specific and worth stating plainly before the next attempt:
-
-   > Indala224's preamble is a 1 and 29 zeros, so a one-bit shift matches nearly as well.
-   > And the DIRECT view of a PSK2 tag carries a candidate that repeats at the frame period
-   > **as convincingly as the true one** — ~98% either way — so the repeat test cannot tell
-   > the two views apart. The impostor is identical across captures, so the two-capture
-   > agreement rule confirms it instead of catching it.
-
-   ⇒ What is needed is a discriminator none of the three rules has, not another weighting of
-   them. Ideas not yet tried, cheapest first:
-   - **Demand the frame decode in exactly one view.** If both the direct and differential
-     views yield a preamble-clean, well-repeating frame, return nothing — an ambiguous
-     capture is not a credential. Costs reads on tags where one view is marginal.
-   - **Use the bit-boundary alignment.** The true frame and the impostor won at different
-     `pos` (8 against 7) — is the winning sample offset systematically different? Measurable
-     from the committed captures with no hardware.
-   - **Ask what Momentum does.** It reads this format; its `protocol_indala224.c` requires
-     two consecutive frames and accepts the second preamble normal or inverted. That is a
-     stronger structural test than ours and it is already written down.
-
-   ⛔ Until then `INDALA224_READER_TRUSTED` stays 0: the command reports 0x43 and cannot
-   return a credential.
-
-8. ⛔ **The old step 5 is done; what remains is the rule above.**
+⚠ Momentum's exact two-preamble test is not available to us at ~2% bit error: it rejected the
+true frame in all four captures (C106).
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 

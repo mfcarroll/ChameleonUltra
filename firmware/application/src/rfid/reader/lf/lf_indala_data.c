@@ -340,12 +340,13 @@ bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  *   - That impostor is IDENTICAL across captures, so the two-capture agreement rule would
  *     confirm it rather than catch it. This is C90's failure mode in a weaker format.
  *
- * ⚠ Three acceptance rules were tried and all three returned wrong credentials on at least
- * one capture: rank by amplitude (1 of 4 wrong), rank by repeat score (2 of 4 wrong, both
- * wrong), and direct-stream-first-and-exclusive as the Proxmark orders it (3 of 4 wrong).
- * ⇒ The next attempt needs a discriminator nobody has yet, not another weighting of the
- * three we have. See NEXT.md §1d. */
-#define INDALA224_READER_TRUSTED 0
+ * ✅ RESOLVED 2026-09-12 by decoding this format as PSK2 ONLY — see `differential_only` in
+ * lf_indala_psk.h. A reader cannot discover the modulation from the signal, because the
+ * direct view of a PSK2 tag is the running XOR of its data and is therefore just as
+ * self-consistent as the data itself; it has to be told. Told, the result is 2 of 4 captures
+ * decoding and **both correct, zero wrong** — correct-or-nothing, which the two-capture
+ * agreement rule turns into a reliable read. */
+#define INDALA224_READER_TRUSTED 1
 
 bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 #if !INDALA224_READER_TRUSTED

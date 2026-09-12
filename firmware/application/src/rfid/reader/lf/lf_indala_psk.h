@@ -119,7 +119,7 @@ typedef struct {
      *  NULL for none, and it must stay NULL wherever the confusion is one-directional. */
     const uint8_t *reject_preamble;
     uint8_t  reject_preamble_bits;
-    /** ⭐⭐ ALSO SEARCH THE DIFFERENTIAL STREAM — the PSK2 fallback.
+    /** ⭐⭐ DECODE THE DIFFERENTIAL STREAM *INSTEAD OF* THE DIRECT ONE — PSK2, not a fallback.
      *
      * A T5577 written as PSK2 encodes the data in phase CHANGES, so the absolute phase this
      * demodulator recovers is the differential of what the reader wants. XOR-ing consecutive
@@ -127,18 +127,33 @@ typedef struct {
      * command — config `000820E0`, not `00081040` (C99) — so without this the format cannot
      * be read at all.
      *
-     * ⭐ The Proxmark does exactly this and in this order: match the preamble on the direct
-     * stream first, and only on failure call `psk1TOpsk2()` and try again
-     * (cmdlfindala.c:1293). Our own header has cited that ordering since the beginning.
+     * ⛔⛔ SEARCHING BOTH VIEWS CANNOT WORK, AND THAT IS A PROPERTY OF THE PROBLEM, NOT A BUG
+     * TO TUNE AROUND.
      *
-     * ⚠ OFF FOR THE 64-BIT FORMATS ON PURPOSE. A second stream is a second chance to match,
-     * and C90 is what a spurious preamble match costs. The bench tags are PSK1 and the direct
-     * search reads them 110/160; nothing is gained by giving that path another way to be
-     * wrong.
+     * The direct view of a PSK2 tag is the RUNNING XOR of its data — a deterministic
+     * transform, not noise. So it repeats at the frame period exactly as well as the data
+     * does (~98% either way, measured), it is identical across captures, and when the data
+     * begins with a run of zeros its integral begins with a run of ones, which matches the
+     * inverted preamble. Every statistical test inside one capture sees two equally
+     * self-consistent frames. Three rules were tried — amplitude, repeat score, and the
+     * Proxmark's direct-first ordering — and returned wrong credentials on 1, 2 and 3 of 4
+     * captures respectively (C104).
      *
-     * ⭐ The differential stream needs no polarity search: XOR of consecutive bits is
-     * invariant under global inversion, which is the whole point of differential encoding. */
-    bool     try_differential;
+     * ⚠ Momentum's own structural test does not save it either: it demands an exact 30-bit
+     * preamble at BOTH frame positions, and at our ~2% bit error rate an exact match over 30
+     * specific bits fails about 45% of the time. It rejected the TRUE frame in all four
+     * captures (C106).
+     *
+     * ⇒ A reader cannot discover the modulation from the signal, so it must be told. Every
+     * Indala224 specimen available — the Proxmark's own clone command, and Momentum's decoder,
+     * which treats these as phase-alternating — is PSK2. This format therefore decodes the
+     * DIFFERENTIAL view and only that one.
+     *
+     * ⚠ OFF FOR THE 64-BIT FORMATS, which are PSK1 and read 110/160 on the direct view.
+     *
+     * ⭐ The differential needs no polarity search: XOR of consecutive bits is invariant under
+     * global inversion, which is the whole point of differential encoding. */
+    bool     differential_only;
     /** ⭐ Require the frame to REPEAT at its own period before accepting it. For a format
      *  whose preamble is mostly a constant run this is the real acceptance test: 224 bits of
      *  self-agreement instead of 30 bits of pattern. */

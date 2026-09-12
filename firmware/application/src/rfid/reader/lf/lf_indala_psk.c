@@ -39,7 +39,7 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     /* ⛔ The IDTECK veto, one-directional on purpose — C90/C91. */
     .reject_preamble = LF_PSK1_PREAMBLE_IDTECK,
     .reject_preamble_bits = IDTECK_PSK_PREAMBLE_BITS,
-    .try_differential = false,
+    .differential_only = false,
     .require_repeat = false,
 };
 
@@ -49,7 +49,7 @@ const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK = {
     .frame_bits = INDALA_PSK_FRAME_BITS,
     .reject_preamble = NULL,
     .reject_preamble_bits = 0,
-    .try_differential = false,
+    .differential_only = false,
     .require_repeat = false,
 };
 
@@ -59,8 +59,8 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224 = {
     .frame_bits = INDALA224_PSK_FRAME_BITS,
     .reject_preamble = NULL,
     .reject_preamble_bits = 0,
-    /* ⛔ Indala224 tags are PSK2 on the wire — see try_differential in the header. */
-    .try_differential = true,
+    /* ⛔ Indala224 tags are PSK2 on the wire — see differential_only in the header. */
+    .differential_only = true,
     /* ⛔ NOT OPTIONAL for this format. 29 of its 30 preamble bits are a constant run. */
     .require_repeat = true,
 };
@@ -321,7 +321,7 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
             continue;
         }
 
-        if (fmt->try_differential) {
+        if (fmt->differential_only) {
             dbits[0] = 0;
             for (size_t k = 1; k < nb; k++) {
                 dbits[k] = (uint8_t)(bits[k] ^ bits[k - 1]);
@@ -344,24 +344,14 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
              * Direct first, matching the Proxmark's order, so a PSK1 tag never reaches the
              * fallback. The differential needs no polarity search — XOR of consecutive bits
              * is invariant under inversion — so it runs inv=0 only. */
-            const uint8_t nstreams = fmt->try_differential ? 2u : 1u;
-            for (uint8_t st = 0; st < nstreams; st++) {
-              /* ⛔⛔ DIRECT FIRST AND EXCLUSIVELY — the differential is a FALLBACK, not a
-               * competitor. The Proxmark matches on the PSK1 stream and only calls
-               * psk1TOpsk2() when that finds nothing (cmdlfindala.c:1293); searching both at
-               * once and picking the better score is a different algorithm, and it decodes
-               * WRONG. The repeat test cannot arbitrate between them: a signal that repeats
-               * has a direct view that repeats AND a differential view that repeats, so both
-               * streams score ~98% and the choice falls to noise. */
-              if (st == 1 && found) {
-                  break;
-              }
-              const uint8_t *stream = (st == 0) ? bits : dbits;
+            {
+              /* ⛔ ONE VIEW, CHOSEN BY THE FORMAT — see differential_only in the header. */
+              const uint8_t *stream = fmt->differential_only ? dbits : bits;
               /* dbits[0] is not a real bit, so a differential frame cannot start at 0. */
-              if (st == 1 && i == 0) {
+              if (fmt->differential_only && i == 0) {
                   continue;
               }
-              const uint8_t ninv = (st == 0) ? 2u : 1u;
+              const uint8_t ninv = fmt->differential_only ? 1u : 2u;
               for (uint8_t inv = 0; inv < ninv; inv++) {
                 uint8_t err = preamble_err(stream, i, inv != 0, fmt->preamble,
                                            fmt->preamble_bits);
