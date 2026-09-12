@@ -129,6 +129,70 @@ and the others go stale silently. So:
 ./checkdocs.sh
 ```
 
+## The bench
+
+⛔ **Two fixed rigs, and nothing on them moves unless a person moves it.** That is the
+constraint that matters for unattended work: a test must not assume a placement it cannot
+make.
+
+| rig | layout | what it drives |
+|---|---|---|
+| **A — emulate** | Chameleon #1 alone on the Flipper pad, its face towards the Flipper's back | the Chameleon emulates, the Flipper reads over its serial CLI |
+| **B — read / write** | Chameleon #2 facing a T5577, which sits on the Proxmark pad | the Proxmark programs the tag and the Chameleon reads it — or the Chameleon writes it and the Proxmark verifies |
+
+| device | port |
+|---|---|
+| Chameleon #1 | `/dev/tty.usbmodemC3A1656543DE1` |
+| Chameleon #2 | `/dev/tty.usbmodemF429364E46961` |
+| Flipper Zero | `/dev/tty.usbmodemflip_Matthew1` |
+| Proxmark3 | `/dev/tty.usbmodemiceman1` |
+
+⭐ **Between them the two rigs close both loops with no hands.** Rig B is a complete
+read-path bench: the Proxmark writes *any* protocol onto the T5577 and the Chameleon reads
+it back, so a new reader can be exercised end to end against an independently-written tag.
+Rig A is the same for the emulate path. Most of `NEXT.md` needs neither a person nor a
+placement change.
+
+⛔ **What they cannot do.** A Chameleon cannot read an emulator — not a defect but the
+specialisation in M27/C82 — and the rigs do not face each other, so anything needing a
+Chameleon to read a non-carrier-locked source needs a person. So does anything needing the
+Proxmark pointed at an emulator rather than at the tag, and anything measured with the cable
+out.
+
+⚠ **Both Chameleons are cabled, and the cable costs ~40% of the coupling by detuning the
+antenna (C72).** Emulation is still read reliably by the Flipper in this state, so functional
+pass/fail tests are valid as they stand — but an amplitude measured cabled is not comparable
+to one measured uncabled. Re-take anything that enters the ledger as a *level* rather than as
+a pass with the cable out. §7 exists to remove this confound.
+
+⚠ The Flipper's serial CLI is how C81 and C83 were taken — `rfid read indala` for PSK,
+`rfid read normal` for ASK, the ASK arm being the built-in control that the reader was
+looking and found a *PSK* tag rather than any tag. **The driver for it was never committed**;
+it lived in a scratch file and is gone. Commit one before relying on it, and build it under
+M28: match on what the success path uniquely prints, never on a protocol name that also
+appears in help text, and bound every count by its own denominator.
+
+## Working conventions
+
+| | |
+|---|---|
+| branch | `indala-psk-read` on `origin` = `mfcarroll/ChameleonUltra`, the fork — pushing research branches there is expected |
+| ⛔ never | `upstream`, `main`, or `--force` / `--force-with-lease` on anything |
+| signing | commits are signed through 1Password's `op-ssh-sign`. **If 1Password is locked, `git commit --no-gpg-sign` and carry on** |
+
+⛔ **Do not go back and sign an unsigned commit, and do not `--amend` one that exists.** Both
+rewrite the hash, `LOG.md` cites hashes, and `checkdocs.sh` asks whether each is reachable
+from HEAD. The rule already written for LOG pointers covers signatures too: land it, then fix
+it forward in a follow-up commit.
+
+⭐ **A change and the note describing it belong in the same commit**, so the tree is never in
+a state where the code and the notes disagree. `./checkdocs.sh` passes before every commit.
+
+⚠ **`NEXT.md` is a plan, not a journal.** What happened and when goes in `LOG.md`; what is
+believed now goes in `FINDINGS.md`; what to do next goes in `NEXT.md`, where a finished
+section collapses to one line. Commentary accumulating there is what took it to 995 lines,
+~600 of them duplicated, with every cross-reference still validating.
+
 ## Environment
 
 | | |
