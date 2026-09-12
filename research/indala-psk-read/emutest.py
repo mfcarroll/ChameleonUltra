@@ -38,28 +38,64 @@ def pm3(cmd):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frame", default="a0000000e6bd0e92")
+    ap.add_argument("--retries", type=int, default=5,
+                    help="capture attempts before giving up — the device sleeps between reads")
     ap.add_argument("--min", type=float, default=10.0,
                     help="refuse to score below this fc/2 amplitude (empty field is 3.0)")
     a = ap.parse_args()
 
-    # ⭐ WAKE THE TAG FIRST, AND DISCARD THAT READ. An emulating Chameleon is asleep until
-    # a field appears; the first `lf read` wakes it but is over before it starts modulating,
-    # so it captures an empty field and the bracket refuses. Two runs back to back worked
-    # where one did not — the second caught the device already awake. Costs one throwaway
-    # capture and removes a failure mode that looks exactly like "not coupled".
-    pm3("lf read")
-    for f in glob.glob(TMP + "*.pm3"):
-        os.remove(f)
-    pm3(f"lf read; data save -f {TMP}")
-    found = sorted(glob.glob(TMP + "*.pm3"))
-    if not found:
-        print("  ⛔ no trace — is the Proxmark free?")
-        return 2
-    x = load16(found[0])
+    # ⭐ WAKE THE TAG IN THE SAME PM3 SESSION AS THE CAPTURE, NOT A SEPARATE ONE.
+    #
+    # An emulating Chameleon sleeps until a field appears, and the first `lf read` wakes it
+    # but is over before it modulates — so that capture is an empty field and the bracket
+    # refuses. The obvious fix, a throwaway `pm3 -c "lf read"` before the real one, DOES NOT
+    # WORK: each invocation spawns a process, connects and exits, so the field is off for
+    # seconds in between and the device goes straight back to sleep. It failed on a device
+    # that had not been moved, immediately before a manual double-run succeeded.
+    #
+    # ⇒ Both reads go in ONE session, back to back, so the field never drops between them.
+    # `data save` writes the most recent read, so the wake-up captures are simply discarded.
+    # ⚠ THE WAKE-UP BEHAVIOUR IS NOT UNDERSTOOD, SO THIS RETRIES RATHER THAN ASSUMES.
+    #
+    # An emulating Chameleon sleeps until a field appears, and the first capture after it
+    # wakes is an empty field. Neither obvious fix works on its own: a throwaway
+    # `pm3 -c "lf read"` fails because each invocation exits and the field drops for seconds
+    # in between, and three reads inside ONE session also failed on a device that had not
+    # been moved. What did work, twice, was two separate runs about ten seconds apart.
+    #
+    # ⇒ Retry the whole capture a few times. Whatever the mechanism — a wake timer, a
+    # charge-up, a field-detect hysteresis — repeated attempts across seconds reproduce the
+    # conditions that are observed to work, and a bracket that refuses is cheap. What must
+    # NOT happen is scoring an empty field, which has produced three confident wrong
+    # conclusions in this session already.
+    x = None
+    for attempt in range(1, a.retries + 1):
+        for f in glob.glob(TMP + "*.pm3"):
+            os.remove(f)
+        # ⚠ ONE `lf read` PER ATTEMPT, not two back to back. Chaining reads inside a single
+        # session brackets fine — coupling 23.06, phase run 929 — and then decodes at NO
+        # length, where one read per invocation decoded to 262 ms at the same position and
+        # amplitude. Consecutive reads re-trigger field detection and restart the emulator's
+        # burst, so the capture lands across a boundary. The retry loop supplies the
+        # wake-ups instead; that is what was observed to work.
+        pm3(f"lf read; data save -f {TMP}")
+        found = sorted(glob.glob(TMP + "*.pm3"))
+        if not found:
+            print("  ⛔ no trace — is the Proxmark free?")
+            return 2
+        cand = load16(found[0])
+        yy = cand - cand.mean()
+        amp = float(np.sqrt(np.mean((yy * ((-1.0) ** np.arange(len(yy)))) ** 2)))
+        print(f"  0. attempt {attempt}/{a.retries}: fc/2 amplitude {amp:.2f}"
+              + ("   — waking, retrying" if amp < a.min and attempt < a.retries else ""))
+        if amp >= a.min:
+            x = cand
+            break
+    if x is None:
+        x = cand
     y = x - x.mean()
     amp = float(np.sqrt(np.mean((y * ((-1.0) ** np.arange(len(y)))) ** 2)))
 
-    print("  0. woke the tag with a throwaway read (it sleeps until a field appears)")
     print(f"  1. BRACKET — fc/2 amplitude {amp:.2f}   "
           f"(real tag 33.85, empty 2.99, threshold {a.min:.1f})")
     if amp < a.min:
