@@ -94,7 +94,7 @@ can run to completion now and work that has to wait.
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
 | §8 reader RAM | ⛔ **a person.** A trade-off between the back-side read rate and affording §1d |
 
-⇒ The unattended path through Phase 1 and Phase 2 is **§0 → §1 → §1c → §3 → §2**. Only §4
+⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §4
 and §7 need hands, and only §5 and §8 need a decision.
 
 ⚠ **Retired section numbers.** LOG.md is append-only and cites sections that have since moved.
@@ -117,22 +117,9 @@ rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 | T5577 write (§8) | **9 of 9 verified writes**; the old failures were placement. C60, L68 |
 | Indala emulation (§3a) | Flipper **6/6**, Proxmark to 262 ms. C81, L79 |
 | Stacking and frame lock (§2) | resolved in opposite directions. C58, C59, L67 |
+| Flipper read driver (§0) | `flipper.py` committed and bracketed: **PSK 4/4, ASK 0/4**. L83 |
 
 ---
-
-## 0. ⚠ Prerequisite — commit a Flipper serial-CLI read driver
-
-Rig A's whole value is that the Flipper reads what we emulate without anyone pressing a
-button, and C81 and C83 were both taken that way — but the driver was a scratch file and is
-gone. Nothing can verify an emulation change until it is back.
-
-`rfid read indala` selects PSK, `rfid read normal` selects ASK; running both gives the
-control for free, since a PSK hit with an ASK miss says the reader was looking and found a
-*PSK* tag rather than any tag.
-
-⛔ Build it under M28. Match on what the success path uniquely prints — a decoded credential
-— never on a protocol name that also appears in help text or in the command echo, and have it
-refuse to print a count larger than the number of attempts.
 
 ## 1. ⭐⭐⭐ Tell the user WHY a read failed — the undecodable-signal status
 

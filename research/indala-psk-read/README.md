@@ -92,6 +92,7 @@ Expect `a0000000e6bd0e92`, `Fmt 26 FC: 52 Card: 63612`.
 | `sweep.py` `phasesweep.py` `gaintest.py` `gapsweep.py` `oversample_test.py` | Per-lever sweeps. ⚠ these score the fc/2 *skirt*, which is polarity-blind — see `METHOD.md` M8. |
 | `cu.py` (in `software/script/`) | Run CLI commands non-interactively. |
 | `ctest/` | ⭐ Host build of the **firmware** decoder. `make check` diffs it against `mfdemod.py` per capture. |
+| `flipper.py` | ⭐ Drive the Flipper's lfrfid CLI — `read` (with its ASK control) and `emulate`. Rig A, both directions. |
 | `checkdocs.sh` | ⭐ Verify the notes have not drifted. Run it before committing a notes change. |
 
 Decode the committed captures:
@@ -172,12 +173,21 @@ pass/fail tests are valid as they stand — but an amplitude measured cabled is 
 to one measured uncabled. Re-take anything that enters the ledger as a *level* rather than as
 a pass with the cable out. §7 exists to remove this confound.
 
-⚠ The Flipper's serial CLI is how C81 and C83 were taken — `rfid read indala` for PSK,
-`rfid read normal` for ASK, the ASK arm being the built-in control that the reader was
-looking and found a *PSK* tag rather than any tag. **The driver for it was never committed**;
-it lived in a scratch file and is gone. Commit one before relying on it, and build it under
-M28: match on what the success path uniquely prints, never on a protocol name that also
-appears in help text, and bound every count by its own denominator.
+⭐ **`flipper.py` drives both directions** — `flipper.py read --mode both` runs the PSK arm
+and its ASK control, `flipper.py emulate Indala26 <4 bytes>` holds an emulation for the
+Chameleon to read. ⚠ It sends ETX after its timeout because `rfid read` does **not** time out:
+it loops until a tag decodes or the next character is ETX, so a failed read otherwise leaves
+the worker running and swallows the next command — invisible on a passing arm, wrong on the
+null (L83).
+
+⚠ **The unit numbering above was established by evidence, not by assumption:** only the unit
+on `/dev/tty.usbmodemC3A1656543DE1` has an active slot emulating Indala, and the Flipper reads
+Indala from its pad. Re-check that after anything is unplugged — the ports are stable, but
+which unit sits where is not knowable from software alone.
+
+⚠ Keep those serials inside a full `/dev/...` path. Written bare, a serial starting with `C`
+and a digit parses as a claim citation to `checkdocs.sh` and fails the run — as the first
+draft of this very paragraph did.
 
 ## Working conventions
 
