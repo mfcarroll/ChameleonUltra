@@ -824,7 +824,7 @@ class ChameleonCMD:
 
     def lf_sniff(self, timeout_ms: int = 2000, bits: int = 8, phase: int = 0,
                  rate_khz: int = 0, gain: int = 6, settle_ms: int = 0,
-                 input_ain: int = 5):
+                 input_ain: int = 5, drive: int = 4):
         """
         Capture raw LF field ADC samples.
 
@@ -850,8 +850,16 @@ class ChameleonCMD:
             RC filter poles. 0 = AIN0 / LF_RSSI, which taps LF_OA upstream of both — worth
             ~9.7dB at fc/2 if the noise is made downstream, but fed through 470k, which is
             far above what the converter's 5us acquisition can settle. See ble_main.h.
+        :param drive: Reader field strength as the PWM mark against a top_value of 4:
+            1..3, stock 2 (50% duty). ⭐ Weakening our own field is the only way to reduce
+            the signal reaching the LF amplifier WITHOUT moving the tag, and on a strongly
+            coupled tag that amplifier saturates — a third of a PAC capture pins at a rail,
+            upstream of the ADC where no gain setting reaches it (C140). The fundamental
+            scales as sin(pi*D), so 1 or 3 is about -3dB against 2.
         :return: Raw response object — check .status and .data
         """
+        if drive not in range(1, 8):
+            raise ValueError("drive must be 1..7")
         timeout_ms = max(1, min(10000, timeout_ms))
         if bits not in (8, 16):
             raise ValueError("bits must be 8 or 16")
@@ -874,7 +882,7 @@ class ChameleonCMD:
         buf = bytearray()
         for chunk in range(16):
             payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF, bits, phase,
-                             rate_khz, gain, settle_ms, chunk, input_ain])
+                             rate_khz, gain, settle_ms, chunk, input_ain, drive])
             resp = self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
             if first is None:
                 first = resp

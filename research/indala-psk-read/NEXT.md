@@ -51,7 +51,7 @@ registered `TAG_TYPE_*`.
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
 | HID Prox (H10301, generic, ex-generic) | ⚠ **unreliable** | ✓ | ✓ | ✓ |
 | ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
-| PAC/Stanley | ⚠ **unreliable** | ✓ | ✓ | ✓ |
+| PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
@@ -204,7 +204,7 @@ specimen is PSK2, so the format decodes the differential view and only that one.
 ⚠ Momentum's exact two-preamble test is not available to us at ~2% bit error: it rejected the
 true frame in all four captures (C106).
 
-## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
+## 2. ◐ Fix the HID Prox and PAC readers — ✅ **PAC IS FIXED**, HID has no failing specimen
 
 Three tags with byte-identical memory read **0/6, 3/6 and 7/9** on the Chameleon and 3/3 on a
 Proxmark (C46). The RF path is flat while reads fail (C45). `lf pac read` scored 0/5 and 2/5
@@ -250,7 +250,19 @@ checksum `0x72` matching the twelfth byte. A tag transmitting that is not the pr
 Proxmark are independent receivers, but I ran both captures through ONE level-threshold script
 of mine. Their agreement measured my bug, not the air (M31).
 
-⛔⛔ **THAT PLAN IS WRONG AND THE MEASUREMENTS RETIRE IT.** "Fix the host demodulation until
+✅ **PAC READS 10 OF 10 — the bug was the reader's own field, not the decoder** (C144). The
+amplifier saturates on a well-coupled tag, so `pac_read()` now sweeps the drive `{4, 6, 2, 7}`
+with a fresh calibration per step. Scored against the known frame: stock drive gives 6 errors of
+128, drive 6 gives **0**. On device, same tag and bench as C109's 0/10: **10 of 10**.
+⚠ It moved the shared LF PWM to 1MHz/top 8 for the finer steps; both hardware paths were
+regressed — Indala 6/6, EM410x 6/6.
+
+⛔ **The comparator route is REFUTED, not deferred** (C145). Clean intervals give 26 errors
+against the level path's 6, from a systematic duty bias in the run lengths. Momentum's approach
+does not transfer to this front end, and the paragraph below that called it "the main line" was
+wrong for four hours.
+
+⛔⛔ **THE ORIGINAL PLAN WAS WRONG AND THE MEASUREMENTS RETIRE IT.** "Fix the host demodulation until
 it recovers the frame" assumes the frame's levels are in the capture. They are not: **33–37% of
 every PAC capture is pinned at the bottom rail** and the clipping happens in the op-amp chain
 *above* the ADC, where no gain setting reaches it — 1/6 is already the lowest, AIN0 is pinned

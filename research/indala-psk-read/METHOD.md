@@ -235,6 +235,21 @@ decoder that means controlling the plaintext — write the tag rather than readi
 it. For a detector it means a rate rather than a hit. `pacber.py` exists only for this, and it
 paid for itself on its first run.
 
+**M34. ⛔ A READER IS ALSO A TRANSMITTER, AND ITS TRANSMIT SETTING IS AN INPUT TO ITS OWN
+RECEIVE PATH.** PAC read 0 of 10 and the investigation spent its whole length downstream of the
+ADC — spike clipping, thresholds, dead zones, debouncing, glitch policy, edge intervals versus
+levels, majority votes, a comparator port. Every one of those treats the capture as given. The
+capture was not given: the Chameleon **illuminates the tag**, the tag's answer scales with that
+illumination, and the amplifier was being overdriven by a field the reader itself chose. One
+step weaker and the same decoder reads 10 of 10.
+⇒ **When a receiver fails on a STRONG signal, look at the transmitter before the demodulator.**
+"Fails on loud tags" was in the section title the whole time and read as a symptom; it is the
+diagnosis. A failure that gets worse as the signal gets better is almost never a sensitivity
+problem, and every tool in the decoder chain is built for the opposite case.
+⚠ The shape to recognise: three byte-identical tags reading 0/6, 3/6 and 7/9 (C46). That spread
+is not flaky decoding, it is a monotone response to a variable nobody had written down —
+coupling — with the failures at the *well-coupled* end.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

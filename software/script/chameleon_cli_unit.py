@@ -8041,6 +8041,15 @@ class LFSniff(ReaderRequiredUnit):
                  'the signal, so they only cost SNR for noise made at or after IC1A.'
         )
         parser.add_argument(
+            '--drive', type=int, default=4, choices=(1,2,3,4,5,6,7), metavar='D',
+            help='Reader field strength: the PWM mark against a top_value of 4. '
+                 '2 (default) is the stock 50%% duty; 1 or 3 is about -3dB. ⭐ On a '
+                 'strongly coupled tag the LF amplifier SATURATES — a third of a PAC '
+                 'capture pins at a rail — and that clipping is upstream of the ADC, so '
+                 'no --gain setting reaches it. Weakening the field is the only way to '
+                 'reduce the signal into the amplifier without moving the tag.'
+        )
+        parser.add_argument(
             '--bits', type=int, default=8, choices=(8, 16), metavar='N',
             help='Sample width. 8 (default) is the historical format: the 14-bit ADC '
                  'conversion right-shifted by 5. 16 returns the FULL conversion, '
@@ -8068,13 +8077,15 @@ class LFSniff(ReaderRequiredUnit):
         node = "AIN5/LF_OA_OUT" if args.input == 5 else "AIN0/LF_RSSI"
         print(f" Capturing LF field for {timeout}ms at {fs_khz}kHz "
               f"({1000.0 / fs_khz:.1f}µs/sample,{rt}), {args.bits}-bit samples{ph} "
-              f"on {node}...")
+              f"on {node}"
+              + (f", drive {args.drive}/8" if args.drive != 4 else "") + "...")
         if not 0 <= args.phase <= 127:
             print(f"{CR}--phase must be 0..127 ticks{C0}")
             return
         resp = self.cmd.lf_sniff(timeout_ms=timeout, bits=args.bits, phase=args.phase,
                                  rate_khz=args.rate, gain=args.gain,
-                                 settle_ms=args.settle, input_ain=args.input)
+                                 settle_ms=args.settle, input_ain=args.input,
+                                 drive=args.drive)
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")

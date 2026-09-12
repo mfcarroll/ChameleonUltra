@@ -47,6 +47,11 @@ void lf_125khz_radio_saadc_phase_set(uint8_t ticks);
  */
 void lf_125khz_radio_saadc_rate_set(uint16_t khz);
 
+/* Reader field strength as the PWM mark against a top_value of 8: 1..7, stock 4 (50%).
+ * Exists so C140's saturation can be reduced without moving the tag — see lf_125khz_radio.c. */
+void lf_125khz_radio_drive_set(uint8_t duty);
+uint8_t lf_125khz_radio_drive_get(void);
+
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb);
 void lf_125khz_radio_gpiote_enable(void);
 void lf_125khz_radio_saadc_disable(void);

@@ -27,10 +27,53 @@ static uint16_t m_saadc_rate_khz = 0;     /* 0 = carrier-locked; else free-run a
 /* One carrier period is 8us = 128 ticks of a 16MHz timer. */
 #define LF_PHASE_TICKS_PER_PERIOD 128
 
+/* ⭐ THE READER'S OWN FIELD STRENGTH, AND IT IS A DIAGNOSTIC KNOB.
+ *
+ * The PWM drives LF_ANT_DRIVER, which is the SELECT pin of the antenna's analog switch
+ * (C134) — so this value is the mark/space of the square wave that swings the coil terminal
+ * between GND and 3V3, against a top_value of 4. Stock is 2, a 50% duty.
+ *
+ * ⚠ The reason it is adjustable is C140: on a strongly coupled tag the LF op-amp chain
+ * SATURATES, a third of every PAC capture is pinned at a rail, and the levels are destroyed
+ * before the ADC ever sees them. No gain setting reaches that, because the clipping is
+ * upstream of the ADC and 1/6 is already the lowest gain. Driving the field more weakly is
+ * the one way to reduce the signal into the amplifier without moving the tag — an air gap
+ * done electronically, and unlike an air gap it needs no hands.
+ *
+ * ⭐ MEASURED, and it is the largest single effect found on PAC: at the stock duty 37.3% of a
+ * capture is pinned at the bottom rail and the best any decoder manages is 6 errors of 128;
+ * one step weaker it is 25.9% pinned and **1 error**. That is why the range is 1..7 rather
+ * than the 1..3 a top_value of 4 allowed — the trend was still improving at the edge of the
+ * old range, so the knob needed more turns.
+ *
+ * ⚠ TOP_VALUE 8 AT 1MHz, not 4 at 500kHz. Same 125kHz carrier, twice the duty resolution.
+ * Everything downstream keys off PWMPERIODEND — the sample trigger, the cycle counter and the
+ * phase timer's CLEAR — and that still fires once per carrier period, so the extra resolution
+ * costs nothing. ⛔ The phase timer is unaffected either way: it runs on TIMER3 at 16MHz where
+ * one carrier period is 128 ticks regardless of how the PWM divides its own clock. */
+#define LF_DRIVE_TOP          8
+#define LF_DRIVE_DUTY_DEFAULT 4
+
 // At present, only channel 1 is used, so only one channel can be configured
 static nrf_pwm_values_individual_t m_lf_125khz_pwm_seq_val[] = {
-    {2, 0, 0, 0},
+    {LF_DRIVE_DUTY_DEFAULT, 0, 0, 0},
 };
+
+void lf_125khz_radio_drive_set(uint8_t duty) {
+    if (duty < 1) {
+        duty = 1;
+    } else if (duty > LF_DRIVE_TOP - 1) {
+        duty = LF_DRIVE_TOP - 1;
+    }
+    /* ⚠ Written into the sequence the PWM plays from, so it takes effect on the next
+     * start_lf_125khz_radio(). Changing it mid-playback would shift the carrier phase
+     * under a capture that is already running. */
+    m_lf_125khz_pwm_seq_val[0].channel_0 = duty;
+}
+
+uint8_t lf_125khz_radio_drive_get(void) {
+    return (uint8_t)m_lf_125khz_pwm_seq_val[0].channel_0;
+}
 
 nrf_pwm_sequence_t const m_lf_125khz_pwm_seq_obj = {
     .values.p_individual = m_lf_125khz_pwm_seq_val,
@@ -80,9 +123,9 @@ static void pwm_init(void) {
         config.output_pins[i] = NRFX_PWM_PIN_NOT_USED;
     }
     config.irq_priority = APP_IRQ_PRIORITY_LOW;
-    config.base_clock = (nrf_pwm_clk_t)NRF_PWM_CLK_500kHz;
+    config.base_clock = (nrf_pwm_clk_t)NRF_PWM_CLK_1MHz;
     config.count_mode = (nrf_pwm_mode_t)NRF_PWM_MODE_UP;
-    config.top_value = (uint16_t)4;
+    config.top_value = (uint16_t)LF_DRIVE_TOP;
     config.load_mode = (nrf_pwm_dec_load_t)NRF_PWM_LOAD_INDIVIDUAL;
     config.step_mode = (nrf_pwm_dec_step_t)NRF_PWM_STEP_AUTO;
 

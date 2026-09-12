@@ -17,6 +17,7 @@
 #include "netdata.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
+#include "lf_125khz_radio.h"
 #include "lf_reader_generic.h"
 #include "lf_indala_data.h"
 #include "lf_em4x05_data.h"
@@ -2155,6 +2156,11 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
      * LF_RSSI, which taps LF_OA upstream of both RC filter poles. See ble_main.h. */
     lf_adc_set_input(length >= 9 ? data[8] : 5);
 
+    /* Optional 10th byte: reader drive duty, 1..7 against top_value 8 (0 or absent = stock 4).
+     * ⭐ Weakening our own field is the only way to reduce the signal into the LF amplifier
+     * without moving the tag, and C140 says that amplifier saturates on a loud one. */
+    lf_125khz_radio_drive_set((length >= 10 && data[9] != 0) ? data[9] : 4);
+
     static uint8_t sniff_buf[LF_SNIFF_MAX_BYTES];
     static size_t sniff_len = 0;
 
@@ -2166,6 +2172,7 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
         lf_125khz_radio_saadc_rate_set(0);
         lf_adc_set_gain(6);
         lf_adc_set_input(5);
+        lf_125khz_radio_drive_set(4);   /* never leave a weakened field for other readers */
     }
 
     if (sniff_len == 0) {
