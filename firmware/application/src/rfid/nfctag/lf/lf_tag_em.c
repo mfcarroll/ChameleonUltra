@@ -28,6 +28,26 @@ NRF_LOG_MODULE_REGISTER();
 
 #define ANT_NO_MOD() nrf_gpio_pin_clear(LF_MOD)
 
+/* ⭐ HOW MANY TIMES TO PLAY THE FRAME BEFORE PAUSING TO CHECK THE FIELD.
+ *
+ * This was 10, and for a PSK1 tag 10 frames is 10 x 2048 samples = 163.84 ms — which sat
+ * exactly on a measured cliff. A Proxmark demodulating a saved trace of this device reads
+ * the credential from 131 ms and 163 ms of capture and fails from 196 ms, while a real tag
+ * decodes at every length (FINDINGS C70). The burst length and the failure threshold
+ * matching to within a millisecond is why this constant is now named and documented.
+ *
+ * ⚠ THAT COINCIDENCE IS NOT PROOF. Clock drift accumulating over the same interval predicts
+ * the same cliff, and an attempt to separate them by looking for the burst gap in the
+ * envelope was not conclusive. Raising this value is the experiment that distinguishes
+ * them: if the Proxmark then reads a full 290 ms capture, the burst boundary was the cause;
+ * if the cliff stays at ~163 ms, it is drift and the fix is carrier locking (NEXT.md §3a).
+ *
+ * ⚠ The cost of a longer burst is FIELD-LOSS LATENCY. The field is only re-checked between
+ * bursts, so this bounds how long the device keeps modulating after the reader goes away —
+ * 32 frames is ~524 ms. Do not raise it without a reason; battery and responsiveness pay.
+ */
+#define LF_TAG_FRAMES_PER_BURST  (32)
+
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
 
@@ -96,7 +116,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
+                             NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -122,7 +143,8 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
+                             NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
