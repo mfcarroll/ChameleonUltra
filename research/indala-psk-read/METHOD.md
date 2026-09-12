@@ -199,3 +199,19 @@ nothing is there; it says nothing about whether the instrument can hear THIS thi
 precisely — because it shared the flaw. Agreement between two measurements that share a
 defect is not corroboration, and it feels exactly like corroboration.
 
+**M27. ⭐ AN ASSUMPTION THAT BUYS SIMPLICITY BUYS FRAGILITY WITH IT, AND YOU ONLY FIND OUT
+WHEN YOU BUILD A SOURCE THAT VIOLATES IT.** This decoder's central insight is that Indala's
+fc/2 subcarrier sits at exactly fs/2 for a carrier-locked sampler, so demodulation is
+multiplication by (-1)^n — no oscillator, no phase estimate, no clock recovery. That is what
+makes it small enough to run on this part in integer arithmetic, and it reads real tags
+60/60. It is also the reason it is the ONLY one of three readers that cannot read our own
+emulator: the assumption holds because a T5577 *divides the reader's own field* and therefore
+cannot drift, and a free-running PWM offers no such guarantee.
+⇒ The invariant was never written down as a dependency, because every specimen available
+satisfied it for free. It only became visible when we built the first source in the project's
+history that did not. ⚠ When a simplification is justified by "the physics guarantees this",
+name what guarantees it — the guarantee is a dependency, and something you build later may
+not provide it. ⭐ And note this is not a defect to fix: the Flipper and Proxmark are tolerant
+because they demodulate generally, which costs code and cycles this device does not have to
+spend on tags that are always locked.
+
