@@ -59,7 +59,7 @@ static const nrf_pwm_sequence_t *indala_modulator(indala_codec *d, uint8_t *buf)
 // The same air layer, a longer frame, and PSK2 rather than PSK1 — see the note on
 // LF_PSK1_PHASE_DIFFERENTIAL in utils/psk1.h for why the modulation is named rather than
 // discovered. Everything else is shared: one PWM buffer, one sequence builder.
-_Static_assert(INDALA224_BIT_COUNT <= LF_PSK1_MAX_FRAME_BITS,
+_Static_assert(INDALA224_BIT_COUNT <= LF_PSK1_EMU_MAX_FRAME_BITS,
                "Indala224 frame does not fit the shared PSK1 PWM buffer");
 
 static indala224_codec *indala224_alloc(void) {

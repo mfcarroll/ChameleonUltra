@@ -24,7 +24,13 @@
 
 // ⭐ Indala224 is the same air layer with a 224-bit frame, so it shares this buffer
 // rather than carrying its own. See the sizing note below for why that matters.
-#define LF_PSK1_MAX_FRAME_BITS    (224)
+//
+// ⚠ NAMED _EMU_ BECAUSE THE DECODER OWNS `LF_PSK1_MAX_FRAME_BITS` with the same value.
+// They are the same number for the same reason and must stay equal, but they belong to
+// opposite halves of the stack — reader and tag emulation — and the reader's header is not
+// includable here. Host-compiling this file beside the decoder is what surfaced the clash
+// (ctest/roundtrip.c), which is a small argument for that harness on its own.
+#define LF_PSK1_EMU_MAX_FRAME_BITS    (224)
 
 // ⭐⭐ ONE PWM ENTRY PER BIT, NOT ONE PER SUBCARRIER CYCLE — the sequence's own `repeats`
 // field holds each entry for LF_PSK1_RF32_SUBCYCLES_PER_BIT PWM periods.
@@ -46,7 +52,7 @@
 // ⛔ TWO COPIES OF THE LONGEST FRAME. An odd-parity PSK2 frame repeats at twice the
 // frame period, and the second copy is phase-inverted — see the note at the end of
 // lf_psk1_build_sequence. 448 entries x 8 bytes is 3584 bytes.
-#define LF_PSK1_PWM_ENTRIES       (LF_PSK1_MAX_FRAME_BITS * 2)
+#define LF_PSK1_PWM_ENTRIES       (LF_PSK1_EMU_MAX_FRAME_BITS * 2)
 #define LF_PSK1_SEQ_REPEATS       (LF_PSK1_RF32_SUBCYCLES_PER_BIT - 1)
 
 // ⛔⛔ PSK1 AND PSK2 ARE DIFFERENT MODULATIONS AND A TAG TYPE MUST NAME WHICH IT IS.
@@ -122,7 +128,7 @@ size_t lf_psk1_build_sequence(const uint8_t *frame_bytes,
 // be built. `frame8` is 8 bytes, MSB first on air.
 const nrf_pwm_sequence_t *lf_psk1_rf32_modulator(const uint8_t *frame8);
 
-// The general form: any frame length up to LF_PSK1_MAX_FRAME_BITS, either modulation.
+// The general form: any frame length up to LF_PSK1_EMU_MAX_FRAME_BITS, either modulation.
 const nrf_pwm_sequence_t *lf_psk1_modulator(const uint8_t *frame,
                                             size_t bit_count,
                                             lf_psk1_phase_mode_t mode);

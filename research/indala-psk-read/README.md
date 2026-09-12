@@ -96,7 +96,8 @@ Expect `a0000000e6bd0e92`, `Fmt 26 FC: 52 Card: 63612`.
 | `inputtest.py` | AIN5 vs AIN0 paired comparison. |
 | `sweep.py` `phasesweep.py` `gaintest.py` `gapsweep.py` `oversample_test.py` | Per-lever sweeps. ⚠ these score the fc/2 *skirt*, which is polarity-blind — see `METHOD.md` M8. |
 | `cu.py` (in `software/script/`) | Run CLI commands non-interactively. |
-| `ctest/` | ⭐ Host build of the **firmware** decoder. `make check` diffs it against `mfdemod.py` per capture. |
+| `ctest/` | ⭐ Host build of the **firmware** decoder. `make check` diffs it against `mfdemod.py` per capture **and runs the emitter round trip**. |
+| `ctest/roundtrip.c` | ⭐⭐ **Emitter → air → decoder, both halves the shipping firmware, no hardware.** The arm that had no host coverage until it shipped a confident wrong credential three times in one session (C152). Asserts the decoded frame AND the buffer's entry count, so a silent reversion cannot pass by getting lucky on alignment. |
 | `flipper.py` | ⭐ Drive the Flipper's lfrfid CLI — `read` (with its ASK control) and `emulate`. Rig A, both directions. |
 | `checkdocs.sh` | ⭐ Verify the notes have not drifted. Run it before committing a notes change. |
 
