@@ -215,3 +215,18 @@ not provide it. ⭐ And note this is not a defect to fix: the Flipper and Proxma
 because they demodulate generally, which costs code and cycles this device does not have to
 spend on tags that are always locked.
 
+**M28. ⛔ A COUNT THAT EXCEEDS THE NUMBER OF ATTEMPTS IS AN IMPOSSIBLE RESULT, AND IT PRINTED
+PLAINLY FOR HOURS.** `nulltest.py` ran a read command five times and matched a substring in
+the output. The command did not exist; the CLI printed its help, which contained the protocol
+name twice. The tool reported **10/5**. Five attempts cannot produce ten successes, the "/5"
+was right there in the output, and it was read as a strong pass and written into two ledger
+claims as the decisive evidence.
+⇒ Sanity-bound every derived number against its own denominator, and have the tool refuse
+rather than print an impossible one. ⚠ And prefer matching on something the SUCCESS path
+uniquely produces — a decoded value, a status code — over a protocol name that also appears
+in help text, error messages and the command itself. A substring match treats the tool's own
+chatter as data.
+⭐ Note where it was caught: not by re-reading the numbers, but by a question about SCOPE —
+"did we ever fix that decoder?". A claim can be internally consistent, cross-referenced and
+still rest on a capability nobody ever built.
+

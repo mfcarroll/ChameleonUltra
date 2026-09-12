@@ -86,9 +86,20 @@ def main():
     print(f"     FRAMES    : {len(hits)}" + ("   ⛔ " + " ".join(sorted(set(hits))) if hits else "   ✓ none"))
 
     print(f"\n  3. bonus — does {a.read!r} itself work? (cannot fail this test)")
+    # ⛔ A SUBSTRING MATCH CAN HIT THE CLI'S OWN HELP TEXT. `lf idteck read` does not exist;
+    # the CLI answers with the subgroup listing, which contains "IDTECK" twice per
+    # invocation. This reported "10/5 ✓" for a reader that was never implemented, and that
+    # false positive was then used as evidence in two ledger claims (C55, C57). Detect the
+    # help banner explicitly rather than trusting the count.
     out2 = cu(*([a.read] * 5))
     own = len(re.findall(re.escape(a.hit), out2))
-    print(f"     {own}/5 " + ("✓" if own else "— broken or absent; the bracket above still stands"))
+    if "------------------" in out2 or own > 5:
+        print(f"     ⛔ {a.read!r} DOES NOT EXIST — the CLI printed its command list, and")
+        print(f"        matching {a.hit!r} inside it gave a bogus {own}/5.")
+        print(f"        This leg contributes NOTHING; the amplitude bracket is the only")
+        print(f"        evidence the tag was present.")
+    else:
+        print(f"     {own}/5 " + ("✓" if own else "— broken or absent; the bracket above still stands"))
 
     ok = not hits and notfound == a.n
     print(f"\n  ⇒ {'✓ NULL PASSES' if ok else '⛔ NULL FAILED — the Indala reader produced a frame'}"
