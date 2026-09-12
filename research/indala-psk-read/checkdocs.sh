@@ -67,6 +67,19 @@ for h in $(grep -oE '^\| L[0-9]+ \|[^|]*\| `[0-9a-f]{7,40}`' LOG.md |
     fi
 done
 
+echo "duplicate sections"
+# ⛔ NEXT.md reached 995 lines of which ~600 were DUPLICATED sections, and every
+# cross-reference in it still validated. Repeated splice-edits matched the FIRST occurrence
+# of an anchor while copies already existed, so each edit appended instead of replacing;
+# §3b appeared six times. Checking references cannot see that — only counting headings can.
+for f in README.md FINDINGS.md NEXT.md METHOD.md ADVERSARIAL.md; do
+    [ -e "$f" ] || continue
+    # ⚠ Compare WHOLE heading lines. A first-token match flags "## The ..." against any
+    # other "## The ...", which is three false positives on these notes alone.
+    dup=$(grep -E '^#{2,3} ' "$f" | sort | uniq -d | head -3)
+    [ -n "$dup" ] && note "$f repeats a section heading: $(echo "$dup" | head -1)"
+done
+
 echo "edit-policy invariants"
 # LOG.md is append-only: entries may gain a retraction pointer, never lose or reword one.
 if git rev-parse HEAD >/dev/null 2>&1 && git cat-file -e HEAD:./LOG.md 2>/dev/null; then
