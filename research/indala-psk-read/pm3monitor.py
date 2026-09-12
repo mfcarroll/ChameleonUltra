@@ -15,6 +15,7 @@ tag on the Proxmark antenna: fc/2 amplitude **33.8**, empty field **3.0**. An em
 reaches ~30 is coupling as well as a tag and there is nothing to fix in firmware.
 """
 import argparse
+import glob
 import os
 import subprocess
 import sys
@@ -26,12 +27,28 @@ TMP = "/tmp/pm3mon"
 
 
 def sample():
+    """⛔ CLEAR THE OUTPUT FIRST, AND READ WHAT ACTUALLY APPEARED.
+
+    The Proxmark's `data save` does NOT overwrite: it writes name.pm3, then name-001.pm3,
+    name-002.pm3 and so on. The first version of this read a fixed name.pm3 every time and
+    therefore reported the SAME stale capture forty times running — an utterly steady
+    0.56x while the device was moved around the bench and even lifted out of the field
+    entirely. A frozen number is what a broken instrument looks like, and it took a human
+    noticing "nothing changed even when I removed it" to catch it.
+
+    ⇒ Delete every candidate first, then take whatever file appears. If none does, say so
+    rather than silently re-reporting the last good reading."""
+    for old in glob.glob(TMP + "*.pm3"):
+        try:
+            os.remove(old)
+        except OSError:
+            pass
     subprocess.run([PM3, "-c", f"lf read; data save -f {TMP}"],
                    capture_output=True, text=True, timeout=180)
-    p = TMP + ".pm3"
-    if not os.path.exists(p):
+    found = sorted(glob.glob(TMP + "*.pm3"))
+    if not found:
         return None
-    vals = np.array([float(t) for t in open(p, "rb").read().split() if t.strip()])
+    vals = np.array([float(t) for t in open(found[0], "rb").read().split() if t.strip()])
     y = vals - vals.mean()
     # fc/2 amplitude: mix by (-1)^n and take the rms of the result. Same quantity the
     # reference numbers above were measured with.

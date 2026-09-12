@@ -199,6 +199,136 @@ that matters for anyone who wants to use this against a real reader.
 one 4096-sample window, and consistent with a PWM free-running against the reader's clock.
 
 **Next, in order:**
+
+⭐ **The cause is clock drift, and the threshold is measured.** Proxmark's own demodulator
+reads the emulated signal at 131 ms and 163 ms of capture and fails at 196 ms and beyond
+(C70). A real tag's frame period is exactly 2048.000 samples with zero slip because it
+DIVIDES the reader's carrier (C71); a free-running PWM cannot. Everything else is eliminated:
+placement (C72 — and this is the first time in this project placement was not the answer),
+modulation depth, transitions, duty cycle, and the low-frequency burst envelope (C73).
+
+1. ⭐ **Try shortening the burst first — it is a one-constant change and the numbers point
+   straight at it.** `lf_tag_em.c` plays `nrfx_pwm_simple_playback(..., 10, FLAG_STOP)` — ten
+   frames, **164 ms**, sitting exactly on the 163/196 ms threshold. ⚠ But think before
+   changing it: a shorter burst restarts the sequence more often, and each restart is a phase
+   DISCONTINUITY in the middle of a long reader capture. That could easily be worse, not
+   better. Measure with `lf indala demod` on a full-length trace, not on the burst alone.
+2. **Establish what a real reader actually needs.** The Proxmark demods a 290 ms buffer,
+   which may be far longer than a door reader's window. If real readers sample ~50 ms, this
+   emulation may already work in the field and only fail against the Proxmark. ⚠ Nobody has
+   tested it against an actual access-control reader, and that is the bar that matters.
+3. **The complete fix is to lock the subcarrier to the reader's carrier** — derive it the way
+   a T5577 does instead of free-running. The device already recovers carrier edges for the
+   ASK readers (`register_rio_callback` in `lf_reader_data.c`), and the nRF52 has PPI to
+   drive a peripheral from an event. ⚠ Substantial, and unproven: nothing establishes that
+   the PWM can be retriggered per carrier cycle without glitching. Do 1 and 2 first.
+
+⚠ **What NOT to do:** chase the 0.6x amplitude. Both traces are near the ADC's full scale
+(peak-to-peak 250 emulator, 239 real tag), so the emulator is not quiet — its energy is
+distributed differently, and amplifying is neither possible nor the point.
+
+## 3b. ⭐⭐⭐ FIX THE HID PROX AND PAC READERS — both fail on loud tags
+
+⭐⭐ **START HERE: the SAADC readers duplicate a capture path that one of them gets right.**
+The LF readers are two families, and it matters which:
+
+| family | readers | capture |
+|---|---|---|
+| GPIO/comparator | em410x, jablotron, viking | `register_rio_callback`, 128-entry ring, no SAADC |
+| **SAADC** | **hidprox, ioprox, pac** + lf_reader_generic | own `saadc_cb`, own 6144 ring, own field start/stop |
+
+Only `lf_reader_generic.c` also suspends BLE advertising — and its own comment records why:
+a burst collapses the 125 kHz field for ~1.6 ms and hit **4 captures in 10**. The three that
+duplicate the prologue instead of sharing it are HID, ioProx and PAC, and HID and PAC are
+exactly the two measured failing on loud tags. The SAADC reader that HAS the guard is Indala,
+at 60/60.
+
+⇒ `capture_begin()`/`capture_end()` already exist and are already shared by two entry points.
+Moving HID onto them is a small mechanical change that also happens to be **the clean test of
+C47** — same protocol, same tag, same bench, one variable.
+
+⛔ **Do not read the em410x 95% as evidence either way.** It is on the GPIO path and never
+touches the SAADC, so it cannot test this. That mistake is why C47 was wrongly weakened in
+L64.
+
+
+Not this project's decoder, but it is the comparison instrument for everything here and it
+has cost two measurements already (L51's uninterpretable run, and C44's near-miss).
+
+**What is established:** three tags with byte-identical memory read 0/6, 3/6 and 7/9 on the
+Chameleon and 3/3 on a Proxmark (C46). The RF path is flat while reads fail (C45). So the
+decoder's tolerance is narrower than the Proxmark's, and package-level differences cross it.
+
+⚠ **`lf pac read` has the same disease**: 0/5 on one unit and 2/5 on the other while its tag
+sat at 16x the empty floor and a Proxmark read it perfectly (L66). So this is not one broken
+decoder — HID Prox and PAC both fail on tags that are loudly present, and `lf em 410x read`
+sits at 95% (76/80) rather than 100%. ⇒ Whatever is wrong may be shared across the LF reader
+family rather than specific to FSK. Fix HID first because it fails hardest (0/6, one tag
+never reading at all), but measure PAC in the same session — a fix that moves both is a very
+different fix from one that moves only HID.
+
+⚠ The Indala reader is the only LF reader in this tree with its own capture path
+(`raw_read_samples`, which suspends BLE and hands the decoder a whole buffer). It is also the
+only one at 100% — 40/40 today across two units. That may be the cleanest clue available, or
+it may be that Indala is simply the only one anybody has tuned. Do not assume which.
+
+**⭐ Test this first — it is one line and it explains an old observation.**
+`advertising_stop()` appears in **1 of 15** LF reader files. Only `lf_reader_generic.c`
+suspends BLE advertising; `hidprox_read()` does not. That file's comment records the
+measurement that put it there: an advertising burst collapses the 125 kHz field for ~1.6 ms
+and hit **4 captures in 10**. And it predicts the thing nobody could explain in L51 —
+*"after connecting it to my phone and/or a reboot, it does read"* — because connecting a BLE
+central is precisely what stops advertising (C47).
+
+```bash
+# the discriminating test, ~5 minutes, needs the BLUE DUAL (the 0/6 tag — the others
+# have too little headroom to show an improvement)
+cd software/script && for i in $(seq 1 15); do .venv/bin/python cu.py "lf hid prox read" | tail -1; done
+# then connect a phone over BLE so advertising stops, and repeat
+```
+
+⚠ **If it works, resist generalising it.** It cannot explain the blue dual reading 0/6
+deterministically — an intermittent field collapse does not produce a clean zero. Expect two
+causes: a BLE-induced intermittency affecting every LF reader, and a per-tag waveform
+tolerance in the FSK demodulator. ⇒ The fix belongs in `capture_begin()`-style shared code so
+all 15 readers get it, not pasted into `hidprox_read()` alone.
+
+⚠ **Until it is fixed, do not use HID Prox as the probe tag for a null.** Use amplitude
+(`lfprobe.py`) for presence, per §3.
+
+## 3a. ✅ INDALA EMULATION WORKS — and four claims had to be retracted to find out
+
+Proxmark capture, emulating Chameleon placed exactly where a real tag had just been proven to
+couple (C68, C69, L73, M26):
+
+| | peak-to-peak | fs/2 skirt | constant-phase run | our decoder |
+|---|---|---|---|---|
+| real tag | 239 | 415835 | 929 (needs 928) | **12/12 windows** |
+| **emulator** | 250 | 78782 | **931 (needs 928)** ✓ | **10/12 windows** |
+| empty | 22 | 3426 | 49 | — |
+
+⛔ **C63, C66 and C67 are retracted** — including "PSK1 tag emulation has never worked on this
+device", which was the most emphatic claim in the ledger. C64 is provisional.
+
+**What went wrong:** every retracted measurement was Chameleon-to-Chameleon, comparing an
+emulating Chameleon — a second device at an unproven distance and orientation — against
+committed captures of a real tag lying flat on the antenna. Same reader, same analysis, same
+empty-field baseline; different geometry. The emulator was coupling badly and every number
+downstream described that. The IDTECK "control" shared the flaw, which is exactly why it
+agreed so convincingly (M26).
+
+**What actually remains, and it is real:**
+
+⚠ **Emulation is ~5x weaker than a real tag** — skirt 78782 vs 415835, integrator amplitude
+~11000 vs ~55900 — and **the Proxmark's own `lf indala reader` will not lock onto it** even
+though our decoder reads it 10 times in 12. That is a margin problem, and it is the thing
+that matters for anyone who wants to use this against a real reader.
+
+⚠ A clock drift exists and is far smaller than C67 claimed: the winning bit offset slides
+12 -> 8 over 180 ms of capture and the polarity flag flips, roughly 180 ppm. Harmless inside
+one 4096-sample window, and consistent with a PWM free-running against the reader's clock.
+
+**Next, in order:**
 1. **Find the 5x.** Modulation depth is the obvious suspect — `LF_PSK1_SUBCARRIER_DUTY` is 8
    of a 16 counter_top, i.e. 50%. A real T5577 shunts harder. ⚠ Measure before changing it.
 2. **Re-test whether a real reader locks on** once the margin improves. `lf indala reader` on
