@@ -250,6 +250,24 @@ problem, and every tool in the decoder chain is built for the opposite case.
 is not flaky decoding, it is a monotone response to a variable nobody had written down —
 coupling — with the failures at the *well-coupled* end.
 
+**M35. ⛔⛔ AGAINST A KNOWN-INTERMITTENT SUBJECT, A SINGLE A/B IS NOT EVIDENCE — YOU NEED THE
+RETURN LEG.** `lf hid prox read` scored 0 of 12. I explained it twice, confidently, and was
+wrong twice: first that a geometry change had handed us the failing specimen §2 wanted, then —
+after the user pointed out the geometry had not changed — that my own PWM edit had caused a
+regression, which the pre-change build seemed to confirm at 12 of 12. Both stories fitted. The
+third measurement killed both: the post-change build, flashed again, read **12 of 12**.
+⇒ **A/B is not an experiment when the subject is noisy; A/B/A is.** The cost of the return leg
+was one flash cycle. The cost of skipping it was very nearly a fabricated regression in the
+notes, and a "fix" for HID that would have papered over a bug I had invented.
+⛔ And the information was already written down. C45 records HID failing 15-20% of the time and
+an unexplained 0/15 episode that cleared on its own. A 0/12 is *inside the documented behaviour
+of that reader*. ⇒ **Before treating a failure as new, look up the subject's recorded failure
+rate.** This is M32 again — the notes had the answer — but with a sharper edge: there I proposed
+an experiment the notes had already answered, here I proposed a CAUSE the notes had already
+explained.
+⚠ The tell to recognise: a single failing run that arrives right after you changed something.
+The change is the salient candidate precisely because it is yours, and salience is not evidence.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

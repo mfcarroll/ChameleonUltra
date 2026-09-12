@@ -51,7 +51,7 @@ registered `TAG_TYPE_*`.
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
 | HID Prox (H10301, generic, ex-generic) | ⚠ **unreliable** | ✓ | ✓ | ✓ |
 | ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
-| PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
+| PAC/Stanley | ◐ **fixed, range-limited (C144, C147)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
@@ -204,7 +204,19 @@ specimen is PSK2, so the format decodes the differential view and only that one.
 ⚠ Momentum's exact two-preamble test is not available to us at ~2% bit error: it rejected the
 true frame in all four captures (C106).
 
-## 2. ◐ Fix the HID Prox and PAC readers — ✅ **PAC IS FIXED**, HID has no failing specimen
+## 2. ◐ Fix the HID Prox and PAC readers — PAC fixed but OUT OF RANGE, HID was never sick
+
+⚠ **Read C146 and C147 before trusting anything below.** Two claims made earlier in this
+section's history did not survive the day: HID does **not** have the saturation disease (0.0% of
+its samples are railed, against PAC's 33-37%), and C144's PAC fix — verified at 10 of 10 — reads
+**0 of 10** at the bench's current, higher coupling, because every step of the drive sweep is
+saturated and drive 7 is the weakest the PWM's top_value allows.
+
+⇒ **What is actually true:** the saturation model is intact and predicted both results; PAC's
+fix works within a coupling range; that range is currently too narrow for this bench. The next
+move is a larger `top_value` so the sweep can reach weaker fields, then re-measure at both
+couplings. ⛔ Do not read the 0/10 as a refutation of C144 — the 10/10 and the 0/10 are each
+true at their own coupling, which is the model's own claim.
 
 Three tags with byte-identical memory read **0/6, 3/6 and 7/9** on the Chameleon and 3/3 on a
 Proxmark (C46). The RF path is flat while reads fail (C45). `lf pac read` scored 0/5 and 2/5
