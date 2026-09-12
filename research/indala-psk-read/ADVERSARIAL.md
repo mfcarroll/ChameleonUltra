@@ -182,3 +182,61 @@ one fixed setting spread 49x. Use `--repeats`, deglitch, take medians, and check
 The firmware gap is real and documented. The device reads HID Prox, ioProx, EM410x fine, so
 the LF path works. The tag works — the Proxmark reads it as `a0000000e6bd0e92`, FC 52, card
 63612, and identifies it as `T55x7, PSK1, RF/32`. None of that is in question.
+
+---
+
+# Adversarial review prompt 2 — the clock-slip conclusion
+
+⚠ Same standing warning as above: this investigation has produced eleven wrong conclusions,
+every one from an artefact in its own analysis. Treat the prior that this one is also wrong as
+HIGH. It is marked **likely closed**, not closed.
+
+## The conclusion to falsify
+
+> Our emulated subcarrier free-runs **131 ppm** off the reader's clock, so a whole subcarrier
+> cycle of phase error accumulates every **~122 ms**. That is why the Proxmark decodes only
+> 131–197 ms of a capture from our emulator but the **full 290 ms** from a T5577 playing the
+> same frame in the same field — 5 of 5, on *less* signal. The burst boundary is excluded
+> (C135), amplitude is excluded (C138), and the reader's demodulator is excluded (C138).
+
+Claims: **C134, C135, C136, C137, C138, C139**. Tools: `clockoffset.py`, `emutest.py`,
+`offsetsweep.py`, `burstnull.py`. Everything except the bench arms re-runs offline.
+
+## What has already been tried, so you do not repeat it
+
+- **Burst harmonics faking the tone.** The burst cycle is ~510 ms, its 4th harmonic ~7.9 Hz,
+  the measured tone 8.20 Hz, the FFT bin 3.44 Hz — unresolvable by arithmetic. Simulated with
+  zero offset and 0–8 gaps: never reaches the gate, and at 131 ppm the tone stays at
+  8.17–8.21 Hz *regardless of burst length* (C139).
+- **The estimator inventing tones.** At a true zero it returns nonsense, but with peak/median
+  ≈3 against ≥10 for a real tone. That ratio is the gate, and it was fixed from synthetic data
+  **before** the bench (C137).
+- **A lag-based estimator.** Tried first, failed its own residual check, and is documented
+  inside `clockoffset.py` rather than deleted.
+
+## ⭐ The sharpest questions
+
+1. ⛔ **IS IT CAUSAL, OR ONLY CORRELATED?** This is the biggest hole and it is admitted. Two
+   sources differ in their clock AND in being locked/free-running AND in coupling, damping and
+   modulation depth — and one decodes further. Nothing has ever *changed the offset and watched
+   the ceiling move*. ⭐ **The experiment that would settle it: deliberately detune our own
+   subcarrier and predict the ceiling quantitatively.** At 500 ppm the model says one cycle of
+   slip in ~32 ms, so the ceiling should collapse to roughly a quarter of what it is now; at
+   ~30 ppm it should rise past 290 ms and the emulator should behave like the tag. That is one
+   firmware build per point and it turns a correlation into a law — or kills it.
+2. **Whose clock is off?** 131 ppm exceeds the nRF52 HFXO spec (±40 ppm) on its own, so the
+   Proxmark's sampling clock carries some of it. ⚠ If most of it is the reader's, then "122 ms"
+   is a property of *this pair*, not of our emulator, and the general claim is weaker than it
+   reads — against a better-matched reader the window would be longer. Separating them needs a
+   third clock. Does that change any decision made on the back of it?
+3. **Is `peak/median` sound on real data?** It was calibrated on synthetic noise that is white.
+   The LF chain's floor spans 17× across bands. Can coloured noise inflate the ratio past 6
+   without a real tone?
+4. **Is the control's silence trustworthy, or just weaker coupling?** The tag read fc/2 16.0
+   against the emulator's 17.9. The decode argument survives that (less signal, further decode)
+   — but does the *estimator* argument? Would a genuinely offset source at 16.0 still gate in?
+5. **Does the prefix bias change the SHAPE?** C136 shows `emutest.py` under-reports the
+   emulator. The tag hit the ceiling of the instrument so it cannot be biased upward. Re-run
+   both arms with `offsetsweep.py` and check the conclusion is not an artefact of that asymmetry.
+6. **The sign.** Squaring loses it. Is there any reading in which the offset is negative and
+   something else sets the ceiling?

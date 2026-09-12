@@ -26,6 +26,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
 | ~~⭐ **An AIR GAP under the HID tag, to test C47**~~ ⛔ **scrapped 2026-09-12 — the user dropped the HID test** | Kept for the record: paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
 | ~~⭐⭐ **A carrier-locked tag in front of the Proxmark — the null for C137**~~ ✅ **done, and clean** | The T5577 went back into the sandwich and the control landed: NO TONE 5 of 5 against the emulator's 131 ppm, and the full 290 ms decoded 5 of 5 against 0–197 ms (C138). ⭐ The sandwich is strictly better than the old rig B — see `README.md` |
+| ◐ **Lift the T5577 out of the sandwich** — to make the clock conclusion CAUSAL | ⚠ Not urgent, and not blocking: the conclusion is recorded as *likely closed* and everything downstream of it is written that way. But the one experiment that would turn correlation into a law — detune our own subcarrier and predict the ceiling (C139, `ADVERSARIAL.md` brief 2, question 1) — needs the Proxmark seeing the emulator alone, and the tag now sits between them. **One lift, then hands off**; several builds are measured at that one geometry |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | ~~**§4 burst length**~~ ✅ done | The Proxmark had to face the emulator and faced the tag. Rig B was turned so the two face each other directly, and §4 was measured there (C135) |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -364,11 +365,24 @@ longer "should we do this" but "is there a second way to do it on hardware that 
 clock". ⚠ Until that is answered, treat everything below as describing the *problem*, not an
 available fix.
 
-✅ **AND THE CONTROL LANDED — this is settled** (C138). A carrier-locked T5577 playing the
+◐ **THE CONTROL LANDED — likely closed, NOT closed** (C138, C139). A carrier-locked T5577 playing the
 *same frame* in the *same field* reads NO TONE where our emulator reads 131 ppm, and the
 Proxmark decodes the full 290 ms of it 5 of 5 where our emulator managed 0–197 ms — on **less**
-signal. Amplitude, the demodulator and the burst boundary are all excluded. ⇒ Nothing here is
-open any more except what to do about it.
+signal. Amplitude, the demodulator and the burst boundary are all excluded, and the one artefact
+that could have faked the measurement — burst harmonics landing on the tone — was simulated and
+does not (C139).
+
+⛔ **What is still missing is CAUSATION, and it is the honest gap.** Every arm so far is
+correlational: two sources differ in their clock *and* in coupling, damping and modulation
+depth, and one decodes further. Nothing has changed the offset and watched the ceiling move.
+⭐ **The experiment that would settle it is cheap and quantitative: deliberately detune our own
+subcarrier and predict the ceiling.** At 500 ppm the model says the ceiling collapses to ~32 ms;
+at ~30 ppm it should pass 290 ms and the emulator should behave like a tag. One firmware build
+per point. ⚠ It needs the T5577 lifted out of the sandwich first, so it is on the hands list.
+
+⇒ Marked **likely closed pending an independent adversarial review** — `ADVERSARIAL.md` carries
+a second brief written to be hostile to this conclusion, listing what has already been tried so
+a reviewer does not repeat it.
 
 ⭐ **The cost of not locking is sized: a ~122 ms coherent window** (C137). Our subcarrier
 runs 131 ppm off the reader's clock, so one whole subcarrier cycle of phase error accumulates
