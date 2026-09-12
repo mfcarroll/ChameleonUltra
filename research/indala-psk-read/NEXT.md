@@ -49,7 +49,7 @@ registered `TAG_TYPE_*`.
 | protocol | read | write | emulate | Momentum |
 |---|---|---|---|---|
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
-| HID Prox (H10301, generic, ex-generic) | ⚠ **unreliable** | ✓ | ✓ | ✓ |
+| HID Prox (H10301, generic, ex-generic) | ⚠ **intermittent, 15-20% (C45)** | ✓ | ✓ | ✓ |
 | ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
 | PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
@@ -204,7 +204,21 @@ specimen is PSK2, so the format decodes the differential view and only that one.
 ⚠ Momentum's exact two-preamble test is not available to us at ~2% bit error: it rejected the
 true frame in all four captures (C106).
 
-## 2. ✅ Fix the HID Prox and PAC readers — PAC FIXED, HID was never sick
+## 2. ✅ CLOSED — PAC fixed; HID's defect was never the one this section described
+
+✅ **PAC: fixed and verified twice at 10/10** (C144), on the tag that read 0/10. The bug was the
+reader's own field saturating its amplifier, and `pac_read()` now sweeps the drive.
+
+✅ **HID: no §2 defect exists.** This section was titled "both fail on loud tags". HID does not:
+**0.0% of its samples are railed**, against PAC's 33-37%, so it does not have the mechanism
+(C146). It read 12/12, 12/12, 6/6, 6/6 and 6/6 across every arm taken.
+
+⚠ **What is NOT closed, and does not belong here:** HID's *intermittency* — 15-20% lock failures
+(C45) plus two unexplained total-failure episodes, 0/15 historically and **0/12 today**. That is
+a separate, older defect with a different signature, and folding it into §2 is what made a 0/12
+look like a new specimen and then like a regression. ⇒ Tracked on its own below, not as §2.
+
+⛔ **Do not reopen §2 on a bad HID read.** Look up C45's recorded failure rate first (M35).
 
 ⚠ **Read C146, C147 and C148 before trusting anything below.** Two claims made earlier in this
 section's history did not survive the day: HID does **not** have the saturation disease (0.0% of
@@ -518,6 +532,21 @@ low-SNR corpus, 26 dB down, and every gate and rule here is regression-tested ag
 `make check`. Not supporting a placement is not the same as discarding data taken there.
 
 ## 9. Upstreamable?
+
+⛔ **REMOVE THE INSTRUMENTATION FIRST — here is the exact list.** All of it exists to answer
+questions this project had, and none of it belongs in a PR:
+
+| | what to remove |
+|---|---|
+| `hw emudebug` | `DATA_CMD_LF_EMU_DEBUG` (3037), `cmd_processor_lf_emu_debug`, `lf_tag_em_debug_get()` and the `m_dbg_*` counters in `lf_tag_em.c`, the `HWEmuDebug` CLI class, `lf_emu_debug()` in `chameleon_cmd.py`, the enum entry |
+| `hw lfdebug` | `DATA_CMD_LF_RADIO_DEBUG` (3038), `cmd_processor_lf_radio_debug`, `lf_125khz_radio_debug_get()` and the `m_dbg_drive_at_start` / `m_dbg_ptr_at_start` / `m_dbg_starts` statics, the `HWLfRadioDebug` CLI class, `lf_radio_debug()`, the enum entry |
+| `lf sniff` research flags | `--phase`, `--rate`, `--gain`, `--input`, `--settle`, `--drive` and the firmware bytes behind them. ⚠ **A decision, not a deletion** — `--bits 16` and `--drive` are genuinely useful diagnostics and `lf sniff` is already a debug command |
+
+⭐ **What must NOT be removed:** `lf_125khz_radio_drive_set()` / `_get()` and the 1MHz/top-8 PWM
+config. They are load-bearing — `pac_read()`'s drive sweep is the PAC fix (C144), not
+instrumentation. ⚠ Keep `hw lfdebug` until C148 is understood; it is the only thing that can
+diagnose it and the fault has never yet been seen with it armed (C151).
+
 
 Read and write are solid and independently verified. Emulation works against two readers.
 The pieces a PR would need: the tag-type registration (done here), emulation (done here), and
