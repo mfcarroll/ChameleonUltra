@@ -115,7 +115,7 @@ can run to completion now and work that has to wait.
 | §4 burst length | ⚠ hands — the Proxmark has to face the emulator, and it faces the tag |
 | §5 carrier locking | ⛔ **a person.** A scope decision, not a task |
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
-| §8 reader RAM | ⛔ **a person.** A trade-off between the back-side read rate and affording §1d |
+| §8 reader RAM | ⛔ **a person**, and now quantified: Indala224 needs 168 KB with stacking and 28 KB without, against 49.6 KB free. Not a trade-off — a blocker |
 
 ⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §4
 and §7 need hands, and only §5 and §8 need a decision.
@@ -306,19 +306,60 @@ is a new transport behind the existing command layer. ⚠ A live BLE connection 
 is itself uncharacterised, and C47 has advertising bursts collapsing the field — measure with
 and without before trusting it.
 
-## 8. ⚠ 32KB of the Indala reader serves only the wrong placement — a decision, not a bug
+## 8. ⚠ DECISION FOR A PERSON — drop stacking? The arithmetic now says it is not optional
 
-48KB static: 8KB samples, 8KB scratch, **32KB of stacking accumulators**. Stacking is worth
-exactly nothing on the front (68.75% at every depth) and 32%→72% on the back (C58).
+⛔ **Nothing here is mine to decide.** What has changed is that the numbers are no longer
+estimates: the RAM headroom is measured from the link map, and the Indala224 requirement is
+arithmetic rather than a guess.
 
-| option | RAM | back-side rate |
+**Measured RAM, `firmware/objects/application.map`:** `.data` + `.bss` end at `__HeapBase`
+`0x20025988`; the heap is 16 KB to `__HeapLimit` `0x20029988`; the stack is 8 KB down from
+`__StackTop`, so `__StackLimit` is `0x20036000`. ⇒ **49.6 KB free**, and the Indala reader's
+48 KB is the only large block that could be reclaimed — about **98 KB reachable in total**.
+
+**What each frame length costs**, at the current shape (samples + scratch + two int32
+accumulators):
+
+| | samples | scratch | 2 × accumulator | total |
+|---|---|---|---|---|
+| 64-bit, as shipped | 8 KB | 8 KB | 32 KB | **48 KB** |
+| 224-bit, same shape | 28 KB | 28 KB | 112 KB | ⛔ **168 KB** |
+| 224-bit, no stacking, decoding in place | 28 KB | — | — | ⭐ **28 KB** |
+
+⛔ **So §1d is not a trade-off, it is a blocker.** 168 KB does not exist on this part and
+cannot be made to: even halving the accumulators to int16 leaves 112 KB. **Indala224 is
+impossible while stacking exists at any depth**, and comfortable without it.
+
+**What stacking buys**, measured on 320 committed captures (C58, and re-confirmed this session
+by running the shipped decoder over single captures):
+
+| | front — the documented placement | back |
 |---|---|---|
-| as shipped | 48KB | 72% |
-| int16 accumulators, cap stacking at 2 | 32KB | 52% |
-| drop stacking | 16KB | 32% |
+| no stacking | **68.75%** (110/160, all correct) | 32% (51/160 correct) |
+| stacking to 8 | **68.75%** — identical | 72% |
 
-⛔ Do not drop stacking without re-checking the straddle gate: stacking REINFORCES the
-dead-band straddle, and the gate is what holds it at 0 wrong.
+⇒ Stacking buys **nothing at all** where the README tells users to put the tag, and roughly
+doubles the rate where it tells them not to.
+
+### Recommendation: drop it
+
+1. It costs 32 KB and returns 0% at the correct placement.
+2. It is the *only* reason Indala224 cannot be built.
+3. ⭐ §1 softens the loss. A back-side read that fails now reports "a subcarrier is present but
+   no frame could be decoded" rather than "not found", which is precisely the nudge to
+   reposition — the fix for a bad placement is to move the tag, not to spend 32 KB hiding it.
+4. Both PSK1 readers share the engine since §1c, so this is decided once for both.
+
+⚠ **Against:** 72% → 32% on the back is a real regression for anyone who holds the tag the
+Flipper way, and that is a habit, not a mistake they will notice.
+
+⛔ **If it goes, re-measure the straddle gate on the same 320 captures.** The existing note
+warns that stacking REINFORCES the dead-band straddle and the gate is what holds it at 0
+wrong; removing stacking should therefore only help, but "should" is not a measurement. ⭐ One
+data point already: stacking a loud IDTECK signal to depths 2, 3, 4 and 8 produced 0 frames
+(C90), so stacking did not manufacture that false positive either.
+
+⇒ **Ask:** keep 72% on the wrong side, or have Indala224? They are mutually exclusive.
 
 ## 9. Upstreamable?
 
