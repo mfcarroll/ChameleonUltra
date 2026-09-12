@@ -73,29 +73,14 @@ it becomes noise. `emuprobe.py` has the calibration: on a Chameleon capture a re
 MISSING from the host `Status` enum, so any client hitting it today gets a bare number. Fix
 in the same pass.
 
-## 1b. ⚠ Re-run the IDTECK null with a real bracket — it is the only unbracketed one
+## 1b. ✅ IDTECK null re-run and bracketed — passes
 
-C55's IDTECK arm has **no valid evidence the tag was on the antenna** (C84, L81). Both legs
-failed: the amplitude band was wrong for a PSK1 subcarrier (500–20000 Hz misses fc/2 =
-62500 Hz), and the second leg was `lf idteck read` "succeeding" — a command that does not
-exist, whose help text the substring matcher counted as 10/5.
+Bracketed at **22.65x the empty floor at 60–65 kHz** (the band a PSK1 subcarrier occupies,
+where the original used 500–20000 Hz and measured leakage), then **20/20 not found, 0 frames**
+(C55 repaired, C85, L82). The phantom-reader leg correctly reported that it contributes
+nothing.
 
-⚠ It is the arm that matters most: IDTECK is 64-bit PSK1 at RF/32 with a T5577 config word
-**identical to Indala's**, so it is the only interferer that puts valid PSK1 carrying the
-wrong frame in front of the decoder. Viking, PAC, Jablotron and the HID/EM410x nulls all keep
-valid brackets and stand.
-
-```bash
-# real IDTECK tag on the Chameleon, bracket in the RIGHT band this time
-cd research/indala-psk-read
-../../software/script/.venv/bin/python lfprobe.py --band 60000 65000 --monitor 5          # antenna CLEAR
-../../software/script/.venv/bin/python nulltest.py --band 60000 65000 --floor <N> \
-    --read "lf indala read" --hit Indala
-```
-
-⚠ Note `--read "lf indala read"`: for a PSK1 interferer the only reader this device has IS
-the Indala one, and it must find NOTHING. There is no IDTECK reader to confirm presence with,
-which is exactly why the amplitude bracket has to be measured in the right band.
+⇒ Every loud-signal null in the project now rests on a valid bracket.
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 
