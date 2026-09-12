@@ -217,11 +217,33 @@ modulation depth, transitions, duty cycle, and the low-frequency burst envelope 
    which may be far longer than a door reader's window. If real readers sample ~50 ms, this
    emulation may already work in the field and only fail against the Proxmark. ⚠ Nobody has
    tested it against an actual access-control reader, and that is the bar that matters.
-3. **The complete fix is to lock the subcarrier to the reader's carrier** — derive it the way
-   a T5577 does instead of free-running. The device already recovers carrier edges for the
-   ASK readers (`register_rio_callback` in `lf_reader_data.c`), and the nRF52 has PPI to
-   drive a peripheral from an event. ⚠ Substantial, and unproven: nothing establishes that
-   the PWM can be retriggered per carrier cycle without glitching. Do 1 and 2 first.
+3. ⭐⭐ **The complete fix is to lock the subcarrier to the reader's carrier, and the Flipper
+   Zero shows it is the right answer** (C74). Its emulation timer is clocked from the
+   EXTERNAL TRIGGER — the reader's carrier through the comparator — so it counts carrier
+   cycles and divides them, exactly as a T5577 does:
+
+   ```c
+   LL_TIM_SetClockSource(FURI_HAL_RFID_EMULATE_TIMER, LL_TIM_CLOCKSOURCE_EXT_MODE2);
+   LL_TIM_ConfigETR(FURI_HAL_RFID_EMULATE_TIMER, LL_TIM_ETR_POLARITY_INVERTED, ...);
+   ```
+
+   ⛔ **IT IS NOT A PORT.** The STM32's TIM2 accepts an external clock on ETR. The nRF52's
+   PWM is clocked only from PCLK16M and has no equivalent input, so no amount of tuning the
+   sequence-playback path can lock it. ⚠ Confirm that against the nRF52840 PS before
+   building — it is the assumption the whole design rests on.
+
+   **The nRF equivalent, built from pieces this device already uses in READER mode:**
+
+   | piece | already exists? |
+   |---|---|
+   | `m_pwm_timer_counter` = TIMER2 in `NRF_TIMER_MODE_COUNTER` | ✓ `lf_125khz_radio.c` |
+   | PPI into `NRF_TIMER_TASK_COUNT` | ✓ — but keyed off `PWMPERIODEND`, which only exists when WE generate the carrier |
+   | an event per RECEIVED carrier cycle | ⚠ needed. LPCOMP (already initialised for field detect) or the RIO GPIOTE edge the ASK readers use |
+   | TIMER COMPARE -> PPI -> GPIOTE toggle on `LF_MOD` | ⚠ needed |
+
+   That gives an fc/2 subcarrier locked to the carrier, with the CPU involved only once per
+   bit (256 us) to express a phase reversal as a skipped toggle. ⚠ Still do 1 and 2 first:
+   they are hours against days, and 2 may show this is not needed in the field at all.
 
 ⚠ **What NOT to do:** chase the 0.6x amplitude. Both traces are near the ADC's full scale
 (peak-to-peak 250 emulator, 239 real tag), so the emulator is not quiet — its energy is
