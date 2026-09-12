@@ -1,12 +1,85 @@
 # Next — ranked
 
-**State:** `lf indala read`, `lf indala write` and Indala tag emulation all work and are
-verified against independent hardware. What remains is a handful of real defects, one design
-decision, and upstreaming.
+**GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
-⛔ Method rules live in `METHOD.md`, not here. Read them before adding a claim to the ledger.
-⛔ Evidence lives in `FINDINGS.md` (what is believed now) and `LOG.md` (what was believed
-when). This file is a PLAN — if a section is finished it collapses to one line below.
+⛔ **Order of work, decided 2026-09-12:** finish Indala and its near-twin IDTECK, then fix the
+readers and emulators that already exist and the bugs already found, and only then add new
+protocols. Breadth on top of known-broken foundations would multiply the debt, and this
+project has already spent days on measurements that turned out to describe a broken
+instrument rather than the thing under test.
+
+⛔ Method rules live in `METHOD.md`. Evidence lives in `FINDINGS.md` (what is believed now)
+and `LOG.md` (what was believed when). This file is a PLAN — finished sections collapse to
+one line.
+
+---
+
+## The grid — where we stand against the Flipper
+
+⚠ Flipper column is the **local Momentum firmware** (`/Users/Shared/code/personal/rfid/Momentum-Firmware`),
+not upstream — that is what this bench actually tests against, and it carries two protocols
+upstream's list does not. Every one of its 26 protocols has BOTH a decoder and an encoder.
+Chameleon columns come from the CLI command table; "emulate" means an `econfig` command plus a
+registered `TAG_TYPE_*`.
+
+| protocol | read | write | emulate | Momentum |
+|---|---|---|---|---|
+| EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
+| HID Prox (H10301, generic, ex-generic) | ⚠ **unreliable** | ✓ | ✓ | ✓ |
+| ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
+| PAC/Stanley | ⚠ **unreliable** | ✓ | ✓ | ✓ |
+| Viking | ✓ | ✓ | ✓ | ✓ |
+| Jablotron | ✓ | ✓ | ✓ | ✓ |
+| **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
+| **Indala 224-bit** | ⛔ **MISSING** | ⛔ | ⛔ | ✓ |
+| **IDTECK** | ⛔ **MISSING** | ✓ | ✓ | ✓ |
+| EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
+| AWID | ✗ | ✗ | ✗ | ✓ |
+| FDX-A | ✗ | ✗ | ✗ | ✓ |
+| FDX-B | ✗ | ✗ | ✗ | ✓ |
+| Paradox | ✗ | ✗ | ✗ | ✓ |
+| Pyramid | ✗ | ✗ | ✗ | ✓ |
+| Keri | ✗ | ✗ | ✗ | ✓ |
+| Gallagher | ✗ | ✗ | ✗ | ✓ |
+| NexWatch | ✗ | ✗ | ✗ | ✓ |
+| Securakey | ✗ | ✗ | ✗ | ✓ |
+| GProxII | ✗ | ✗ | ✗ | ✓ |
+| Noralsy | ✗ | ✗ | ✗ | ✓ |
+| InstaFob | ✗ | ✗ | ✗ | ✓ (ASK, RF/32) |
+
+⇒ **Twelve protocols absent, two read paths missing, two readers unreliable.**
+
+⛔ **Indala is NOT finished.** Momentum implements **Indala224** as well as Indala26, and our
+decoder is hard-wired to 64 bits (`INDALA_PSK_FRAME_BITS 64`). That belongs in Phase 1, and it
+carries a RAM cost that collides with §8:
+
+> A 224-bit frame at RF/32 is **7168 samples**. The two-frame rule that guarantees one whole
+> frame lands inside the window (`lf_indala_psk.h`) would need **14336 samples = 28 KB** at
+> 16-bit, against the 8 KB the 64-bit path uses. On a part where the reader already holds
+> 48 KB, that is not a free change — and 32 KB of the current footprint is stacking that buys
+> nothing at the correct placement (§8). ⇒ Decide §8 before building Indala224, not after.
+
+⚠ The `tag_base_type.h` placeholders for **Keri** and **NexWatch** sit in the PSK block beside
+Indala and IDTECK, so those two should reuse the PSK1 path nearly whole.
+
+## The plan — three phases, in this order
+
+**Phase 1 — finish Indala and IDTECK.** They share a physical layer, so IDTECK is nearly free
+once Indala is done, and the pair is the proving ground for everything after it.
+> §1 undecodable-signal status · §1c IDTECK reader · §1d Indala224 · §4 burst length · §5 carrier locking
+
+**Phase 2 — fix what already exists.** Two readers are unreliable on loud tags and there are
+known bugs with reproductions attached. ⛔ Nothing new is added until these are closed:
+breadth on a broken foundation multiplies the debt, and this project has already lost days to
+instruments that were measuring themselves.
+> §2 HID Prox + PAC readers · §3 PWM clock bug · §7 BLE test transport · §8 reader RAM
+
+**Phase 3 — new protocols**, cheapest and most-verifiable first.
+> §10 the eleven missing protocols
+
+⚠ **Retired section numbers.** LOG.md is append-only and cites sections that have since moved.
+`§1d`, `§2b`, `§3a`, `§3b`, `§3c` were folded into the sections above during the 2026-09-12
+rewrite; the pre-rewrite file is `archive/NEXT-2026-09-12-before-dedup.md`.
 
 ---
 
@@ -81,6 +154,49 @@ where the original used 500–20000 Hz and measured leakage), then **20/20 not f
 nothing.
 
 ⇒ Every loud-signal null in the project now rests on a valid bracket.
+
+## 1c. ⭐⭐ Implement the IDTECK READER — the cheapest protocol on the board
+
+IDTECK is the only protocol where we can write and emulate but not read (see the grid). It is
+also the cheapest thing on the list, because **its physical layer is identical to Indala's**:
+64-bit PSK1 at RF/32, subcarrier fc/2, and a T5577 config word that differs from Indala's only
+in not setting `T5577_PWD` (C54, and `t55xx.h`).
+
+⇒ `lf_indala_psk.c` already does the whole demodulation. What differs is 33 bits of preamble
+and the payload interpretation:
+
+| | Indala | IDTECK |
+|---|---|---|
+| preamble | `1010` + 28 zeros + `1` (33 bits) | `0x4944544B` — "IDTK" (32 bits) |
+| payload | 31 bits, de-scrambled to FC/CN | checksum byte + 24-bit card number |
+
+**Approach:** parameterise the preamble search rather than copying the decoder. The
+straddle gate, the bit integrator, the offset ranking and the capture path are all
+protocol-agnostic and already validated on 640 captures.
+
+⚠ **It inherits the carrier-lock limitation** (C80, C82). An IDTECK reader built on this
+decoder will read real tags and will NOT read an emulated one, for the same reason
+`lf indala read` does not. ⇒ §1's status code must live in the shared path, not in
+Indala-specific code, so both protocols report it.
+
+⭐ **It also gives us the null we currently have to borrow.** Today the only way to show the
+Indala reader rejects IDTECK is an amplitude bracket (C85); with an IDTECK reader, each
+protocol's reader becomes the positive control for the other's null — on the same tag, same
+placement, same moment.
+
+## 1d. ⚠ Indala 224-bit — Indala is not finished without it
+
+Momentum implements `Indala224` alongside `Indala26`; our decoder is hard-wired to 64 bits.
+A 224-bit frame is 7168 samples at RF/32, so the two-frame guarantee needs 14336 samples —
+**28 KB against the current 8 KB**.
+
+⛔ **Settle §8 first.** The reader already holds 48 KB, of which 32 KB is stacking
+accumulators that buy nothing at the correct placement (C58). Freeing that is what makes
+Indala224 affordable; doing them in the other order means sizing a buffer twice.
+
+⚠ Needs a real 224-bit tag to verify against. The Proxmark can write one
+(`lf indala clone --224`), and Momentum can read it — so the three-reader bar applies as
+usual.
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 
@@ -222,6 +338,26 @@ message is what makes it honest.
 
 ⚠ `idteck.c` ships a PSK1 emulation nobody has verified end to end (§6). Worth reporting
 upstream independently of anything here.
+
+## 10. ⛔ NOT YET — the eleven missing protocols
+
+⛔ **Phase 3. Do not start these until Phase 2 is closed.** Every one of them will need the
+same capture path, the same null discipline and the same brackets, and all three are still
+being repaired.
+
+Ranked by expected cost, cheapest first:
+
+| protocol | why it is cheap, or not |
+|---|---|
+| **Keri**, **NexWatch** | PSK, and `tag_base_type.h` already reserves them in the 300 block beside Indala and IDTECK. Should reuse the PSK1 path nearly whole |
+| **AWID**, **Pyramid**, **Paradox** | FSK, so they reuse the HID/ioProx machinery — ⚠ which is exactly what Phase 2 is fixing |
+| **Securakey**, **GProxII**, **Noralsy**, **Gallagher** | ASK/biphase variants; reuse the EM410x/Viking/Jablotron machinery |
+| **FDX-A**, **FDX-B** | animal-ID, different framing and bit rates; likely the most work |
+
+⚠ **Each one needs a real tag to verify against.** A protocol implemented against a
+specification and never tested on hardware is worth less than nothing — it looks supported.
+That is the whole lesson of `idteck.c`, which shipped an emulation nobody had ever verified
+end to end and a reader that does not exist.
 
 ## Closed — do not re-open without new evidence
 
