@@ -276,24 +276,24 @@ the clean test of C47.
 ⛔ Do not read the em410x 95% as evidence either way: it is on the GPIO path and never
 touches the SAADC, which is why C47 was wrongly weakened once already.
 
-## 3. ⚠ PWM clock on a type change — NOT reproduced, and not refuted either
+## 3. ⛔⛔ Changing a slot's LF tag type kills emulation until a POWER CYCLE
 
-The code reading still holds: `pwm_init()` picks the base clock from `IS_PSK1_TYPE(m_tag_type)`
-and runs only from `lf_sense_enable()`, so `hw slot type` changes the type with nothing
-re-initialising the PWM.
+**Repro, one line:** with LF emulation working, `hw slot type -s <n> -t <any other LF type>`.
+Emulation stops and does not come back from a mode cycle or a DFU reflash — only from
+removing power. Receive is unaffected (C126, L110).
 
-⛔ **But it does not show up.** Switching slot 1 ASK↔PSK1 with the Flipper's field held
-continuously kept reading 4/4, and the failure that did appear survives a full reboot — which
-re-runs `pwm_init` by construction, so it cannot be the stale clock (C93, L89).
+⛔ **The old hypothesis is refuted.** A stale PWM base clock would be repaired by
+`lf_sense_enable()` re-running `pwm_init()`, which a mode cycle does. It is not repaired.
+⇒ Whatever is left stuck survives a software reset, so it is not anything `pwm_init` touches.
+Candidates worth instrumenting: the HFXO request refcount (`sd_clock_hfclk_request` /
+`_release` are paired across sense enable/disable and could unbalance), LPCOMP, and the
+PPI/GPIOTE wiring for `LF_MOD`.
 
-⇒ Re-open this only with a test that reads the base clock directly, or one that can show a
-protocol emulating CORRECTLY before and INCORRECTLY after a type change, with a positive
-control on both sides. The attempt logged in L89 had neither.
+⚠ **This is user-facing and belongs in §9's upstream report** whatever we do about it: a user
+who changes a slot's type has a device that silently stops emulating until they unplug it.
 
-✅ **Unblocked** — rig A emulates again after the power cycle (3/3). ⭐ And that is itself a
-clue worth following here: the failure survived a DFU reflash and died on a USB unplug (C96),
-so whatever stuck was peripheral state that a soft reset does not clear — which is the same
-family of problem §3 describes, even though §3's specific mechanism was ruled out.
+⚠ Blocked on nothing — but every test costs a power cycle, so batch the instrumentation
+before asking for one.
 
 ## 4–5 preamble. ⭐ Burst length and carrier lock are DIFFERENT problems
 
