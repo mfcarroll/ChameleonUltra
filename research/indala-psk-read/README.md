@@ -178,6 +178,17 @@ reader — the only free-running source on this bench, and the two rigs do not f
 the Proxmark pointed at an emulator rather than at the tag; and anything measured with the
 cable out.
 
+⭐ **COUPLING IS A SETTABLE VARIABLE: paper spacers give an air gap in 1 mm steps, 1-12 mm.**
+That matters more than it sounds. Several claims here are about behaviour at MARGINAL signal —
+C47 predicts an effect only where reads are already failing — and a tag either couples well or
+it does not, so those claims were untestable while the only specimens were "on the pad" and
+"not on the pad". A gap turns that into a dial: find the distance where reads sit near 50% and
+the margin is where the experiment wants it.
+
+⚠ It needs a person, but only to place the spacer. Everything after that — including
+reflashing between two builds — leaves the geometry untouched, so a paired test at a fixed gap
+is one placement and any number of measurements.
+
 ⚠ **Both Chameleons are cabled, and the cable costs ~40% of the coupling by detuning the
 antenna (C72).** Emulation is still read reliably by the Flipper in this state, so functional
 pass/fail tests are valid as they stand — but an amplitude measured cabled is not comparable

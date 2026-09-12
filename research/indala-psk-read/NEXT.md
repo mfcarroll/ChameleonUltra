@@ -24,7 +24,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 |---|---|
 | ⚠ **The bench tag is currently PAC/Stanley `CD4F5552`, not IDTECK** | Left that way deliberately: it is §2's first REPRODUCIBLE failure (`lf pac read` 0/10 on a tag the Proxmark reads) and the specimen to debug against. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
-| ⚠ **A physically WEAK-COUPLING HID fob — not HID data** | ⛔ Not a Proxmark command: writing HID to the T5577 is already done and reads **12/12** (C108). C46's failures were three *different physical packages* with byte-identical memory reading 0/6, 3/6 and 7/9, and its conclusion was that the PACKAGE is the variable. C47 only predicts an effect where reads are marginal, so testing it needs one of those fobs on rig B. No write can synthesise poor coupling |
+| ⭐ **An AIR GAP under the HID tag, to test C47** | Paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
 | **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
@@ -220,10 +220,10 @@ reprogram the T5577 reversibly.
 ⚠ **C47 IS UNTESTED AND THE GUARD IS NOT THE FIX.** Measured paired on one T5577 wearing
 H10301, one session, one recompile apart: **12/12 with the guard off, 12/12 with it on**
 (C108). The guard cannot be shown to help a specimen that already reads perfectly, and C47
-predicts an effect only on MARGINAL reads. ⇒ Testing it needs a marginal specimen: one of C46's three
-HID fobs, physically on the pad. ⛔ NOT a tag to write — writing HID to the T5577 is done and
-reads 12/12; what is missing is weak coupling, which no Proxmark command can produce. ioProx
-never fitting the theory stands too.
+predicts an effect only on MARGINAL reads. ⇒ Testing it needs MARGIN, not a different tag. ⭐ An air
+gap supplies it: paper spacers in 1 mm steps turn coupling into a dial, so the read rate can
+be set near 50% where a guard that helps would show. ⛔ Not a tag to write — writing HID to the
+T5577 is done and reads 12/12. ioProx never fitting the theory stands too.
 
 ⭐⭐ **PAC reproduces, and it is now narrowed to interpretation.** `lf pac read` gives **0 of
 10** on a T5577 the Proxmark reads perfectly (C109). Captured at 14336 samples and demodulated
