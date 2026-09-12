@@ -408,6 +408,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_INDALA_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_INDALA224 && buffer->length >= LF_INDALA224_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = indala224.alloc();
+        m_pwm_seq = indala224.modulator(codec, buffer->buffer);
+        indala224.free(codec);
+        NRF_LOG_INFO("load lf indala224 data finish.");
+        return LF_INDALA224_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -430,6 +439,12 @@ static void recompute_frames_per_burst(void) {
     for (size_t i = 0; i < entries; i++) {
         ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
     }
+    /* ⛔ `repeats` IS PART OF THE DURATION, not a detail of the buffer. SEQ[n].REFRESH
+     * holds each loaded sample for repeats+1 PWM periods, so a PSK1 sequence storing one
+     * entry per BIT (repeats 15) lasts sixteen times what its counter_tops sum to. Reading
+     * it off the sequence keeps this generic: an ASK protocol storing one entry per symbol
+     * leaves repeats at 0 and the arithmetic is unchanged. */
+    ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
     const uint32_t hz = IS_PSK1_TYPE(m_tag_type) ? 1000000u : 125000u;
     const uint64_t frame_us = (ticks * 1000000u) / hz;
     if (frame_us == 0) {
@@ -628,6 +643,30 @@ bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t tag_id[LF_INDALA_TAG_ID_SIZE] = {
         0xA0, 0x00, 0x00, 0x00,   // fixed preamble: 1010, 28 zeros, then the leading 1 of
         0xE6, 0xBD, 0x0E, 0x92,   // ...the payload. Fmt 26 FC 52 Card 63612.
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Indala224 data save callback. */
+int lf_tag_indala224_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_INDALA224 ? LF_INDALA224_TAG_ID_SIZE : 0;
+}
+
+/** @brief Indala224 default frame: the 224-bit credential this format was developed
+ * against, `80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5` — the Proxmark's own
+ * documented 224-bit example, written to the bench T5577 and read back 6 of 6 by
+ * `lf indala read --224` (C107). ⭐ A factory-reset slot therefore emulates something this
+ * bench has independently decoded, rather than a pattern nothing has ever verified.
+ * The leading `80000001` carries the 30-bit preamble: a 1 followed by 29 zeros. */
+bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_INDALA224_TAG_ID_SIZE] = {
+        0x80, 0x00, 0x00, 0x01,   // 1 then 29 zeros: the Indala224 preamble, then payload
+        0xB2, 0x35, 0x23, 0xA6,
+        0xC2, 0xE3, 0x1E, 0xBA,
+        0x3C, 0xBE, 0xE4, 0xAF,
+        0xB3, 0xC6, 0xAD, 0x1F,
+        0xCF, 0x64, 0x93, 0x93,
+        0x92, 0x8C, 0x14, 0xE5,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

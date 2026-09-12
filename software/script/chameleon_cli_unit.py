@@ -780,6 +780,23 @@ def _indala_frame_info(frame: bytes) -> dict:
         "payload_hex": frame[4:].hex().upper(),
     }
 
+# ⛔ THE 224-BIT PREAMBLE IS A 1 AND 29 ZEROS — 30 bits, and 29 of them a constant run.
+# That is a far weaker structure than Indala26's 33-bit pattern, which a loud IDTECK tag
+# already forged once (C90). It is enough to reject a typo here; it is NOT enough to accept
+# a frame off the air, which is why the reader gates 224 on a whole-frame repeat instead.
+def _indala224_frame_info(frame: bytes) -> dict:
+    """Split a 224-bit Indala frame and check its 30-bit preamble.
+
+    ⚠ No checksum exists for this format either — see _indala_frame_info."""
+    head = int.from_bytes(frame[:4], "big")
+    pre_ok = (head >> 2) == 0x20000000
+    return {
+        "preamble_hex": frame[:4].hex().upper(),
+        "preamble_valid": pre_ok,
+        "payload_hex": frame[4:].hex().upper(),
+    }
+
+
 IDTECK_PREAMBLE_INT = 0x4944544B
 
 
@@ -836,14 +853,16 @@ def _idteck_frame_info(frame: bytes) -> dict:
 
 
 class LFIndalaIdArgsUnit(DeviceRequiredUnit):
-    """Argument parser for Indala: 16 hex = the full 64-bit frame, preamble included."""
+    """Argument parser for Indala: the full frame, preamble included — 16 hex for the
+    64-bit format, 56 for the 224-bit one."""
 
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
         parser.add_argument(
             "--id", type=str, required=required,
-            help="Indala frame in hex: 16 chars for the full 64-bit frame. The first 33 "
-                 "bits are the fixed preamble, so it always starts a0000000.",
+            help="Indala frame in hex: 16 chars for the full 64-bit frame (56 with --224). "
+                 "The first 33 bits are the fixed preamble, so it always starts a0000000; "
+                 "a 224-bit frame's first 30 bits are a 1 and 29 zeros.",
             metavar="<hex>"
         )
         return parser
@@ -853,17 +872,23 @@ class LFIndalaIdArgsUnit(DeviceRequiredUnit):
             return False
         if args.id is None:
             return True
-        if not re.match(r"^[a-fA-F0-9]{16}$", args.id):
-            raise ArgsParserError("ID must be 16 HEX symbols")
-        info = _indala_frame_info(bytes.fromhex(args.id))
-        if not info["preamble_valid"]:
+        is224 = getattr(args, "is224", False)
+        digits, info_fn, shape = (
+            (56, _indala224_frame_info, "30-bit preamble (a 1 then 29 zeros, so 8000000 "
+                                        "and a 0 or 1)")
+            if is224 else
+            (16, _indala_frame_info, "33-bit preamble (a0000000 plus the top bit of the "
+                                     "next byte)")
+        )
+        if not re.match(r"^[a-fA-F0-9]{%d}$" % digits, args.id):
+            raise ArgsParserError(f"ID must be {digits} HEX symbols")
+        if not info_fn(bytes.fromhex(args.id))["preamble_valid"]:
             # ⚠ A warning, not a refusal. Indala has formats beyond 26 and this project
-            # has only ever verified the 64-bit one, so refusing would be claiming more
+            # has only ever verified two of them, so refusing would be claiming more
             # certainty than we have — but a reader will almost certainly ignore a frame
             # whose preamble is wrong, and silently emulating nothing is worse.
             print(f"{color_string((CR, 'WARNING'))}: frame does not start with Indala's "
-                  f"33-bit preamble (a0000000 plus the top bit of the next byte) — "
-                  f"a reader will almost certainly reject it")
+                  f"{shape} — a reader will almost certainly reject it")
         return True
 
     def args_parser(self) -> ArgumentParserNoExit:
@@ -6089,29 +6114,41 @@ class LFIndalaRead(ReaderRequiredUnit):
 class LFIndalaWrite(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("Write a raw 64-bit Indala frame to a T5577. "
-                              "Configures PSK1, RF/32, 2 data blocks.")
+        parser.description = ("Write a raw Indala frame to a T5577. 64-bit configures "
+                              "PSK1, RF/32, 2 data blocks; --224 configures PSK2, RF/32, "
+                              "7 data blocks.")
         parser.add_argument("-r", "--raw", required=True,
-                            help="16 hex digits, e.g. a0000000e6bd0e92")
+                            help="16 hex digits, e.g. a0000000e6bd0e92 (56 with --224)")
+        # ⚠ A FLAG RATHER THAN LENGTH INFERENCE, to match `lf indala read`. The digit count
+        # would in fact distinguish the two here — but a frame typed one character short
+        # would then silently become "the other protocol, rejected" instead of "this
+        # protocol, wrong length", and the read command already made this choice.
+        parser.add_argument("--224", dest="is224", action="store_true",
+                            help="write a 224-bit Indala frame instead of a 64-bit one")
         return parser
 
-    # ⭐ T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | (2 << T55x7_MAXBLOCK_SHIFT).
-    # Confirmed twice over: it is what Proxmark's `lf indala clone` writes
-    # (cmdlfindala.c) and it is what block 0 of the working bench tag actually reads back
-    # as. Two independent sources, which is the standard this project holds itself to.
-    CONFIG = 0x00081040
-
     def on_exec(self, args: argparse.Namespace):
+        # ⭐ The two widths differ in four values and share everything else — the read-back
+        # bracket, the five verdicts, and the reason each one is distinguishable. Keeping
+        # them in one table rather than two commands is what stops the verdict logic being
+        # copied and then maintained in one copy.
+        digits, scan, write, what = (
+            (56, self._read224, self.cmd.indala224_write_to_t55xx, "Indala224 PSK2, RF/32, 7 data blocks")
+            if args.is224 else
+            (16, self._read64, self.cmd.indala_write_to_t55xx, "Indala PSK1, RF/32, 2 data blocks")
+        )
+
         raw = args.raw.strip().lower().removeprefix("0x")
-        if len(raw) != 16 or any(c not in "0123456789abcdef" for c in raw):
-            print(f"{color_string((CR, 'Need exactly 16 hex digits'))}")
+        if len(raw) != digits or any(c not in "0123456789abcdef" for c in raw):
+            print(f"{color_string((CR, f'Need exactly {digits} hex digits'))}")
             return
+
         # ⭐ READ BEFORE WRITING — this is the coupling bracket, and it is the whole
         # reason this command can now say anything at all. A T5577 that cannot be heard
         # cannot be shown to have been written, and F05 is the scar: six bracketing reads
         # failed while a tag sat at 90x the empty floor. If the tag is audible BEFORE the
         # write, a failure after it is a failure of the WRITE and not of the placement.
-        before = self._try_read()
+        before = scan()
         if before is None:
             print(f"   {color_string((CY, 'No Indala frame before the write.'))} That is "
                   f"expected for a blank or non-Indala tag, but it also means there is no "
@@ -6120,21 +6157,23 @@ class LFIndalaWrite(ReaderRequiredUnit):
         else:
             print(f"   before: {color_string((CY, before))}")
 
-        # ⛔ NOT three lf_t55xx_write_block() calls. That was the first version and it
+        # ⛔ NOT lf_t55xx_write_block() per block. That was the first version and it
         # DOES NOT RELIABLY WORK — measured on a real tag, one of three writes landed, and
         # the two that did not were the config block and the high data word. The raw
         # single-block path cycles the field per block, so each one is written to a tag
-        # charging from cold, once, with no retry. write_indala_to_t55xx() goes through
+        # charging from cold, once, with no retry. write_indala*_to_t55xx() goes through
         # write_t55xx(), which holds the field on and writes every block twice, and is
         # what every other protocol writer on this device uses.
-        self.cmd.indala_write_to_t55xx(bytes.fromhex(raw))
+        print(f"   writing {what}")
+        write(bytes.fromhex(raw))
 
         # ⭐ A SUCCESSFUL READ-BACK VERIFIES EVERYTHING, not just the payload. If the
-        # config block had not landed the tag would not be transmitting PSK1 at RF/32 at
-        # all, so it could not be read — which means one read covers block 0, block 1 and
-        # block 2 together. This is why §8's old plan (add a T5577 block read first) is no
-        # longer on the critical path: the reader IS the verifier.
-        after = self._try_read()
+        # config block had not landed the tag would not be transmitting at the right
+        # modulation and bit rate at all, so it could not be read — which means one read
+        # covers block 0 and every data block together. This is why §8's old plan (add a
+        # T5577 block read first) is no longer on the critical path: the reader IS the
+        # verifier.
+        after = scan()
         if after == raw:
             print(f"{color_string((CG, 'VERIFIED'))} {raw} — read back off the tag. The "
                   f"config block landed too, or it could not have been read at all.")
@@ -6151,16 +6190,28 @@ class LFIndalaWrite(ReaderRequiredUnit):
             print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — the tag still reads "
                   f"{after}, unchanged. Nothing was written.")
         else:
+            # ⭐ A GRADED SCORE, NOT A VERDICT. The blocks are 8 hex digits each and land
+            # independently, so naming WHICH differ says whether one block missed or the
+            # framing is wrong — a distinction a bare mismatch cannot carry (M33).
+            bad = [i for i in range(0, len(raw), 8) if raw[i:i+8] != after[i:i+8]]
             print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {raw}, read "
-                  f"back {after}. Some blocks landed and some did not.")
+                  f"back {after}. {len(bad)} of {len(raw)//8} blocks differ"
+                  + (f" (block{'s' if len(bad) > 1 else ''} "
+                     f"{', '.join(str(i//8 + 1) for i in bad)})." if bad else "."))
 
-    def _try_read(self):
-        """The credential currently on the tag, or None. ⚠ None is NOT proof of absence —
-        see F05 in the research notes — which is why every caller above distinguishes
-        'nothing there' from 'cannot tell'."""
+    def _read64(self):
+        """The 64-bit credential currently on the tag, or None. ⚠ None is NOT proof of
+        absence — see F05 in the research notes — which is why every caller above
+        distinguishes 'nothing there' from 'cannot tell'."""
         try:
-            uid = self.cmd.indala_scan()[0]
-            return uid.hex()
+            return self.cmd.indala_scan()[0].hex()
+        except Exception:
+            return None
+
+    def _read224(self):
+        """The 224-bit credential currently on the tag, or None. Same caveat as _read64."""
+        try:
+            return self.cmd.indala224_scan()[0].hex()
         except Exception:
             return None
 
@@ -6175,45 +6226,60 @@ class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
         )
         self.add_slot_args(parser)
         self.add_card_arg(parser)
+        parser.add_argument("--224", dest="is224", action="store_true",
+                            help="the slot holds a 224-bit Indala frame, not a 64-bit one")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        # ⭐ The two widths differ in the slot type they require, the pair of commands that
+        # carry the frame, and the preamble shape — nothing else. The type check below is
+        # the reason the flag exists at all: a 224-bit frame in an Indala slot would be
+        # rejected by the firmware with a bare parameter error.
+        want, setter, getter, info_fn = (
+            (TagSpecificType.Indala224, self.cmd.indala224_set_emu_id,
+             self.cmd.indala224_get_emu_id, _indala224_frame_info)
+            if args.is224 else
+            (TagSpecificType.Indala, self.cmd.indala_set_emu_id,
+             self.cmd.indala_get_emu_id, _indala_frame_info)
+        )
+        name = str(want)
+
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
         if args.id is not None:
-            slotinfo = self.cmd.get_slot_info()
-            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
-            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
-            if lf_tag_type != TagSpecificType.Indala:
-                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Indala. "
-                      f"Set it with: hw slot type -s <n> -t Indala")
-            self.cmd.indala_set_emu_id(bytes.fromhex(args.id))
-            print(f" - Indala emu id set to {args.id.upper()}.")
-        else:
-            # ⚠ CHECK THE TYPE BEFORE ASKING. The firmware answers STATUS_PAR_ERR when the
-            # slot's LF type is not Indala, which the CLI renders as the useless "API
-            # request fail, param error" — and the commonest way to hit it is setting a
-            # type on one slot while a DIFFERENT slot is active, since econfig without -s
-            # reads the ACTIVE one. Say which slot and what it actually holds.
-            slotinfo = self.cmd.get_slot_info()
-            selected = SlotNumber.from_fw(self.cmd.get_active_slot())
-            lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
-            if lf_tag_type != TagSpecificType.Indala:
-                print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
-                      f"{color_string((CR, str(lf_tag_type)))}"
-                      f"{color_string((CR, ', not Indala.'))}")
-                print(f"   Either pick the slot: {color_string((CG, 'lf indala econfig -s <n>'))}")
-                print(f"   or set this one:     {color_string((CG, 'hw slot type -s ' + str(selected) + ' -t Indala'))}")
-                return
-            response = self.cmd.indala_get_emu_id()
-            info = _indala_frame_info(response)
-            print(f" - Indala emu id: {response.hex().upper()}")
-            print(f"   Preamble : {info['preamble_hex']}"
-                  + ("" if info["preamble_valid"] else
-                     f"  {color_string((CR, '(not the Indala preamble)'))}"))
-            print(f"   Payload  : {info['payload_hex']}")
-            # ⇒ The decoded view comes from the reader, which owns the de-scramble
-            # tables. Duplicating them here would be a second copy to keep in step.
-            print(f"   Decode it with {color_string((CG, 'lf indala read'))} against the "
-                  f"emulated slot on a second device.")
+            if lf_tag_type != want:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not {name}. "
+                      f"Set it with: hw slot type -s <n> -t {name}")
+            setter(bytes.fromhex(args.id))
+            print(f" - {name} emu id set to {args.id.upper()}.")
+            return
+
+        # ⚠ CHECK THE TYPE BEFORE ASKING. The firmware answers STATUS_PAR_ERR when the
+        # slot's LF type does not match, which the CLI renders as the useless "API
+        # request fail, param error" — and the commonest way to hit it is setting a
+        # type on one slot while a DIFFERENT slot is active, since econfig without -s
+        # reads the ACTIVE one. Say which slot and what it actually holds.
+        if lf_tag_type != want:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}"
+                  f"{color_string((CR, ', not ' + name + '.'))}")
+            print(f"   Either pick the slot: {color_string((CG, 'lf indala econfig -s <n>'))}")
+            print(f"   or set this one:     {color_string((CG, 'hw slot type -s ' + str(selected) + ' -t ' + name))}")
+            return
+        response = getter()
+        info = info_fn(response)
+        print(f" - {name} emu id: {response.hex().upper()}")
+        print(f"   Preamble : {info['preamble_hex']}"
+              + ("" if info["preamble_valid"] else
+                 f"  {color_string((CR, '(not the Indala preamble)'))}"))
+        print(f"   Payload  : {info['payload_hex']}")
+        # ⇒ The decoded view comes from the reader, which owns the de-scramble
+        # tables. Duplicating them here would be a second copy to keep in step.
+        print(f"   Decode it with "
+              f"{color_string((CG, 'lf indala read' + (' --224' if args.is224 else '')))} "
+              f"against the emulated slot on a second device.")
 
 
 @lf_ioprox.command("write")

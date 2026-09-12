@@ -105,6 +105,25 @@ extern "C" {
     T5577_PSKCF_RF_2 |            \
     (2 << T5577_MAXBLOCK_SHIFT))
 
+// Indala 224-bit: PSK2 at RF/32, subcarrier = carrier/2 (RF_2), SEVEN data blocks.
+//
+// ⛔⛔ PSK2, NOT PSK1 — AND THAT IS NOT A TYPO OF THE 64-BIT CONFIG ABOVE. A 224-bit Indala
+// is written by the Proxmark's own `lf indala clone --224` as `000820E0`, and
+// `lf t55xx detect` reports Modulation PSK2 against PSK1 for the 64-bit tag written in the
+// same session (C99). Our own reader agrees from the other side: the Indala224 format
+// decodes the DIFFERENTIAL view and only that one, because the direct view of a PSK2 tag
+// is the running XOR of its data and no test inside one capture can tell the two apart
+// (C107). ⇒ Writing this as PSK1 would produce a tag nothing on this bench can read.
+//
+// ⚠ SEVEN data blocks fills page 0 completely — blocks 1-7 — so there is no room for a
+// password block, which is why T5577_PWD is absent here as it is for Indala26. Block 7 IS
+// the last 32 bits of the frame.
+#define T5577_INDALA224_CONFIG (  \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_PSK2 |       \
+    T5577_PSKCF_RF_2 |            \
+    (7 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

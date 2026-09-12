@@ -226,6 +226,26 @@ cross-reference through on this branch, and the shell reported success the whole
 | ⛔ never | `upstream`, `main`, or `--force` / `--force-with-lease` on anything |
 | signing | commits are signed through 1Password's `op-ssh-sign`. **If 1Password is locked, `git commit --no-gpg-sign` and carry on** |
 
+⛔⛔ **THE FLASH SCRIPT DOES NOT CHOOSE WHICH CHAMELEON IT FLASHES.** the DFU trigger it runs (`resource/tools/` in the
+firmware tree) sends the command to the **first** matching comport, and with both units plugged in that is
+whichever the OS lists first — it is not stable between runs. A flash therefore lands on one
+unit and the other keeps the old build, which looks exactly like a silently failed flash. To
+target one deliberately, trigger DFU on its port yourself and then run the script with
+`--no-build`:
+
+```bash
+cd /Users/Shared/code/personal/rfid/ChameleonUltra && software/script/.venv/bin/python -c "import serial; s=serial.Serial('/dev/tty.usbmodemC3A1656543DE1',115200); s.dtr=1; s.timeout=0; s.write(b'\x11\xef\x03\xf2\x00\x00\x00\x00\x0b\x00'); s.close()"
+```
+
+⚠ **And `hw version` cannot settle it.** `GIT_VERSION` arrives as a `-D` flag, so changing it
+does not make `make` rebuild the object holding it: a device can run brand-new code and report
+a hash several commits old. ⭐ **Ask the device what commands it declares instead** — a new
+command id is present or it is not, and that is not cacheable:
+
+```bash
+cd /Users/Shared/code/personal/rfid/ChameleonUltra/software/script && .venv/bin/python -c "import chameleon_com,chameleon_cmd; d=chameleon_com.ChameleonCom(); d.open('/dev/tty.usbmodemC3A1656543DE1'); print(sorted(chameleon_cmd.ChameleonCMD(d).get_device_capabilities())[-6:]); d.close()"
+```
+
 ⛔ **Do not go back and sign an unsigned commit, and do not `--amend` one that exists.** Both
 rewrite the hash, `LOG.md` cites hashes, and `checkdocs.sh` asks whether each is reachable
 from HEAD. The rule already written for LOG pointers covers signatures too: land it, then fix

@@ -51,7 +51,12 @@ bool is_tag_specific_type_valid(tag_specific_type_t tag_type) {
 /**
  * Tag data stored in flash. Total length must be aligned by 4 bytes (whole words).
  */
-static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
+/* ⚠ SIZED BY THE LONGEST LF TAG ID, which is Indala224's 28 bytes — it was 20 while
+ * ioProx's 16 was the longest. Must stay a whole number of 4-byte words (FDS stores
+ * words). ⭐ Growing it is backward compatible: fds_read_sync() accepts a record
+ * SHORTER than the buffer and reports the shorter length, so slots written by an
+ * older build still load. */
+static uint8_t m_tag_data_buffer_lf[LF_INDALA224_TAG_ID_SIZE];  // LF card data buffer
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
@@ -100,6 +105,7 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_LF, TAG_TYPE_JABLOTRON,   lf_tag_data_loadcb,           lf_tag_jablotron_data_savecb, lf_tag_jablotron_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_IDTECK,      lf_tag_data_loadcb,           lf_tag_idteck_data_savecb,    lf_tag_idteck_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_INDALA,      lf_tag_data_loadcb,           lf_tag_indala_data_savecb,    lf_tag_indala_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_INDALA224,   lf_tag_data_loadcb,           lf_tag_indala224_data_savecb, lf_tag_indala224_data_factory, &m_tag_data_lf},
     // MF1 tag emulation
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_Mini, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_1024, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},

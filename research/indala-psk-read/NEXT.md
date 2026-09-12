@@ -22,6 +22,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
+| ⛔⛔ **The T5577 no longer couples to EITHER Chameleon — rig B's read and write arms are both dead** | ⭐ The Proxmark still reads and writes it perfectly (`lf t55xx detect`, `lf indala clone`, all fine this session), and Chameleon #1 reads the Flipper's emulation 3/3 — so **neither the tag nor the reader is at fault, and the instrument checks are all clean**: `hw lfdebug` shows drive 4, PWM0 enabled, COUNTERTOP 8, pointer ours; drive 4 and drive 7 give different levels, so C148 is excluded. What is dead is the geometry between the tag and the Chameleon: `lf em 410x read` returns not found on both units, and a `lf sniff` rms is **415 at drive 4 against the 5541 this bench measured hours earlier** — 13x down, the empty-antenna floor. ⇒ The tag needs re-seating against Chameleon #2's front face. **This blocks §1d's write verification and every future protocol's read arm** — the Proxmark-writes-Chameleon-reads loop is the whole value of rig B |
 | ⚠ **The bench tag is EM410x `DEADBEEF88`** — `drivesoak.py` cycles the tag through PAC, HID, Indala and EM410x and leaves it on whichever its last round wrote. It has worn three credentials in one day: PAC (as recorded), then HID Prox (as found), then Indala for C138's control, now PAC again | ⛔ Not deliberate — it is wherever the soak left it. §2's PAC specimen is one unattended command away (`lf pac clone --cn CD4F5552`), and so is C138's Indala reference (`lf indala clone -r a0000000e6bd0e92`). ⚠ Check what is actually on the tag before running anything against it: this row has been stale twice and both times it sent experiments at the wrong specimen. ⚠ It is no longer the carrier-locked Indala reference C138 used — restoring that is one unattended command, `lf indala clone -r a0000000e6bd0e92`, and the §4/§5 work is finished with it for now. ⛔ Its previous contents are dumped to `~/lf-t55xx-1D555955-5569A9A5-55A59569-D5B2649F-B3C6AD1F-CF649393-928C14E5-dump.json` and restore with `lf t55xx restore -f <that file>`. ⚠ §2's PAC specimen is no longer on this tag — but `pactest/` reproduces that failure on the host from a committed capture, so the physical tag is not the only specimen. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ◐ **Lift the T5577 out of the sandwich** — to make the clock conclusion CAUSAL | ⚠ Not urgent, and not blocking: the conclusion is recorded as *likely closed* and everything downstream of it is written that way. But the one experiment that would turn correlation into a law — detune our own subcarrier and predict the ceiling (C139, `ADVERSARIAL.md` brief 2, question 1) — needs the Proxmark seeing the emulator alone, and the tag now sits between them. **One lift, then hands off**; several builds are measured at that one geometry |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
@@ -51,7 +52,7 @@ registered `TAG_TYPE_*`.
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
-| **Indala 224-bit** | ✓ | ⛔ | ⛔ | ✓ |
+| **Indala 224-bit** | ✓ | ◐ **built, unverified (C155)** | ✓ **6/6 exact (C152)** | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | AWID | ✗ | ✗ | ✗ | ✓ |
@@ -67,17 +68,19 @@ registered `TAG_TYPE_*`.
 | Noralsy | ✗ | ✗ | ✗ | ✓ |
 | InstaFob | ✗ | ✗ | ✗ | ✓ (ASK, RF/32) |
 
-⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK READ path now works.**
+⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
+works, and every one of them now emulates too.** The only Indala gap left is the 224-bit
+WRITE, which is built and cannot be verified while the T5577 sits where it does (C155).
 
-⛔ **Indala is NOT finished.** Momentum implements **Indala224** as well as Indala26, and our
-decoder is hard-wired to 64 bits (`INDALA_PSK_FRAME_BITS 64`). That belongs in Phase 1, and it
-carries a RAM cost that collides with §8:
+⭐ **Indala is finished except for one unattended command.** Indala224 reads (C107), emulates
+6 of 6 exact (C152) and its writer is built — `lf indala write --224`, T5577 config `000820E0`,
+seven data blocks. ⛔ The write has NOT been verified on a tag, and that is C155's placement
+problem rather than anything about the code: the same command's 64-bit arm, verified 9 of 9 in
+an earlier session, also fails to land now. ⇒ One re-seat and both verify together.
 
-> A 224-bit frame at RF/32 is **7168 samples**. The two-frame rule that guarantees one whole
-> frame lands inside the window (`lf_indala_psk.h`) would need **14336 samples = 28 KB** at
-> 16-bit, against the 8 KB the 64-bit path uses. On a part where the reader already holds
-> 48 KB, that is not a free change — and 32 KB of the current footprint is stacking that buys
-> nothing at the correct placement (§8). ⇒ Decide §8 before building Indala224, not after.
+⚠ The RAM objection that used to gate this is gone. A 224-bit frame needs **3584 bytes** of PWM
+buffer, not 28 KB, because all 16 entries in an RF/32 bit are identical and the sequence's
+`repeats` will hold one of them (C154). The reader's 28 KB capture buffer is unchanged.
 
 ⚠ The `tag_base_type.h` placeholders for **Keri** and **NexWatch** sit in the PSK block beside
 Indala and IDTECK, so those two should reuse the PSK1 path nearly whole.
@@ -93,8 +96,8 @@ in full in `FINDINGS.md`.
 
 | | | needs |
 |---|---|---|
-| **A. Close the Indala family** — §1d write + emulate for 224-bit | the only in-family gap left; `--224` exists on `read` and nowhere else | **nothing** — rig B writes and verifies in both directions |
-| **B. New protocols, by modulation family** — §10 | PSK1 first (Keri, NexWatch), then ASK/biphase, then FSK, then long-frame biphase | **nothing for the read side** — the Proxmark writes the tag. ⚠ write and emulate need a non-ours reader, which both rigs already provide |
+| ◐ **A. Close the Indala family** — §1d | ✅ emulate done, 6/6 exact (C152). ◐ write built, unverified | ⛔ **hands** — C155, the tag no longer couples to either Chameleon |
+| **B. New protocols, by modulation family** — §10 | PSK1 first (Keri, NexWatch), then ASK/biphase, then FSK, then long-frame biphase | ⚠ **the EMULATE side is unblocked** — rig A needs no tag, and `lf_psk1_format_t` plus the parameterised modulator now carry a new PSK1 protocol nearly whole. ⛔ **every READ arm is blocked by C155** |
 
 **Standing items, not blocking either:**
 
@@ -145,21 +148,24 @@ in full in `FINDINGS.md`.
 
 ---
 
-## 1d. ◐ Indala 224-bit — reads 6/6; WRITE and EMULATE are the gap
-✅ **Read works**: `lf indala read --224`, 6 of 6 with two nulls, PSK2-only (C107, L98).
+## 1d. ◐ Indala 224-bit — reads, emulates; the WRITE is built and unverified
+✅ **Read**: `lf indala read --224`, 6 of 6 with two nulls, PSK2-only (C107, L98).
+✅ **Emulate**: `hw slot type -t Indala224` + `lf indala econfig --224`, read back by Momentum
+**6 of 6 bit-for-bit** with an ASK control at 0/6 (C152, L125).
+◐ **Write**: `lf indala write --224` exists — `T5577_INDALA224_CONFIG` = `000820E0`, PSK2 RF/32,
+seven data blocks filling page 0. ⛔ **Not verified on a tag.** It reports CANNOT TELL, and so
+does the 64-bit arm that this bench verified 9 of 9 in an earlier session, because the T5577 no
+longer couples to either Chameleon (C155).
 
-⛔ **Nothing else exists.** Verified against the command table, not memory: `--224` appears on
-`lf indala read` and **nowhere else** — no `lf indala write --224`, no `econfig`, and no
-`TAG_TYPE_INDALA224` registered in `tag_base_type.h`. It is the only in-family gap left.
+⇒ **The remaining step is one placement and two commands**, and they verify both widths at once:
 
-| | what it needs |
-|---|---|
-| **write** | the T5577 path already writes 64-bit Indala; 224 is 7 blocks instead of 2 and a different config word. ⚠ Confirm the block count and config against what `lf indala read --224` already decodes, and against a Proxmark-written tag as the independent check |
-| **emulate** | register the tag type, then the PSK1 transmit path takes it — ⚠ a 224-bit frame is **57.3 ms**, so `recompute_frames_per_burst()` already handles it (C133) and the 500 ms budget gives 8 frames |
-| **verify** | rig B in both directions: the Proxmark writes a 224 tag and we read it; we write one and the Proxmark reads it. Emulation goes to rig A |
+```
+lf indala write --224 -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5
+lf indala write -r a0000000e6bd0e92
+```
 
-⭐ **This is the cheapest remaining Phase 1 item and it unblocks nothing else** — do it first
-because it closes the family, not because anything waits on it.
+⚠ Verify the 224 write against the **T5577 memory dump**, not against `lf indala reader`: the
+Proxmark's own 224-bit read-back is right about one time in three (C153).
 
 ## 5. ⚠ Carrier locking — a decision, and it is now a cheap one
 

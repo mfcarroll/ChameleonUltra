@@ -12,6 +12,7 @@
 #include "lf_indala_psk.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
@@ -334,15 +335,42 @@ uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_p
  * @return STATUS_LF_TAG_OK
  */
 uint8_t write_indala_to_t55xx(uint8_t *raw8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
-    /* T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | (2 << T55x7_MAXBLOCK_SHIFT).
-     * Confirmed twice: what Proxmark's `lf indala clone` writes, and what block 0 of the
-     * working bench tag actually reads back as. */
-    uint32_t blks[3] = {
-        0x00081040,
-        bytes_to_num(raw8, 4),
-        bytes_to_num(raw8 + 4, 4),
-    };
-    return write_t55xx(blks, 3, new_passwd, old_passwds, old_passwd_count);
+    /* ⭐ The block layout and the config word live in indala.c with every other protocol's,
+     * rather than as a literal here. They were a literal `0x00081040` until Indala224 needed
+     * a second config word and the choice was one copy or two. */
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = indala_t55xx_writer(raw8, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 224-bit Indala frame to a T55xx tag (PSK2, RF/32, 7 data blocks).
+ *
+ * ⛔ EIGHT BLOCKS, NOT SEVEN — `blks` here is one longer than every other writer in this
+ * file. Block 0 is the config and blocks 1-7 the frame, which is the whole of page 0. The
+ * `uint32_t blks[7]` those writers declare is sized for a config plus six data words and
+ * would overflow by one here.
+ *
+ * ⚠ A 224-bit frame leaves no password block, so this tag cannot be password-protected —
+ * block 7 is the last 32 bits of the credential. `write_t55xx()` still runs its password
+ * reset first, and the data write that follows overwrites whatever that left in block 7.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless, exactly as
+ * every other writer here does. Read the tag back before believing it.
+ *
+ * @param raw28 28 bytes, the 224-bit frame big-endian
+ * @return STATUS_LF_TAG_OK
+ */
+uint8_t write_indala224_to_t55xx(uint8_t *raw28, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[8] = {0x00};
+    uint8_t blk_count = indala224_t55xx_writer(raw28, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
 /**

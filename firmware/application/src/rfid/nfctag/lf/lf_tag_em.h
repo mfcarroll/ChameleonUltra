@@ -14,6 +14,9 @@
 #define LF_JABLOTRON_TAG_ID_SIZE 5
 #define LF_IDTECK_TAG_ID_SIZE 8
 #define LF_INDALA_TAG_ID_SIZE 8
+// ⚠ 28 bytes — the largest LF tag id there is, and what sizes the shared LF slot
+// buffer in tag_emulation.c. Anything longer needs that buffer grown with it.
+#define LF_INDALA224_TAG_ID_SIZE 28
 
 void lf_tag_125khz_sense_switch(bool enable);
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
@@ -33,6 +36,8 @@ int lf_tag_idteck_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffe
 bool lf_tag_idteck_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_indala_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int lf_tag_indala224_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);
 
 /** ⚠ §3 instrumentation: 12 bytes of LF emulation state. ⛔ Remove before upstreaming. */

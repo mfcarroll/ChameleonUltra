@@ -178,6 +178,8 @@ class Command(enum.IntEnum):
     IDTECK_GET_EMU_ID = 5013
     INDALA_SET_EMU_ID = 5014
     INDALA_GET_EMU_ID = 5015
+    INDALA224_SET_EMU_ID = 5016
+    INDALA224_GET_EMU_ID = 5017
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -186,9 +188,9 @@ class Command(enum.IntEnum):
     IDTECK_SCAN = 3035
     INDALA224_SCAN = 3036
     LF_EMU_DEBUG = 3037
-
-
     LF_RADIO_DEBUG = 3038
+    INDALA224_WRITE_TO_T55XX = 3039
+
 @enum.unique
 class Status(enum.IntEnum):
     HF_TAG_OK = 0x00  # IC card operation is successful
@@ -351,6 +353,7 @@ class TagSpecificType(enum.IntEnum):
 
     # PSK Tag-Talk-First      300
     Indala = 300
+    Indala224 = 301
     # Keri
     # NexWatch
     IDTECK = 310
@@ -443,6 +446,8 @@ class TagSpecificType(enum.IntEnum):
             return "IDTECK"
         elif self == TagSpecificType.Indala:
             return "Indala"
+        elif self == TagSpecificType.Indala224:
+            return "Indala224"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

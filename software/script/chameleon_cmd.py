@@ -698,6 +698,23 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def indala224_write_to_t55xx(self, raw28: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                                 old_keys: list = None):
+        """Write a raw 224-bit Indala frame onto a T55xx tag.
+
+        ⛔ The tag is configured PSK2, not PSK1 — see T5577_INDALA224_CONFIG and C99. It
+        occupies all seven data blocks of page 0, so it cannot carry a password.
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write. This says
+        what was transmitted, not what landed. Read the tag back.
+        """
+        if len(raw28) != 28:
+            raise ValueError("The raw frame must be exactly 28 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!28s4s{4*len(old_keys)}s', raw28, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.INDALA224_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def indala_scan(self):
         """
         Read an Indala credential (PSK1, RF/32, fc/2 subcarrier).
@@ -1290,6 +1307,31 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(Command.INDALA_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def indala224_set_emu_id(self, id: bytes):
+        """
+        Set the 224-bit Indala frame emulated on the active slot.
+
+        :param id: 28 bytes, MSB first on air. The first 30 bits are the Indala224
+                   preamble — a 1 followed by 29 zeros — so a valid frame starts 8000000
+                   and the eighth hex digit is 0 or 1.
+
+        ⛔ Transmitted PSK2, not PSK1. See utils/psk1.h and C99.
+        """
+        if len(id) != 28:
+            raise ValueError("The id bytes length must equal 28")
+        return self.device.send_cmd_sync(Command.INDALA224_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def indala224_get_emu_id(self):
+        """
+        Get the emulated Indala 224-bit frame.
+        """
+        resp = self.device.send_cmd_sync(Command.INDALA224_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:28]
         return resp
 
     @expect_response(Status.SUCCESS)
