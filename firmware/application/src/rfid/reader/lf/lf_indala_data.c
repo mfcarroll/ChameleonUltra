@@ -139,10 +139,17 @@ static const uint8_t PHASE_ROTATION[] = {
 /* ⭐ 8KB, and that is the whole reader now — down from 48KB. The decoder works IN PLACE on
  * this buffer, which is exactly why the scratch copy is gone: nothing has to survive the
  * decode any more. */
-static int16_t m_samples[INDALA_PSK_CAPTURE_SAMPLES];
+/* ⚠ SIZED FOR THE LONGEST FRAME, FILLED TO WHAT THE FORMAT ASKS FOR. 28KB rather than 8,
+ * and still a third of what the stacked 64-bit reader used to cost. The capture LENGTH is a
+ * parameter because it is real time on the wire: 4096 samples is 33ms and 14336 is 114ms, so
+ * a 64-bit read that captured the whole buffer would be 3.5x slower for nothing. */
+static int16_t m_samples[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
-bool lf_psk1_read(lf_psk1_decode_fn decode, lf_psk1_read_t *out,
-                  uint32_t timeout_ms, int32_t *energy_out) {
+bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
+                  lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+    if (capture_samples > LF_PSK1_MAX_CAPTURE_SAMPLES) {
+        capture_samples = LF_PSK1_MAX_CAPTURE_SAMPLES;
+    }
     bool ok = false;
     uint8_t winner_phase = 0;
     indala_psk_result_t winner_res;
@@ -171,7 +178,7 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, lf_psk1_read_t *out,
                 break;
             }
             size_t got = 0;
-            if (!raw_read_samples(m_samples, INDALA_PSK_CAPTURE_SAMPLES,
+            if (!raw_read_samples(m_samples, capture_samples,
                                   INDALA_CAPTURE_TIMEOUT_MS, &got, 0)) {
                 continue;
             }
@@ -236,7 +243,8 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, lf_psk1_read_t *out,
 
 bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_psk1_read_t r;
-    if (!lf_psk1_read(indala_psk1_decode, &r, timeout_ms, energy_out)) {
+    if (!lf_psk1_read(indala_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
         return false;
     }
     const indala_psk_result_t *res = &r.res;
@@ -274,7 +282,8 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * emulation side. */
 bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_psk1_read_t r;
-    if (!lf_psk1_read(idteck_psk1_decode, &r, timeout_ms, energy_out)) {
+    if (!lf_psk1_read(idteck_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
         return false;
     }
     const indala_psk_result_t *res = &r.res;
@@ -292,5 +301,30 @@ bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     uint32_t card = ((uint32_t)res->id[7] << 16) | ((uint32_t)res->id[6] << 8) | res->id[5];
     NRF_LOG_INFO("idteck card %lu chksum %02x phase %u tries %u",
                  (unsigned long)card, res->id[4], r.phase, r.tries);
+    return true;
+}
+
+/* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
+ * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
+ * returns the frame in full and leaves interpretation to the host — there is no agreed
+ * facility-code layout for 224-bit Indala the way there is for format 26, and inventing one
+ * in firmware would be the kind of guess this project keeps having to retract.
+ *
+ * ⚠ A capture is 114ms here against 33ms for the 64-bit formats, so the same 3s budget buys
+ * ~26 attempts rather than ~90. */
+bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, INDALA224_READ_FRAME_BYTES);
+    data[INDALA224_READ_FRAME_BYTES + 0] = r.phase;
+    data[INDALA224_READ_FRAME_BYTES + 1] = r.res.offset;
+    data[INDALA224_READ_FRAME_BYTES + 2] = r.tries;
+    data[INDALA224_READ_FRAME_BYTES + 3] = 0;
+
+    NRF_LOG_INFO("indala224 %02x%02x%02x.. phase %u tries %u",
+                 r.res.id[0], r.res.id[1], r.res.id[2], r.phase, r.tries);
     return true;
 }

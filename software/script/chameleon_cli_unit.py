@@ -6052,9 +6052,22 @@ class LFIndalaRead(ReaderRequiredUnit):
         parser.description = ("Scan an Indala credential (PSK1, RF/32). Slower than the "
                               "other LF reads: the firmware demodulates whole captures at "
                               "a rotating sample phase and returns only once two agree.")
+        # ⚠ A FLAG RATHER THAN AUTO-DETECTION, deliberately. The two formats need different
+        # capture lengths — 4096 samples against 14336 — so trying both would either make
+        # every 64-bit read 3.5x slower or double the time a failed read takes. The 64-bit
+        # path is the verified one and its timing is not worth spending on a guess.
+        parser.add_argument("--224", dest="is224", action="store_true",
+                            help="read a 224-bit Indala frame instead of a 64-bit one")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
+        if args.is224:
+            raw, phase, offset, tries = self.cmd.indala224_scan()
+            print("Indala224 PSK1")
+            print(f"   Raw: {color_string((CY, raw.hex()))}")
+            print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+                  f"{tries} capture{'' if tries == 1 else 's'} taken")
+            return
         uid, fc, csn, flags, phase, offset, tries = self.cmd.indala_scan()
         parity_ok = bool(flags & 0x04)
         print(f"Indala PSK1")

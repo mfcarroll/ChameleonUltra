@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "lf_indala_psk.h"
@@ -61,8 +62,16 @@ typedef struct {
  * ⛔ `decode` must carry its own veto if it needs one. Indala does (C90/C91); IDTECK must
  * not.
  */
-bool lf_psk1_read(lf_psk1_decode_fn decode, lf_psk1_read_t *out,
-                  uint32_t timeout_ms, int32_t *energy_out);
+bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
+                  lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
 
 /** IDTECK, same engine, same timeout, same energy reporting. */
 bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
+/** Bytes of frame in an Indala224 read: 224 bits. */
+#define INDALA224_READ_FRAME_BYTES 28
+/** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */
+#define INDALA224_READ_DATA_SIZE   32
+
+/** Indala224, same engine, a longer capture, and the repeat gate doing the accepting. */
+bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);

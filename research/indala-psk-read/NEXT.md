@@ -205,18 +205,31 @@ frames and accepts the second preamble either normal OR inverted. ⇒ Do not ass
 polarity of the repeat — PSK2-style cards alternate it, and our decoder searches both
 polarities already for the same reason.
 
+⛔⛔ **AND IT IS PSK2.** A 224-bit tag written by `lf indala clone -r` leaves the T5577 config
+at `000820E0` and detect reports **Modulation PSK2** — against `00081040`/PSK1 for the 64-bit
+bench tag (C99). Our demodulator recovers ABSOLUTE phase, which for a PSK2 tag is the
+DIFFERENTIAL of the data.
+
+⭐ **The fix is already written down in our own decoder header.** The Proxmark matches its
+preamble on the PSK1 stream first and only then calls `psk1TOpsk2()` (cmdlfindala.c:1293) —
+which is XOR-ing consecutive bits. So one demodulator serves both: search the preamble in the
+absolute-phase stream, and if that fails, in its differential. ⚠ The repeat gate is unaffected
+— a repeating frame differentiates to a repeating stream.
+
+⚠ **And the Proxmark cannot be the reference here.** Its own read-back of the tag it had just
+written came back different, at "len 235" (C100). Use the memory dump, as IDTECK did.
+
 **Plan, in order:**
 
-1. Parameterise the frame length. `INDALA_PSK_FRAME_BITS` is hard-wired to 64 and the result
-   struct carries `id[8]`; both need to take the larger of the supported formats.
-2. One capture buffer sized for the longest frame (14336 samples), with the CAPTURE LENGTH
-   per protocol — 4096 for the 64-bit formats so they keep their 33 ms reads rather than
-   paying 114 ms for a buffer they do not use.
-3. The periodicity check above, as the acceptance test.
-4. Verify: `lf indala clone -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5` on the
-   Proxmark writes a 224-bit tag to rig B's T5577 — that raw value is the Proxmark's own
-   documented example. ⛔ Restore the IDTECK contents `00081040 / 4944544B / 55667788`
-   afterwards; C90-C92 regress against them.
+1. ✅ Frame length parameterised by format descriptor.
+2. ✅ One capture buffer at 14336 samples, capture length per protocol.
+3. ✅ The periodicity check, as the acceptance test.
+4. ⛔ **NEXT: the PSK2 fallback.** Search the preamble in the differential stream when the
+   direct one fails, exactly as the Proxmark does.
+5. Verify: `lf indala clone -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5`
+   writes the tag — confirmed working, and the write/restore cycle is proven: the tag was
+   written, dumped, and put back to `00081040 / 4944544B / 55667788` with the IDTECK reader
+   returning card 8943462 afterwards. ⛔ Always restore; C90-C92 regress against those blocks.
 
 ## 2. ⭐⭐⭐ Fix the HID Prox and PAC readers — both fail on loud tags
 

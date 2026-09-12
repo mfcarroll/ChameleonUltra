@@ -722,6 +722,25 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def indala224_scan(self):
+        """
+        Read a 224-bit Indala credential (PSK1, RF/32, fc/2 subcarrier).
+
+        ⚠ Slower than the 64-bit scans: a 224-bit frame needs a 14336-sample capture, 114ms
+        against 33ms, so the device's 3s budget buys about a quarter of the attempts.
+
+        ⭐ Returns the raw 28-byte frame and nothing derived from it. There is no agreed
+        facility-code layout for 224-bit Indala the way there is for format 26, so the device
+        does not invent one.
+
+        Returns (raw28, phase, offset, tries).
+        """
+        resp = self.device.send_cmd_sync(Command.INDALA224_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = struct.unpack(">28sBBB1x", resp.data[:32])
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def idteck_scan(self):
         """
         Read an IDTECK credential (PSK1, RF/32, fc/2 subcarrier).

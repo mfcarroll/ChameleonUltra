@@ -86,6 +86,23 @@ uint8_t scan_indala(uint8_t *data) {
 }
 
 /**
+ * @brief Search Indala 224-bit tag
+ *
+ * ⚠ Slower than the 64-bit scans by construction: a 224-bit frame needs a 14336-sample
+ * capture, 114ms against 33ms, so the same budget buys about a quarter of the attempts.
+ *
+ * @param data INDALA224_READ_DATA_SIZE bytes; see lf_indala_data.h for the layout
+ * @return STATUS_LF_TAG_OK on success
+ */
+uint8_t scan_indala224(uint8_t *data) {
+    int32_t energy = 0;
+    if (indala224_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return lf_psk1_failure_status(energy);
+}
+
+/**
  * @brief Search IDTECK tag
  *
  * Same budget and same failure reporting as Indala — it is the same demodulation against a
