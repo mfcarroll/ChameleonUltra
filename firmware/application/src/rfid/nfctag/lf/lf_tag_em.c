@@ -686,15 +686,28 @@ int lf_tag_keri_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
     return m_tag_type == TAG_TYPE_KERI ? LF_KERI_TAG_ID_SIZE : 0;
 }
 
-/** @brief Keri default frame: the credential this protocol was developed against.
- * `E0000000 80003039` is internal id 0x80003039 — what `lf keri clone -t i --cn 12345`
- * writes — and it is the frame four captures of a Momentum emulation decoded to exactly
- * (C157), so a factory-reset slot emulates something this bench has independently read.
- * ⭐ The leading E0000000 is not a choice: bits 0-32 are Keri's fixed preamble. */
+/** @brief Keri default: the BLOCK form of internal id 0x80003039, `(id << 3) | 7` — what
+ * `lf keri clone -t i --cn 12345` leaves in T5577 blocks 1-2, and what a real tag therefore
+ * puts on the wire.
+ *
+ * ⛔⛔ NOT THE READER'S FRAME VIEW `E0000000 80003039`, THOUGH THE TWO ARE THE SAME 64-BIT
+ * CYCLE THREE BITS APART. Emulating the frame view gives Momentum a stable, confident,
+ * WRONG credential — `FD9FD9FB` against the true `80003039`, 6 reads out of 6 — while the
+ * block form reads correctly 5 of 5, with an Indala26 control correct on the same encoder
+ * in both directions (C160).
+ *
+ * ⭐ The cyclic sequences are identical, so this can only be the BURST BOUNDARY: the
+ * emulation plays 31 frames and pauses for field detection, and playback always begins at
+ * buffer index 0. Rotation decides where in the frame that seam falls, and Momentum's Keri
+ * decoder wants its preamble at bit 0 AND bit 64 of its own window. ⚠ The measurement is
+ * solid; that mechanism is inferred and has not been isolated.
+ *
+ * ⇒ GENERAL RULE FOR THIS FAMILY: emulate what the TAG puts on the wire, not what the
+ * reader's frame view is. They differ whenever the preamble straddles a block boundary. */
 bool lf_tag_keri_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t tag_id[LF_KERI_TAG_ID_SIZE] = {
-        0xE0, 0x00, 0x00, 0x00,   // 111 then 29 zeros, then the leading 1 of...
-        0x80, 0x00, 0x30, 0x39,   // ...the internal id, whose top bit IS that 1
+        0x00, 0x00, 0x00, 0x04,   // (0x80003039 << 3) | 7, big-endian: the block form a
+        0x00, 0x01, 0x81, 0xCF,   // ...T5577 holds and clocks out continuously
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

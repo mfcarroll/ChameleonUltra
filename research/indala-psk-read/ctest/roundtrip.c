@@ -60,8 +60,19 @@ static int hexeq(const uint8_t *got, const char *want, size_t bytes) {
     return strcmp(buf, want) == 0;
 }
 
+/* `hex` is what goes ON THE WIRE; `want` is what the decoder should hand back. They are the
+ * same for every format whose frame starts at a block boundary, and they are NOT for Keri —
+ * see the block-form note in lf_tag_em.c (C160). */
+static int trial2(const char *name, const char *hex, const char *want, size_t bits,
+                  lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt);
+
 static int trial(const char *name, const char *hex, size_t bits,
                  lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt) {
+    return trial2(name, hex, hex, bits, mode, fmt);
+}
+
+static int trial2(const char *name, const char *hex, const char *want, size_t bits,
+                  lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt) {
     uint8_t frame[LF_PSK1_MAX_FRAME_BYTES] = {0};
     size_t bytes = bits / 8;
     for (size_t i = 0; i < bytes; i++) {
@@ -91,7 +102,7 @@ static int trial(const char *name, const char *hex, size_t bits,
     size_t n = render(seq, samples, want_samples);
 
     indala_psk_result_t r;
-    int ok = lf_psk1_decode_fmt(samples, n, fmt, &r) && hexeq(r.id, hex, bytes);
+    int ok = lf_psk1_decode_fmt(samples, n, fmt, &r) && hexeq(r.id, want, bytes);
     int shape_ok = (got_entries == want_entries);
 
     printf("  %-28s %s  entries %4zu (want %4zu) %s  decode %s\n",
@@ -116,8 +127,12 @@ int main(void) {
     /* ⭐ Keri shares the encoder whole — same mode, same buffer, only the preamble differs.
      * This is the ONLY verification its emulate arm has: the bench lost coupling before it
      * could be read off the air (C159), and the grid says so. */
-    bad += trial("Keri      PSK1", "e000000080003039", 64,
-                 LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_KERI);
+    /* ⛔ KERI EMITS THE BLOCK FORM AND DECODES TO THE FRAME VIEW — the same 64-bit cycle
+     * three bits apart. This asymmetry IS the test: emulating the frame view instead gave
+     * Momentum a stable wrong credential 6 of 6 (C160), and nothing on the host would have
+     * caught it, because our own decoder is rotation-insensitive and accepts either. */
+    bad += trial2("Keri      PSK1 block form", "00000004000181cf", "e000000080003039", 64,
+                  LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_KERI);
 
     /* ⭐ C152's frame. Its bits XOR to 1, so the encoder MUST emit two copies. */
     bad += trial("Indala224 PSK2 odd parity",

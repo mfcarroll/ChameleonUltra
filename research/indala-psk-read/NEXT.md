@@ -22,7 +22,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 
 | | why a person is required |
 |---|---|
-| ⛔⛔ **BOTH RIGS HAVE LOST COUPLING, and it looks like interference rather than placement** | ⭐ **Read C159 before touching anything.** Rig A read the Flipper's Indala26 emulation 3/3 this morning and returns 0x43 now; its fc/2 subcarrier amplitude has gone **24.3 → 9.6**, below the 10.0 presence threshold, while broadband rms ROSE 937 → 1550. ⛔ **The Flipper emulating changes nothing: 9.8 idle against 9.6 emulating** — so the emulator is not reaching the antenna at all. Rig B went the same way earlier (C155). Every instrument is clean on both units. ⇒ A raised floor with a collapsed signal is interference, not a moved tag, and two rigs failing the same way within hours points at something shared. **This blocks every hardware arm in this file** — read, write and emulate, on both rigs |
+| ⚠ **Both rigs lost coupling for several hours and came back WITHOUT a diagnosis** | ⭐ Every arm passes again — Indala224 and Indala26 writes verified on the tag, Keri read/write/emulate all verified. ⛔ **Nothing was identified and nothing was fixed**, so it is an intermittent with an unknown cause and a known signature: fc/2 amplitude collapses to ~9.6 against ~24 while broadband rms RISES, and the emulating-versus-idle pair goes flat (C159, C155). ⚠ Before blaming any future failure on code, take that pair — one capture idle, one with a source — and check whether they differ at all |
 | ⛔⛔ **The T5577 no longer couples to EITHER Chameleon — rig B's read and write arms are both dead** | ⭐ The Proxmark still reads and writes it perfectly (`lf t55xx detect`, `lf indala clone`, all fine this session), and Chameleon #1 reads the Flipper's emulation 3/3 — so **neither the tag nor the reader is at fault, and the instrument checks are all clean**: `hw lfdebug` shows drive 4, PWM0 enabled, COUNTERTOP 8, pointer ours; drive 4 and drive 7 give different levels, so C148 is excluded. What is dead is the geometry between the tag and the Chameleon: `lf em 410x read` returns not found on both units, and a `lf sniff` rms is **415 at drive 4 against the 5541 this bench measured hours earlier** — 13x down, the empty-antenna floor. ⇒ The tag needs re-seating against Chameleon #2's front face. **This blocks §1d's write verification and every future protocol's read arm** — the Proxmark-writes-Chameleon-reads loop is the whole value of rig B |
 | ⚠ **The bench tag is EM410x `DEADBEEF88`** — `drivesoak.py` cycles the tag through PAC, HID, Indala and EM410x and leaves it on whichever its last round wrote. It has worn three credentials in one day: PAC (as recorded), then HID Prox (as found), then Indala for C138's control, now PAC again | ⛔ Not deliberate — it is wherever the soak left it. §2's PAC specimen is one unattended command away (`lf pac clone --cn CD4F5552`), and so is C138's Indala reference (`lf indala clone -r a0000000e6bd0e92`). ⚠ Check what is actually on the tag before running anything against it: this row has been stale twice and both times it sent experiments at the wrong specimen. ⚠ It is no longer the carrier-locked Indala reference C138 used — restoring that is one unattended command, `lf indala clone -r a0000000e6bd0e92`, and the §4/§5 work is finished with it for now. ⛔ Its previous contents are dumped to `~/lf-t55xx-1D555955-5569A9A5-55A59569-D5B2649F-B3C6AD1F-CF649393-928C14E5-dump.json` and restore with `lf t55xx restore -f <that file>`. ⚠ §2's PAC specimen is no longer on this tag — but `pactest/` reproduces that failure on the host from a committed capture, so the physical tag is not the only specimen. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |
 | ◐ **Lift the T5577 out of the sandwich** — to make the clock conclusion CAUSAL | ⚠ Not urgent, and not blocking: the conclusion is recorded as *likely closed* and everything downstream of it is written that way. But the one experiment that would turn correlation into a law — detune our own subcarrier and predict the ceiling (C139, `ADVERSARIAL.md` brief 2, question 1) — needs the Proxmark seeing the emulator alone, and the tag now sits between them. **One lift, then hands off**; several builds are measured at that one geometry |
@@ -53,7 +53,7 @@ registered `TAG_TYPE_*`.
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
 | **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
-| **Indala 224-bit** | ✓ | ◐ **built, unverified (C155)** | ✓ **11/11 exact (C152)** | ✓ |
+| **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | AWID | ✗ | ✗ | ✗ | ✓ |
@@ -61,7 +61,7 @@ registered `TAG_TYPE_*`.
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
 | Paradox | ✗ | ✗ | ✗ | ✓ |
 | Pyramid | ✗ | ✗ | ✗ | ✓ |
-| **Keri** | ◐ **4/4 on captures, 4 nulls — NOT on device (C157, C159)** | ◐ built, unverified | ◐ **round trip exact — not on air** | ✓ |
+| **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
 | Gallagher | ✗ | ✗ | ✗ | ✓ |
 | NexWatch | ✗ | ✗ | ✗ | ✓ |
 | Securakey | ✗ | ✗ | ✗ | ✓ |
@@ -97,8 +97,8 @@ in full in `FINDINGS.md`.
 
 | | | needs |
 |---|---|---|
-| ◐ **A. Close the Indala family** — §1d | ✅ emulate done, 6/6 exact (C152). ◐ write built, unverified | ⛔ **hands** — C155, the tag no longer couples to either Chameleon |
-| **B. New protocols, by modulation family** — §10 | PSK1 first (Keri, NexWatch), then ASK/biphase, then FSK, then long-frame biphase | ⚠ **the EMULATE side is unblocked** — rig A needs no tag, and `lf_psk1_format_t` plus the parameterised modulator now carry a new PSK1 protocol nearly whole. ⛔ **every READ arm is blocked by C155** |
+| ✅ **A. Close the Indala family** — §1d | **DONE.** Read, write and emulate all verified on hardware | — |
+| ◐ **B. New protocols, by modulation family** — §10 | ✅ **Keri complete** — read, write, emulate, all on hardware. ⇒ **NexWatch is next**, and it finishes the PSK1 family | **nothing** — both rigs work |
 
 **Standing items, not blocking either:**
 

@@ -355,7 +355,10 @@ static void keri_descramble(uint32_t internal_id, uint32_t *fc, uint32_t *cn) {
  * interpretation differ, which is the whole argument for `lf_psk1_format_t`. */
 bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_psk1_read_t r;
-    if (!lf_psk1_read(keri_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+    /* ⛔ NOT INDALA_PSK_CAPTURE_SAMPLES — see KERI_PSK_CAPTURE_SAMPLES. At 4096 this reader
+     * returned 0x43 on a real Keri tag six times running while the host decoded the same
+     * captures 3 of 4. */
+    if (!lf_psk1_read(keri_psk1_decode, KERI_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }

@@ -6721,7 +6721,13 @@ class LFKeriEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             if lf_tag_type != TagSpecificType.Keri:
                 print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Keri. "
                       f"Set it with: hw slot type -s <n> -t Keri")
-            self.cmd.keri_set_emu_id(bytes.fromhex("e0000000") + internal_id.to_bytes(4, "big"))
+            # ⛔⛔ THE BLOCK FORM GOES ON THE WIRE, NOT THE READER'S FRAME VIEW. `(id << 3)
+            # | 7` is what `lf keri clone` leaves in T5577 blocks 1-2 and therefore what a
+            # real tag transmits. Emulating E0000000||id instead — the same 64-bit cycle,
+            # three bits along — gave Momentum a stable WRONG credential 6 times out of 6
+            # (C160). Sending what the tag sends is the rule; the rotation is not free.
+            self.cmd.keri_set_emu_id((((internal_id << 3) | 7) & 0xFFFFFFFFFFFFFFFF)
+                                     .to_bytes(8, "big"))
             print(f" - Keri emu id set to internal id {raw.upper()}.")
             return
 
@@ -6734,11 +6740,14 @@ class LFKeriEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             print(f"   or set this one:     {color_string((CG, 'hw slot type -s ' + str(selected) + ' -t Keri'))}")
             return
         response = self.cmd.keri_get_emu_id()
-        pre_ok = response[:4].hex() == "e0000000" and bool(response[4] & 0x80)
-        print(f" - Keri emu id: {response.hex().upper()}")
-        print(f"   Preamble : {response[:4].hex().upper()}"
-              + ("" if pre_ok else f"  {color_string((CR, '(not the Keri preamble)'))}"))
-        print(f"   Internal ID: {response[4:].hex().upper()}")
+        # The stored bytes are the block form; the id is the middle 32 bits.
+        block = int.from_bytes(response, "big")
+        internal_id = (block >> 3) & 0xFFFFFFFF
+        shape_ok = (block & 7) == 7 and bool(internal_id & 0x80000000)
+        print(f" - Keri emu id: {response.hex().upper()}  (block form, on the wire)")
+        print(f"   Internal ID: {internal_id:08X}"
+              + ("" if shape_ok else
+                 f"  {color_string((CR, '(not a valid Keri block form)'))}"))
         print(f"   Decode it with {color_string((CG, 'lf keri read'))} against the "
               f"emulated slot on a second device.")
 

@@ -94,6 +94,24 @@ extern const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS];
  * 224-bit frames is 14336 samples = 28KB. The 64-bit formats still capture only 4096 — a
  * capture is real time on the wire (33ms against 114ms), so making them read a buffer they do
  * not use would slow every Indala and IDTECK read by 3.5x for nothing. */
+/* ⛔⛔ KERI NEEDS A LONGER CAPTURE THAN INDALA26 DOES, THOUGH BOTH ARE 64-BIT PSK1 AT RF/32.
+ * MEASURED on a Proxmark-written Keri tag, four sample phases, the SAME captures truncated:
+ *
+ *     4096 samples  0 of 4      <- what Indala26 and IDTECK use
+ *     5120 samples  3 of 4
+ *     6144 .. 14336 3 of 4      <- flat from 5120 upward
+ *
+ * ⭐ The likely reason is where the preamble sits in the repeating stream. Indala26's frame
+ * begins AT the block boundary — block 1 is `A0000000`, whose top bits are the preamble — so
+ * a capture that catches any block boundary catches a frame start. Keri's T5577 holds
+ * `(id << 3) | 7`, which puts its three leading preamble 1s at the END of the block pair, so
+ * the frame the reader wants starts 3 bits BEFORE a boundary and the usable window closes
+ * that much earlier. ⚠ Stated as the likely reason, not a demonstrated one: the threshold is
+ * measured, the mechanism is inferred, and a capture-length sweep cannot separate them.
+ *
+ * 8192 is double the measured threshold and still only 65ms on the wire against 33ms. */
+#define KERI_PSK_CAPTURE_SAMPLES 8192
+
 #define INDALA224_PSK_CAPTURE_SAMPLES 14336
 #define LF_PSK1_MAX_CAPTURE_SAMPLES   INDALA224_PSK_CAPTURE_SAMPLES
 
