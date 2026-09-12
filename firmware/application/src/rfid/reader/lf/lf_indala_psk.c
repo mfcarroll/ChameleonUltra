@@ -25,6 +25,42 @@ const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS] = {
     0, 1, 0, 0, 1, 0, 1, 1    /* 0x4B 'K' */
 };
 
+/* Indala224: a 1 then 29 zeros. ⛔ Almost pure constant run — see the header. */
+const uint8_t LF_PSK1_PREAMBLE_INDALA224[INDALA224_PSK_PREAMBLE_BITS] = {
+    1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
+    .preamble = LF_PSK1_PREAMBLE_INDALA,
+    .preamble_bits = INDALA_PSK_PREAMBLE_BITS,
+    .frame_bits = INDALA_PSK_FRAME_BITS,
+    /* ⛔ The IDTECK veto, one-directional on purpose — C90/C91. */
+    .reject_preamble = LF_PSK1_PREAMBLE_IDTECK,
+    .reject_preamble_bits = IDTECK_PSK_PREAMBLE_BITS,
+    .require_repeat = false,
+};
+
+const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK = {
+    .preamble = LF_PSK1_PREAMBLE_IDTECK,
+    .preamble_bits = IDTECK_PSK_PREAMBLE_BITS,
+    .frame_bits = INDALA_PSK_FRAME_BITS,
+    .reject_preamble = NULL,
+    .reject_preamble_bits = 0,
+    .require_repeat = false,
+};
+
+const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224 = {
+    .preamble = LF_PSK1_PREAMBLE_INDALA224,
+    .preamble_bits = INDALA224_PSK_PREAMBLE_BITS,
+    .frame_bits = INDALA224_PSK_FRAME_BITS,
+    .reject_preamble = NULL,
+    .reject_preamble_bits = 0,
+    /* ⛔ NOT OPTIONAL for this format. 29 of its 30 preamble bits are a constant run. */
+    .require_repeat = true,
+};
+
 /*
  * ⭐ EXACT MATCH, NOT A CORRELATION, AND NOT A TOLERANCE.
  *
@@ -164,21 +200,15 @@ static void descramble26(const uint8_t *w, indala_psk_result_t *out) {
                         ((out->parity & 1u) == want_odd);
 }
 
-bool lf_psk1_decode(int16_t *samples, size_t n,
-                    const uint8_t *preamble, uint8_t preamble_bits,
-                    indala_psk_result_t *out) {
-    return lf_psk1_decode_ex(samples, n, preamble, preamble_bits, NULL, 0, out);
-}
-
-bool lf_psk1_decode_ex(int16_t *samples, size_t n,
-                       const uint8_t *preamble, uint8_t preamble_bits,
-                       const uint8_t *reject, uint8_t reject_bits,
-                       indala_psk_result_t *out) {
-    if (samples == NULL || out == NULL || preamble == NULL ||
-            preamble_bits == 0 || preamble_bits > LF_PSK1_MAX_PREAMBLE_BITS ||
-            n < INDALA_PSK_MIN_SAMPLES) {
+bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
+                        const lf_psk1_format_t *fmt, indala_psk_result_t *out) {
+    if (samples == NULL || out == NULL || fmt == NULL || fmt->preamble == NULL ||
+            fmt->preamble_bits == 0 || fmt->preamble_bits > LF_PSK1_MAX_PREAMBLE_BITS ||
+            fmt->frame_bits == 0 || fmt->frame_bits > LF_PSK1_MAX_FRAME_BITS ||
+            n < INDALA_PSK_MIN_SAMPLES(fmt->frame_bits)) {
         return false;
     }
+    const uint16_t FB = fmt->frame_bits;
     bool rejected = false;
     if (n > INDALA_PSK_CAPTURE_SAMPLES) {
         n = INDALA_PSK_CAPTURE_SAMPLES;
@@ -196,7 +226,7 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
     int32_t  best_amp = -1;
     int32_t  best_min = 0;
     uint8_t  best_err = 0xFF;
-    uint8_t  best_word[INDALA_PSK_FRAME_BITS];
+    uint8_t  best_word[LF_PSK1_MAX_FRAME_BITS];
     uint8_t  best_off = 0, best_pos = 0;
     bool     best_inv = false;
     bool     found = false;
@@ -222,7 +252,7 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
 
     for (size_t off = 0; off < INDALA_PSK_BIT_SAMPLES; off++) {
         size_t nb = (n - off) / INDALA_PSK_BIT_SAMPLES;
-        if (nb < INDALA_PSK_FRAME_BITS) {
+        if (nb < FB) {
             continue;
         }
         if (nb > INDALA_PSK_MAX_BITS) {
@@ -240,20 +270,21 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
             best_energy = mean_abs;
         }
 
-        for (size_t i = 0; i + INDALA_PSK_FRAME_BITS <= nb; i++) {
+        for (size_t i = 0; i + FB <= nb; i++) {
             /* ⛔⛔ THE REJECT PREAMBLE — see the note above lf_psk1_decode_ex in the header.
              * Costs almost nothing: preamble_err bails on the first wrong bit. */
-            if (reject != NULL && !rejected) {
+            if (fmt->reject_preamble != NULL && !rejected) {
                 for (uint8_t inv = 0; inv < 2; inv++) {
-                    if (preamble_err(bits, i, inv != 0, reject, reject_bits)
-                            <= PREAMBLE_MAX_ERR) {
+                    if (preamble_err(bits, i, inv != 0, fmt->reject_preamble,
+                                     fmt->reject_preamble_bits) <= PREAMBLE_MAX_ERR) {
                         rejected = true;
                         break;
                     }
                 }
             }
             for (uint8_t inv = 0; inv < 2; inv++) {
-                uint8_t err = preamble_err(bits, i, inv != 0, preamble, preamble_bits);
+                uint8_t err = preamble_err(bits, i, inv != 0, fmt->preamble,
+                                           fmt->preamble_bits);
                 if (err > PREAMBLE_MAX_ERR) {
                     continue;
                 }
@@ -261,7 +292,7 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
                  * divide would cancel. Bounded by 64 * 4 * 32 * 16383 = 1.4e8. */
                 int32_t amp = 0;
                 int32_t mn = INT32_MAX;
-                for (size_t k = 0; k < INDALA_PSK_FRAME_BITS; k++) {
+                for (size_t k = 0; k < FB; k++) {
                     int32_t v = integ[i + k];
                     v = (v < 0) ? -v : v;
                     amp += v;
@@ -276,7 +307,7 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
                     best_off = (uint8_t)off;
                     best_pos = (uint8_t)i;
                     best_inv = (inv != 0);
-                    for (size_t k = 0; k < INDALA_PSK_FRAME_BITS; k++) {
+                    for (size_t k = 0; k < FB; k++) {
                         uint8_t b = bits[i + k];
                         best_word[k] = (inv != 0) ? (uint8_t)(1u - b) : b;
                     }
@@ -341,12 +372,69 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
      *
      * ⇒ It only ever REJECTS. A rejected capture costs one retry at the next phase, and
      * nothing that is accepted today becomes accepted that was not before. */
-    if (best_amp / INDALA_PSK_FRAME_BITS >= INDALA_PSK_STRADDLE_AMP &&
-            best_min * INDALA_PSK_STRADDLE_DIV < best_amp / INDALA_PSK_FRAME_BITS) {
+    if (best_amp / FB >= INDALA_PSK_STRADDLE_AMP &&
+            best_min * INDALA_PSK_STRADDLE_DIV < best_amp / FB) {
         return false;
     }
 
-    for (size_t k = 0; k < 8; k++) {
+    /* ⭐⭐ THE REPEAT TEST — 224 bits of evidence where the preamble offers 30.
+     *
+     * A tag transmits its frame continuously, so the bits one frame period away from any
+     * position are the same bits. For a format whose preamble is almost entirely a constant
+     * run, that self-agreement is the only acceptance test worth having: C90 showed a loud
+     * wrong-protocol source forging Indala26's 33-bit preamble and returning a confident
+     * wrong credential, and Indala224's preamble is weaker still.
+     *
+     * ⚠ THE REPEAT MAY BE INVERTED. Momentum accepts the second frame's preamble normal OR
+     * inverted because PSK2-style cards alternate phase frame to frame, so this counts
+     * agreement and disagreement and requires one of them to be total. Comparing only
+     * "equal" would reject those cards entirely.
+     *
+     * ⚠ Only bits that actually exist in the capture are compared; whichever side of the
+     * frame the neighbouring copy falls on, the capture holds one whole period of it. A
+     * position with no neighbour contributes nothing rather than counting as agreement. */
+    if (fmt->require_repeat) {
+        /* ⚠ Rebuild the bit stream at the WINNING offset. `bits` was overwritten by every
+         * offset tried after it, and `samples` is untouched since baseband_in_place, so one
+         * extra pass is both correct and cheap — and only this format pays for it. */
+        size_t nb_all = (n - best_off) / INDALA_PSK_BIT_SAMPLES;
+        if (nb_all > INDALA_PSK_MAX_BITS) {
+            nb_all = INDALA_PSK_MAX_BITS;
+        }
+        for (size_t k = 0; k < nb_all; k++) {
+            int32_t v = bit_integrator(samples, n, best_off + k * INDALA_PSK_BIT_SAMPLES);
+            bits[k] = (v > 0) ? 1u : 0u;
+        }
+
+        size_t compared = 0, same = 0;
+        const size_t pos = best_pos;
+        for (size_t k = 0; k < FB; k++) {
+            /* ⚠ `best_word` is already de-inverted; `bits` is not. Compare against the raw
+             * stream in the same sense the frame was read in, or an inverted-preamble frame
+             * would score 0 agreement against its own neighbours. */
+            const uint8_t want = best_inv ? (uint8_t)(1u - best_word[k]) : best_word[k];
+            if (pos + k >= FB) {
+                compared++;
+                if (bits[pos + k - FB] == want) {
+                    same++;
+                }
+            }
+            if (pos + k + FB < nb_all) {
+                compared++;
+                if (bits[pos + k + FB] == want) {
+                    same++;
+                }
+            }
+        }
+        /* ⛔ Require a whole frame's worth of corroboration, and require it to be unanimous
+         * one way or the other. A partial match is a coincidence, not a period. */
+        if (compared < FB || (same != compared && same != 0)) {
+            return false;
+        }
+    }
+
+    const size_t frame_bytes = (size_t)FB / 8;
+    for (size_t k = 0; k < frame_bytes; k++) {
         uint8_t byte = 0;
         for (size_t b = 0; b < 8; b++) {
             byte = (uint8_t)((byte << 1) | best_word[k * 8 + b]);
@@ -356,7 +444,7 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
     out->offset   = best_off;
     out->bit_pos  = best_pos;
     out->inverted = best_inv;
-    out->amp      = best_amp / INDALA_PSK_FRAME_BITS;
+    out->amp      = best_amp / FB;
     out->min_amp  = best_min;
     /* ⚠ ADVISORY, NOT A GATE. The parity is reported so a caller can prefer a clean read,
      * but it does NOT reject a frame here: it is two bits, it only covers format 26, and
@@ -368,7 +456,8 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
     out->csn = 0;
     out->parity = 0;
     out->wiegand26_ok = false;
-    memcpy(out->word_bits, best_word, INDALA_PSK_FRAME_BITS);
+    out->frame_bits = FB;
+    memcpy(out->word_bits, best_word, FB);
     return true;
 }
 
@@ -376,14 +465,15 @@ bool lf_psk1_decode_ex(int16_t *samples, size_t n,
  * Indala's preamble matches a loud IDTECK tag, so Indala must veto on IDTECK; the reverse
  * never happened in 480 captures, so vetoing here would only throw away genuine reads. */
 bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
-    return lf_psk1_decode(samples, n, LF_PSK1_PREAMBLE_IDTECK,
-                          IDTECK_PSK_PREAMBLE_BITS, out);
+    return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_IDTECK, out);
+}
+
+bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_INDALA224, out);
 }
 
 bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
-    if (!lf_psk1_decode_ex(samples, n,
-                           LF_PSK1_PREAMBLE_INDALA, INDALA_PSK_PREAMBLE_BITS,
-                           LF_PSK1_PREAMBLE_IDTECK, IDTECK_PSK_PREAMBLE_BITS, out)) {
+    if (!lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_INDALA64, out)) {
         return false;
     }
     descramble26(out->word_bits, out);

@@ -35,14 +35,28 @@
 /** Samples per bit. Indala is RF/32 and the SAADC takes one sample per carrier cycle. */
 #define INDALA_PSK_BIT_SAMPLES  32
 
-/** Bits in an Indala frame. */
+/** Bits in a 64-bit-class frame — Indala26 and IDTECK both. */
 #define INDALA_PSK_FRAME_BITS   64
+
+/** Bits in an Indala224 frame. */
+#define INDALA224_PSK_FRAME_BITS 224
+
+/** The longest frame any format here uses, for fixed-size storage. */
+#define LF_PSK1_MAX_FRAME_BITS  INDALA224_PSK_FRAME_BITS
+#define LF_PSK1_MAX_FRAME_BYTES (LF_PSK1_MAX_FRAME_BITS / 8)
 
 /** Bits in the fixed preamble (cmdlfindala.c:50) — and the first 33 bits of every ID. */
 #define INDALA_PSK_PREAMBLE_BITS 33
 
 /** IDTECK's preamble is 0x4944544B, "IDTK", the first 32 bits of every IDTECK frame. */
 #define IDTECK_PSK_PREAMBLE_BITS 32
+
+/* ⛔⛔ INDALA224'S PREAMBLE IS A 1 FOLLOWED BY 29 ZEROS, AND THAT IS NOT ENOUGH ON ITS OWN.
+ * 29 of its 30 bits are a constant run — weaker than Indala26's 33-bit preamble, which a
+ * loud IDTECK tag already forged at sample phase 28 to produce a confident wrong credential
+ * (C90). ⇒ A format this weak must carry `require_repeat`, which tests all 224 bits against
+ * the frame's own neighbouring copies instead of trusting 30. */
+#define INDALA224_PSK_PREAMBLE_BITS 30
 
 /** Longest preamble any format here uses, for fixed-size storage. */
 #define LF_PSK1_MAX_PREAMBLE_BITS 33
@@ -55,6 +69,7 @@
  * duplicated the 320-capture validation with it. */
 extern const uint8_t LF_PSK1_PREAMBLE_INDALA[INDALA_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
+extern const uint8_t LF_PSK1_PREAMBLE_INDALA224[INDALA224_PSK_PREAMBLE_BITS];
 
 /** Samples in one capture. 4096 = two whole 64-bit frames at RF/32.
  *
@@ -62,6 +77,13 @@ extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
  * capture, so a 2048-sample buffer only contains a complete frame for one starting phase
  * in 2048. Two frames guarantees one whole frame lands inside. */
 #define INDALA_PSK_CAPTURE_SAMPLES 4096
+
+/* ⭐ ONE BUFFER, SIZED FOR THE LONGEST FRAME, FILLED TO WHATEVER THE FORMAT NEEDS. Two whole
+ * 224-bit frames is 14336 samples = 28KB. The 64-bit formats still capture only 4096 — a
+ * capture is real time on the wire (33ms against 114ms), so making them read a buffer they do
+ * not use would slow every Indala and IDTECK read by 3.5x for nothing. */
+#define INDALA224_PSK_CAPTURE_SAMPLES 14336
+#define LF_PSK1_MAX_CAPTURE_SAMPLES   INDALA224_PSK_CAPTURE_SAMPLES
 
 /* ⛔ THE STRADDLE GATE. A frame is rejected when it is BOTH loud and ragged — see the long
  * note at the gate itself in lf_indala_psk.c. Both conditions are required: shape alone
@@ -80,13 +102,37 @@ extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
                                            front-side true frames 0.36-0.62. */
 
 /** Upper bound on bits recoverable from one capture, for the stack-allocated workspace. */
-#define INDALA_PSK_MAX_BITS (INDALA_PSK_CAPTURE_SAMPLES / INDALA_PSK_BIT_SAMPLES)
+#define INDALA_PSK_MAX_BITS (LF_PSK1_MAX_CAPTURE_SAMPLES / INDALA_PSK_BIT_SAMPLES)
 
 /** Shortest capture that can hold a preamble plus a whole word plus slack. */
-#define INDALA_PSK_MIN_SAMPLES (INDALA_PSK_BIT_SAMPLES * (INDALA_PSK_FRAME_BITS + 4))
+#define INDALA_PSK_MIN_SAMPLES(frame_bits) (INDALA_PSK_BIT_SAMPLES * ((frame_bits) + 4))
+
+/* ⭐ A FORMAT IS THE ONLY THING THAT DIFFERS BETWEEN THESE PROTOCOLS at this layer. Indala26,
+ * IDTECK and Indala224 are all PSK1 at RF/32 on an fc/2 subcarrier; the mixer, the notch, the
+ * bit integrator, the offset ranking and the straddle gate are shared verbatim. Passing a
+ * descriptor rather than six loose parameters keeps it that way as formats are added. */
+typedef struct {
+    const uint8_t *preamble;       /**< one byte per bit, MSB of the frame first. */
+    uint8_t  preamble_bits;
+    uint16_t frame_bits;
+    /** ⛔ A format whose presence VETOES this one — see the note on lf_psk1_decode_ex.
+     *  NULL for none, and it must stay NULL wherever the confusion is one-directional. */
+    const uint8_t *reject_preamble;
+    uint8_t  reject_preamble_bits;
+    /** ⭐ Require the frame to REPEAT at its own period before accepting it. For a format
+     *  whose preamble is mostly a constant run this is the real acceptance test: 224 bits of
+     *  self-agreement instead of 30 bits of pattern. */
+    bool     require_repeat;
+} lf_psk1_format_t;
+
+extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64;
+extern const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK;
+extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224;
 
 typedef struct {
-    uint8_t  id[8];        /**< the 64-bit frame, big-endian: id[0] is the first bit. */
+    uint8_t  id[LF_PSK1_MAX_FRAME_BYTES]; /**< the frame, big-endian: id[0] is the first bit.
+                                  Only the first frame_bits/8 bytes are meaningful. */
+    uint16_t frame_bits;   /**< bits actually recovered, so a caller knows how much of id. */
     uint8_t  fc;           /**< format-26 facility code, de-scrambled. */
     uint16_t csn;          /**< format-26 card number, de-scrambled. */
     uint8_t  parity;       /**< the two format-26 parity bits, b2 b1. */
@@ -100,7 +146,7 @@ typedef struct {
                                 relative to its average is an integrator sitting across bit
                                 boundaries, which decodes to a repeatable WRONG word. See
                                 the gate in lf_indala_psk.c. */
-    uint8_t  word_bits[INDALA_PSK_FRAME_BITS]; /**< the frame as one byte per bit, which is
+    uint8_t  word_bits[LF_PSK1_MAX_FRAME_BITS]; /**< the frame as one byte per bit, which is
                                 what a format de-scramble wants. `id` is the same 64 bits
                                 packed. */
     int32_t  energy;       /**< ⭐ SET EVEN WHEN NO FRAME DECODES — this is the one field
@@ -151,7 +197,7 @@ typedef struct {
  * second 8KB buffer. Pass a copy if the caller still needs the raw capture.
  *
  * @param samples  raw 14-bit SAADC conversions, one per carrier cycle, 0..16383.
- * @param n        sample count; must be >= INDALA_PSK_MIN_SAMPLES.
+ * @param n        sample count; must be >= INDALA_PSK_MIN_SAMPLES(frame_bits).
  * @param out      filled in on success. ⚠ `out->energy` is filled in EITHER WAY, and is
  *                 the only field that may be read after a false return.
  * @return         true if a frame was recovered.
@@ -168,46 +214,14 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
  * @param preamble       one byte per bit, 0 or 1, MSB of the frame first.
  * @param preamble_bits  length, at most LF_PSK1_MAX_PREAMBLE_BITS.
  */
-bool lf_psk1_decode(int16_t *samples, size_t n,
-                    const uint8_t *preamble, uint8_t preamble_bits,
-                    indala_psk_result_t *out);
-
-/**
- * ⛔⛔ THE SAME DECODE, PLUS A FORMAT THAT VETOES IT — the fix for C90.
- *
- * `lf indala read` returned `a0000000801119c0`, a confident WRONG credential, from a T5577
- * whose memory is an IDTECK frame, on 4 of 8 reads. Neither existing safeguard can see it:
- * the straddle gate wants a frame that is loud AND ragged and this one is loud and well
- * shaped at 2.8x the amplitude bar, while the two-capture agreement rule wants errors to be
- * independent and this one is deterministic at sample phase 28, so both captures agree.
- *
- * ⭐ The asymmetry is the whole mechanism. Indala's preamble is 33 bits of which 28 are a
- * CONSTANT RUN, so a loud non-Indala PSK1 signal sampled at an unlucky phase can produce it.
- * IDTECK's is "IDTK", 32 bits with no run longer than two — a far more selective pattern.
- * Measured on the committed captures:
- *
- *     160 front-side Indala tag captures      IDTECK matched   0
- *     160 front-side empty captures           IDTECK matched   0
- *     160 back-side Indala tag captures       IDTECK matched   0
- *       8 IDTECK tag captures, phases 0-112   IDTECK matched   8   (Indala falsely: 1)
- *
- * ⇒ "If IDTECK decodes from this capture, do not report an Indala credential" costs nothing
- * on 480 captures of the thing it must not disturb, and catches the false positive.
- *
- * ⛔ IT IS ASYMMETRIC ON PURPOSE. An IDTECK reader must NOT veto on an Indala match: the
- * false match goes one way only, so vetoing that direction would throw away genuine IDTECK
- * reads for a pattern that appears BECAUSE the tag is IDTECK.
- *
- * ⚠ This rejects; it does not disambiguate. A capture containing both formats is a case
- * nobody has produced, and it would be reported as "present but not decoded" (0x43).
- */
-bool lf_psk1_decode_ex(int16_t *samples, size_t n,
-                       const uint8_t *preamble, uint8_t preamble_bits,
-                       const uint8_t *reject, uint8_t reject_bits,
-                       indala_psk_result_t *out);
+bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
+                        const lf_psk1_format_t *fmt, indala_psk_result_t *out);
 
 /** IDTECK's decode: the same demodulation against the "IDTK" preamble, and no veto. */
 bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** Indala224: the same demodulation against a 30-bit preamble, gated on the repeat. */
+bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** What a reader hands the capture engine: one protocol's whole decode, preamble and any
  *  veto included, so the engine stays protocol-agnostic. */

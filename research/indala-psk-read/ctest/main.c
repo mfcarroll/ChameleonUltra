@@ -63,8 +63,7 @@ int main(int argc, char **argv) {
         static int16_t buf2[INDALA_PSK_CAPTURE_SAMPLES];
         memcpy(buf2, buf, n * sizeof(buf[0]));
         indala_psk_result_t ri;
-        int idteck = lf_psk1_decode(buf2, n, LF_PSK1_PREAMBLE_IDTECK,
-                                    IDTECK_PSK_PREAMBLE_BITS, &ri);
+        int idteck = lf_psk1_decode_fmt(buf2, n, &LF_PSK1_FORMAT_IDTECK, &ri);
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
