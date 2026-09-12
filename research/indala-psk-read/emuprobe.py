@@ -34,6 +34,26 @@ import numpy as np
 
 FS = 125000.0
 HERE = os.path.dirname(os.path.abspath(__file__))
+EXPECT_BITS = 0
+EXPECT_HEX = ""
+
+
+def lowpass_baseband(y):
+    """Mix fc/2 down to DC and keep the data. Same chain as the decoder."""
+    b = y * ((-1.0) ** np.arange(len(y)))
+    S = np.fft.rfft(b)
+    S[np.fft.rfftfreq(len(b), 1 / FS) > 12000.0] = 0
+    return np.fft.irfft(S, len(b))
+
+
+def longest_bit_run(hexframe):
+    """Longest run of identical bits in a frame — in PSK1 that IS the constant-phase run."""
+    bits = bin(int(hexframe, 16))[2:].zfill(len(hexframe) * 4)
+    best = run = 1
+    for i in range(1, len(bits)):
+        run = run + 1 if bits[i] == bits[i - 1] else 1
+        best = max(best, run)
+    return best
 
 
 def load16(path):
@@ -98,6 +118,30 @@ def report(path):
     print("    subcarrier at 7.8 kHz — but 7.8 kHz is ALSO a harmonic of a healthy 3906 Hz,")
     print("    so read the two together, never 7.8 kHz alone.")
 
+    # ⭐ THE MEASURE THAT ACTUALLY CRACKED IT. A PSK1 frame's phase IS its bits, so a run of
+    # N identical bits must appear as N*32 samples of constant phase. That test needs no
+    # frequency resolution at the Nyquist edge — which is exactly where the obvious
+    # measurement fails (an EMPTY field "peaks" 793 Hz off fc/2, proving the estimator
+    # rather than any signal). Measured: real tag 912 samples, emulator 102, empty 34.
+    b = lowpass_baseband(y)
+    sgn = np.sign(b)
+    sgn[sgn == 0] = 1
+    ch = np.flatnonzero(np.diff(sgn)) + 1
+    runs = np.diff(np.concatenate([[0], ch, [len(sgn)]]))
+    print(f"  longest constant-phase run  {runs.max():6.0f} samples = "
+          f"{runs.max() / 32:.1f} bits at RF/32")
+    if EXPECT_BITS:
+        need = EXPECT_BITS * 32
+        verdict = "✓" if runs.max() > need * 0.7 else "⛔ PHASE STRUCTURE IS NOT THERE"
+        print(f"    frame {EXPECT_HEX} needs a {EXPECT_BITS}-bit run = {need} samples   {verdict}")
+
+    # A looping 64-bit frame at RF/32 repeats every 2048 samples.
+    yy = b - b.mean()
+    ac = np.correlate(yy, yy, "full")[len(yy) - 1:]
+    ac = ac / ac[0]
+    lag = 1500 + int(np.argmax(ac[1500:2600]))
+    print(f"  frame autocorrelation       lag {lag} r={ac[lag]:+.2f}   (true frame = 2048)")
+
     cdemod = os.path.join(HERE, "ctest", "cdemod")
     if os.path.exists(cdemod):
         out = subprocess.run([cdemod, path], capture_output=True, text=True).stdout.strip()
@@ -105,9 +149,19 @@ def report(path):
 
 
 def main():
-    if len(sys.argv) < 2:
+    global EXPECT_BITS, EXPECT_HEX
+    args = sys.argv[1:]
+    if "--frame" in args:
+        i = args.index("--frame")
+        EXPECT_HEX = args[i + 1].lower()
+        EXPECT_BITS = longest_bit_run(EXPECT_HEX)
+        del args[i:i + 2]
+    if not args:
         raise SystemExit(__doc__)
-    for p in sys.argv[1:]:
+    if EXPECT_HEX:
+        print(f"  expecting frame {EXPECT_HEX}: longest identical-bit run is "
+              f"{EXPECT_BITS} bits = {EXPECT_BITS * 32} samples of constant phase")
+    for p in args:
         report(p)
 
 
