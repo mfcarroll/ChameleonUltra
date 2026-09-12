@@ -721,6 +721,31 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">8sBHBBBB1x", resp.data[:16])
         return resp
 
+    @expect_response(Status.SUCCESS)
+    def lf_emu_debug(self):
+        """
+        ⚠ §3 instrumentation: read the LF emulation state in one shot.
+
+        Changing a slot's LF tag type kills emulation until a power cycle (C126), and every
+        test of that costs a power cycle — so this returns everything at once rather than
+        making us spend a cycle per question. ⛔ Remove with the firmware side.
+
+        Returns a dict: sense_state, emulating, tag_type, pwm_clk, pwm_inits, playbacks,
+        hfclk_balance, hfclk_running, have_seq.
+        """
+        resp = self.device.send_cmd_sync(Command.LF_EMU_DEBUG)
+        if resp.status == Status.SUCCESS:
+            d = resp.data
+            resp.parsed = {
+                "sense_state": d[0], "emulating": d[1],
+                "tag_type": (d[2] << 8) | d[3],
+                "pwm_clk": d[4],
+                "pwm_inits": (d[5] << 8) | d[6],
+                "playbacks": (d[7] << 8) | d[8],
+                "hfclk_balance": d[9], "hfclk_running": d[10], "have_seq": d[11],
+            }
+        return resp
+
     @expect_response(Status.LF_TAG_OK)
     def indala224_scan(self):
         """

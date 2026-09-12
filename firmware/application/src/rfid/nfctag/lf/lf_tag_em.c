@@ -56,6 +56,16 @@ static volatile bool m_is_lf_emulating = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 
+/* ⚠ §3 INSTRUMENTATION. Changing a slot's LF tag type kills emulation until a power cycle
+ * (C126), and the stale-base-clock explanation is refuted because forcing pwm_init does not
+ * fix it. These counters exist to find what IS stuck. Every test costs a power cycle, so the
+ * point is to read everything at once. ⛔ Remove before upstreaming. */
+static uint8_t  m_dbg_pwm_clk = 0xFF;   /* base clock pwm_init last applied */
+static uint16_t m_dbg_pwm_inits = 0;    /* how many times pwm_init has run */
+static uint16_t m_dbg_playbacks = 0;    /* how many times playback was started */
+static uint16_t m_dbg_hf_req = 0;       /* sd_clock_hfclk_request calls */
+static uint16_t m_dbg_hf_rel = 0;       /* ...and releases; these must stay balanced */
+
 // The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
@@ -116,6 +126,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    m_dbg_playbacks++;
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
                              NRFX_PWM_FLAG_STOP);
 
@@ -143,7 +154,8 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
+        m_dbg_playbacks++;
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_TAG_FRAMES_PER_BURST,
                              NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
@@ -165,6 +177,10 @@ static void pwm_init(void) {
     // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
     cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    /* ⚠ DEBUG BOOKKEEPING for §3. Records what was actually applied rather than what the
+     * current tag type would ask for now, which is the whole question. */
+    m_dbg_pwm_clk = (uint8_t)cfg.base_clock;
+    m_dbg_pwm_inits++;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
     cfg.step_mode = NRF_PWM_STEP_AUTO;
@@ -190,6 +206,7 @@ static void lf_sense_enable(void) {
     // so this coexists with BLE. Both functions run from thread context
     // (tag_mode_enter/tag_emulation_sense_end) where SVCs are safe.
     sd_clock_hfclk_request();
+    m_dbg_hf_req++;
     uint32_t hfclk_running = 0;
     while (!hfclk_running) {
         sd_clock_hfclk_is_running(&hfclk_running);
@@ -208,6 +225,7 @@ static void lf_sense_disable(void) {
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
     sd_clock_hfclk_release();
+    m_dbg_hf_rel++;
 }
 
 static enum {
@@ -496,4 +514,25 @@ bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0xE6, 0xBD, 0x0E, 0x92,   // ...the payload. Fmt 26 FC 52 Card 63612.
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/* ⚠ §3 INSTRUMENTATION — see the counter declarations above. Reads everything in one call
+ * because each test costs a power cycle. ⛔ Deliberately does NOT call is_lf_field_exists():
+ * that enables LPCOMP and triggers a sample, so measuring with it would change the state
+ * being measured. ⛔ Remove before upstreaming. */
+void lf_tag_em_debug_get(uint8_t *out) {
+    uint32_t hf = 0;
+    sd_clock_hfclk_is_running(&hf);
+    out[0]  = (uint8_t)m_lf_sense_state;
+    out[1]  = m_is_lf_emulating ? 1u : 0u;
+    out[2]  = (uint8_t)((uint16_t)m_tag_type >> 8);
+    out[3]  = (uint8_t)((uint16_t)m_tag_type & 0xFF);
+    out[4]  = m_dbg_pwm_clk;
+    out[5]  = (uint8_t)(m_dbg_pwm_inits >> 8);
+    out[6]  = (uint8_t)(m_dbg_pwm_inits & 0xFF);
+    out[7]  = (uint8_t)(m_dbg_playbacks >> 8);
+    out[8]  = (uint8_t)(m_dbg_playbacks & 0xFF);
+    out[9]  = (uint8_t)(m_dbg_hf_req - m_dbg_hf_rel);
+    out[10] = (uint8_t)hf;
+    out[11] = (m_pwm_seq != NULL) ? 1u : 0u;
 }

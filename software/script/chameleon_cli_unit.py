@@ -7553,6 +7553,31 @@ class HWFactoryReset(DeviceRequiredUnit):
             print(" - Reset failed!")
 
 
+@hw.command("emudebug")
+class HWEmuDebug(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("⚠ §3 instrumentation: dump the LF emulation state. Changing a "
+                              "slot's LF tag type kills emulation until a power cycle, and "
+                              "every test costs one, so this reads everything at once.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        d = self.cmd.lf_emu_debug()
+        sense = {0: "NONE", 1: "DISABLE", 2: "ENABLE"}.get(d["sense_state"], "?")
+        clk = {0: "16MHz", 1: "8MHz", 2: "4MHz", 3: "2MHz", 4: "1MHz",
+               5: "500kHz", 6: "250kHz", 7: "125kHz", 0xFF: "never run"}.get(d["pwm_clk"], "?")
+        print(f"   LF sense state   : {sense}")
+        print(f"   emulating now    : {bool(d['emulating'])}")
+        print(f"   tag type         : {d['tag_type']}")
+        print(f"   PWM base clock   : {clk}   (applied by the last pwm_init)")
+        print(f"   pwm_init runs    : {d['pwm_inits']}")
+        print(f"   playbacks started: {d['playbacks']}")
+        print(f"   HFXO req-rel     : {d['hfclk_balance']}   (0 is balanced)")
+        print(f"   HFXO running     : {bool(d['hfclk_running'])}")
+        print(f"   have pwm seq     : {bool(d['have_seq'])}")
+
+
 @hw.command("battery")
 class HWBatteryInfo(DeviceRequiredUnit):
     # How much remaining battery is considered low?

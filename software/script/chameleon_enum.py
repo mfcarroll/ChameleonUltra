@@ -185,6 +185,7 @@ class Command(enum.IntEnum):
     INDALA_WRITE_TO_T55XX = 3034
     IDTECK_SCAN = 3035
     INDALA224_SCAN = 3036
+    LF_EMU_DEBUG = 3037
 
 
 @enum.unique

@@ -212,5 +212,6 @@
 #define DATA_CMD_INDALA_WRITE_TO_T55XX          (3034)
 #define DATA_CMD_IDTECK_SCAN                    (3035)
 #define DATA_CMD_INDALA224_SCAN                 (3036)
+#define DATA_CMD_LF_EMU_DEBUG                   (3037)
 
 #endif

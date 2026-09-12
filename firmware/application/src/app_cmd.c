@@ -10,6 +10,7 @@
 #include "app_cmd.h"
 #include "app_status.h"
 #include "tag_persistence.h"
+#include "lf_tag_em.h"    /* ⚠ §3 instrumentation only — remove with the debug command */
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
@@ -754,6 +755,12 @@ static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status,
         return data_frame_make(cmd, status, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
+static data_frame_tx_t *cmd_processor_lf_emu_debug(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t buf[LF_TAG_EM_DEBUG_SIZE] = { 0x00 };
+    lf_tag_em_debug_get(buf);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(buf), buf);
 }
 
 static data_frame_tx_t *cmd_processor_indala224_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3247,6 +3254,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_INDALA_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_indala_write_to_t55xx,         NULL                   },
     {    DATA_CMD_IDTECK_SCAN,                  before_reader_run,           cmd_processor_idteck_scan,                   NULL                   },
     {    DATA_CMD_INDALA224_SCAN,               before_reader_run,           cmd_processor_indala224_scan,                NULL                   },
+    {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },

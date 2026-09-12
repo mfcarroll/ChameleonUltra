@@ -276,7 +276,13 @@ the clean test of C47.
 ⛔ Do not read the em410x 95% as evidence either way: it is on the GPIO path and never
 touches the SAADC, which is why C47 was wrongly weakened once already.
 
-## 3. ⛔⛔ Changing a slot's LF tag type kills emulation until a POWER CYCLE
+## 3. ⛔⛔⛔ TOP PRIORITY — changing a slot's LF tag type kills emulation until a POWER CYCLE
+
+⛔ **Ahead of every new protocol, decided 2026-09-12.** Not because it is the worst bug on
+merit but because of what it costs: **every slot-type change needs a human to unplug the
+device**, so it puts a person in the loop of any automated run. It is the one defect that
+blocks unattended work outright, and breadth built on top of it would multiply the number of
+times someone has to walk over to the bench.
 
 **Repro, one line:** with LF emulation working, `hw slot type -s <n> -t <any other LF type>`.
 Emulation stops and does not come back from a mode cycle or a DFU reflash — only from
