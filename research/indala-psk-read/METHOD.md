@@ -197,6 +197,21 @@ varied.
 software, with no hardware at all. A format with a checksum will tell you whether you have
 read it correctly — ask it before building a theory about why it disagrees.
 
+**M32. ⛔ THE NOTES ARE AN INSTRUMENT TOO, AND I PROPOSED A MEASUREMENT THEY HAD ALREADY
+ANSWERED.** L114 closed by pointing at carrier-edge counting for field detection — the way the
+Proxmark and Flipper stay clock-locked while emulating — and I offered it as the next experiment,
+costed at one capture. `FINDINGS.md`'s own **Hardware reference** already opened with
+`ANT -> VD1 detector -> LF_OA`, and `lf_tag_em.c` already carried an upstream maintainer's line
+saying the tag-mode antenna taps are envelope-only. Both were written before I proposed it. The
+signal I planned to measure does not exist on any pin of this board, in any mode.
+⇒ **Before designing a measurement, read the reference section for the subsystem it touches.**
+One grep against notes I had already written would have replaced a firmware build, a flash and a
+bench session.
+⚠ The hazard is structural, not carelessness. A reference section is precisely where facts go to
+*stop* being thought about — that is its job. The whole answer here was one word of a component
+label, `detector`, and it read as scenery. ⭐ So the check cannot be "do I remember this"; it has
+to be the grep, run at the moment a design is proposed rather than after it fails.
+
 **M23. ⛔⛔ A SAFETY RULE MEASURED AT LOW SNR MAY NOT HOLD AT HIGH SNR, AND THE FAILURE IS
 SILENT.** The two-capture agreement rule rests on "every wrong word appeared exactly once,
 because bit errors land somewhere different each time." That was measured, correctly, on

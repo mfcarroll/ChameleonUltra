@@ -269,6 +269,9 @@ noise is a much weaker one against a chain whose floor spans 17x across bands.
 | C131 | ⚠ **`hw slot type` does not persist without `hw slot store`, and it has cost two experiments.** A reboot reloads the slot from flash, so an unstored type change silently reverts — once leaving three experiments running against EM410X when I believed the slot was Indala, and once reverting EM410X to Indala mid-test so an "EM410x" arm was really an Indala arm. ⇒ After `hw slot type`, either `hw slot store` or re-read the type before trusting any measurement | 2 incidents | ✓ `hw emudebug` reports the live type, which is how both were caught | n/a | L112 |
 | C132 | ⭐⭐⭐ **ALL THREE FIXED AND VERIFIED — a slot's LF type can now be changed and emulated with no reboot, in either direction.** **C129:** `lf_sense_disable()` no longer nulls `m_pwm_seq` (the sequences are static and outlive the uninit, which `utils/psk1.h` already documented), so a mode cycle keeps the waveform — `have pwm seq` stays True and ASK reads **4/4** where it read 0/4. **C130:** `lf_tag_data_loadcb()` is now a wrapper that calls `pwm_reinit_if_clock_changed()` after every load, so the base clock follows the type; `pwm_init runs` increments and the clock moves 125kHz ↔ 1MHz on demand. **C131:** `hw slot type` now prints that the change is RAM-only until `hw slot store`. ⇒ Round trip with no reboot and no power cycle: Indala → EM410X **ASK 4/4** → Indala **PSK 4/4** | 19 reads across 4 configurations | ✓ each arm is the other's control — both protocols read in both directions | ✓ the clock and sequence state are read from the device, independent of the read outcome | L113 |
 | C133 | ⭐⭐ **The emulation burst is now a TIME budget, and the frame count is derived per protocol from the sequence itself.** `LF_TAG_FRAMES_PER_BURST (32)` was the wrong unit: a frame is 16.4 ms for Indala 64-bit, 32.8 ms for PAC and EM410x, and **57.3 ms for Indala 224-bit** — so one constant meant 524 ms for one protocol and **1.83 s** for another, with the worst latency landing on the longest-frame protocol. Now `LF_TAG_BURST_TARGET_MS (500)` is converted by summing the sequence's own `counter_top` values, so a protocol added later is right without a table. Verified on device: Indala **31** frames, EM410x **16**, both matching the arithmetic, and both still emulate (PSK 3/3, ASK 3/3) | 6 reads + 2 state dumps | ✓ each protocol is the other's control | ✓ the computed counts match hand arithmetic from the carrier rate | L114 |
+| C134 | ⛔⛔ **NO CARRIER-RATE SIGNAL REACHES THE MCU IN ANY MODE — carrier-edge field detection and carrier recovery are both impossible on this board.** All four LF pins are accounted for on sheet 2 of the Ultra schematic: **P0.31** is the SELECT input of U1 (RS2257XC6, an SPDT analog switch) that ties the coil's drive terminal to GND or 3V3 — it never touches antenna signal, so it cannot be re-purposed as a sense input; **P1.13** is the gate of Q3, which shunts the RECTIFIED node; **P0.02** and **P0.29** both sit behind **VD1**, a 1N4148 half-wave detector at the coil, whose hold is 235 kΩ against ≈7.3 nF → **τ ≈ 1.7 ms**. ⚠ Doubly blocked: the SAADC is clamped to 200 kHz and a 125 kHz carrier needs 250 kHz, so surviving ripple would be unresolvable anyway. ⇒ **§5 cannot lock to the reader's carrier**, and §4's burst cannot be removed the way the Proxmark and Flipper do it — both of those recover a clock this board discards before the MCU. ⛔ Retracts the closing sentence of L114, which proposed exactly that | the board, not a measurement — the claim is exhaustive over the pin list, not sampled | n/a | ✓ two independent sources predating the question: the manufacturer's schematic, and an upstream maintainer's "envelope-only" comment in `lf_tag_em.c` (commit `a421e99`, an ancestor of `upstream/main`). The firmware's own "~2 ms peak detector" delay agrees with τ computed from components it never mentions | L115 |
+| C135 | ⭐⭐ **§4 MEASURED — the burst-length curve is FLAT above ~500 ms and falls below it, so 500 ms stays.** 24 `emutest.py` runs across **120× of burst length**, one bench, one frame, Proxmark facing Chameleon #2. **2 frames / 32.8 ms:** 7 of 8 decode, every one at exactly **66 ms** and never higher. **31 frames / 508 ms:** 1 of 5, to 197 ms. **32 frames / 524 ms** (the older build): 4 of 6, to 164–197 ms. **245 frames / 4014 ms:** 4 of 5, to 131–164 ms. ⇒ Two separate regimes. Above ~500 ms **more burst buys nothing** — and at 4014 ms a 290 ms capture is essentially never boundary-crossing, yet 262 ms and 290 ms decoded in **none** of the 5, so whatever stops them is not the boundary. Below ~500 ms the boundaries **do** cost: the 32.8 ms arm lost a factor of 2–3, while carrying **27% more signal** than every other arm (fc/2 22.7 against 17.9), which confounds it in the favourable direction and so understates the loss. ⛔ Replaces L114's reason for the constant — "the only length with evidence" — with a curve. ⚠ The 131–197 ms ceiling at long bursts is **unexplained**; it is not boundaries, and two free-running oscillators are the obvious suspect, which is §5's subject | 24 runs across 4 arms | ✓ the 32.8 ms arm is the paired manipulation, and its confound runs the favourable way | ⚠ **weak — no carrier-locked positive control in this geometry.** The 131–197 ms ceiling is not yet known to be the emulator's rather than the Proxmark demodulator's at this amplitude | L115 |
+| C136 | ⚠ **`emutest.py` reports the longest decodable PREFIX, which is not the longest decodable WINDOW — every §4 ceiling above is a LOWER BOUND.** One capture, 2-frame burst, prefix ceiling 66 ms: sliding a fixed **131 ms** window across the same samples in 32.8 ms steps decodes at offset 65.5 ms — 1 of 5 offsets. ⇒ A bad patch early in a capture poisons every longer prefix, so "longest length that decodes" silently conflates *how long* with *where*. The honest statistic is the FRACTION of fixed-length windows that decode, swept over offset; `offsetsweep.py` measures that, and §4's arms should be re-taken with it before the curve is trusted to more than its shape | 5 windows on 1 capture | ✓ the prefix ladder on the same capture is the control, and the two disagree | ✓ same demodulator, same samples, same session — only the window origin changed | L115 |
 | The `lf hid prox read` 0/15 episode | ⛔ **unexplained, and not reproducible.** It sat at 0/15 for ~15 minutes, survived 150 s of rest, then cleared on its own. C25 excludes the antenna, the field, coupling and thermal drift; the control arm excludes `lf indala read`. What remains is the hidprox decoder or something above it. `lfprobe.py` will catch it in the act if it recurs |
 | `lf hid prox read` lock rate | fails ~15-20% on a signal C25 shows is present and constant — an existing decoder issue, unrelated to this work, and a poor instrument to measure anything else with |
 | Does `lf indala read` false-positive on a **non-Indala tag**? | HID Prox closed (C24). ⚠ EM410x, ioProx, Viking, PAC and Jablotron are all still untested, and ASK/OOK tags modulate the envelope differently from HID's FSK |
@@ -299,12 +302,47 @@ integrator = 4*sum(y[a..a+31]) + y[a-1] - y[a] - y[a+31] + y[a+32]
 
 ## Hardware reference
 
+⛔⛔ **EVERY PATH FROM THE LF ANTENNA TO THE MCU PASSES THROUGH A DETECTOR DIODE. NO PIN CARRIES
+A CARRIER-RATE SIGNAL, IN ANY MODE.** Stated first because it forecloses a whole family of
+designs — carrier-edge field detection, carrier locking, coherent demodulation — and because
+this project proposed one of them anyway, against a reference section that already said
+`VD1 detector` (C134, M32). Source: `Chameleon_nrf52_ultra_V1.0.pdf`, sheet 2.
+
 ```
-ANT -> VD1 detector -> LF_OA -> [C28 10n / R9 82 / C36 33n] -> IC1A (R17 4k7 / C38 1n)
-                         |                                      -> IC1B -> AIN5 (P0.29)
-                         \-> R12 470k -> LF_RSSI -> AIN0 (P0.02)
+                       U1 RS2257XC6, SPDT analog switch
+P_LF_ANT_DRV -- A            B1 -- GND        select S <- P0.31  LF_ANT_DRIVER  [OUTPUT]
+                             B2 -- VCC3.3V
+
+P_LF_ANT_RAW --+-- C33 / C34 / C10 resonance --|>|-- LF_OA
+                                               VD1  1N4148, half-wave
+LF_OA --+-- R11 220 -- Q3 drain, gate <- P1.13  LF_MOD  [OUTPUT]   load modulation
+        +-- R12 470k --------------------- LF_RSSI -> AIN0 / LPCOMP0   P0.02
+        +-- R13 470k -- GND
+        \-- C28 10n / R9 82 / C35 27n / C36 33n -> IC1A (R17 4k7 / C38 1n)
+                                                -> IC1B -> LF_OA_OUT -> AIN5   P0.29
+                                                   both powered from LF_AMP_PWR = P1.15
 ```
 
+**All four LF pins, and what each one can and cannot see:**
+
+| pin | dir | what it is |
+|---|---|---|
+| P0.31 `LF_ANT_DRIVER` | **out** | the SELECT input of the analog switch. The coil's drive terminal is tied to GND or 3V3 on the *far side* of U1 — this pin never touches antenna signal, so it cannot be re-purposed as a sense input |
+| P1.13 `LF_MOD` | **out** | gate of Q3, which shunts `LF_OA` through 220 Ω — the RECTIFIED node, not the coil |
+| P0.02 `LF_RSSI` | in | `LF_OA` through 470 k, clamped by VD2. Post-detector: an envelope |
+| P0.29 `LF_OA_OUT` | in | the same envelope, twice filtered. Dead unless P1.15 is high, and tag mode clears it (`rfid_main.c`) |
+
+- ⭐ **VD1 is the whole reason.** It rectifies at the coil, and LF_OA's own load sets the hold:
+  R12 ∥ R13 = 235 kΩ against C28 in series with C35 ≈ 7.3 nF → **τ ≈ 1.7 ms**, which is the
+  "~2 ms peak detector" `lf_tag_em.c` already waits out between bursts. The number was in the
+  firmware before the schematic was read; they agree.
+- ⚠ **Doubly blocked.** Even if carrier ripple survived the detector, the SAADC is clamped to
+  200 kHz (`lf_125khz_radio_saadc_rate_set`) and a 125 kHz carrier needs 250 kHz.
+- ⭐ **Modulation and sensing share ONE node.** Q3 pulls `LF_OA` down; LF_RSSI and the op-amp
+  chain both read `LF_OA`. That is not an implementation accident to work around — it is why
+  LPCOMP must be disabled while emulating.
+- In reader mode the carrier is **generated, not recovered**: TIMER2 counts our own
+  `PWMPERIODEND` events. Nothing in the design ever knew a reader's carrier phase.
 - Filter poles: R9/C36 = **58.8 kHz**, R17/C38 = **33.9 kHz**. At fc/2 = 62.5 kHz they cost
   −3.3 dB and −6.4 dB.
 - `READER_POWER` (P1.15) is the schematic's `LF_AMP_PWR`; it feeds the bias divider

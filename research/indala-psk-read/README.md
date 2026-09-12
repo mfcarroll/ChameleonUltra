@@ -144,7 +144,7 @@ make.
 | rig | layout | what it drives |
 |---|---|---|
 | **A — emulate** | Chameleon #1 alone on the Flipper pad, its face towards the Flipper's back | the Chameleon emulates, the Flipper reads over its serial CLI |
-| **B — read / write** | Chameleon #2 facing a T5577, which sits on the Proxmark pad | the Proxmark programs the tag and the Chameleon reads it — or the Chameleon writes it and the Proxmark verifies |
+| **B — read / write** | ⚠ **re-aimed 2026-09-12: the Proxmark and Chameleon #2 now face each other directly.** It was Chameleon #2 facing a T5577 on the Proxmark pad | as it stands, the Proxmark reads what Chameleon #2 emulates — which is what §4 needed. ⛔ The T5577 write/read loop needs the tag back between them |
 
 | device | port |
 |---|---|
@@ -175,8 +175,8 @@ sources, and the only one known is our own PWM.
 
 ⛔ **What genuinely needs a person:** a second *Chameleon* emulating in front of a Chameleon
 reader — the only free-running source on this bench, and the two rigs do not face each other;
-the Proxmark pointed at an emulator rather than at the tag; and anything measured with the
-cable out.
+a carrier-locked source in front of the Proxmark, which the re-aim gave up; and anything
+measured with the cable out.
 
 ⭐ **COUPLING IS A SETTABLE VARIABLE: paper spacers give an air gap in 1 mm steps, 1-12 mm.**
 That matters more than it sounds. Several claims here are about behaviour at MARGINAL signal —

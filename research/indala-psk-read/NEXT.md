@@ -26,7 +26,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 | ~~The bench tag is 224-bit Indala~~ ✅ done | Left that way deliberately — §1d's decode is still failing and this tag is the only specimen to diagnose against. Contents, blocks 0-7: `0x000820E0 0x80000001 0xB23523A6 0xC2E31EBA 0xBCBEE4AF 0xB3C6AD1F 0xCF649393 0x928C14E5`. ⛔ Restore `00081040 / 4944544B / 55667788` before relying on C90-C92's regressions again; the restore cycle is proven and needs no hands |
 | ⭐ **An AIR GAP under the HID tag, to test C47** | Paper spacers, 1-12 mm. The T5577 wearing HID reads 12/12 flat on the pad, so there is no margin for the guard to affect (C108). ⇒ Set a gap that puts reads near 50% and the paired guard-on/guard-off test finally has somewhere to show an effect. **Protocol: one placement, then hands off** — start around 6 mm, I measure and say up or down, and once the rate is in the 20-80% band both builds are measured at that same gap without touching it |
 | **A free-running source in front of a Chameleon reader** | The one case §1's status was built for. Two Chameleons must face each other and the rigs do not. The Flipper cannot stand in — it is carrier-locked and we read it 8 of 8 (C87) |
-| **§4 burst length** | The Proxmark must face the emulator, and it faces the tag |
+| ~~**§4 burst length**~~ ✅ done | The Proxmark had to face the emulator and faced the tag. Rig B was turned so the two face each other directly, and §4 was measured there (C135) |
 | **§7 BLE transport** | The point of it is measuring with the cable out |
 
 ⚠ **A soft reboot is not a power cycle.** Rig A's emulation died during §3 work and survived a
@@ -88,14 +88,14 @@ Indala and IDTECK, so those two should reuse the PSK1 path nearly whole.
 
 **Phase 1 — finish Indala and IDTECK.** They share a physical layer, so IDTECK is nearly free
 once Indala is done, and the pair is the proving ground for everything after it.
-> ✅ §0 wrong-credential fix · ✅ §1 undecodable-signal status · ✅ §1c IDTECK reader · §1d Indala224 · §4 burst length · §5 carrier locking
+> ✅ §0 wrong-credential fix · ✅ §1 undecodable-signal status · ✅ §1c IDTECK reader · §1d Indala224 · ✅ §4 burst length · §5 carrier locking
 
 ⭐ **Do §8 first, out of phase order.** It is the only item that changes the reader's core, it
 is decided (drop stacking), and §1d is impossible until it lands. Sizing the Indala224 buffer
 before removing 40 KB would mean sizing it twice.
 
 ⇒ **The order now: ~~§8~~ → §1d → §2 → §3.** Everything in it runs unattended on the bench as it
-stands; §4, §5 and §7 are what remain for a person.
+stands; §5 and §7 are what remain for a person — §4 is closed (C135).
 
 **Phase 2 — fix what already exists.** Two readers are unreliable on loud tags and there are
 known bugs with reproductions attached. ⛔ Nothing new is added until these are closed:
@@ -117,13 +117,13 @@ can run to completion now and work that has to wait.
 | §1d Indala224 | **nothing** — §8 is settled, so the RAM is available. `lf indala clone --224` on rig B |
 | §2 HID / PAC readers | **PAC: nothing** — it fails 0/10 on the T5577 right now (C109), which is the specimen to debug against. ⚠ **HID: needs a weak-coupling fob**, not a write; the T5577 wearing HID reads 12/12 either way (C108). ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` when done — C90-C92 regress against them |
 | §3 PWM clock bug | **nothing** — the slot is changed over the CLI and the Flipper reads the result on rig A |
-| §4 burst length | ⚠ hands — the Proxmark has to face the emulator, and it faces the tag |
-| §5 carrier locking | ⛔ **a person.** A scope decision, not a task |
+| §4 burst length | ✅ **done.** Rig B now has the Proxmark facing Chameleon #2 directly, and the sweep ran there (C135) |
+| §5 carrier locking | ⛔ **a person.** A scope decision, not a task — and C134 narrowed it: the reader's carrier is not observable on this board |
 | §7 BLE transport | ⚠ hands — the whole point of it is testing with the cable out |
 | §8 reader RAM | ✅ **done** — stacking removed, 89.8 KB free. C97 |
 
-⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §4
-and §7 need hands, and only §5 and §8 need a decision.
+⇒ The unattended path through Phase 1 and Phase 2 is **§1 → §1c → §3 → §2**. Only §7
+needs hands now, and only §5 needs a decision.
 
 ⚠ **Retired section numbers.** LOG.md is append-only and cites sections that have since moved.
 `§1d`, `§2b`, `§3a`, `§3b`, `§3c` were folded into the sections above during the 2026-09-12
@@ -297,7 +297,7 @@ They both affect emulation and they are easy to conflate, so:
 
 | | what is wrong | affects | fixed by |
 |---|---|---|---|
-| **Burst length** | the emulator transmits N frames then PAUSES to check the field. A reader whose capture spans that gap sees a discontinuity | readers that demodulate a long buffer in one go — **the Proxmark** | a longer burst (fewer boundaries) |
+| **Burst length** | the emulator transmits N frames then PAUSES to check the field. A reader whose capture spans that gap sees a discontinuity | readers that demodulate a long buffer in one go — **the Proxmark** | ⚠ a longer burst, but only up to a point: measured flat above ~500 ms (C135) |
 | **Carrier lock** | the subcarrier comes from the emulator's own crystal instead of DIVIDING the reader's carrier, so it drifts | readers that assume the subcarrier sits exactly at fs/2 — **ours** | clocking the modulation from the received carrier |
 
 They are independent, and the evidence separates them cleanly:
@@ -312,32 +312,56 @@ They are independent, and the evidence separates them cleanly:
 §5 does not remove burst boundaries. Neither is required for the emulation to be useful — two
 independent readers already accept it.
 
-## 4. ◐ Burst length — the unit is fixed, the value still needs measuring
+## 4. ✅ Burst length — measured across 120×, and 500 ms stays
 
-✅ **Done: it is a time budget.** `LF_TAG_BURST_TARGET_MS (500)`, converted per protocol by
-summing the sequence's own `counter_top` values. Indala 31 frames, EM410x 16, verified on
+✅ **The unit is a time budget.** `LF_TAG_BURST_TARGET_MS (500)`, converted per protocol by
+summing the sequence's own `counter_top` values — Indala 31 frames, EM410x 16, verified on
 device (C133, L114). The old frame count gave Indala224 a **1.83 s** field-loss latency.
 
-⭐ **Neither reference implementation has this problem.** The Flipper emulates in `while(true)`
-on a DMA'd timer; the Proxmark loops until host or button. Both are tools under direct user
-control, so "emulate until cancelled" is right for them and there is nothing to copy. The
-Chameleon is a card that must sleep, so it must notice the reader leaving.
+✅ **And the value is now measured** (C135, L115). Proxmark facing Chameleon #2, one frame,
+one bench, 24 runs:
 
-⇒ **But both stay clock-locked to the reader's field while emulating** — the Flipper clocks
-its timer from the carrier, the Proxmark waits on the reader's clock edges. ⭐ That points at
-the real fix: **detect field loss by counting carrier edges**, which works *during*
-modulation and removes the need for a burst boundary at all. `TIMER2` in counter mode already
-exists in `lf_125khz_radio.c`. ⚠ Untested assumption: load modulation damps the carrier rather
-than removing it, so edges should survive — measure before building.
+| burst | frames | runs | decoded |
+|---|---|---|---|
+| 32.8 ms | 2 | 8 | 7, every one capped at **66 ms** |
+| 508 ms | 31 | 5 | 1, to 197 ms |
+| 524 ms | 32 | 6 | 4, to 164–197 ms |
+| 4014 ms | 245 | 5 | 4, to 131–164 ms |
 
-⇒ That makes the edge counter a shared prerequisite for §5, and a better first step than
-treating carrier locking as one large port.
+⇒ **Flat above ~500 ms, falling below it.** Eight times more burst bought nothing, and at
+4014 ms a 290 ms capture is essentially never boundary-crossing — yet 262 ms and 290 ms
+decoded in **none** of the 5, so above ~500 ms the limit is not the boundary at all. Below it
+the boundaries do cost: the 32.8 ms arm lost a factor of 2–3 **while carrying 27% more
+signal**, which confounds it in the favourable direction and understates the loss.
+⇒ **Keep 500 ms** — now because the curve is flat there, not because 32 frames landed near it.
 
-**Still to measure:** the 500 ms value itself. It is where 32 Indala frames landed (524 ms),
-which is the only length with evidence (C70, C75). The sweep needs the Proxmark facing an
-emulating Chameleon — ✅ that geometry now exists on rig B.
+⛔ **The carrier-edge replacement is dead.** L114 proposed detecting field loss by counting
+carrier edges so the burst could go away entirely. It cannot be built on this board: every
+path from the antenna to the MCU passes through a detector diode, and the one pin that looked
+like a way in is an analog switch's select input (C134). ⚠ The notes already said so before
+the proposal was made — that is M32, and it is the reason this cost a read rather than a
+bench session.
+
+**What is left, in order of value:**
+
+| | why |
+|---|---|
+| ⭐ **Re-take the arms with `offsetsweep.py`** | `emutest.py` scores the longest decodable PREFIX, so one bad patch early poisons every longer prefix — a 131 ms window decodes at offset 65.5 ms in the capture whose prefix ceiling was 66 ms (C136). The SHAPE of the curve survives that; the numbers are lower bounds |
+| ⭐ **Explain the 131–197 ms ceiling at long bursts** | it is not the boundary, and it is the one thing here with no mechanism behind it. Two free-running oscillators are the suspect, which makes it §5's question rather than §4's |
+| **A carrier-locked positive control** | without one, that ceiling might belong to the Proxmark's demodulator at this amplitude rather than to our emulator. Needs a real tag in front of the Proxmark — ⚠ hands |
+| **The knee between 33 ms and 508 ms** | unmeasured, and not worth chasing by reflashing: one build per arm rules out interleaving, and the within-arm spread (0 to 197 ms) is as large as the differences between the long arms. ⇒ Make the budget settable at runtime first, the way `hw emudebug` was added for §3 |
 
 ## 5. ⚠ Carrier locking — optional, and the decision belongs to a person
+
+⛔⛔ **THE OBVIOUS IMPLEMENTATION IS IMPOSSIBLE HERE, AND THAT CHANGES THE DECISION.** Locking
+to the reader means recovering its carrier, and **this board never sees it**: every path from
+the LF antenna to the MCU passes through a detector diode at the coil, so all four LF pins
+carry an envelope or nothing at all (C134). The Flipper can do it because its front end hands
+the carrier to a timer; ours rectifies it away in the first component. ⇒ Whatever §5 becomes,
+it is not a port of the Flipper's approach — and the question a person is being asked is no
+longer "should we do this" but "is there a second way to do it on hardware that discards the
+clock". ⚠ Until that is answered, treat everything below as describing the *problem*, not an
+available fix.
 
 The Flipper clocks its emulation timer from the reader's own carrier (`LL_TIM_CLOCKSOURCE_EXT_MODE2`
 + `LL_TIM_ConfigETR`), so its subcarrier divides that carrier exactly as a T5577 does (C74).
