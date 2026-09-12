@@ -206,6 +206,8 @@
 #define DATA_CMD_INDALA_GET_EMU_ID              (5015)
 #define DATA_CMD_INDALA224_SET_EMU_ID           (5016)
 #define DATA_CMD_INDALA224_GET_EMU_ID           (5017)
+#define DATA_CMD_KERI_SET_EMU_ID                (5018)
+#define DATA_CMD_KERI_GET_EMU_ID                (5019)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
@@ -217,5 +219,7 @@
 #define DATA_CMD_LF_EMU_DEBUG                   (3037)
 #define DATA_CMD_LF_RADIO_DEBUG                 (3038)
 #define DATA_CMD_INDALA224_WRITE_TO_T55XX       (3039)
+#define DATA_CMD_KERI_SCAN                      (3040)
+#define DATA_CMD_KERI_WRITE_TO_T55XX            (3041)
 
 #endif

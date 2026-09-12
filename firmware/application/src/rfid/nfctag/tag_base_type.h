@@ -65,7 +65,9 @@ typedef enum {
     // T5577 rather than PSK1 (C99). Keri and NexWatch below keep no reserved number; they
     // are notes on what belongs in this block, not allocations.
     TAG_TYPE_INDALA224,
-    // Keri
+    // ⭐ Keri is a different PROTOCOL, not an Indala variant — but the same air layer, so
+    // it sits in this block and reuses the PSK1 modulator whole (C157).
+    TAG_TYPE_KERI,
     // NexWatch
     TAG_TYPE_IDTECK = 310,
 
@@ -117,14 +119,14 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK, TAG_TYPE_INDALA, TAG_TYPE_INDALA224
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK, TAG_TYPE_INDALA, TAG_TYPE_INDALA224, TAG_TYPE_KERI
 
 // Tag types that use PSK1 modulation for emulation. These require the PWM
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
 // subcarrier period can be expressed with a counter_top valid under the
 // nRF52 PWM spec. Legacy ASK/FSK types keep the default 125kHz base.
 #define IS_PSK1_TYPE(t) ((t) == TAG_TYPE_IDTECK || (t) == TAG_TYPE_INDALA || \
-                        (t) == TAG_TYPE_INDALA224)
+                        (t) == TAG_TYPE_INDALA224 || (t) == TAG_TYPE_KERI)
 
 #define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
     TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \

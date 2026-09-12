@@ -51,6 +51,17 @@
 /** IDTECK's preamble is 0x4944544B, "IDTK", the first 32 bits of every IDTECK frame. */
 #define IDTECK_PSK_PREAMBLE_BITS 32
 
+/* ⭐ KERI IS THE SAME AIR LAYER AS INDALA26 AND IDTECK — PSK1, RF/32, fc/2 subcarrier,
+ * 64-bit frame — and this is MEASURED, not assumed from a datasheet: four captures of a
+ * Momentum-emulated Keri credential decode to the exact predicted frame through this
+ * demodulator unchanged, at sample offset 0 (C157). Its T5577 config word says the same
+ * thing from the other side: `603E1040` is PSK1 / PSKCF_RF_2, and `lf t55xx detect` on a
+ * Proxmark-cloned Keri reports PSK1, RF/32.
+ *
+ * Its preamble is 33 bits — `111`, 29 zeros, then a 1 — where Indala's is `1010`, 28
+ * zeros, then a 1. They disagree at bit 1, so neither can match the other's window. */
+#define KERI_PSK_PREAMBLE_BITS 33
+
 /* ⛔⛔ INDALA224'S PREAMBLE IS A 1 FOLLOWED BY 29 ZEROS, AND THAT IS NOT ENOUGH ON ITS OWN.
  * 29 of its 30 bits are a constant run — weaker than Indala26's 33-bit preamble, which a
  * loud IDTECK tag already forged at sample phase 28 to produce a confident wrong credential
@@ -70,6 +81,7 @@
 extern const uint8_t LF_PSK1_PREAMBLE_INDALA[INDALA_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_INDALA224[INDALA224_PSK_PREAMBLE_BITS];
+extern const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS];
 
 /** Samples in one capture. 4096 = two whole 64-bit frames at RF/32.
  *
@@ -163,6 +175,7 @@ typedef struct {
 extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224;
+extern const lf_psk1_format_t LF_PSK1_FORMAT_KERI;
 
 typedef struct {
     uint8_t  id[LF_PSK1_MAX_FRAME_BYTES]; /**< the frame, big-endian: id[0] is the first bit.
@@ -257,6 +270,11 @@ bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** Indala224: the same demodulation against a 30-bit preamble, gated on the repeat. */
 bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** Keri: the same demodulation against Keri's 33-bit preamble. The credential is the
+ *  32-bit internal id, `out->id[4..7]`; its top bit is the preamble's last bit and is
+ *  therefore always set. */
+bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** What a reader hands the capture engine: one protocol's whole decode, preamble and any
  *  veto included, so the engine stays protocol-agnostic. */

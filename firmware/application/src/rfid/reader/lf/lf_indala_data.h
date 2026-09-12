@@ -68,6 +68,11 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
 /** IDTECK, same engine, same timeout, same energy reporting. */
 bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by keri_read(): the 8-byte frame, then the 32-bit internal id, then the
+ *  de-scrambled facility code and card number, then phase / offset / tries. */
+#define KERI_READ_DATA_SIZE 16
+bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */

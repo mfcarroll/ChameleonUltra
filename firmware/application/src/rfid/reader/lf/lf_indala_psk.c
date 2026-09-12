@@ -32,6 +32,14 @@ const uint8_t LF_PSK1_PREAMBLE_INDALA224[INDALA224_PSK_PREAMBLE_BITS] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
+/* Keri: 111, then 29 zeros, then the 1 that is also the top bit of the internal id. */
+const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS] = {
+    1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1
+};
+
 const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     .preamble = LF_PSK1_PREAMBLE_INDALA,
     .preamble_bits = INDALA_PSK_PREAMBLE_BITS,
@@ -63,6 +71,28 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224 = {
     .differential_only = true,
     /* ⛔ NOT OPTIONAL for this format. 29 of its 30 preamble bits are a constant run. */
     .require_repeat = true,
+};
+
+const lf_psk1_format_t LF_PSK1_FORMAT_KERI = {
+    .preamble = LF_PSK1_PREAMBLE_KERI,
+    .preamble_bits = KERI_PSK_PREAMBLE_BITS,
+    .frame_bits = INDALA_PSK_FRAME_BITS,
+    /* ⛔⛔ THE INDALA VETO, AND IT IS NOT THEORETICAL — IT WAS MEASURED INTO EXISTENCE.
+     * This field said NULL for about ten minutes, on the argument that Keri's preamble and
+     * Indala's disagree at bit 1 so no window could satisfy both. The cross-protocol null
+     * refuted it immediately: **1 of 5 committed Indala captures returned a confident Keri
+     * credential**, `e0000000e69f0f0a` off the tag whose frame is `a0000000e6bd0e92` — the
+     * Indala payload under a forged Keri preamble, at sample offset 28 (C157).
+     *
+     * ⇒ C90's failure mode, in a third pairing. A 64-bit PSK1 frame at RF/32 carries real
+     * data at every offset, so ANY other protocol on this air layer is a preamble
+     * generator for the rest. ⚠ One-directional on purpose, exactly as Indala's IDTECK
+     * veto is: a Keri frame has never forged Indala's `1010`, and vetoing both ways would
+     * make each protocol unreadable in the other's presence for no measured gain. */
+    .reject_preamble = LF_PSK1_PREAMBLE_INDALA,
+    .reject_preamble_bits = INDALA_PSK_PREAMBLE_BITS,
+    .differential_only = false,
+    .require_repeat = false,
 };
 
 /*
@@ -516,6 +546,10 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
  * never happened in 480 captures, so vetoing here would only throw away genuine reads. */
 bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_IDTECK, out);
+}
+
+bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_KERI, out);
 }
 
 bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {

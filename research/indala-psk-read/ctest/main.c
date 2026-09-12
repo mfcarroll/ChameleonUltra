@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0;
+    int mode224 = 0, modekeri = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
             quiet = 1;
@@ -34,6 +34,10 @@ int main(int argc, char **argv) {
         }
         if (!strcmp(argv[i], "--224")) {
             mode224 = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--keri")) {
+            modekeri = 1;
             continue;
         }
         FILE *f = fopen(argv[i], "rb");
@@ -72,6 +76,24 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modekeri) {
+            /* ⚠ Prints the whole 64-bit frame, not just the internal id: the preamble is
+             * half of what is being tested, and hiding it would make a wrong-preamble
+             * match look like a correct one. */
+            indala_psk_result_t rk;
+            if (!keri_psk1_decode(buf, n, &rk)) {
+                printf(" %-44s %5zu samples  -                 energy %7ld\n",
+                       argv[i], n, (long)rk.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 8; k++) printf("%02x", rk.id[k]);
+            printf("  off %2u pos %3u %s\n", rk.offset, rk.bit_pos,
+                   rk.inverted ? "inv" : "");
+            continue;
         }
 
         if (mode224) {

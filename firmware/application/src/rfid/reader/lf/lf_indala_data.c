@@ -317,6 +317,73 @@ bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ KERI DE-SCRAMBLE. The 32-bit internal id carries the facility code and card number
+ * interleaved through a fixed bit permutation; these two tables are Momentum's, transcribed
+ * from protocol_keri.c, and the Proxmark's cmdlfkeri.c agrees with them.
+ *
+ * ⚠ 255 means "this source bit is used by neither field" — most of them are. A 32-bit id
+ * yields a 5-bit facility code and a 21-bit card number, so eleven bits go nowhere, and
+ * that is the format rather than an omission here.
+ *
+ * ⚠ ADVISORY, like Indala's format-26 fields. A Keri tag written with `-t i` carries a raw
+ * internal id with no facility/card structure at all, so the de-scramble of one is
+ * meaningless — which is why `keri_read` returns the internal id as well and the host
+ * prints both. */
+static const uint8_t KERI_CARD_TO_ID[32] = {
+    255, 255, 255, 255, 13, 12, 20, 5,   16,  6,  21,
+    17,  8,   255, 0,   7,  10, 15, 255, 11,  4,  1,
+    255, 18,  255, 19,  2,  14, 3,  9,   255, 255
+};
+static const uint8_t KERI_CARD_TO_FC[32] = {
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 0,   255, 255, 255, 255, 2,   255, 255, 255,
+    3,   255, 4,   255, 255, 255, 255, 255, 1,   255
+};
+
+static void keri_descramble(uint32_t internal_id, uint32_t *fc, uint32_t *cn) {
+    *fc = 0;
+    *cn = 0;
+    for (uint8_t i = 0; i < 32; i++) {
+        uint32_t bit = (internal_id >> i) & 1u;
+        if (KERI_CARD_TO_ID[i] < 32) *cn |= bit << KERI_CARD_TO_ID[i];
+        if (KERI_CARD_TO_FC[i] < 32) *fc |= bit << KERI_CARD_TO_FC[i];
+    }
+}
+
+/* ⭐ KERI — the same capture, the same demodulator, the same 4096 samples as Indala26 and
+ * IDTECK, because it is the same air layer (C157). Only the preamble and the payload
+ * interpretation differ, which is the whole argument for `lf_psk1_format_t`. */
+bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(keri_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    const indala_psk_result_t *res = &r.res;
+
+    /* Bits 32..63 of the frame are the internal id; its top bit is also the last bit of
+     * the preamble and is therefore always 1. */
+    uint32_t id = ((uint32_t)res->id[4] << 24) | ((uint32_t)res->id[5] << 16) |
+                  ((uint32_t)res->id[6] << 8)  |  (uint32_t)res->id[7];
+    uint32_t fc = 0, cn = 0;
+    keri_descramble(id, &fc, &cn);
+
+    memcpy(&data[0], res->id, 8);
+    data[8]  = (uint8_t)(fc & 0xFF);
+    data[9]  = (uint8_t)(cn >> 16);
+    data[10] = (uint8_t)(cn >> 8);
+    data[11] = (uint8_t)(cn & 0xFF);
+    data[12] = r.phase;
+    data[13] = res->offset;
+    data[14] = r.tries;
+    data[15] = 0;
+
+    NRF_LOG_INFO("keri id %08lx fc %lu cn %lu phase %u tries %u",
+                 (unsigned long)id, (unsigned long)fc, (unsigned long)cn,
+                 r.phase, r.tries);
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

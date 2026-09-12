@@ -14,6 +14,7 @@
 #include "protocols/indala.h"
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
+#include "protocols/keri.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
@@ -417,6 +418,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_INDALA224_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_KERI && buffer->length >= LF_KERI_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = keri.alloc();
+        m_pwm_seq = keri.modulator(codec, buffer->buffer);
+        keri.free(codec);
+        NRF_LOG_INFO("load lf keri data finish.");
+        return LF_KERI_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -667,6 +677,24 @@ bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0xB3, 0xC6, 0xAD, 0x1F,
         0xCF, 0x64, 0x93, 0x93,
         0x92, 0x8C, 0x14, 0xE5,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief Keri data save callback. */
+int lf_tag_keri_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_KERI ? LF_KERI_TAG_ID_SIZE : 0;
+}
+
+/** @brief Keri default frame: the credential this protocol was developed against.
+ * `E0000000 80003039` is internal id 0x80003039 — what `lf keri clone -t i --cn 12345`
+ * writes — and it is the frame four captures of a Momentum emulation decoded to exactly
+ * (C157), so a factory-reset slot emulates something this bench has independently read.
+ * ⭐ The leading E0000000 is not a choice: bits 0-32 are Keri's fixed preamble. */
+bool lf_tag_keri_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_KERI_TAG_ID_SIZE] = {
+        0xE0, 0x00, 0x00, 0x00,   // 111 then 29 zeros, then the leading 1 of...
+        0x80, 0x00, 0x30, 0x39,   // ...the internal id, whose top bit IS that 1
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

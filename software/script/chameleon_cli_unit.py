@@ -996,6 +996,7 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_indala = lf.subgroup("indala", "Indala commands")
+lf_keri = lf.subgroup("keri", "Keri commands")
 
 
 @root.command("clear")
@@ -6593,6 +6594,153 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.viking_write_to_t55xx(id_bytes)
         print(f" - Viking ID(8H): {id_hex} write done.")
+
+
+@lf_keri.command("read")
+class LFKeriRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a Keri credential (PSK1, RF/32). Shares the Indala "
+                              "capture engine, so the same timing applies: the firmware "
+                              "demodulates whole captures at a rotating sample phase and "
+                              "returns only once two agree.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, internal_id, fc, cn, phase, offset, tries = self.cmd.keri_scan()
+        print("Keri PSK1")
+        print(f"   Raw: {color_string((CY, raw.hex()))}")
+        print(f"   Internal ID: {color_string((CY, f'{internal_id:08X}'))}")
+        # ⚠ ADVISORY, and said so rather than printed as fact. A tag cloned with an
+        # internal id directly carries no facility/card structure at all, and there is no
+        # flag in the frame that says which kind it is — so these two numbers are a
+        # de-scramble that may be meaningless, exactly as Indala's format-26 fields are on
+        # a non-26 tag.
+        print(f"   FC: {color_string((CG, fc))} Card: {color_string((CY, cn))}  "
+              f"{color_string((CY, '(MS-format de-scramble — meaningless on an internal-id tag)'))}")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_keri.command("write")
+class LFKeriWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Write a Keri credential to a T5577. Configures PSK1, "
+                              "RF/32, 2 data blocks.")
+        parser.add_argument("--id", type=str, required=True,
+                            help="32-bit internal id, 8 hex digits, top bit set "
+                                 "(e.g. 80003039)")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw = args.id.strip().lower().removeprefix("0x")
+        if len(raw) != 8 or any(c not in "0123456789abcdef" for c in raw):
+            print(f"{color_string((CR, 'Need exactly 8 hex digits'))}")
+            return
+        internal_id = int(raw, 16)
+        if not internal_id & 0x80000000:
+            # ⚠ A refusal, not a warning — unlike Indala's loose preamble check. This bit
+            # is not a convention, it is the 33rd bit of the preamble: clear it and the
+            # frame has no preamble and no reader will look at it.
+            print(f"{color_string((CR, 'The internal id must have its top bit set'))} — "
+                  f"that bit is the last bit of Keri's preamble, not a payload bit.")
+            return
+
+        # The air frame: E0000000 then the internal id. The firmware rotates this into the
+        # T5577's own block layout — see keri_t55xx_writer.
+        frame = bytes.fromhex("e0000000") + internal_id.to_bytes(4, "big")
+
+        # ⭐ READ BEFORE WRITING — the coupling bracket, for the same reason `lf indala
+        # write` has one: a tag that cannot be heard cannot be shown to have been written.
+        before = self._try_read()
+        if before is None:
+            print(f"   {color_string((CY, 'No Keri frame before the write.'))} Expected for "
+                  f"a blank or non-Keri tag, but it also means there is no proof this tag "
+                  f"is coupled — so a failure after the write will not be distinguishable "
+                  f"from a tag the reader cannot hear.")
+        else:
+            print(f"   before: {color_string((CY, before))}")
+
+        self.cmd.keri_write_to_t55xx(frame)
+
+        after = self._try_read()
+        want = frame.hex()
+        if after == want:
+            print(f"{color_string((CG, 'VERIFIED'))} internal id {raw.upper()} — read back "
+                  f"off the tag. The config block landed too, or it could not have been read.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after. "
+                  f"The tag may be uncoupled rather than unwritten; reposition it on the "
+                  f"FRONT of the device and try `lf keri read` first.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — the tag read {before} before and "
+                  f"nothing after, so it was coupled and is now not transmitting a readable "
+                  f"frame.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — the tag still reads "
+                  f"{after}, unchanged.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {want}, read "
+                  f"back {after}.")
+
+    def _try_read(self):
+        """The Keri frame currently on the tag, or None. ⚠ None is NOT proof of absence."""
+        try:
+            return self.cmd.keri_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_keri.command("econfig")
+class LFKeriEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the Keri frame emulated on a slot. "
+                              "Provide --id to set; omit it to read back the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--id", type=str, required=False, metavar="<hex>",
+                            help="32-bit internal id, 8 hex digits, top bit set")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.id is not None:
+            raw = args.id.strip().lower().removeprefix("0x")
+            if len(raw) != 8 or any(c not in "0123456789abcdef" for c in raw):
+                print(f"{color_string((CR, 'Need exactly 8 hex digits'))}")
+                return
+            internal_id = int(raw, 16)
+            if not internal_id & 0x80000000:
+                print(f"{color_string((CR, 'The internal id must have its top bit set'))} — "
+                      f"that bit is the last bit of Keri's preamble.")
+                return
+            if lf_tag_type != TagSpecificType.Keri:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Keri. "
+                      f"Set it with: hw slot type -s <n> -t Keri")
+            self.cmd.keri_set_emu_id(bytes.fromhex("e0000000") + internal_id.to_bytes(4, "big"))
+            print(f" - Keri emu id set to internal id {raw.upper()}.")
+            return
+
+        # ⚠ CHECK THE TYPE BEFORE ASKING — the firmware's STATUS_PAR_ERR renders as the
+        # useless "API request fail, param error". Say which slot and what it holds.
+        if lf_tag_type != TagSpecificType.Keri:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}{color_string((CR, ', not Keri.'))}")
+            print(f"   Either pick the slot: {color_string((CG, 'lf keri econfig -s <n>'))}")
+            print(f"   or set this one:     {color_string((CG, 'hw slot type -s ' + str(selected) + ' -t Keri'))}")
+            return
+        response = self.cmd.keri_get_emu_id()
+        pre_ok = response[:4].hex() == "e0000000" and bool(response[4] & 0x80)
+        print(f" - Keri emu id: {response.hex().upper()}")
+        print(f"   Preamble : {response[:4].hex().upper()}"
+              + ("" if pre_ok else f"  {color_string((CR, '(not the Keri preamble)'))}"))
+        print(f"   Internal ID: {response[4:].hex().upper()}")
+        print(f"   Decode it with {color_string((CG, 'lf keri read'))} against the "
+              f"emulated slot on a second device.")
 
 
 @lf_idteck.command("read")

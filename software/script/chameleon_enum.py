@@ -180,6 +180,8 @@ class Command(enum.IntEnum):
     INDALA_GET_EMU_ID = 5015
     INDALA224_SET_EMU_ID = 5016
     INDALA224_GET_EMU_ID = 5017
+    KERI_SET_EMU_ID = 5018
+    KERI_GET_EMU_ID = 5019
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -190,6 +192,8 @@ class Command(enum.IntEnum):
     LF_EMU_DEBUG = 3037
     LF_RADIO_DEBUG = 3038
     INDALA224_WRITE_TO_T55XX = 3039
+    KERI_SCAN = 3040
+    KERI_WRITE_TO_T55XX = 3041
 
 @enum.unique
 class Status(enum.IntEnum):
@@ -354,7 +358,7 @@ class TagSpecificType(enum.IntEnum):
     # PSK Tag-Talk-First      300
     Indala = 300
     Indala224 = 301
-    # Keri
+    Keri = 302
     # NexWatch
     IDTECK = 310
 
@@ -448,6 +452,8 @@ class TagSpecificType(enum.IntEnum):
             return "Indala"
         elif self == TagSpecificType.Indala224:
             return "Indala224"
+        elif self == TagSpecificType.Keri:
+            return "Keri"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

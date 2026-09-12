@@ -124,6 +124,15 @@ extern "C" {
     T5577_PSKCF_RF_2 |            \
     (7 << T5577_MAXBLOCK_SHIFT))
 
+// Keri: PSK1, subcarrier = carrier/2, 2 data blocks — but expressed in X_MODE with the
+// dynamic bit-rate field rather than T5577_BITRATE_RF_32, which is what the Proxmark's
+// `lf keri clone` writes and what `lf t55xx detect` reads back as PSK1 / RF/32. ⛔ Kept
+// verbatim rather than rewritten into the shape its neighbours use: the value is copied
+// from a working clone's own block dump, and the two forms are not known to be equivalent
+// on this chip.
+//   T5577_TESTMODE_DISABLED | T5577_X_MODE | PSK1 | PSKCF_RF_2 | (0xF << 18) | 2 blocks
+#define T5577_KERI_CONFIG (0x603E1040)
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

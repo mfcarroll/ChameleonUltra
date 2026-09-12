@@ -836,6 +836,67 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def keri_scan(self):
+        """
+        Read a Keri credential (PSK1, RF/32, fc/2 subcarrier).
+
+        ⭐ Bit-identical air layer to Indala and IDTECK — same capture engine, same
+        demodulator, same 10s host timeout against the 3s device budget. Only the 33-bit
+        preamble and the payload interpretation differ.
+
+        Returns (raw, internal_id, fc, cn, phase, offset, tries) where raw is the full
+        64-bit frame — preamble `E0000000` then the internal id — and fc/cn are the
+        de-scrambled facility code and card number.
+
+        ⚠ fc and cn are ADVISORY. A tag written with an internal id directly (`lf keri
+        clone -t i`) has no facility/card structure, so its de-scramble is meaningless.
+        """
+        resp = self.device.send_cmd_sync(Command.KERI_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, fc, c_hi, c_mid, c_lo, phase, offset, tries = struct.unpack(
+                ">8sBBBBBBB1x", resp.data[:16])
+            internal_id = int.from_bytes(raw[4:8], "big")
+            cn = (c_hi << 16) | (c_mid << 8) | c_lo
+            resp.parsed = (raw, internal_id, fc, cn, phase, offset, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def keri_write_to_t55xx(self, frame8: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                            old_keys: list = None):
+        """Write a raw 64-bit Keri frame onto a T55xx tag (PSK1, RF/32).
+
+        ⛔ `frame8` is the AIR frame — E0000000 followed by the internal id — NOT the block
+        contents. The firmware rotates it into the form a T5577 clocks out; the two differ
+        by three bits and transcribing one as the other yields a tag nothing reads.
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write.
+        """
+        if len(frame8) != 8:
+            raise ValueError("The raw frame must be exactly 8 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!8s4s{4*len(old_keys)}s', frame8, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.KERI_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def keri_set_emu_id(self, id: bytes):
+        """Set the 64-bit Keri frame emulated on the active slot.
+
+        :param id: 8 bytes, MSB first on air. The first 33 bits are Keri's preamble, so a
+                   valid frame always starts E0000000 and the next byte has its top bit set.
+        """
+        if len(id) != 8:
+            raise ValueError("The id bytes length must equal 8")
+        return self.device.send_cmd_sync(Command.KERI_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def keri_get_emu_id(self):
+        """Get the emulated Keri 64-bit frame."""
+        resp = self.device.send_cmd_sync(Command.KERI_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:8]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
         Write ioProx card data to a T55XX tag.

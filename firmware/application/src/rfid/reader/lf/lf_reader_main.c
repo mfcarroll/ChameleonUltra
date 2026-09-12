@@ -15,6 +15,7 @@
 #include "protocols/indala.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
+#include "protocols/keri.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 
@@ -115,6 +116,17 @@ uint8_t scan_indala224(uint8_t *data) {
 uint8_t scan_idteck(uint8_t *data) {
     int32_t energy = 0;
     if (idteck_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return lf_psk1_failure_status(energy);
+}
+
+/* ⚠ Same status convention as the other PSK1 readers: `lf_psk1_failure_status` turns
+ * "energy present but nothing decoded" into 0x43 rather than "not found", which is the
+ * signal to reposition (C89). */
+uint8_t scan_keri(uint8_t *data) {
+    int32_t energy = 0;
+    if (keri_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
         return STATUS_LF_TAG_OK;
     }
     return lf_psk1_failure_status(energy);
@@ -367,6 +379,24 @@ uint8_t write_indala_to_t55xx(uint8_t *raw8, uint8_t *new_passwd, uint8_t *old_p
 uint8_t write_indala224_to_t55xx(uint8_t *raw28, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[8] = {0x00};
     uint8_t blk_count = indala224_t55xx_writer(raw28, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 64-bit Keri frame to a T55xx tag (PSK1, RF/32, 2 data blocks).
+ *
+ * ⛔ `frame8` is the AIR frame — E0000000 followed by the internal id — not the block
+ * contents. keri_t55xx_writer() rotates it into the form a T5577 clocks out. See the long
+ * note there for why the two differ.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
+ */
+uint8_t write_keri_to_t55xx(uint8_t *frame8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = keri_t55xx_writer(frame8, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }

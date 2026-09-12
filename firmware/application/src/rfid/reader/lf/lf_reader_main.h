@@ -18,6 +18,8 @@ uint8_t encode_ioprox_params(uint8_t ver, uint8_t fc, uint16_t cn, uint8_t *out)
 uint8_t scan_hidprox(uint8_t *uid, uint8_t format_hint);
 uint8_t scan_indala(uint8_t *data);
 uint8_t scan_idteck(uint8_t *data);
+uint8_t scan_keri(uint8_t *data);
+uint8_t write_keri_to_t55xx(uint8_t *frame8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t scan_indala224(uint8_t *data);
 uint8_t scan_pac(uint8_t *card_id);
 uint8_t scan_viking(uint8_t *uid);
