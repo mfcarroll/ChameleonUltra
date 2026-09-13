@@ -1001,6 +1001,7 @@ lf_nexwatch = lf.subgroup("nexwatch", "NexWatch commands")
 lf_gallagher = lf.subgroup("gallagher", "Gallagher commands")
 lf_securakey = lf.subgroup("securakey", "Securakey commands")
 lf_noralsy = lf.subgroup("noralsy", "Noralsy commands")
+lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
 
 
 @root.command("clear")
@@ -7454,6 +7455,30 @@ class LFNoralsyEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         print(f" - Noralsy emu frame: {response.hex().upper()}")
         print(f"   Card: {card}  Year: {year}" + ("" if ok else
               f"  {color_string((CR, '(checksums fail)'))}"))
+
+
+@lf_instafob.command("read")
+class LFInstaFobRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an InstaFob credential (ASK/Manchester, RF/32, 225-bit "
+                              "frame — the tag's whole T5577 page 0). Read only: see the note "
+                              "in the output for why no write command exists.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, offset, tries = self.cmd.instafob_scan()
+        cfg = raw[:4].hex()
+        print("InstaFob ASK/Manchester")
+        print(f"   Raw (225 bits): {color_string((CY, raw.hex()))}")
+        # ⭐ The first four bytes are the tag's own T5577 config word, which is also what the
+        # format is recognised by — worth printing as such rather than as opaque frame bytes.
+        print(f"   Config word: {color_string((CG, cfg))}  (the tag transmits its own block 0)")
+        print(f"   Card data: {color_string((CY, raw[4:8].hex()))}")
+        print(f"   ⚠ This frame is a 7-bit rotation of Momentum's numbering — do not compare "
+              f"it byte-for-byte against a Flipper dump.")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
 
 
 @lf_idteck.command("read")

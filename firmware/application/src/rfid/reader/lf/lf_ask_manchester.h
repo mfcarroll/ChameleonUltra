@@ -149,6 +149,14 @@ _Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_PSK1_MAX_FRAME_BITS,
  * 114ms Gallagher and Securakey need. */
 #define NORALSY_ASK_CAPTURE_SAMPLES 6144
 
+/* ⚠ THE BUFFER MAXIMUM, AND IT IS ONLY 1.99 FRAMES. A 225-bit frame at RF/32 is 7200 samples,
+ * so a whole frame lands inside for 7136 of 7200 start offsets — 99.1%, not the 100% every
+ * other format here enjoys. A cost rather than a wall, and the reason this format has no
+ * margin left to give (C185). */
+#define INSTAFOB_ASK_CAPTURE_SAMPLES 14336
+_Static_assert(INSTAFOB_ASK_CAPTURE_SAMPLES <= LF_PSK1_MAX_CAPTURE_SAMPLES,
+               "InstaFob's capture must fit the shared sample buffer");
+
 extern const uint8_t LF_ASK_PREAMBLE_GALLAGHER[GALLAGHER_ASK_PREAMBLE_BITS];
 extern const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS];
 extern const uint8_t LF_ASK_PREAMBLE_NORALSY[NORALSY_ASK_PREAMBLE_BITS];

@@ -603,6 +603,24 @@ bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ INSTAFOB — the fourth ASK protocol and the only one whose frame is not 96 bits. 225 bits
+ * at RF/32 is 7200 samples, so the 14336 maximum holds 1.99 frames and a whole frame lands
+ * inside for 99.1% of start offsets rather than the 100% every other format here enjoys
+ * (C185). ⚠ That is why this one uses the buffer maximum and has no margin to give. */
+bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_ask_read(instafob_ask_decode, INSTAFOB_ASK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, INSTAFOB_READ_FRAME_BYTES);
+    data[29] = r.phase;
+    data[30] = r.res.offset;
+    data[31] = r.tries;
+    NRF_LOG_INFO("instafob phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

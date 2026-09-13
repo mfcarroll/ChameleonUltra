@@ -810,6 +810,15 @@ static data_frame_tx_t *cmd_processor_keri_write_to_t55xx(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_instafob_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[INSTAFOB_READ_DATA_SIZE] = { 0x00 };
+    status = scan_instafob(card_data);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
 static data_frame_tx_t *cmd_processor_noralsy_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[NORALSY_READ_DATA_SIZE] = { 0x00 };
     status = scan_noralsy(card_data);
@@ -3577,6 +3586,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SECURAKEY_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_securakey_write_to_t55xx,      NULL                   },
     {    DATA_CMD_NORALSY_SCAN,                 before_reader_run,           cmd_processor_noralsy_scan,                  NULL                   },
     {    DATA_CMD_NORALSY_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_noralsy_write_to_t55xx,        NULL                   },
+    {    DATA_CMD_INSTAFOB_SCAN,                before_reader_run,           cmd_processor_instafob_scan,                 NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },

@@ -897,6 +897,27 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def instafob_scan(self):
+        """Read an InstaFob credential (ASK/Manchester, RF/32, 225-bit frame).
+
+        ⭐ The frame is the tag's ENTIRE T5577 page 0 — 1 + 7x32 bits — and the 32 bits this
+        format is recognised by are the chip's own configuration word `0x00107060`.
+
+        ⚠ THE FRAME IS A 7-BIT ROTATION of Momentum's numbering: we search for the config word
+        and return 225 bits from there, where Momentum puts it at bit 7 (C186).
+
+        ⛔ There is no `instafob_write_to_t55xx`, deliberately — nothing on this bench can
+        verify such a write, so it would ship on self-certification (C185).
+
+        Returns (raw29, phase, offset, tries).
+        """
+        resp = self.device.send_cmd_sync(Command.INSTAFOB_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, offset, tries = struct.unpack(">29sBBB", resp.data[:32])
+            resp.parsed = (raw, phase, offset, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def noralsy_scan(self):
         """Read a Noralsy credential (ASK/Manchester, RF/32, 96-bit frame).
 

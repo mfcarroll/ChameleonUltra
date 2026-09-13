@@ -40,12 +40,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **InstaFob's DECODER is verified on the host (C186)** — two controlled
-  payloads tracked across a change, paired null clean, 24 cross-protocol nulls clean. ⛔ Its
-  WRITE arm cannot be verified on this bench at all (Needs hands). **Next for it: wire the
-  device read arm** (`instafob_read` + `scan_instafob` + command + CLI, capture 14336), then
-  decide whether the emitter is worth attempting — ⚠ it needs a SEQUENCE TERMINATOR, the
-  first in this family that does.
+- **In flight:** nothing. **InstaFob READS on device** (C186, C187) and ships read-only —
+  ⛔ no writer, because nothing here can verify one (Needs hands). Its emulate arm is the only
+  thing left in family 2, and ⚠ it needs a SEQUENCE TERMINATOR, the first in this family that
+  does — the plain loop that carried the other three will not carry it.
+- **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
 - **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
 - ⛔⛔ **The ASK readers now SWEEP DRIVE (C182)** — Noralsy decodes at drive 7 and at no other
   setting, including stock. Every ASK capture in this campaign was taken at `--drive 7`, so
@@ -131,9 +130,13 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
    means nothing is answering and **no firmware change will help**; ~24 and up is a healthy
    tag (C163). Do not debug code until that number is healthy. A whole session was spent
    debugging a reader against a bench that was not answering.
-6. ⚠ **One `flipper.py` emulation at a time.** `timeout` kills it with SIGTERM, skipping the
-   `finally` that sends ETX, so the emulation outlives the script and the next "idle" null
-   decodes (M29).
+6. ⛔⛔ **One `flipper.py` emulation at a time, AND STOP IT EXPLICITLY.** `timeout` kills it
+   with SIGTERM, skipping the `finally` that sends ETX, so the emulation outlives the script
+   and the next "idle" null decodes (M29). ⚠ **`wait` DOES NOT HELP** — every command here
+   runs in a fresh shell, so a job backgrounded in an earlier call is invisible to it. This
+   rule was in this file and still produced a false null on 2026-09-13 (C187). ⇒ `pkill -f
+   "flipper.py emulate"`, then send a literal ETX (`b'\x03'`) to the Flipper's port, then
+   CONFIRM the null is empty before believing any return leg.
 7. ⚠ **The flash script does NOT choose which Chameleon it flashes**, and `hw version`
    cannot settle it (`GIT_VERSION` arrives as a `-D` flag, so the object is not rebuilt).
    Trigger DFU on the port you want, then **ask the device what command ids it declares** —
@@ -226,6 +229,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 10:20 | Noralsy — DONE | 3 → 6 | Noralsy write + emulate verified; drive-sweep regression | write 3/3 pm3, emulate 10/10 null 0/4; Gallagher 4/4 and Securakey 4/4 after the shared change |
 | 2026-09-13 10:55 | InstaFob scoping | 3 → 5 | C185; 2 committed captures | Flipper emulation audible at fs/2 39314 vs 15287 null; write arm unverifiable, in Needs hands |
 | 2026-09-13 11:35 | InstaFob decoder | 4 → 7 | InstaFob format; shared frame bound 224 → 240 | 2 payloads tracked across a change, 24 nulls clean, 320-capture regression holds |
+| 2026-09-13 12:15 | InstaFob read arm | 4 → 8 | device read arm, read-only by design; M29 rule hardened | 5/5 on device, null 0/4 after an explicit stop, 4/4 on a changed payload |
 
 ---
 

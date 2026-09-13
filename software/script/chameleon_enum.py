@@ -210,6 +210,7 @@ class Command(enum.IntEnum):
     SECURAKEY_WRITE_TO_T55XX = 3047
     NORALSY_SCAN = 3048
     NORALSY_WRITE_TO_T55XX = 3049
+    INSTAFOB_SCAN = 3050
 
 @enum.unique
 class Status(enum.IntEnum):

@@ -154,6 +154,14 @@ uint8_t scan_gallagher(uint8_t *data) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 
+uint8_t scan_instafob(uint8_t *data) {
+    int32_t energy = 0;
+    if (instafob_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
 uint8_t scan_noralsy(uint8_t *data) {
     int32_t energy = 0;
     if (noralsy_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {

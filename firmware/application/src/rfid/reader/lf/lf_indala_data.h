@@ -108,6 +108,19 @@ bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 #define NORALSY_READ_DATA_SIZE 16
 bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes of frame in an InstaFob read: 225 bits rounds to 29 bytes. */
+#define INSTAFOB_READ_FRAME_BYTES 29
+/** Bytes written by instafob_read(): the frame, then phase, offset, tries. */
+#define INSTAFOB_READ_DATA_SIZE   32
+
+/* ⛔ THERE IS NO `write_instafob_to_t55xx`, AND THAT IS DELIBERATE. The config word is known
+ * (`0x00107060`) and the writer would be four lines, but NOTHING ON THIS BENCH COULD VERIFY
+ * IT: the Proxmark has no InstaFob support at all and the Flipper sits on the other rig, so
+ * the only reader available for our own written tag would be our own reader. A write command
+ * that ships on self-certification is the `idteck.c` failure exactly — it looks supported.
+ * ⇒ Read only, until the Flipper can face the T5577 (C185, and it is in Needs hands). */
+bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */
