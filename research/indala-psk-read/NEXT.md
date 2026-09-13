@@ -76,7 +76,6 @@ registered `TAG_TYPE_*`.
 | **Gallagher** | ✓ **6/6 on device (C173)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C174)** | ✓ |
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
-| GProxII | ✗ | ✗ | ✗ | ✓ |
 | **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
 | **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✗ | ✓ |
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
