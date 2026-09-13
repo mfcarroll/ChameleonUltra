@@ -216,13 +216,14 @@ static const uint8_t GPROXII_PHASE_ROTATION[] = {
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                             lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
-                            const uint8_t *phases, uint8_t phase_count, uint8_t tries);
+                            const uint8_t *phases, uint8_t phase_count, uint8_t tries,
+                            uint8_t drive);
 
 bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
                      lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
     return lf_sampled_read_phases(decode, capture_samples, out, timeout_ms, energy_out,
                                   PHASE_ROTATION, (uint8_t)PHASE_ROTATION_COUNT,
-                                  INDALA_TRIES_PER_PHASE);
+                                  INDALA_TRIES_PER_PHASE, 0);
 }
 
 /* ⭐⭐ THE INSTRUMENT C209 ASKED FOR: run the READER's own capture and hand back the samples
@@ -242,15 +243,25 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
  *
  * ⚠ Instrumentation. Remove with the rest before upstreaming (§9b). */
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
-                             const int16_t **out, size_t *got) {
+                             uint8_t repeats, const int16_t **out, size_t *got) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
-    lf_125khz_radio_drive_set(drive);
+    if (repeats < 1) {
+        repeats = 1;
+    }
     lf_125khz_radio_saadc_phase_set(phase);
     *got = 0;
-    bool ok = raw_read_samples(m_samples, capture_samples,
-                               INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got, 0);
+    bool ok = false;
+    /* ⭐ `repeats` exists to test ONE hypothesis: a real read takes up to forty captures
+     * back to back and the probe took one, and only the probe worked. Returning the LAST of
+     * N asks whether a capture late in such a run differs from the first. */
+    for (uint8_t i = 0; i < repeats; i++) {
+        lf_125khz_radio_drive_set(drive);
+        *got = 0;
+        ok = raw_read_samples(m_samples, capture_samples,
+                              INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got, 0);
+    }
     /* ⚠ Restore both, for the reason the sniff command's own note gives: a reader that leaves
      * the field or the sample phase altered breaks whatever runs next, invisibly. */
     lf_125khz_radio_drive_set(4);
@@ -261,7 +272,8 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
-                  const uint8_t *phases, uint8_t phase_count, uint8_t tries) {
+                  const uint8_t *phases, uint8_t phase_count, uint8_t tries,
+                  uint8_t drive) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -291,6 +303,18 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
         for (uint8_t k = 0; k < tries && !ok; k++) {
             if (!NO_TIMEOUT_1MS(p_at, timeout_ms)) {
                 break;
+            }
+            /* ⛔⛔ RE-ASSERT THE DRIVE BEFORE EVERY CAPTURE, NOT ONCE PER READ, AND THAT IS
+             * A BUG FIX RATHER THAN BELT AND BRACES. Measured: the reader's own captures
+             * decode exactly at drive 7 and not at all at drive 4 (C210), and a read that set
+             * the drive once before forty captures behaved like drive 4 — mean boundary step
+             * ~5070 against drive 7's ~2500, and 3 reads in 10. Each capture runs its own
+             * `capture_begin`/`capture_end`, and the duty written into the PWM sequence does
+             * not survive that cycle reliably.
+             * ⚠ `drive` 0 means "leave it alone", which is what every existing reader passes —
+             * they sweep drive themselves in `lf_ask_read` or take the stock field. */
+            if (drive != 0) {
+                lf_125khz_radio_drive_set(drive);
             }
             size_t got = 0;
             if (!raw_read_samples(m_samples, capture_samples,
@@ -848,12 +872,11 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
      * the algorithm is right and something between the sniff path and the reader path is not.
      * That is the open question; see NEXT.md. Until it is answered this command ships as
      * research, and the grid must say NOT VERIFIED rather than a read count. */
-    lf_125khz_radio_drive_set(7);
     bool ok = lf_sampled_read_phases(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
                                      &r, timeout_ms, energy_out,
                                      GPROXII_PHASE_ROTATION,
                                      (uint8_t)GPROXII_PHASE_ROTATION_COUNT,
-                                     GPROXII_TRIES_PER_PHASE);
+                                     GPROXII_TRIES_PER_PHASE, 7);
     /* ⚠ Restore the stock drive — a reader that leaves the field weakened breaks whatever runs
      * next, invisibly (C148/L122). */
     lf_125khz_radio_drive_set(4);
