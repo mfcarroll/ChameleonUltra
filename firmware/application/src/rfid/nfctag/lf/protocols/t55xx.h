@@ -167,9 +167,18 @@ extern "C" {
 // ⭐ MEASURED from a Proxmark `lf securakey clone`: block 0 `000C8060`, `lf t55xx detect`
 // reports ASK / RF/40 / ST Yes (C175). ⛔ RF/40, not Gallagher's RF/32 — the bit rate is not
 // a family constant, and the difference from `00088060` is exactly that field.
+//
+// ✅ THE FULL DUMP, recorded 2026-09-13 because C231 could not cover this writer without it:
+//   `lf securakey clone --raw 7FCB400001ADEA5344300000` -> 000C8060 / 7FCB4000 01ADEA53 44300000
+// The block form IS the air frame. ⚠ That had to be CHECKED rather than assumed — Keri's is
+// three bits out of phase and cost a wrong credential 6 of 6 (C160). `ctest/roundtrip.c` pins it.
 #define T5577_SECURAKEY_CONFIG (0x000C8060)
 
 // Noralsy: ASK at RF/32, three data blocks (96-bit frame).
+//
+// ✅ THE FULL DUMP, recorded 2026-09-13 for the same reason as Securakey's above:
+//   `lf noralsy clone --cn 112233 --y 2000` -> 00088068 / BB0214FF 01100022 33070000
+// The block form IS the air frame here too, and `ctest/roundtrip.c` pins it.
 //
 // ⛔⛔ COPIED VERBATIM FROM A CLONE'S BLOCK DUMP, AND `lf t55xx detect` CANNOT VERIFY IT.
 // The Proxmark writes `00088068` and then reports "Could not detect modulation automatically"

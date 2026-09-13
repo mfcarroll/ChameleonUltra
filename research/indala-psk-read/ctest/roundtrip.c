@@ -39,6 +39,7 @@
 #include "awid.h"
 #include "gproxii.h"
 #include "keri.h"
+#include "securakey.h"
 #include "nexwatch.h"
 #include "lf_ask_biphase.h"
 #include "fsk2a_t55xx.h"
@@ -458,6 +459,21 @@ int main(void) {
                        T5577_GPROXII_CONFIG, want_gproxii);
     bad += trial_t55xx("FDX-B    -> T5577 blocks", "0031bd39740201f8804039b518040201", 4,
                        T5577_FDXB_CONFIG, want_fdxb);
+
+    /* ✅ THE LAST TWO, and their reference dumps were MEASURED for this rather than found: C231
+     * had to leave Securakey and Noralsy uncovered because nobody had ever written their block
+     * forms down, and inventing the expected blocks from our own writer's code would have
+     * tested nothing. Two Proxmark clones later they are here. ⚠ Both turn out to be straight
+     * transcriptions, which is what makes the arms cheap — and is exactly the thing that had
+     * to be checked rather than assumed, because Keri's is not. */
+    static const uint32_t want_sk[]  = {T5577_SECURAKEY_CONFIG, 0x7FCB4000, 0x01ADEA53,
+                                        0x44300000};
+    static const uint32_t want_nor[] = {T5577_NORALSY_CONFIG, 0xBB0214FF, 0x01100022,
+                                        0x33070000};
+    bad += trial_writer("Securakey -> T5577 blocks", "7fcb400001adea5344300000", 12,
+                        securakey_t55xx_writer, want_sk, 4);
+    bad += trial_writer("Noralsy  -> T5577 blocks", "bb0214ff0110002233070000", 12,
+                        noralsy_t55xx_writer, want_nor, 4);
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");
     return bad ? 1 : 0;
