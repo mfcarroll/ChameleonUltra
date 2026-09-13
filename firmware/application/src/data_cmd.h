@@ -243,5 +243,6 @@
 #define DATA_CMD_AWID_SCAN                      (3051)
 #define DATA_CMD_PARADOX_SCAN                   (3052)
 #define DATA_CMD_PYRAMID_SCAN                   (3053)
+#define DATA_CMD_FDXA_SCAN                      (3054)
 
 #endif

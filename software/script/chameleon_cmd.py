@@ -897,6 +897,22 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def fdxa_scan(self):
+        """Read an FDX-A credential (FSK2a carrying Manchester, 96-bit frame).
+
+        ⭐ The most heavily gated format here: a 16-bit preamble, the frame repeating, 40
+        Manchester pair checks, and odd parity on each of the five decoded bytes.
+
+        ⚠ Bit 7 of every decoded byte IS that parity bit, so an arbitrary 5-byte string is
+        not a valid FDX-A credential (C199).
+        """
+        resp = self.device.send_cmd_sync(Command.FDXA_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, pay, phase, tries = struct.unpack(">12s5sBB1x", resp.data[:20])
+            resp.parsed = (raw, pay, phase, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def paradox_scan(self):
         """Read a Paradox credential (FSK2a, 96-bit frame).
 

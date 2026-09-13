@@ -672,6 +672,21 @@ bool pyramid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ FDX-A — the fourth and last FSK protocol, and the only one with two encoding layers:
+ * FSK2a on the wire carrying Manchester inside it (C199). */
+bool fdxa_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    if (!lf_ask_read(fdxa_fsk_decode, FDXA_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    fdxa_fsk_payload(r.res.word_bits, &data[12]);
+    data[17] = r.phase;
+    data[18] = r.tries;
+    data[19] = 0;
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

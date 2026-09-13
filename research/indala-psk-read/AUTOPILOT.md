@@ -76,7 +76,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   ⭐⭐ **AWID READS ON DEVICE — 5/5, null 0/3, 4/4 on a changed payload (C196).** The FSK
   family is open and was the CHEAPEST of the three attempted, not the most expensive.
   ⭐⭐ **THREE FSK PROTOCOLS READ ON DEVICE** — AWID, Paradox, Pyramid (C196, C198).
-  **Next: FDX-A**, the last of the family, then the FSK writers when the tag returns.
+  ⭐ **FDX-A decodes too (C199)** — all four FSK protocols read on the host. Its device arm is
+  built; **hardware verification is pending only because the flash keeps landing on Chameleon
+  #2**. ⛔ That is the documented trap: the flash script runs its OWN DFU trigger regardless of
+  yours, and it picks whichever port the OS lists first. ⇒ Re-run until `3054 in caps` on #1.
+  **Then: the FSK writers when the tag returns.**
   ⚠ **After a flash, wait ~15s before querying capabilities** — three "failed" flashes on
   2026-09-13 were the check racing re-enumeration at 6s while the script reported success
   each time (L162). Read the flash script's OUTPUT rather than discarding it.
@@ -288,6 +292,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 18:40 | AWID on device | 14 → 17 | `awid_read`, `scan_awid`, `DATA_CMD_AWID_SCAN`, CLI | 5/5 on device, null 0/3, 4/4 on a changed payload |
 | 2026-09-13 19:15 | Paradox + Pyramid | 14 → 17 | 2 format entries, 2 committed captures | both decode first try; 26 nulls clean; Pyramid's CRC verified on a real signal |
 | 2026-09-13 19:50 | both on device | 15 → 18 | device arms, commands 3052/3053, CLI | Paradox 4/4 null 0/2; Pyramid 4/4 then 3/3 on a changed payload |
+| 2026-09-13 20:25 | FDX-A | 15 → 18 | format + device arm + CLI; C199 | decodes host-side, 26 nulls; hardware pending on a misdirected flash |
 
 ---
 

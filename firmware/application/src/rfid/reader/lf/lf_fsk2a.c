@@ -134,6 +134,67 @@ const lf_fsk2a_format_t LF_FSK2A_FORMAT_PYRAMID = {
     .accept = pyramid_accept,
 };
 
+/* FDX-A: 0x55 then 0x1D. */
+const uint8_t LF_FSK2A_PREAMBLE_FDXA[FDXA_FSK_PREAMBLE_BITS] = {
+    0, 1, 0, 1, 0, 1, 0, 1,   /* 0x55 */
+    0, 0, 0, 1, 1, 1, 0, 1    /* 0x1D */
+};
+
+/* ⭐ Manchester INSIDE the FSK. Returns false on a matched pair, which is an encoding
+ * violation rather than a data value — and is most of this format's gate. */
+static bool fdxa_manchester(const uint8_t *word_bits, uint8_t out5[5]) {
+    for (uint8_t i = 0; i < 5; i++) {
+        out5[i] = 0;
+    }
+    for (uint8_t k = 0; k < 40; k++) {
+        const uint8_t a = word_bits[16 + k * 2u] & 1u;
+        const uint8_t b = word_bits[17 + k * 2u] & 1u;
+        if (a == b) {
+            return false;
+        }
+        if (a) {                                  /* 10 -> 1, 01 -> 0 */
+            out5[k / 8] = (uint8_t)(out5[k / 8] | (0x80u >> (k % 8)));
+        }
+    }
+    return true;
+}
+
+void fdxa_fsk_payload(const uint8_t *word_bits, uint8_t out5[5]) {
+    (void)fdxa_manchester(word_bits, out5);
+}
+
+/* ⛔ THREE CHECKS ON TOP OF THE PREAMBLE: the Manchester pair rule (40 of them), odd parity
+ * on each of the five decoded bytes, and the frame repeat handled by `require_repeat`. */
+static bool fdxa_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < FDXA_FSK_FRAME_BITS) {
+        return false;
+    }
+    uint8_t dec[5];
+    if (!fdxa_manchester(word_bits, dec)) {
+        return false;
+    }
+    for (uint8_t i = 0; i < 5; i++) {
+        uint8_t sum = 0;
+        for (uint8_t b = 0; b < 8; b++) {
+            sum = (uint8_t)(sum + ((dec[i] >> b) & 1u));
+        }
+        if ((sum & 1u) == 0) {
+            return false;                          /* odd parity per byte */
+        }
+    }
+    return true;
+}
+
+const lf_fsk2a_format_t LF_FSK2A_FORMAT_FDXA = {
+    .preamble = LF_FSK2A_PREAMBLE_FDXA,
+    .preamble_bits = FDXA_FSK_PREAMBLE_BITS,
+    .frame_bits = FDXA_FSK_FRAME_BITS,
+    .pulses_short = 6,
+    .pulses_long = 5,
+    .require_repeat = true,
+    .accept = fdxa_accept,
+};
+
 bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
                          const lf_fsk2a_format_t *fmt, lf_decode_result_t *out) {
     memset(out, 0, sizeof(*out));
@@ -245,4 +306,8 @@ bool paradox_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
 
 bool pyramid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_fsk2a_decode_fmt(samples, n, &LF_FSK2A_FORMAT_PYRAMID, out);
+}
+
+bool fdxa_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
+    return lf_fsk2a_decode_fmt(samples, n, &LF_FSK2A_FORMAT_FDXA, out);
 }

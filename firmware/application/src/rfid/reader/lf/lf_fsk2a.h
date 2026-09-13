@@ -57,7 +57,20 @@
 #define PYRAMID_FSK_PREAMBLE_BITS 24
 #define PYRAMID_FSK_CAPTURE_SAMPLES 14336
 
+/* FDX-A: 96-bit frame, 16-bit preamble `0x551D`.
+ *
+ * ⭐⭐ THE ONLY PROTOCOL IN THIS FAMILY WITH TWO ENCODING LAYERS: FSK2a on the wire, carrying
+ * MANCHESTER-encoded data inside it. Bits 16..95 are 40 bit-PAIRS — `01` is a 0 and `10` a 1,
+ * and a matched pair is an encoding violation that rejects the frame outright. So its 80
+ * payload bits carry 40 real ones, and the pair rule alone is 40 independent checks.
+ * ⇒ Together with 16 preamble bits, the frame repeating, and odd parity on each of the five
+ * decoded bytes, this is the most heavily gated format on the bench. */
+#define FDXA_FSK_FRAME_BITS    96
+#define FDXA_FSK_PREAMBLE_BITS 16
+#define FDXA_FSK_CAPTURE_SAMPLES 14336
+
 extern const uint8_t LF_FSK2A_PREAMBLE_AWID[AWID_FSK_PREAMBLE_BITS];
+extern const uint8_t LF_FSK2A_PREAMBLE_FDXA[FDXA_FSK_PREAMBLE_BITS];
 extern const uint8_t LF_FSK2A_PREAMBLE_PARADOX[PARADOX_FSK_PREAMBLE_BITS];
 extern const uint8_t LF_FSK2A_PREAMBLE_PYRAMID[PYRAMID_FSK_PREAMBLE_BITS];
 
@@ -80,6 +93,7 @@ typedef struct {
 extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_AWID;
 extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_PARADOX;
 extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_PYRAMID;
+extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_FDXA;
 
 /** Demodulate one FSK2a frame. ⚠ `samples` is NOT modified. */
 bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
@@ -93,6 +107,12 @@ bool paradox_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** Pyramid's decode — 24-bit preamble, repeat at 128, and a CRC-8 over 13 bytes. */
 bool pyramid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
+
+/** FDX-A's decode — FSK2a carrying Manchester, with parity on each decoded byte. */
+bool fdxa_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
+
+/** The five bytes an FDX-A frame carries, Manchester-decoded from bits 16..95. */
+void fdxa_fsk_payload(const uint8_t *word_bits, uint8_t out5[5]);
 
 /** The 66 payload bits an AWID frame carries, left-aligned into 9 bytes.
  *  ⭐ Each nibble at `8 + 4i` is THREE data bits plus an odd-parity LSB (C194). */

@@ -66,7 +66,7 @@ registered `TAG_TYPE_*`.
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | **AWID** | ✓ **5/5 on device, null 0/3 (C196)** | ◐ deferred — needs the tag back | ✗ | ✓ |
-| FDX-A | ✗ | ✗ | ✗ | ✓ |
+| **FDX-A** | ◐ **host-verified (C199)**, device arm built, hardware pending | ✗ | ✗ | ✓ |
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
 | **Paradox** | ✓ **4/4 on device, null 0/2 (C198)** | ◐ deferred — needs the tag back | ✗ | ✓ |
 | **Pyramid** | ✓ **4/4 + 3/3 on a changed payload (C198)** | ◐ deferred — needs the tag back | ✗ | ✓ |

@@ -214,6 +214,7 @@ class Command(enum.IntEnum):
     AWID_SCAN = 3051
     PARADOX_SCAN = 3052
     PYRAMID_SCAN = 3053
+    FDXA_SCAN = 3054
 
 @enum.unique
 class Status(enum.IntEnum):

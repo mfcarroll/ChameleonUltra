@@ -1005,6 +1005,7 @@ lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
 lf_awid = lf.subgroup("awid", "AWID commands (read only for now)")
 lf_paradox = lf.subgroup("paradox", "Paradox commands (read only for now)")
 lf_pyramid = lf.subgroup("pyramid", "Pyramid commands (read only for now)")
+lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only for now)")
 
 
 @root.command("clear")
@@ -7534,6 +7535,24 @@ class LFPyramidRead(ReaderRequiredUnit):
         raw, phase, tries = self.cmd.pyramid_scan()
         print("Pyramid FSK2a")
         print(f"   Raw (128 bits): {color_string((CY, raw.hex()))}")
+        print(f"   Read at sample phase {phase} ticks, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_fdxa.command("read")
+class LFFdxaRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an FDX-A credential (FSK2a carrying Manchester). Read only "
+                              "for now — the writer waits for the T5577 to return.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, pay, phase, tries = self.cmd.fdxa_scan()
+        print("FDX-A FSK2a + Manchester")
+        print(f"   Raw (96 bits): {color_string((CY, raw.hex()))}")
+        print(f"   Payload:       {color_string((CY, pay.hex()))}")
+        print(f"   ⚠ Bit 7 of each byte is FDX-A's odd-parity bit, not payload.")
         print(f"   Read at sample phase {phase} ticks, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 
