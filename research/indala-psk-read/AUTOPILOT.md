@@ -53,9 +53,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   ⭐ **Partly answered for Gallagher (C180)**: the real tag's frame period is exactly nominal,
   12 intervals at 3072 ± 1 sample, so its sequence terminator causes no displacement and our
   plain loop matches at the boundary. `framedrift.py` does this with no hands.
-  ⛔ **`framedrift.py` is NOT yet trustworthy for Securakey** — it finds no frame in
-  `sk_20.bin` where `ctest/cdemod --securakey` reads it. Fix that disagreement (the shipping
-  decoder sweeps two low-pass widths, this sweeps one) before quoting any Securakey number.
+  ⭐ **Now answered for BOTH ASK protocols (C180): 20 frame-to-frame periods, none showing a
+  terminator gap.** `framedrift.py` agrees with the shipping decoder on every capture.
+  ⛔ **The fix was NOT the low-pass sweep I predicted** — it was the slicing reference: a
+  trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
+  about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -211,6 +213,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 07:35 | U6 (part) | 39 → 42 | Securakey device read + write + emitter, `TAG_TYPE_SECURAKEY`, CLI | read 6/6, write 3/3 via pm3; **emulate 0/6** with Gallagher 4/4 as the same-rig control |
 | 2026-09-13 08:05 | U6 — DONE | 41 → 43 | C177 retracted; `flipper.py` matcher widened for multi-word names | emulate 10/10, null 0/4, return leg tracked a changed credential |
 | 2026-09-13 08:30 | C179 follow-up | 42 → 44 | `framedrift.py`; C180 | Gallagher real-tag frame period 3072 ± 1 over 12 intervals; Securakey withheld — tool disagrees with shipping decoder |
+| 2026-09-13 08:55 | C180 completed | 42 → 43 | `framedrift.py` DC estimator now mirrors the firmware | Securakey 8 intervals all exactly 3840; 20 periods total, no terminator gap on either protocol |
 
 ---
 
