@@ -96,8 +96,17 @@ static const nrf_pwm_sequence_t *gproxii_modulator(gproxii_codec *d, uint8_t *bu
             ch0 = (uint16_t)((level ? 0u : (1u << 15)) |
                              (GPROXII_CARRIER_CYCLES_PER_BIT / 2));
         } else {
-            /* Held for the whole bit: all of it, or none of it. */
-            ch0 = (uint16_t)(level ? GPROXII_CARRIER_CYCLES_PER_BIT : 0u);
+            /* ⛔⛔ HELD FOR THE WHOLE BIT — AND THE HIGH CASE MUST BE `counter_top + 1`, NOT
+             * `counter_top`. This codebase already knew: `jablotron.c` and `pac.c` both hold a
+             * level and both use compare = counter_top + 1, each with a comment citing the
+             * nRF52840 PS — "compare >= counter_top -> pin held HIGH", and using exactly
+             * counter_top leaves a 1-tick glitch because the counter DOES reach it.
+             *
+             * ⚠ The first two versions of this emitter used `counter_top`, so every held-high
+             * bit carried that glitch. Worse, the em410x probe that "proved" held levels are
+             * silent (C242) used the same wrong idiom — so what it actually demonstrated was
+             * that the GLITCHY form is silent, which is a different claim. */
+            ch0 = (uint16_t)(level ? (GPROXII_CARRIER_CYCLES_PER_BIT + 1u) : 0u);
         }
         m_gproxii_vals[i].channel_0 = ch0;
         m_gproxii_vals[i].channel_1 = 0;
