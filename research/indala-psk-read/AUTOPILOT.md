@@ -162,7 +162,9 @@ the two Chameleons face each other.
   ⛔ **The fix was NOT the low-pass sweep I predicted** — it was the slicing reference: a
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
-- ⭐ **Chameleon #2 carries `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
+- ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
+  now holds SECURAKEY `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
+- ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -349,6 +351,8 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 08:20 | **C252 — the error-detection sweep** | 10 → 10 | `6b51ccb`. 1,024 corrupted frames through emitter and decoder, 10 protocols. Rejected/wrong runs AWID 96/0 to Indala224 28/196. Counts PINNED so a weakened gate fails `make check` | Sensitivity by deliberate break: Gallagher's accept hook removed moved it 88/8 → 16/80 while its round trip stayed ✓ exact |
+| 2026-09-14 09:15 | **C253 — Securakey's missing gate** | 10 → 10 | `f536b44` flashed to #2. `securakey_accept()` enforces the reference's ten zero spacers; sweep 19→28 caught | Hardware A/B/A: valid 8/8, spacer bit 46 flipped 0/4 with the field loud and pm3's readback proving the tag held it, restored 4/4 |
 | 2026-09-14 07:30 | **C251 — the wrong credentials are Indala** | 10 → 10 | `235dfa3` (probe #2) then `a049bc6` (restore). Guard OFF: hint 0 → 7 wrong of 48, six of them relabelled `Indala 26-bit`; `-f H10301` → 1 wrong of 48. The four H10301-labelled wrongs are two flips inside one parity group | A/B/A, closing arm 48/48 on the restored build; each arm confirmed on the device by `hw version`'s git hash |
 | 2026-09-14 06:10 | **C47's paired test — C45 EXPLAINED** | 10 → 10 | `d37b450` (probe, guard 0) then `ee59b45` (restore, guard 1). Guard ON 96/96 exact, guard OFF 71/80 with **5 wrong credentials**, p = 6.4e-4 (C250). C45's headline corrected: the fault is the capture, not the decoder | A/B/A across three flashed builds, each confirmed on the device by `hw version`'s git hash before any read |
 | 2026-09-14 04:40 | **C45 on the current build** | 10 → 10 | Nothing in firmware — a measurement. A/B/A on the rig-B T5577: legacy HID 32/32 exact, shared-engine AWID 32/32 exact, legacy HID 16/16 after rewriting the credential (C248). ⚠ C249: chained `pm3 -c` reported a pre-wipe credential from a tag that had just been wiped | 80 credential-scored reads + 24 null reads, four blank columns all silent; the closing HID arm rules out drift |
