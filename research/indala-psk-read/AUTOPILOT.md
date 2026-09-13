@@ -38,12 +38,6 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔ 2026-09-14 06:40 — CHAMELEON #2 IS ON PROBE BUILD #2, ADVERTISING GUARD OFF
-
-`LF_ADV_GUARD_ENABLED` is **0** and flashed to `/dev/tty.usbmodemF429364E46961`. Every LF
-reader on that unit is degraded while this is true. ⛔ **If you are resuming and this paragraph
-is still here, the restore was lost: set the switch back to 1, rebuild, flash #2, delete this.**
-
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
 Every protocol Momentum carries READS and WRITES here except FDX-A and InstaFob, which nothing
