@@ -55,13 +55,19 @@ tag by flipping one named spacer bit (8/8 valid, 0/4 broken, 4/4 restored).
 reach `require_repeat`, and the obvious instrument fails its own control. Low numbers are a
 FLOOR for repeat-gated formats.
 
-⇒ **Candidates next, all no-hands:**
-- ⚠ `LF_ASK_FORMAT_INSTAFOB.accept` is now the ONLY `NULL` hook left. Its 32-bit preamble is
-  strong and InstaFob ships read-only, so check the reference before touching it — this is
-  exactly where C253's mistake would repeat if the reference turns out to check nothing.
-- GProxII 36/60 and the three PSK1 formats at ~50% — audit each against its reference and
-  record "matches" or "here is the missing check". Indala26's parity is ALREADY a decided
-  non-gate (C19); do not re-open it.
+✅ **The audit is DONE (C256) and GProxII's gap is closed (C255).** InstaFob's `NULL` hook turned
+out to be correct — the reference checks its 32-bit constant and nothing else — and IDTECK and
+Indala224 match too. ⛔ **One measured caution now sits over all of this**: with a corrupted tag
+in the field, GProxII returned a frame that passes EVERY check both references make, once in
+four. A stronger gate narrows the window; it does not close it.
+
+⇒ **Candidates next, all no-hands unless marked:**
+- ⭐ **Indala26 bits 60 and 61 must be zero** — the reference checks it, we do not, it is pure
+  frame content and safe to add. Cheapest remaining item and it needs a device arm to confirm
+  the real tag still reads.
+- ⚠ **The REPEAT requirements (Indala26 at offset 64, Keri's same-id-in-both-frames) are NOT
+  safe to add blind.** Whether our capture window holds two frames is per-protocol and measured
+  (C161). Measure first: truncate a good capture and find the threshold.
 - The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
@@ -377,6 +383,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 10:45 | **C255/C256 — gate audit, GProxII closed** | 8 → 11 | `3f46af2` flashed to #2. GProxII gains the reference's Wiegand parity check (sweep 36→64 rejected); every other format audited against its reference — IDTECK, InstaFob and Indala224 MATCH, Indala26 and Keri have open gaps | Hardware A/B/A: valid 8/8, one named bit broken 0 exact/3 silent/**1 self-consistent false frame**, restored 8/8 |
 | 2026-09-14 08:20 | **C252 — the error-detection sweep** | 10 → 10 | `6b51ccb`. 1,024 corrupted frames through emitter and decoder, 10 protocols. Rejected/wrong runs AWID 96/0 to Indala224 28/196. Counts PINNED so a weakened gate fails `make check` | Sensitivity by deliberate break: Gallagher's accept hook removed moved it 88/8 → 16/80 while its round trip stayed ✓ exact |
 | 2026-09-14 09:15 | **C253 — Securakey's missing gate** | 10 → 10 | `f536b44` flashed to #2. `securakey_accept()` enforces the reference's ten zero spacers; sweep 19→28 caught | Hardware A/B/A: valid 8/8, spacer bit 46 flipped 0/4 with the field loud and pm3's readback proving the tag held it, restored 4/4 |
 | 2026-09-14 07:30 | **C251 — the wrong credentials are Indala** | 10 → 10 | `235dfa3` (probe #2) then `a049bc6` (restore). Guard OFF: hint 0 → 7 wrong of 48, six of them relabelled `Indala 26-bit`; `-f H10301` → 1 wrong of 48. The four H10301-labelled wrongs are two flips inside one parity group | A/B/A, closing arm 48/48 on the restored build; each arm confirmed on the device by `hw version`'s git hash |
