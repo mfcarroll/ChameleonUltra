@@ -75,7 +75,9 @@ four. A stronger gate narrows the window; it does not close it.
   in PR preparation, and doing it here would break the tooling this branch runs on.
   ⇒ **§9 is now current in every part a reviewer reads.** What remains in §9b is genuinely not
   ours to decide: the command-id allocation needs upstream, and the shared-struct sizing and
-  the GProxII parameter overrides are judgement calls for a maintainer. ⇒ **Everything left in
+  the GProxII parameter overrides are judgement calls for a maintainer. ⭐ **Operator directive 2026-09-15: the upstream `unpack()` relabelling is OURS to work on**,
+  not merely to report — see C276 for the mitigation shipped and NEXT.md §9f for the corrected
+  scope. ⇒ **Everything else left in
   §2 needs HANDS** (see §5 and NEXT.md's Needs hands table). The next device unit is the
   emulate-arm re-grade, and it cannot start until the tag comes out of the sandwich.
 - ⛔ **The `require_repeat` instrument has now failed TWICE (C254, C264)** — the second attempt
@@ -398,6 +400,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 00:30 | **C276 — the unpinned HID read says it is a guess** | 19 → 20 | Operator called the `unpack()` relabelling ours to work on. `lf hid prox read` now flags an unpinned read, names the `-f` flag and quotes C251's 7-in-48. ⭐ And §9f overstated the risk: the walk has ONE caller, `hidprox.c:134` | Both branches verified on a real H10301 clone — unpinned warns, pinned is silent; the caller count is a whole-tree grep |
 | 2026-09-14 23:20 | **C274 — the drive sweep's comment was wrong** | 19 → 19 | It claimed step order affects latency not correctness; two protocols read at one drive each, and the table truncates under a short timeout. No live bug — every caller passes 3000 ms — but the margin is load-bearing and now says so | Worked through the step arithmetic at five timeout values against the constant callers actually pass; comment-only, firmware rebuilt clean |
 | 2026-09-14 22:50 | **C272/C273 — FDX-B settles C270** | 18 → 19 | Same biphase decoder as GProxII, RF/32 not RF/64: 56 captures, 24 frames, **zero wrong credentials** — so it is the bit rate, not the decoder. ⛔ And FDX-B reads at drive 4 and NO other setting, working only because the shared sweep tries 4 first | Two passes at drives 7 and 6 to rule out a fluke; drive 4's 16/16 in the same sweeps is the positive control |
 | 2026-09-14 22:00 | **C270/C271 — field sweep across the ASK family** | 18 → 18 | Gallagher (RF/32) and Securakey (RF/40) have NO marginal regime — perfect, then a cliff to nothing, 0 false in 40 captures each. Only GProxII (RF/64) degrades into wrong answers, and it has the strongest gate of the three | 120 captures × 5 drives with drive 7 as the in-sweep control; the drive-1 cliff reproduces on both protocols and on two passes |

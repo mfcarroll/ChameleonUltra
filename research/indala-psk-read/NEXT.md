@@ -327,6 +327,16 @@ Six of the seven came back labelled **`Indala 26-bit`**, FC 1953-1977 / CN 471, 
 checks less, accepts what H10301 refused, and `card->format` is quietly set to ind26. The CLI
 prints whatever format comes back, so there is no signal that a fallback happened at all.
 
+⭐⭐ **UPDATE 2026-09-15 — the operator has called this OURS to work on, and a mitigation has
+shipped (C276).** `lf hid prox read` now states that an unpinned read is the FIRST layout that
+fits rather than the only one, names the `-f` flag, and quotes the measured cost. The walk
+itself is untouched.
+
+⭐ **And this row overstated the risk of changing it.** It said narrowing `unpack()` touches
+"every reader that guesses a format". A whole-tree grep finds **one caller: `hidprox.c:134`.**
+ioProx has a fixed XSF layout; Indala prints its own 26-bit interpretation without the table.
+⇒ Upstream is being asked about one reader, not a shared foundation.
+
 ⛔ **Both halves are on `main`.** The walking `unpack()` is upstream's, and so is
 `LFHIDProxRead` passing `format = 0` when `-f` is absent. This branch did not introduce either
 and **must not "fix" it here**: the format walk is load-bearing for every reader that guesses a

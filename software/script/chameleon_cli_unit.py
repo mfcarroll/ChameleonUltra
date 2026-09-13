@@ -5971,6 +5971,25 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_scan(format)
         cn = (cn1 << 32) + cn2
         print(f"HIDProx/{HIDFormat(format)}")
+        # ⛔ SAY THAT AN UNPINNED READ IS A GUESS, because the firmware returns the FIRST
+        # format that fits and prints it as if it were the answer. `formats[]` in wiegand.c is
+        # the Proxmark's shared WIEGAND LAYOUT table, not a per-protocol one, and the reference
+        # prints EVERY match under a "False Positives ARE possible" banner. We print one.
+        #
+        # ⚠ This is not theoretical and the cost is measured: with the capture perturbed, an
+        # unpinned read returned a wrong credential 7 times in 48 and SIX of those seven came
+        # back relabelled `Indala 26-bit` — a corrupted H10301 frame breaks H10301's parity,
+        # `unpack()` walks on, and ind26's weaker checks accept it. Pinning the format cut that
+        # to 1 in 48 (C251).
+        #
+        # ⛔ The fix is deliberately HERE and not in `unpack()`: that walk is shared by every
+        # reader which guesses a format, and narrowing it is a change to other people's readers.
+        if args.format is None:
+            print(f"   {color_string((CY, '⚠ no format pinned'))} — this is the FIRST layout "
+                  f"that fits, not the only one. Re-run with "
+                  f"{color_string((CG, '-f ' + HIDFormat(format).name))} to require it; on a "
+                  f"perturbed capture an unpinned read was wrong 7 times in 48 against 1 in 48 "
+                  f"pinned (C251).")
         if fc > 0:
             print(f" FC: {color_string((CG, fc))}")
         if il > 0:
