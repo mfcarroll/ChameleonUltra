@@ -38,6 +38,8 @@
 #include "noralsy.h"
 #include "awid.h"
 #include "gproxii.h"
+#include "keri.h"
+#include "nexwatch.h"
 #include "lf_ask_biphase.h"
 #include "fsk2a_t55xx.h"
 #include "t55xx.h"
@@ -284,6 +286,35 @@ static int trial_fsk(const char *name, const char *hex, size_t bits,
  * the other five still have no host coverage; adding theirs needs a dump of each reference
  * clone, which is bench work rather than typing. Recorded in NEXT.md.
  */
+/* ⭐ The same pin for a writer that is NOT the shared FSK2a transcription — Gallagher's,
+ * NexWatch's and above all KERI's, whose block form is `(id << 3) | 7` and therefore three
+ * bits out of phase with its air frame. ⛔ Keri is the reason this whole family of arms
+ * exists: sending its frame view where its block form belongs gave a stable, confident,
+ * WRONG credential 6 times out of 6 (C160), and nothing on the host could see it. */
+static int trial_writer(const char *name, const char *hex, size_t frame_bytes,
+                        uint8_t (*writer)(uint8_t *, uint32_t *),
+                        const uint32_t *want, uint8_t want_n) {
+    uint8_t frame[32] = {0};
+    for (size_t i = 0; i < frame_bytes; i++) {
+        unsigned v; sscanf(hex + 2 * i, "%2x", &v); frame[i] = (uint8_t)v;
+    }
+    uint32_t blks[8] = {0};
+    uint8_t n = writer(frame, blks);
+    int bad = (n != want_n);
+    for (uint8_t i = 0; i < n && !bad; i++) {
+        bad = (blks[i] != want[i]);
+    }
+    printf("  %-28s %s  blocks %u (want %u)", name, bad ? "\u26d4" : "\u2713", n, want_n);
+    if (bad) {
+        printf("   got");
+        for (uint8_t i = 0; i < n; i++) printf(" %08X", blks[i]);
+        printf("   want");
+        for (uint8_t i = 0; i < want_n; i++) printf(" %08X", want[i]);
+    }
+    printf("\n");
+    return bad ? 1 : 0;
+}
+
 static int trial_t55xx(const char *name, const char *hex, uint8_t words, uint32_t config,
                        const uint32_t *want) {
     uint8_t frame[32] = {0};
@@ -402,6 +433,31 @@ int main(void) {
                        T5577_PARADOX_CONFIG, want_paradox);
     bad += trial_t55xx("Pyramid  -> T5577 blocks", "00010101010101010101016eb35e5da4", 4,
                        T5577_PYRAMID_CONFIG, want_pyramid);
+
+    /* ⭐⭐ THE OTHER WRITERS, pinned from the reference dumps already recorded in the tree —
+     * C202 flagged that six of them had no host coverage at all, and five of those six had
+     * their reference blocks written down and unused. ⛔ KERI IS THE ONE THAT MATTERS: its
+     * block form is `(id << 3) | 7`, three bits out of phase with the air frame it is given,
+     * and that rotation is the exact bug that shipped a confident wrong credential 6 of 6. */
+    static const uint32_t want_keri[]    = {T5577_KERI_CONFIG, 0x00000004, 0x000181CF};
+    static const uint32_t want_gal[]     = {T5577_GALLAGHER_CONFIG, 0x7FEAA31E, 0x76D86C6D,
+                                            0x868CC249};
+    static const uint32_t want_nw[]      = {T5577_NEXWATCH_CONFIG, 0x56000000, 0x00436455,
+                                            0x121E6000};
+    static const uint32_t want_gproxii[] = {T5577_GPROXII_CONFIG, 0xF84602A4, 0x6119D4A1,
+                                            0x14211046};
+    static const uint32_t want_fdxb[]    = {T5577_FDXB_CONFIG, 0x0031BD39, 0x740201F8,
+                                            0x804039B5, 0x18040201};
+    bad += trial_writer("Keri ROTATED -> blocks", "e000000080003039", 8,
+                        keri_t55xx_writer, want_keri, 3);
+    bad += trial_writer("Gallagher -> T5577 blocks", "7feaa31e76d86c6d868cc249", 12,
+                        gallagher_t55xx_writer, want_gal, 4);
+    bad += trial_writer("NexWatch -> T5577 blocks", "5600000000436455121e6000", 12,
+                        nexwatch_t55xx_writer, want_nw, 4);
+    bad += trial_t55xx("GProxII  -> T5577 blocks", "f84602a46119d4a114211046", 3,
+                       T5577_GPROXII_CONFIG, want_gproxii);
+    bad += trial_t55xx("FDX-B    -> T5577 blocks", "0031bd39740201f8804039b518040201", 4,
+                       T5577_FDXB_CONFIG, want_fdxb);
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");
     return bad ? 1 : 0;
