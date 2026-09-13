@@ -381,6 +381,38 @@ and not gated** — which is what the reference does (C261).
 wrong number printed under a right frame was invisible by construction, in every protocol, for
 the whole branch.
 
+### 9h. ⭐ THE INSTRUMENTATION SPLIT, AS A CHECKLIST RATHER THAN AN INTENTION
+
+§9b has said "strip all three, or land them separately" since it was written, which is a
+decision and not a plan. This is the plan — every site, found by `grep` on 2026-09-14, so the
+split is a mechanical operation instead of an archaeology exercise.
+
+⛔ **Deliberately NOT executed on this branch.** Removing these would break the research tooling
+the branch exists to use, and `research/` ships in no PR anyway. The checklist is the
+deliverable; the cut belongs in the PR preparation.
+
+| | firmware | host |
+|---|---|---|
+| **3037 `LF_EMU_DEBUG`** (`hw emudebug`) | `data_cmd.h:235`, handler `app_cmd.c:761` (5 lines), dispatch row `app_cmd.c:3856` | `chameleon_enum.py:204`, `chameleon_cmd.py:753`, `chameleon_cli_unit.py:9029` |
+| **3038 `LF_RADIO_DEBUG`** (`hw lfdebug`) | `data_cmd.h:236`, handler `app_cmd.c:770` (5 lines), dispatch row `app_cmd.c:3857` | `chameleon_enum.py:205`, `chameleon_cmd.py:783`, `chameleon_cli_unit.py:9055` |
+| **3060 `LF_READER_CAPTURE`** | `data_cmd.h:264`, handler `app_cmd.c:852` (39 lines), dispatch row `app_cmd.c:3853`, and `lf_reader_capture_probe()` at `lf_indala_data.c:246` / `.h:158` | `chameleon_enum.py:227` and nothing else |
+| **The GProxII failure-energy payload** | `app_cmd.c:921-932` — the 4-byte payload returned on a FAILED scan | `chameleon_cmd.py:1004-1007` |
+
+⭐ **Nothing shippable depends on any of them, and that is checked rather than hoped.**
+`lf_reader_capture_probe()` has exactly one caller (`app_cmd.c:866`); the two debug handlers are
+`static` and reached only through their own dispatch rows; and the GProxII energy path already
+has a plain sibling in the tree — `scan_gproxii()` at `lf_reader_main.c:192` wraps
+`scan_gproxii_energy()` and discards the energy. So that fourth row is two lines: call the
+sibling, delete the failure branch. **The split is subtraction, not surgery.**
+
+⭐ `rdrcap.py` needs nothing done to it. It hardcodes `CMD = 3060` and never imports the enum,
+and it lives under `research/`, which is in no PR.
+
+⚠ **What is lost is worth naming rather than quietly binning.** The capture probe is what
+cracked C211 after six hypotheses had been refuted by measurement, and the failure-energy
+payload is what separates "the capture was wrong" from "the decode was wrong" on a silent read —
+the distinction C206 turned on. A diagnostics change should carry them with that justification.
+
 ### 9c. ⭐ Recommended shape — three PRs, not one
 
 ⭐ **10,242 lines of CODE will not be reviewed in one PR; it will be declined.** ⚠ The figure

@@ -70,12 +70,14 @@ four. A stronger gate narrows the window; it does not close it.
   ✅ **AND Securakey's display is built (C261)** — the display layer is complete and verified in
   all ten protocols. ✅ **§9 refreshed (C262)**: 48 new command ids of which 41 are shippable,
   three stale rows fixed, and §9g now carries the gate and display audits for a reviewer.
-  ⇒ **Next: the instrumentation strip, §9b's last ⛔ that is ours to act on.** Three ids
-  (3037 `LF_EMU_DEBUG`, 3038 `LF_RADIO_DEBUG`, 3060 `LF_READER_CAPTURE`) plus
-  `lf_reader_capture_probe()`, the GProxII failure-energy payload, `rdrcap.py`, `hw emudebug`
-  and `hw lfdebug`. ⛔ Do NOT delete them — they earned their place (the probe cracked C211
-  after six refuted hypotheses). The unit is to establish EXACTLY what the split touches, so a
-  diagnostics change can be lifted out whole rather than picked apart later.
+  ✅ **AND the instrumentation split is now a checklist (C263, §9h)** — four items, every call
+  site, nothing shippable depending on any of them. Deliberately not executed: the cut belongs
+  in PR preparation, and doing it here would break the tooling this branch runs on.
+  ⇒ **§9 is now current in every part a reviewer reads.** What remains in §9b is genuinely not
+  ours to decide: the command-id allocation needs upstream, and the shared-struct sizing and
+  the GProxII parameter overrides are judgement calls for a maintainer. ⇒ **Everything left in
+  §2 needs HANDS** (see §5 and NEXT.md's Needs hands table). The next device unit is the
+  emulate-arm re-grade, and it cannot start until the tag comes out of the sandwich.
 - The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
@@ -392,6 +394,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 16:20 | **C263 — the instrumentation split, as a checklist** | 12 → 12 | §9h: four items, every call site grepped. Nothing shippable depends on any of them — the probe has one caller, the debug handlers none beyond their dispatch rows, and GProxII's is two lines because `scan_gproxii()` was already in the tree | Pure compute; the "nothing depends on them" claim is a caller count, and deliberately NOT executed — it would break this branch's own tooling |
 | 2026-09-14 15:45 | **C262 — §9 refresh** | 12 → 12 | Command ids recounted from a `data_cmd.h` diff: 48 new, 41 shippable. Three stale rows fixed — HID Prox's "intermittent 15-20%", §9a's grid omitting six protocols, and a blocker arguing from an unread reference. New §9g carries the gate and display audits | Pure compute: every correction is contradicted by a claim already in the ledger, and the count is a `comm` between two checked-out headers |
 | 2026-09-14 14:40 | **C261 — Securakey's display** | 11 → 12 | `_securakey_fields()` in the CLI: length, FC, card and the Wiegand word, matching the Proxmark field for field. The parity is REPORTED, not gated — the third option C253 did not list | A/B/A on the tag: valid fields 4/4 matching pm3, bit 38 flipped read 4/4 with `PARITY FAILS` flagged (the gate cannot be what changed), restored 4/4 |
 | 2026-09-14 13:55 | **C259/C260 — the display layer** | 11 → 11 | Keri's `Internal ID` fixed (it printed the raw field under the reference's label); the other half of C259 retracted as my own comparison error. Then all ten displays audited: 8 clean, 1 fixed, 1 gap — Securakey prints nothing derived | Each protocol cloned by the Proxmark with a credential WE chose, read by both tools in the same minute |
