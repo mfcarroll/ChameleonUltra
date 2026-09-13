@@ -31,6 +31,10 @@
 
 #include "lf_indala_psk.h"
 #include "psk1.h"
+#include "lf_ask_manchester.h"
+#include "gallagher.h"
+#include "securakey.h"
+#include "noralsy.h"
 
 #define SAMPLES_PER_ENTRY 2      /* 16us subcarrier cycle / 8us sample period */
 #define DC                8192   /* mid-scale of the 14-bit SAADC */
@@ -49,6 +53,30 @@ static size_t render(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len
                 int high = ((int)s ^ phase) & 1;
                 out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
             }
+        }
+    }
+    return n;
+}
+
+/* ⭐ THE ASK RENDERER, AND IT IS NOT THE PSK ONE. A PSK entry is one bit held for `repeats`+1
+ * periods of an fc/2 subcarrier whose POLARITY is the data; an ASK entry is one bit of
+ * `counter_top` CARRIER CYCLES whose first and second halves carry the Manchester transition.
+ * Rendering one with the other's model produces a plausible waveform that decodes to nothing,
+ * which is the least useful kind of test failure.
+ *
+ * ⚠ The half-order must match the decoder's: `lf_ask_manchester_decode_fmt` samples at
+ * SPB/4 and 3*SPB/4 and calls (high, low) a 1 — so a set polarity bit is FIRST HALF HIGH. */
+static size_t render_ask(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len) {
+    const size_t entries = (size_t)seq->length / 4u;
+    size_t n = 0;
+    for (size_t i = 0; n < out_len; i++) {
+        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i % entries];
+        const int polarity = (e->channel_0 & (1u << 15)) ? 1 : 0;
+        const size_t top = e->counter_top;
+        for (size_t s = 0; s < top && n < out_len; s++) {
+            const int first_half = (s < top / 2u);
+            const int high = polarity ? first_half : !first_half;
+            out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
         }
     }
     return n;
@@ -112,6 +140,34 @@ static int trial2(const char *name, const char *hex, const char *want, size_t bi
     return (ok && shape_ok) ? 0 : 1;
 }
 
+/* One ASK protocol through its own emitter and the shipping decoder. */
+static int trial_ask(const char *name, const char *hex, size_t bits,
+                     const protocol *proto, const lf_ask_format_t *fmt) {
+    uint8_t frame[32] = {0};
+    for (size_t i = 0; i < bits / 8u; i++) {
+        unsigned v; sscanf(hex + 2 * i, "%2x", &v); frame[i] = (uint8_t)v;
+    }
+    void *codec = proto->alloc();
+    const nrf_pwm_sequence_t *seq = proto->modulator(codec, frame);
+    if (seq == NULL) {
+        printf("  %-28s ⛔ modulator returned NULL\n", name);
+        proto->free(codec);
+        return 1;
+    }
+    const size_t entries = (size_t)seq->length / 4u;
+    static int16_t air[LF_PSK1_MAX_CAPTURE_SAMPLES];
+    size_t n = render_ask(seq, air, sizeof(air) / sizeof(air[0]));
+    proto->free(codec);
+
+    indala_psk_result_t r;
+    int ok = lf_ask_manchester_decode_fmt(air, n, fmt, &r);
+    int exact = ok && hexeq(r.id, hex, bits / 8u);
+    printf("  %-28s %s  entries %4zu (want %4zu)  %s\n", name,
+           exact ? "✓" : "⛔", entries, bits,
+           ok ? (exact ? "decode exact" : "DECODED WRONG") : "NO DECODE");
+    return exact ? 0 : 1;
+}
+
 int main(void) {
     int bad = 0;
     puts("emitter -> air -> decoder, both halves the shipping firmware\n");
@@ -161,6 +217,20 @@ int main(void) {
     bad += trial("Indala224 PSK2 even parity",
                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e4", 224,
                  LF_PSK1_PHASE_DIFFERENTIAL, &LF_PSK1_FORMAT_INDALA224);
+
+
+    /* ⭐⭐ THE ASK FAMILY, WHICH HAD NO ROUND TRIP AT ALL UNTIL NOW. Every PSK protocol has had
+     * one since C152 shipped three wrong encodings in a single session; the four ASK protocols
+     * went to the radio with nothing between them and it. These compile the SHIPPING emitters
+     * — `gallagher.c`, `securakey.c`, `noralsy.c` — and feed them to the SHIPPING decoder.
+     * ⚠ Securakey is the arm that matters most structurally: it is RF/40 where the others are
+     * RF/32, so it is the one that would catch a bit rate hard-coded back into the emitter. */
+    bad += trial_ask("Gallagher ASK RF/32", "7feaa31e76d86c6d868cc249", 96,
+                     &gallagher, &LF_ASK_FORMAT_GALLAGHER);
+    bad += trial_ask("Securakey ASK RF/40", "7fcb400001adea5344300000", 96,
+                     &securakey, &LF_ASK_FORMAT_SECURAKEY);
+    bad += trial_ask("Noralsy   ASK RF/32", "bb0214ff0112402233670000", 96,
+                     &noralsy, &LF_ASK_FORMAT_NORALSY);
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");
     return bad ? 1 : 0;
