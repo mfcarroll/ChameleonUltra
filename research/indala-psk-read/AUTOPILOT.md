@@ -174,7 +174,10 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 ## 2. THE QUEUE
 
 > **EXECUTION ORDER — this overrides the numbering below.**
-> **U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8.**
+> ✅ **U1–U8 ARE ALL COMPLETE (2026-09-13).** The queue did NOT end there: the grid still
+> lists two protocols Momentum carries and we do not, and both are verifiable on this bench.
+> ⇒ **U9 → U10**, and they are one family, so U9 finishes completely before U10 starts.
+> **(historical) U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8.**
 > ⛔ §10 of `NEXT.md` is organised **by modulation family**, and a family's FIRST protocol
 > must be finished completely — read, write, emulate, all verified on hardware — before its
 > second is started. A shared path is only proven once something has been through it end to
@@ -190,6 +193,8 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 | **U6** | **Securakey, then Noralsy, then InstaFob** — the rest of family 2, one at a time, only after U5 is completely done | device | same bar as U5, each |
 | **U7** | **§9 upstreaming prep** — strip instrumentation, review what is upstreamable. Pure compute, no device | compute | a written assessment in NEXT.md §9 |
 | **U8** | **FSK family** (AWID, Paradox, Pyramid, FDX-A). ⛔ **LAST, deliberately.** It reuses the HID Prox/ioProx SAADC machinery, and HID's 15–20% intermittency (C45) is unexplained and lives in exactly that path. Adding four protocols on top of an unexplained defect is what Phase 2 existed to prevent | device | do not start without saying so in §4 |
+| **U9** | **GProxII** — opens family 4, **ASK BIPHASE**. ⭐ Picked before FDX-B deliberately: it is RF/64, NON-inverted, standard T5577 config, 96-bit frame, 6-bit preamble, where FDX-B is inverted AND extended-mode AND 128 bits. Proving a new line coding against three changed variables at once is the n=1 generalisation this branch keeps having to retract (C169/C171/C182, C189/C190) | device | read + write verified on hardware, cross-protocol nulls clean; emulate if the emitter is honest |
+| **U10** | **FDX-B** — the rest of family 4, only after U9 is completely done. ASK biphase INVERTED, RF/32, 128 bits, preamble `00000000001`, T5577 config `903F0082` (extended mode). ⚠ Not to be confused with FDX-A, which is FSK2a and already reads | device | same bar as U9 |
 
 ⛔ **Not yours to decide** — leave these alone and do not "make progress" on them:
 §5 carrier-locking (a person's call; the recommendation is written), §7 BLE transport (needs
