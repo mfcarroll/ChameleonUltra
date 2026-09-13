@@ -338,6 +338,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 04:40 | **C45 on the current build** | 10 → 10 | Nothing in firmware — a measurement. A/B/A on the rig-B T5577: legacy HID 32/32 exact, shared-engine AWID 32/32 exact, legacy HID 16/16 after rewriting the credential (C248). ⚠ C249: chained `pm3 -c` reported a pre-wipe credential from a tag that had just been wiped | 80 credential-scored reads + 24 null reads, four blank columns all silent; the closing HID arm rules out drift |
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
 | 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
 | 2026-09-13 02:45 | U2 | 29 → 31 | NexWatch emulation: protocol struct, `TAG_TYPE_NEXWATCH`, econfig, 2 roundtrip arms | Flipper 6/6, null 0/4, return leg 4/4 — A/B/A |
