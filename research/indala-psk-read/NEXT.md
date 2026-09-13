@@ -397,6 +397,16 @@ bit from valid parity, so the nudges that restore it land in a few places and ca
 while marginal-field errors scatter and cannot. ⇒ **Gates narrow it, agreement narrows it
 further, and neither closes it.** That is the honest thing to hand a reviewer.
 
+⛔⛔ **AND C270 INVERTS HOW THE GATE TABLE ABOVE SHOULD BE READ.** Swept across the whole ASK
+family: **Gallagher (RF/32) and Securakey (RF/40) have no marginal regime at all** — perfect at
+every drive down to 2, then a cliff to nothing, **zero false frames in 40 captures each**. Only
+**GProxII (RF/64)** degrades gradually into wrong answers. The front end's AC coupling has a
+~27-sample time constant (C204): RF/32 and RF/40 keep their half-bit inside it, RF/64 does not.
+⇒ **GProxII has the STRONGEST gate of the three and Securakey the weakest, and it is GProxII
+that emits wrong credentials.** Gate strength and field robustness are independent, and the
+sweep above measures only the first. A reviewer reading that table as a safety ranking would
+get it backwards.
+
 **What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
 each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,
 Gallagher, Noralsy, PAC, GProxII, FDX-B and Jablotron agree field for field. **Three were not

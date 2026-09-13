@@ -33,7 +33,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True)
     p.add_argument("--samples", type=int, default=14336)
-    p.add_argument("--drive", type=int, default=7)
+    # ⚠ 0 IS NOT "no drive" AND NOT A FLOOR — the firmware reads it as the DEFAULT 4
+    # (`cmd_processor_lf_reader_capture`: `(data[2] != 0) ? data[2] : 4`). A sweep that
+    # starts at 0 therefore begins with a STRONGER field than 1 or 2, which reads exactly
+    # like C148's inert-drive defect striking mid-session. Sweep from 1 (C271).
+    p.add_argument("--drive", type=int, default=7,
+                   help="1-7; 0 means the firmware default of 4, NOT zero field")
     p.add_argument("--phase", type=int, default=0)
     p.add_argument("--repeats", type=int, default=1,
                    help="take N captures back to back and return the LAST")
