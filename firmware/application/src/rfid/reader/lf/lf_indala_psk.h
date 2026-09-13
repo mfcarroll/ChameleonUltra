@@ -62,6 +62,35 @@
  * zeros, then a 1. They disagree at bit 1, so neither can match the other's window. */
 #define KERI_PSK_PREAMBLE_BITS 33
 
+/* ⭐ NEXWATCH IS THE SAME AIR LAYER AGAIN — PSK1, RF/32, fc/2 subcarrier — and like Keri's
+ * this is MEASURED from the tag rather than taken from a datasheet: a Proxmark-cloned
+ * NexWatch reports `lf t55xx detect` PSK1 / RF/32 and block 0 `00081060`, which is Indala's
+ * `00081040` with the block count raised 2 -> 3. Three data blocks, 96 bits.
+ *
+ * ⭐⭐ THE BEST-GATED FORMAT IN THIS FAMILY, not the worst. 40 fixed bits — `0x56` then 32
+ * RESERVED ZEROS — and then a computed 4-bit parity on top, where Indala has 33 fixed bits
+ * and no computed check at all. Both references agree on that shape: the Proxmark searches
+ * 0x56 plus 16 of the zeros (cmdlfnexwatch.c detectNexWatch) and Momentum checks all 32 of
+ * them AND the parity inside `can_be_decoded` before a frame is ever returned.
+ *
+ * ⚠ 32 of the 40 bits are a constant run, which is the shape that made Indala's preamble
+ * forgeable (C90, C157) — so the parity is the one part of the gate that does not depend on
+ * a constant run.
+ *
+ * ⛔⛔ BUT THAT ARGUMENT IS STRUCTURAL, NOT MEASURED, AND THE MEASUREMENT CAME BACK BLANK.
+ * Run against 508 captures of every other specimen on this bench — Indala26, IDTECK,
+ * Indala224, Keri and empty field — the format accepts nothing WITH the parity check and
+ * nothing WITHOUT it (`ctest/cdemod --nogate`). The 40 fixed bits alone were sufficient on
+ * everything available to test. ⇒ The parity is kept because Momentum enforces it and
+ * because the constant-run argument is sound, NOT because this bench has seen it catch
+ * anything. Do not cite it as a validated defence; cite the 40 bits, which were measured.
+ * ⚠ That is also the honest reason the `--nogate` arm exists: it is the only thing standing
+ * between "the gate works" and "the gate was never exercised". */
+#define NEXWATCH_PSK_PREAMBLE_BITS 40
+
+/** NexWatch frame: 96 bits, three T5577 blocks. */
+#define NEXWATCH_PSK_FRAME_BITS 96
+
 /* ⛔⛔ INDALA224'S PREAMBLE IS A 1 FOLLOWED BY 29 ZEROS, AND THAT IS NOT ENOUGH ON ITS OWN.
  * 29 of its 30 bits are a constant run — weaker than Indala26's 33-bit preamble, which a
  * loud IDTECK tag already forged at sample phase 28 to produce a confident wrong credential
@@ -69,8 +98,11 @@
  * the frame's own neighbouring copies instead of trusting 30. */
 #define INDALA224_PSK_PREAMBLE_BITS 30
 
-/** Longest preamble any format here uses, for fixed-size storage. */
-#define LF_PSK1_MAX_PREAMBLE_BITS 33
+/** Longest preamble any format here uses, for fixed-size storage.
+ *  ⛔ 40 is NexWatch's, and it must stay the whole `0x56` + 32 reserved zeros: truncating it
+ *  to the 8 bits of `0x56` would leave an 8-bit gate on a format whose payload sits behind
+ *  a constant run, which is exactly the C90 failure. */
+#define LF_PSK1_MAX_PREAMBLE_BITS 40
 
 /* ⭐ THE PREAMBLES ARE THE ONLY THING THAT DIFFERS BETWEEN THESE TWO PROTOCOLS at this
  * layer. Indala and IDTECK are both 64-bit PSK1 at RF/32 on an fc/2 subcarrier, written by
@@ -82,6 +114,7 @@ extern const uint8_t LF_PSK1_PREAMBLE_INDALA[INDALA_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_IDTECK[IDTECK_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_INDALA224[INDALA224_PSK_PREAMBLE_BITS];
 extern const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS];
+extern const uint8_t LF_PSK1_PREAMBLE_NEXWATCH[NEXWATCH_PSK_PREAMBLE_BITS];
 
 /** Samples in one capture. 4096 = two whole 64-bit frames at RF/32.
  *
@@ -111,6 +144,28 @@ extern const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS];
  *
  * 8192 is double the measured threshold and still only 65ms on the wire against 33ms. */
 #define KERI_PSK_CAPTURE_SAMPLES 8192
+
+/* ⛔ MEASURED BY TRUNCATION, exactly as Keri's was (C161) — never guessed from the frame
+ * length. MEASURED on a Proxmark-written NexWatch tag, four sample phases, the SAME captures
+ * truncated:
+ *
+ *     3328 samples  0 of 4
+ *     3456 samples  4 of 4      <- 108 bits: the 96-bit frame plus 12 bits of slack
+ *     3584 .. 14336 4 of 4      <- flat from 3456 upward
+ *
+ * ⭐⭐ A 96-BIT FRAME NEEDS A SHORTER CAPTURE THAN KERI'S 64-BIT ONE, WHICH IS BACKWARDS
+ * UNLESS C161'S INFERRED MECHANISM IS RIGHT — and it is the prediction that mechanism makes.
+ * C161 measured Keri needing 5120 where Indala26 needs 4096 and could only infer why: Keri's
+ * T5577 holds `(id << 3) | 7`, so its frame starts 3 bits BEFORE a block boundary and the
+ * usable window closes early. NexWatch's blocks are `56000000 / 00436455 / 121E6000` — the
+ * frame starts AT the boundary, exactly as Indala26's does — so the mechanism predicts it
+ * should behave like Indala26 and not like Keri despite being half again as long. It does.
+ * ⇒ C161's mechanism was inferred from one protocol; this is a second, independent, and it
+ * was a prediction before it was a measurement.
+ *
+ * 6144 is exactly two whole frames — the header's own floor, since a frame can start
+ * anywhere in the capture — and 1.8x the measured threshold, at 49ms on the wire. */
+#define NEXWATCH_PSK_CAPTURE_SAMPLES 6144
 
 #define INDALA224_PSK_CAPTURE_SAMPLES 14336
 #define LF_PSK1_MAX_CAPTURE_SAMPLES   INDALA224_PSK_CAPTURE_SAMPLES
@@ -184,6 +239,23 @@ typedef struct {
      * ⭐ The differential needs no polarity search: XOR of consecutive bits is invariant under
      * global inversion, which is the whole point of differential encoding. */
     bool     differential_only;
+    /** ⭐⭐ A FORMAT'S OWN ACCEPTANCE RULE, checked INSIDE the candidate loop — NULL for a
+     *  format that has none.
+     *
+     *  ⛔ IT MUST BE HERE AND NOT AT THE CALLER. A computed check applied after the decoder
+     *  has already picked its winner can only say "no"; applied during the search it lets a
+     *  failing candidate be passed over so a PASSING one at another offset can win. That is
+     *  the difference between a format that reads and one that reports "not found" whenever
+     *  a louder neighbour aligns first — the same lesson `require_repeat` learned for
+     *  Indala224, where ranking by amplitude returned a confident wrong credential (C104).
+     *
+     *  ⭐ This is Momentum's `can_be_decoded` shape: it computes NexWatch's parity over the
+     *  scrambled id and mode and refuses the frame outright when it disagrees, so a frame
+     *  that fails is never returned rather than being returned with a warning.
+     *
+     *  @param word_bits  the candidate frame, one byte per bit, already de-inverted.
+     *  @param frame_bits the format's frame length. */
+    bool (*accept)(const uint8_t *word_bits, uint16_t frame_bits);
     /** ⭐ Require the frame to REPEAT at its own period before accepting it. For a format
      *  whose preamble is mostly a constant run this is the real acceptance test: 224 bits of
      *  self-agreement instead of 30 bits of pattern. */
@@ -194,6 +266,7 @@ extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_IDTECK;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_INDALA224;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_KERI;
+extern const lf_psk1_format_t LF_PSK1_FORMAT_NEXWATCH;
 
 typedef struct {
     uint8_t  id[LF_PSK1_MAX_FRAME_BYTES]; /**< the frame, big-endian: id[0] is the first bit.
@@ -293,6 +366,17 @@ bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out)
  *  32-bit internal id, `out->id[4..7]`; its top bit is the preamble's last bit and is
  *  therefore always set. */
 bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** NexWatch: 96-bit PSK1, gated on the 40-bit fixed preamble AND the computed 4-bit parity.
+ *
+ * ⚠ THE CHECKSUM IS NOT PART OF THE GATE, and that is deliberate rather than an omission.
+ * It is computed over the descrambled id, the parity and a MAGIC BYTE that is not carried in
+ * the frame — both references infer the magic by testing which of `0xBE` Quadrakey, `0x88`
+ * Nexkey and `0x86` Honeywell reproduces it, and the Proxmark brute-forces all 256 when none
+ * does. Rejecting a frame whose checksum matches no known magic would refuse a legitimate
+ * tag from a vendor we have not seen. ⇒ The checksum is a FINGERPRINT, reported by
+ * `nexwatch_read` alongside the credential; the parity is the gate. */
+bool nexwatch_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** What a reader hands the capture engine: one protocol's whole decode, preamble and any
  *  veto included, so the engine stays protocol-agnostic. */

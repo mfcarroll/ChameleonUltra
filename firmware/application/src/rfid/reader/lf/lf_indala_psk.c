@@ -40,6 +40,69 @@ const uint8_t LF_PSK1_PREAMBLE_KERI[KERI_PSK_PREAMBLE_BITS] = {
     1
 };
 
+/* NexWatch: 0x56, then the 32 RESERVED bits, which are zero on every frame either
+ * reference will accept. ⛔ All 40 belong to the preamble — see the header. */
+const uint8_t LF_PSK1_PREAMBLE_NEXWATCH[NEXWATCH_PSK_PREAMBLE_BITS] = {
+    0, 1, 0, 1, 0, 1, 1, 0,   /* 0x56 */
+    0, 0, 0, 0, 0, 0, 0, 0,   /* bits 8-39: reserved, must be zero */
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+};
+
+/* ⭐ NEXWATCH'S PARITY, AND IT IS THE PART OF THE GATE THAT A NEIGHBOUR CANNOT FORGE.
+ * Four bits computed over the 36 payload bits — the scrambled 32-bit id and the 4-bit mode —
+ * as the XOR of all nine nibbles, then re-ordered 1234 -> 4231. Both references compute it
+ * identically (`nexwatch_parity` in cmdlfnexwatch.c, `protocol_nexwatch_parity` in
+ * protocol_nexwatch.c); Momentum additionally REFUSES the frame when it disagrees, which is
+ * the behaviour copied here.
+ *
+ * ⚠ The nibble swap is not cosmetic. Without it the check still passes on about 1 frame in
+ * 16 by luck, which is exactly the regime where a wrong credential looks confident. */
+static uint8_t nexwatch_parity_of(const uint8_t *word_bits) {
+    uint8_t p = 0;
+    /* bits 40..75: the scrambled id (32) and the mode (4), as nine nibbles. */
+    for (uint8_t nib = 0; nib < 9; nib++) {
+        uint8_t v = 0;
+        for (uint8_t k = 0; k < 4; k++) {
+            v = (uint8_t)(((unsigned)v << 1) | (word_bits[40 + nib * 4u + k] & 1u));
+        }
+        p ^= v;
+    }
+    /* scramble parity (1234) -> (4231) */
+    uint8_t a = (uint8_t)((p >> 3) & 1u);
+    a = (uint8_t)(a | (((p >> 1) & 1u) << 1));
+    a = (uint8_t)(a | (((p >> 2) & 1u) << 2));
+    a = (uint8_t)(a | ((p & 1u) << 3));
+    return a;
+}
+
+static bool nexwatch_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < NEXWATCH_PSK_FRAME_BITS) {
+        return false;
+    }
+    uint8_t got = 0;
+    for (uint8_t k = 0; k < 4; k++) {
+        got = (uint8_t)(((unsigned)got << 1) | (word_bits[76 + k] & 1u));
+    }
+    return got == nexwatch_parity_of(word_bits);
+}
+
+const lf_psk1_format_t LF_PSK1_FORMAT_NEXWATCH = {
+    .preamble = LF_PSK1_PREAMBLE_NEXWATCH,
+    .preamble_bits = NEXWATCH_PSK_PREAMBLE_BITS,
+    .frame_bits = NEXWATCH_PSK_FRAME_BITS,
+    /* ⚠ NO VETO, and unlike Keri's that is a MEASURED verdict rather than an assumption —
+     * see the cross-protocol null in FINDINGS.md. The 40-bit preamble plus the parity is a
+     * 44-bit gate, where Keri's was 33 bits and no computed check, and Keri's veto had to be
+     * added because a real Indala capture forged its preamble at offset 28 (C157). */
+    .reject_preamble = NULL,
+    .reject_preamble_bits = 0,
+    .accept = nexwatch_accept,
+    .differential_only = false,
+    .require_repeat = false,
+};
+
 const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     .preamble = LF_PSK1_PREAMBLE_INDALA,
     .preamble_bits = INDALA_PSK_PREAMBLE_BITS,
@@ -422,6 +485,21 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                     }
                 }
 
+                /* ⛔ THE FORMAT'S OWN ACCEPTANCE RULE, HERE AND NOT AFTER THE LOOP — see the
+                 * note on `accept` in the header. `continue` rather than a late rejection is
+                 * the whole point: it lets a candidate that fails the parity be passed over
+                 * so a correct one at a different sample offset can still win. */
+                if (fmt->accept != NULL) {
+                    uint8_t cand[LF_PSK1_MAX_FRAME_BITS];
+                    for (size_t k = 0; k < FB; k++) {
+                        uint8_t b = stream[i + k];
+                        cand[k] = (inv != 0) ? (uint8_t)(1u - b) : b;
+                    }
+                    if (!fmt->accept(cand, fmt->frame_bits)) {
+                        continue;
+                    }
+                }
+
                 bool better;
                 if (fmt->require_repeat) {
                     /* higher agreement wins; amplitude only breaks ties */
@@ -550,6 +628,10 @@ bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
 
 bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_KERI, out);
+}
+
+bool nexwatch_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_NEXWATCH, out);
 }
 
 bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {

@@ -387,6 +387,98 @@ bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ NEXWATCH'S DESCRAMBLE — a pure bit permutation, and both references carry the same
+ * table (`hex_2_id` in cmdlfnexwatch.c and protocol_nexwatch.c). Entry i says which bit of
+ * the SCRAMBLED word supplies bit (31 - i) of the card number. */
+static const uint8_t NEXWATCH_HEX_2_ID[32] = {
+    31, 27, 23, 19, 15, 11, 7, 3,
+    30, 26, 22, 18, 14, 10, 6, 2,
+    29, 25, 21, 17, 13, 9,  5, 1,
+    28, 24, 20, 16, 12, 8,  4, 0
+};
+
+static uint32_t nexwatch_descramble(uint32_t scrambled) {
+    uint32_t id = 0;
+    for (uint8_t idx = 0; idx < 32; idx++) {
+        uint32_t bit = (scrambled >> NEXWATCH_HEX_2_ID[idx]) & 1u;
+        id |= bit << (31u - idx);
+    }
+    return id;
+}
+
+static uint8_t nexwatch_reflect8(uint8_t v) {
+    uint8_t r = 0;
+    for (uint8_t i = 0; i < 8; i++) {
+        r = (uint8_t)(((unsigned)r << 1) | ((v >> i) & 1u));
+    }
+    return r;
+}
+
+/* NexWatch's checksum: a running SUBTRACT over the descrambled card number's four bytes, the
+ * magic and the reflected parity, then reflected. Verbatim from `nexwatch_checksum`. */
+static uint8_t nexwatch_checksum(uint8_t magic, uint32_t id, uint8_t parity) {
+    uint8_t a = (uint8_t)((id >> 24) & 0xFFu);
+    a = (uint8_t)(a - ((id >> 16) & 0xFFu));
+    a = (uint8_t)(a - ((id >> 8) & 0xFFu));
+    a = (uint8_t)(a - (id & 0xFFu));
+    a = (uint8_t)(a - magic);
+    a = (uint8_t)(a - (nexwatch_reflect8(parity) >> 4));
+    return nexwatch_reflect8(a);
+}
+
+/* ⭐ NEXWATCH — the same capture and the same demodulator once more, which is the fourth
+ * protocol through `lf_psk1_format_t` and the reason it exists. The acceptance (40 fixed
+ * bits plus the computed parity) lives in the format; what is left here is interpretation.
+ *
+ * ⚠ THE MAGIC BYTE IS INFERRED, NOT READ. It is not carried in the frame at all: the
+ * checksum is computed over the card number, the parity and a vendor constant, so the only
+ * way to name the vendor is to try the three known constants and see which reproduces the
+ * frame's checksum. ⛔ A tag whose checksum matches none of them is still a valid read — it
+ * passed a 44-bit gate — and reports magic 0x00 rather than failing. Refusing it would
+ * refuse a vendor we have not met. */
+bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(nexwatch_psk1_decode, NEXWATCH_PSK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    const indala_psk_result_t *res = &r.res;
+
+    /* bits 40..71 are the scrambled card number; 72..75 the mode; 76..79 the parity;
+     * 80..87 the checksum. The frame is byte-aligned throughout, so these are whole bytes. */
+    uint32_t scrambled = ((uint32_t)res->id[5] << 24) | ((uint32_t)res->id[6] << 16) |
+                         ((uint32_t)res->id[7] << 8)  |  (uint32_t)res->id[8];
+    uint32_t cn = nexwatch_descramble(scrambled);
+    uint8_t mode   = (uint8_t)(res->id[9] >> 4);
+    uint8_t parity = (uint8_t)(res->id[9] & 0x0Fu);
+    uint8_t chk    = res->id[10];
+
+    static const uint8_t MAGICS[3] = {
+        NEXWATCH_MAGIC_QUADRAKEY, NEXWATCH_MAGIC_NEXKEY, NEXWATCH_MAGIC_HONEYWELL
+    };
+    uint8_t magic = 0;
+    for (uint8_t i = 0; i < 3; i++) {
+        if (nexwatch_checksum(MAGICS[i], cn, parity) == chk) {
+            magic = MAGICS[i];
+            break;
+        }
+    }
+
+    memcpy(&data[0], res->id, 12);
+    data[12] = (uint8_t)(cn >> 24);
+    data[13] = (uint8_t)(cn >> 16);
+    data[14] = (uint8_t)(cn >> 8);
+    data[15] = (uint8_t)(cn & 0xFFu);
+    data[16] = magic;
+    data[17] = mode;
+    data[18] = r.phase;
+    data[19] = res->offset;
+
+    NRF_LOG_INFO("nexwatch cn %lu mode %u magic %02x phase %u tries %u",
+                 (unsigned long)cn, mode, magic, r.phase, r.tries);
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

@@ -73,6 +73,21 @@ bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 #define KERI_READ_DATA_SIZE 16
 bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by nexwatch_read(): the 12-byte frame, then the descrambled 32-bit card
+ *  number, then the magic byte, the mode, phase / offset / tries.
+ *
+ * ⚠ THE FRAME IS RETURNED IN FULL and the host prints it. 96 bits is more than a card
+ * number, and the checksum's magic byte is an INFERENCE — see `nexwatch_psk1_decode` — so
+ * anything downstream that wants to re-derive the fingerprint can. */
+#define NEXWATCH_READ_DATA_SIZE 20
+/** ⭐ NOT IN THE FRAME. The checksum is computed over the card number, the parity and one of
+ *  these; which one is discovered by trying all three, exactly as both references do. A
+ *  fourth vendor's tag reads fine and reports magic 0x00 / "unknown". */
+#define NEXWATCH_MAGIC_QUADRAKEY 0xBE
+#define NEXWATCH_MAGIC_NEXKEY    0x88
+#define NEXWATCH_MAGIC_HONEYWELL 0x86
+bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */

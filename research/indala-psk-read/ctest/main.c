@@ -26,7 +26,8 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0;
+    size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
             quiet = 1;
@@ -40,6 +41,25 @@ int main(int argc, char **argv) {
             modekeri = 1;
             continue;
         }
+        if (!strcmp(argv[i], "--nexwatch")) {
+            modenw = 1;
+            continue;
+        }
+        /* ⭐ THE NULL FOR THE GATE ITSELF. Runs NexWatch with its computed parity check
+         * REMOVED, leaving the 40 fixed bits alone — which is what the format would be if
+         * someone "simplified" the accept hook away. Without this arm the claim that the
+         * parity earns its keep is an assertion; with it, it is a measurement. */
+        if (!strcmp(argv[i], "--nogate")) {
+            modenw = 1;
+            nogate = 1;
+            continue;
+        }
+        /* ⭐ Truncate every capture to N samples — this is how a format's capture length is
+         * MEASURED rather than guessed (C161). Same files, shorter window. */
+        if (!strncmp(argv[i], "--trunc=", 8)) {
+            trunc = (size_t)strtoul(argv[i] + 8, NULL, 10);
+            continue;
+        }
         FILE *f = fopen(argv[i], "rb");
         if (!f) {
             fprintf(stderr, "cannot open %s\n", argv[i]);
@@ -51,6 +71,9 @@ int main(int argc, char **argv) {
         files++;
 
         size_t n = got / 2;
+        if (trunc != 0 && trunc < n) {
+            n = trunc;
+        }
         int ok16 = (got >= 2 && (got % 2) == 0);
         for (size_t k = 0; k < n && ok16; k++) {
             if (raw[2 * k] > 0x3F) {
@@ -76,6 +99,27 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modenw) {
+            /* ⚠ Prints the WHOLE 96-bit frame, preamble included, for the same reason the
+             * Keri arm does: the fixed bits are half of what is under test. */
+            indala_psk_result_t rn;
+            lf_psk1_format_t fmt = LF_PSK1_FORMAT_NEXWATCH;
+            if (nogate) {
+                fmt.accept = NULL;
+            }
+            if (!lf_psk1_decode_fmt(buf, n, &fmt, &rn)) {
+                printf(" %-44s %5zu samples  -                          energy %7ld\n",
+                       argv[i], n, (long)rn.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 12; k++) printf("%02x", rn.id[k]);
+            printf("  off %2u pos %3u %s\n", rn.offset, rn.bit_pos,
+                   rn.inverted ? "inv" : "");
+            continue;
         }
 
         if (modekeri) {
