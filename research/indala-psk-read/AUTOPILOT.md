@@ -211,7 +211,7 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds FDX-B `-c 999 -n 1234567890 -a` (raw `0029740b4e4a079f80406af958040201`) — the audits and
+  now holds HID `H10301 --fc 123 --cn 4567`, and **Chameleon #2 is on HEAD** (`656cc61`) — the audits and
   field sweeps cycled it through seventeen credentials in one session; before that Securakey, IDTECK, FDX-B, Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
@@ -400,6 +400,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 02:40 | **C279 — the relabelling message, seen to render** | 13 → 13 | `512a7be` (probe) then `656cc61` (restore, = HEAD). Read 29 of 40 walked the branch and printed it correctly; corrupted credential FC 1973 / card 471 against a true 1969 / 471 | A/B/A: 12/12 correct on the restored build. ⭐ #2 is now on HEAD firmware — no drift for the operator's return |
 | 2026-09-15 00:30 | **C276 — the unpinned HID read says it is a guess** | 19 → 20 | Operator called the `unpack()` relabelling ours to work on. `lf hid prox read` now flags an unpinned read, names the `-f` flag and quotes C251's 7-in-48. ⭐ And §9f overstated the risk: the walk has ONE caller, `hidprox.c:134` | Both branches verified on a real H10301 clone — unpinned warns, pinned is silent; the caller count is a whole-tree grep |
 | 2026-09-14 23:20 | **C274 — the drive sweep's comment was wrong** | 19 → 19 | It claimed step order affects latency not correctness; two protocols read at one drive each, and the table truncates under a short timeout. No live bug — every caller passes 3000 ms — but the margin is load-bearing and now says so | Worked through the step arithmetic at five timeout values against the constant callers actually pass; comment-only, firmware rebuilt clean |
 | 2026-09-14 22:50 | **C272/C273 — FDX-B settles C270** | 18 → 19 | Same biphase decoder as GProxII, RF/32 not RF/64: 56 captures, 24 frames, **zero wrong credentials** — so it is the bit rate, not the decoder. ⛔ And FDX-B reads at drive 4 and NO other setting, working only because the shared sweep tries 4 first | Two passes at drives 7 and 6 to rule out a fluke; drive 4's 16/16 in the same sweeps is the positive control |
