@@ -239,10 +239,14 @@
 #define DATA_CMD_NORALSY_WRITE_TO_T55XX         (3049)
 /* ⚠ Scan only — no InstaFob writer ships; see lf_indala_data.h for why. */
 #define DATA_CMD_INSTAFOB_SCAN                  (3050)
-/* ⚠ Scan only for now — the AWID writer is deferred until the tag is back in the sandwich. */
 #define DATA_CMD_AWID_SCAN                      (3051)
 #define DATA_CMD_PARADOX_SCAN                   (3052)
 #define DATA_CMD_PYRAMID_SCAN                   (3053)
+/* ⛔ Scan only, and not a deferral: nothing on this bench can read an FDX-A tag back — the
+ * Proxmark's `lf fdx` is FDX-B — so a writer would certify itself. Same as InstaFob (C185). */
 #define DATA_CMD_FDXA_SCAN                      (3054)
+#define DATA_CMD_AWID_WRITE_TO_T55XX            (3055)
+#define DATA_CMD_PARADOX_WRITE_TO_T55XX         (3056)
+#define DATA_CMD_PYRAMID_WRITE_TO_T55XX         (3057)
 
 #endif

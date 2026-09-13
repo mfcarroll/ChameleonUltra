@@ -959,6 +959,52 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def awid_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                            old_keys: list = None):
+        """Write a raw 96-bit AWID frame onto a T55xx (FSK2a, RF/50, 3 data blocks).
+
+        ⭐ `frame12` is BOTH the air frame and the block contents. That was MEASURED off a
+        Proxmark clone's own dump, not assumed from the ASK protocols — Keri's block form is
+        three bits out of phase with its air frame and emitting the wrong one of the two gave
+        a stable WRONG credential 6 of 6 (C160, C202).
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write.
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.AWID_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def paradox_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                               old_keys: list = None):
+        """Write a raw 96-bit Paradox frame onto a T55xx (FSK2a, RF/50, 3 data blocks).
+
+        ⚠ The same config word as AWID's, exactly — the two differ only in preamble and
+        payload layout, which the writer never sees (C202).
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PARADOX_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
+    def pyramid_write_to_t55xx(self, frame16: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                               old_keys: list = None):
+        """Write a raw 128-bit Pyramid frame onto a T55xx (FSK2a, RF/50, 4 data blocks).
+
+        ⚠ SIXTEEN bytes, not twelve, and four data blocks rather than three — that block count
+        is the only part of the config word Pyramid does not share with AWID and Paradox.
+        """
+        if len(frame16) != 16:
+            raise ValueError("The raw frame must be exactly 16 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!16s4s{4*len(old_keys)}s', frame16, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.PYRAMID_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def instafob_scan(self):
         """Read an InstaFob credential (ASK/Manchester, RF/32, 225-bit frame).
 

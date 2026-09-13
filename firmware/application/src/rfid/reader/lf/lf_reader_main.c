@@ -20,6 +20,7 @@
 #include "protocols/gallagher.h"
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
+#include "protocols/fsk2a_t55xx.h"
 #include "lf_fsk2a.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
@@ -526,6 +527,47 @@ uint8_t write_nexwatch_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *
     }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
+
+/**
+ * @brief Write a raw 96-bit AWID frame to a T55xx tag (FSK2a, RF/50, 3 data blocks).
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
+ */
+uint8_t write_awid_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[4] = {0x00};
+    uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_AWID_CONFIG, blks);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 96-bit Paradox frame to a T55xx tag (FSK2a, RF/50, 3 data blocks).
+ *
+ * ⚠ Identical to AWID's at this layer — the two share a config word exactly (C202). They
+ * differ in preamble and payload layout, which is the decoder's business, not the writer's.
+ */
+uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[4] = {0x00};
+    uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_PARADOX_CONFIG, blks);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 128-bit Pyramid frame to a T55xx tag (FSK2a, RF/50, 4 data blocks).
+ *
+ * ⚠ FOUR data blocks, not three — Pyramid's frame is 128 bits, and the block-count field is
+ * the only thing its config word does not share with AWID's and Paradox's.
+ */
+uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[5] = {0x00};
+    uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_PYRAMID_CONFIG, blks);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/* ⛔ THERE IS DELIBERATELY NO write_fdxa_to_t55xx, and that is a refusal rather than a
+ * deferral. The Proxmark has no FDX-A clone — `lf fdx` is FDX-B, a different protocol — so a
+ * tag we wrote could only be read back by our own reader, which is the self-certification that
+ * put a wrong `idteck.c` upstream and that this project exists downstream of (C185). InstaFob
+ * is withheld for the same reason. ⇒ Ship it when something here can read it, not before. */
 
 /**
  * Set the LF card scanning timeout value (in milliseconds).

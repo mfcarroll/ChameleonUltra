@@ -846,6 +846,70 @@ static data_frame_tx_t *cmd_processor_awid_scan(uint16_t cmd, uint16_t status, u
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
+/* ⚠ The three FSK write processors below are the same shape as gallagher's, noralsy's and
+ * securakey's, differing only in frame length and the writer they call. The boilerplate is
+ * now repeated eight times in this file; folding it into one helper is a worthwhile cleanup
+ * but it would touch five processors that are already verified on hardware, so it belongs in
+ * the upstreaming pass rather than in a protocol addition. Recorded in NEXT.md §9b. */
+
+static data_frame_tx_t *cmd_processor_awid_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t frame12[12];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_awid_to_t55xx(payload->frame12, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_paradox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t frame12[12];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_paradox_to_t55xx(payload->frame12, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+/* ⚠ SIXTEEN frame bytes, not twelve — Pyramid's frame is 128 bits. */
+static data_frame_tx_t *cmd_processor_pyramid_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t frame16[16];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_pyramid_to_t55xx(payload->frame16, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_instafob_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[INSTAFOB_READ_DATA_SIZE] = { 0x00 };
     status = scan_instafob(card_data);
@@ -3627,6 +3691,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_PARADOX_SCAN,                 before_reader_run,           cmd_processor_paradox_scan,                  NULL                   },
     {    DATA_CMD_PYRAMID_SCAN,                 before_reader_run,           cmd_processor_pyramid_scan,                  NULL                   },
     {    DATA_CMD_FDXA_SCAN,                    before_reader_run,           cmd_processor_fdxa_scan,                     NULL                   },
+    {    DATA_CMD_AWID_WRITE_TO_T55XX,          before_reader_run,           cmd_processor_awid_write_to_t55xx,           NULL                   },
+    {    DATA_CMD_PARADOX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_paradox_write_to_t55xx,        NULL                   },
+    {    DATA_CMD_PYRAMID_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_pyramid_write_to_t55xx,        NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },

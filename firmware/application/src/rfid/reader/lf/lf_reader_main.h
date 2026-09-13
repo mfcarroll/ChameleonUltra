@@ -26,11 +26,17 @@ uint8_t scan_securakey(uint8_t *data);
 uint8_t scan_noralsy(uint8_t *data);
 /** ⚠ Read only — see the note on instafob_read for why there is no writer. */
 uint8_t scan_instafob(uint8_t *data);
-/** ⚠ Read only for now — the writer is deferred until the T5577 is back. */
 uint8_t scan_awid(uint8_t *data);
 uint8_t scan_paradox(uint8_t *data);
 uint8_t scan_pyramid(uint8_t *data);
+/** ⛔ Read only, and permanently so far: nothing on this bench can read an FDX-A tag back,
+ *  so a writer would be self-certifying. See the note beside the three FSK writers. */
 uint8_t scan_fdxa(uint8_t *data);
+/** ⚠ `frame12`/`frame16` are the AIR frames, written to the blocks unrotated — measured per
+ *  protocol, NOT assumed from Gallagher. See fsk2a_t55xx_blocks() for the three dumps. */
+uint8_t write_awid_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
+uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
+uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_noralsy_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_securakey_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_gallagher_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);

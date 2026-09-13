@@ -178,6 +178,37 @@ extern "C" {
 // what that bit does is NOT established here; do not derive it from the named flags.
 #define T5577_NORALSY_CONFIG (0x00088068)
 
+// AWID and Paradox: FSK2a at RF/50, THREE data blocks (96-bit frame).
+// Pyramid: the same, with FOUR data blocks (128-bit frame).
+//
+// ⭐ MEASURED from three Proxmark clones' own block dumps, and each read back by
+// `lf t55xx detect` as FSK2a / RF/50: AWID `00107060`, Paradox `00107060`, Pyramid
+// `00107080` (C202). They also agree with the Proxmark client's own header, which makes
+// two independent sources for each word.
+//
+// ⚠ Composed from the named flags rather than kept as literals, because unlike Keri's and
+// Gallagher's these compose EXACTLY: RF_50 | FSK2a | (n << MAXBLOCK_SHIFT) reproduces all
+// three measured words bit for bit. Where a measured word cannot be composed that way it is
+// kept verbatim instead — see Keri, Gallagher, Securakey and Noralsy above.
+//
+// ⚠ Note what is ABSENT: T5577_PWD. These are byte-for-byte T5577_HIDPROX_CONFIG without
+// the password-enable bit (and, for Pyramid, one more data block) — the Proxmark's clones
+// report "Password set...... No", and matching the reference clone is the point.
+#define T5577_AWID_CONFIG (       \
+    T5577_BITRATE_RF_50 |         \
+    T5577_MODULATION_FSK2a |      \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
+#define T5577_PARADOX_CONFIG (    \
+    T5577_BITRATE_RF_50 |         \
+    T5577_MODULATION_FSK2a |      \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
+#define T5577_PYRAMID_CONFIG (    \
+    T5577_BITRATE_RF_50 |         \
+    T5577_MODULATION_FSK2a |      \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

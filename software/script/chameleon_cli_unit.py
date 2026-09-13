@@ -7489,9 +7489,8 @@ class LFInstaFobRead(ReaderRequiredUnit):
 class LFAwidRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("Scan an AWID credential (FSK2a, RF/8 and RF/10 tones). Read "
-                              "only for now — the writer is deferred until the T5577 is back "
-                              "in the sandwich and a Proxmark can verify it.")
+        parser.description = ("Scan an AWID credential (FSK2a, RF/8 and RF/10 tones). "
+                              "See `lf awid write` for the other direction.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -7511,8 +7510,8 @@ class LFAwidRead(ReaderRequiredUnit):
 class LFParadoxRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("Scan a Paradox credential (FSK2a, 96-bit frame). Read only for "
-                              "now — the writer waits for the T5577 to return.")
+        parser.description = ("Scan a Paradox credential (FSK2a, 96-bit frame). "
+                              "See `lf paradox write` for the other direction.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -7528,7 +7527,7 @@ class LFPyramidRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = ("Scan a Pyramid credential (FSK2a, 128-bit frame, CRC-8 gated). "
-                              "Read only for now — the writer waits for the T5577 to return.")
+                              "See `lf pyramid write` for the other direction.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
@@ -7539,12 +7538,132 @@ class LFPyramidRead(ReaderRequiredUnit):
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 
 
+# ⭐ ONE WRITE-AND-VERIFY FOR THREE PROTOCOLS. The ASK and PSK write commands each carry
+# their own copy of this flow; three more copies is where that stops being reasonable, and
+# unlike the firmware command processors there is nothing already verified on hardware to
+# disturb by sharing it here. ⚠ The subclasses supply only what genuinely differs: the name,
+# the frame length, and the two device calls.
+#
+# ⛔ The before/after read is the POINT of this command, not decoration. A T5577 does not
+# acknowledge a write — the firmware returns LF_TAG_OK either way — so without reading the tag
+# back afterwards there is no evidence at all that anything landed. The `before` read matters
+# just as much: without it, a tag the reader simply cannot hear is indistinguishable from a
+# write that failed, which is the mistake `emutest.py` exists to stop repeating.
+class _LFFskWrite(ReaderRequiredUnit):
+    PROTOCOL = ""      # display name
+    HEX_DIGITS = 0     # frame length in hex digits
+    EXAMPLE = ""
+
+    def _write(self, frame: bytes):
+        raise NotImplementedError
+
+    def _try_read(self):
+        """The frame on the tag as lowercase hex, or None. ⚠ None is NOT proof of absence."""
+        raise NotImplementedError
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        bits = self.HEX_DIGITS * 4
+        parser.description = (f"Write a {self.PROTOCOL} credential to a T5577. Configures "
+                              f"FSK2a, RF/50, {bits // 32} data blocks. Reads the tag back "
+                              f"afterwards — a T5577 does not acknowledge writes.")
+        parser.add_argument("--raw", type=str, required=True,
+                            metavar=f"<{self.HEX_DIGITS} hex>",
+                            help=f"the {bits}-bit frame, e.g. {self.EXAMPLE}")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        hexs = args.raw.strip().lower().removeprefix("0x")
+        if len(hexs) != self.HEX_DIGITS or any(c not in "0123456789abcdef" for c in hexs):
+            print(f"{color_string((CR, f'Need exactly {self.HEX_DIGITS} hex digits '))}"
+                  f"{color_string((CR, f'({self.HEX_DIGITS * 4} bits)'))}")
+            return
+        frame = bytes.fromhex(hexs)
+
+        before = self._try_read()
+        if before is None:
+            print(f"   {color_string((CY, f'No {self.PROTOCOL} frame before the write.'))} "
+                  f"Expected for a blank or other-protocol tag, but it also means there is no "
+                  f"proof this tag is coupled — so a failure after the write will not be "
+                  f"distinguishable from a tag the reader cannot hear.")
+        else:
+            print(f"   before: {color_string((CY, before))}")
+
+        self._write(frame)
+
+        after = self._try_read()
+        if after == hexs:
+            print(f"{color_string((CG, 'VERIFIED'))} — {self.PROTOCOL} frame read back off "
+                  f"the tag.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after. "
+                  f"Reposition the tag and try "
+                  f"{color_string((CG, f'lf {self.PROTOCOL.lower()} read'))}.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — the tag read {before} before and "
+                  f"nothing after.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — still reads {after}.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {hexs}, read "
+                  f"back {after}.")
+
+
+@lf_awid.command("write")
+class LFAwidWrite(_LFFskWrite):
+    PROTOCOL = "AWID"
+    HEX_DIGITS = 24
+    EXAMPLE = "011d81711dd1181111111111"
+
+    def _write(self, frame):
+        self.cmd.awid_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.awid_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_paradox.command("write")
+class LFParadoxWrite(_LFFskWrite):
+    PROTOCOL = "Paradox"
+    HEX_DIGITS = 24
+    EXAMPLE = "0f55555695596a6a9999a59a"
+
+    def _write(self, frame):
+        self.cmd.paradox_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.paradox_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_pyramid.command("write")
+class LFPyramidWrite(_LFFskWrite):
+    PROTOCOL = "Pyramid"
+    HEX_DIGITS = 32
+    EXAMPLE = "00010101010101010101016eb35e5da4"
+
+    def _write(self, frame):
+        self.cmd.pyramid_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.pyramid_scan()[0].hex()
+        except Exception:
+            return None
+
+
 @lf_fdxa.command("read")
 class LFFdxaRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("Scan an FDX-A credential (FSK2a carrying Manchester). Read only "
-                              "for now — the writer waits for the T5577 to return.")
+        parser.description = ("Scan an FDX-A credential (FSK2a carrying Manchester). Read only, "
+                              "and not waiting on anything: no reader here can check an "
+                              "FDX-A tag we wrote, so shipping a writer would self-certify.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):

@@ -35,6 +35,8 @@
 #include "gallagher.h"
 #include "securakey.h"
 #include "noralsy.h"
+#include "fsk2a_t55xx.h"
+#include "t55xx.h"
 
 #define SAMPLES_PER_ENTRY 2      /* 16us subcarrier cycle / 8us sample period */
 #define DC                8192   /* mid-scale of the 14-bit SAADC */
@@ -168,6 +170,48 @@ static int trial_ask(const char *name, const char *hex, size_t bits,
     return exact ? 0 : 1;
 }
 
+/* ⭐⭐ A TRANSCRIPTION PIN, NOT A ROUND TRIP — said plainly because the arms above are round
+ * trips and this one is a different kind of evidence. There is no air and no decoder here: it
+ * asserts that the shipping writer turns a frame into the EXACT block words a Proxmark clone
+ * of that same credential was dumped holding (C202). It cannot tell you the credential is
+ * right; it can only tell you we still transcribe it the way the reference tag does.
+ *
+ * ⛔ That is the failure it is here to catch. Keri's block form is `(id << 3) | 7`, three bits
+ * out of phase with its air frame, and writing the wrong one of the two put a stable, WRONG,
+ * confidently-decoded credential on a tag 6 times out of 6 (C160). A rotation introduced into
+ * fsk2a_t55xx_blocks() would be invisible to every other test in this file and would need a
+ * Proxmark and a tag to notice — which is exactly the sort of check that does not get run.
+ *
+ * ⚠ These are also the first T5577 writer vectors in the tree. `gallagher_t55xx_writer` and
+ * the other five still have no host coverage; adding theirs needs a dump of each reference
+ * clone, which is bench work rather than typing. Recorded in NEXT.md.
+ */
+static int trial_t55xx(const char *name, const char *hex, uint8_t words, uint32_t config,
+                       const uint32_t *want) {
+    uint8_t frame[32] = {0};
+    for (size_t i = 0; i < (size_t)words * 4u; i++) {
+        unsigned v;
+        sscanf(hex + 2 * i, "%2x", &v);
+        frame[i] = (uint8_t)v;
+    }
+    uint32_t blks[8] = {0};
+    uint8_t n = fsk2a_t55xx_blocks(frame, words, config, blks);
+
+    int bad = (n != (uint8_t)(words + 1));
+    for (uint8_t i = 0; i < n && !bad; i++) {
+        bad = (blks[i] != want[i]);
+    }
+    printf("  %-28s %s  blocks %u (want %u)", name, bad ? "⛔" : "✓", n, words + 1u);
+    if (bad) {
+        printf("   got");
+        for (uint8_t i = 0; i < n; i++) printf(" %08X", blks[i]);
+        printf("   want");
+        for (uint8_t i = 0; i < (uint8_t)(words + 1); i++) printf(" %08X", want[i]);
+    }
+    printf("\n");
+    return bad ? 1 : 0;
+}
+
 int main(void) {
     int bad = 0;
     puts("emitter -> air -> decoder, both halves the shipping firmware\n");
@@ -231,6 +275,22 @@ int main(void) {
                      &securakey, &LF_ASK_FORMAT_SECURAKEY);
     bad += trial_ask("Noralsy   ASK RF/32", "bb0214ff0112402233670000", 96,
                      &noralsy, &LF_ASK_FORMAT_NORALSY);
+
+
+    /* ⭐⭐ THE FSK2a T5577 WRITER, pinned to three real Proxmark clones' own block dumps.
+     * ⚠ AWID and Paradox share a config word exactly; only Pyramid differs, and only in the
+     * block-count field. All three block forms equal their air frames — measured per protocol,
+     * because Keri's does not (C160, C202). */
+    static const uint32_t want_awid[]    = {0x00107060, 0x011D8171, 0x1DD11811, 0x11111111};
+    static const uint32_t want_paradox[] = {0x00107060, 0x0F555556, 0x95596A6A, 0x9999A59A};
+    static const uint32_t want_pyramid[] = {0x00107080, 0x00010101, 0x01010101, 0x0101016E,
+                                            0xB35E5DA4};
+    bad += trial_t55xx("AWID     -> T5577 blocks", "011d81711dd1181111111111", 3,
+                       T5577_AWID_CONFIG, want_awid);
+    bad += trial_t55xx("Paradox  -> T5577 blocks", "0f55555695596a6a9999a59a", 3,
+                       T5577_PARADOX_CONFIG, want_paradox);
+    bad += trial_t55xx("Pyramid  -> T5577 blocks", "00010101010101010101016eb35e5da4", 4,
+                       T5577_PYRAMID_CONFIG, want_pyramid);
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");
     return bad ? 1 : 0;
