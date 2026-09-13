@@ -342,6 +342,61 @@ static int trial_t55xx(const char *name, const char *hex, uint8_t words, uint32_
     return bad ? 1 : 0;
 }
 
+/* ⭐⭐ PIN THE EMITTED WAVEFORM'S SHAPE, NOT JUST ITS MEANING. Every other arm in this file
+ * asks "does what we emit decode back" — and for AWID the answer is yes while the Flipper
+ * reads it 0 of 6, so that question is not sufficient on its own.
+ *
+ * ⛔ WHAT THIS PINS AND WHY. A real AWID emission was captured on this bench from a Flipper
+ * emulating the protocol, decoded byte-exact by our own reader, and measured: the HIGH run is
+ * 4 samples on essentially every tone and only the LOW run varies, 4 for RF/8 and 6 for RF/10
+ * (C226). Our emitter was emitting 5 and 5 for the long tone — the same PERIOD, which our own
+ * decoder cannot tell apart because it only ever looks at the sum, and which no round trip in
+ * this file would ever catch. It was corrected to match the measurement.
+ *
+ * ⇒ Without this arm that correction can revert silently. `counter_top / 2` is the obvious
+ * thing to write and it is what was there before. */
+static int trial_awid_duty(void) {
+    uint8_t frame[12] = {0x01, 0x1D, 0xB2, 0x18, 0x27, 0x1B, 0xD8, 0x11,
+                         0x11, 0x11, 0x11, 0x11};
+    void *codec = awid.alloc();
+    const nrf_pwm_sequence_t *seq = awid.modulator(codec, frame);
+    const size_t entries = (size_t)seq->length / 4u;
+    int bad = 0;
+    size_t shorts = 0, longs = 0;
+    unsigned worst = 0;
+    for (size_t i = 0; i < entries; i++) {
+        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i];
+        const uint16_t top = e->counter_top;
+        const uint16_t duty = e->channel_0 & 0x7FFFu;
+        if (top == 8) {
+            shorts++;
+        } else if (top == 10) {
+            longs++;
+        } else {
+            bad = 1;
+        }
+        /* The mark is FIXED at 4 regardless of tone — that is the measured reference. */
+        if (duty != 4u) {
+            bad = 1;
+            if (duty > worst) {
+                worst = duty;
+            }
+        }
+    }
+    awid.free(codec);
+    /* ⚠ Report the OFFENDING duty, not the wanted one. A failure line that still reads
+     * "mark fixed at 4" describes the test's intention rather than what it found, which
+     * is exactly the kind of message that makes a red result easy to skim past. */
+    if (bad) {
+        printf("  %-28s ⛔  %zu short + %zu long entries, mark reaches %u, want 4\n",
+               "AWID duty vs real emission", shorts, longs, worst);
+    } else {
+        printf("  %-28s ✓  %zu short + %zu long entries, mark fixed at 4\n",
+               "AWID duty vs real emission", shorts, longs);
+    }
+    return bad;
+}
+
 int main(void) {
     int bad = 0;
     puts("emitter -> air -> decoder, both halves the shipping firmware\n");
@@ -413,6 +468,7 @@ int main(void) {
      * count: a 0 costs six entries and a 1 costs five. */
     bad += trial_fsk("AWID     FSK2a RF/8-10", "011db218271bd81111111111", 96,
                      &awid, awid_fsk_decode);
+    bad += trial_awid_duty();
 
     /* ⭐⭐ THE FIRST BIPHASE EMITTER, on the credential the Proxmark wrote and our own reader
      * read back 12 of 12 exact (C213). ⚠ Its entry count is FIXED at two per bit where AWID's
