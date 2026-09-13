@@ -2,6 +2,7 @@
 
 #include "bsp_time.h"
 #include "lf_125khz_radio.h"
+#include "bsp_delay.h"
 #include "lf_indala_data.h"
 #include "lf_indala_psk.h"
 #include "lf_ask_manchester.h"
@@ -217,13 +218,13 @@ static const uint8_t GPROXII_PHASE_ROTATION[] = {
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                             lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
                             const uint8_t *phases, uint8_t phase_count, uint8_t tries,
-                            uint8_t drive);
+                            uint8_t drive, uint16_t gap_ms);
 
 bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
                      lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
     return lf_sampled_read_phases(decode, capture_samples, out, timeout_ms, energy_out,
                                   PHASE_ROTATION, (uint8_t)PHASE_ROTATION_COUNT,
-                                  INDALA_TRIES_PER_PHASE, 0);
+                                  INDALA_TRIES_PER_PHASE, 0, 0);
 }
 
 /* ⭐⭐ THE INSTRUMENT C209 ASKED FOR: run the READER's own capture and hand back the samples
@@ -243,7 +244,7 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
  *
  * ⚠ Instrumentation. Remove with the rest before upstreaming (§9b). */
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
-                             uint8_t repeats, uint16_t settle_ms,
+                             uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
@@ -258,6 +259,12 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
      * back to back and the probe took one, and only the probe worked. Returning the LAST of
      * N asks whether a capture late in such a run differs from the first. */
     for (uint8_t i = 0; i < repeats; i++) {
+        /* ⚠ A gap with the FIELD OFF, which is not the same as `settle_ms` — settle is
+         * field-ON time before the window opens. If what degrades capture 2 is something that
+         * holds charge across `stop_lf_125khz_radio()`, only this can let it drain. */
+        if (i > 0 && gap_ms > 0) {
+            bsp_delay_ms(gap_ms);
+        }
         lf_125khz_radio_drive_set(drive);
         *got = 0;
         ok = raw_read_samples(m_samples, capture_samples,
@@ -274,7 +281,7 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
                   const uint8_t *phases, uint8_t phase_count, uint8_t tries,
-                  uint8_t drive) {
+                  uint8_t drive, uint16_t gap_ms) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -316,6 +323,29 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
              * they sweep drive themselves in `lf_ask_read` or take the stock field. */
             if (drive != 0) {
                 lf_125khz_radio_drive_set(drive);
+            }
+            /* ⛔⛔ A FIELD-OFF GAP BEFORE EVERY CAPTURE BUT THE FIRST, AND IT IS THE FIX FOR
+             * C211 — the one thing that worked after settle, threshold shape, drive, phase
+             * order and budget had all been tried and refuted.
+             *
+             * Measured with the reader-capture probe, four captures back to back, returning the
+             * last: gap 0 and 5ms -> wrong frame; 20ms -> wrong; 25, 30, 40 -> exact but 35
+             * came back one bit out; 50, 150 and 250ms -> exact every time. So the threshold is
+             * around 25ms and it is soft near there. 50 is 2x it, chosen the way every other
+             * margin here is.
+             *
+             * ⚠ WHAT IS CHARGING IS NOT ESTABLISHED. `capture_end` already stops the field, so
+             * it is something that holds charge across that — the tag's own storage, or the LF
+             * amplifier's AC coupling. What IS established is the symptom: a capture taken too
+             * soon after another CLIPS, min 0 and max 16380 against a clean capture's 472 and
+             * 14176 (C212), and this decoder thresholds on step magnitude, which is exactly
+             * what clipping destroys.
+             *
+             * ⚠ IT COSTS LATENCY AND ONLY THIS PROTOCOL PAYS IT. 114ms capture + 50ms gap means
+             * a 3s budget buys about 14 captures rather than 20. Every other reader passes 0
+             * here and is untouched. */
+            if (gap_ms > 0 && (pi > 0 || k > 0)) {
+                bsp_delay_ms(gap_ms);
             }
             size_t got = 0;
             if (!raw_read_samples(m_samples, capture_samples,
@@ -877,7 +907,8 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
                                      &r, timeout_ms, energy_out,
                                      GPROXII_PHASE_ROTATION,
                                      (uint8_t)GPROXII_PHASE_ROTATION_COUNT,
-                                     GPROXII_TRIES_PER_PHASE, 7);
+                                     GPROXII_TRIES_PER_PHASE, 7,
+                                     GPROXII_CAPTURE_GAP_MS);
     /* ⚠ Restore the stock drive — a reader that leaves the field weakened breaks whatever runs
      * next, invisibly (C148/L122). */
     lf_125khz_radio_drive_set(4);

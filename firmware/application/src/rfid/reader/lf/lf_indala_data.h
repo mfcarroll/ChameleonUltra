@@ -147,11 +147,16 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
  * recover a single read. ⇒ time is ruled out; see the note by GPROXII_PHASE_ROTATION. */
 #define GPROXII_READ_TIMEOUT_MS INDALA_READ_TIMEOUT_MS
 
+/** ⛔ Field-off milliseconds between captures. MEASURED: 0-20ms gives a wrong frame, 25-40 is
+ *  exact but marginal (35 came back one bit out), 50 and above is exact every time (C213). 50
+ *  is 2x the threshold. Only GProxII pays this — see the long note in lf_indala_data.c. */
+#define GPROXII_CAPTURE_GAP_MS 50
+
 /** ⚠ INSTRUMENTATION — run the READER's capture path and return its samples undecoded.
  *  The one measurement `lf sniff` cannot make, because sniff is the other path. See C209 and
  *  the long note in lf_indala_data.c. Remove with the rest of the instrumentation. */
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
-                             uint8_t repeats, uint16_t settle_ms,
+                             uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got);
 
 #define GPROXII_READ_DATA_SIZE 16
