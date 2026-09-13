@@ -87,3 +87,121 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# ⭐⭐ WHAT AN AC-COUPLED FRONT END DOES TO EACH EMITTER
+#
+# ⛔ WHY. Three hypotheses for the silent emulations are dead — counter_top magnitude,
+# entries per bit, and sequence length — and the one that survives is that every emitter the
+# Flipper reads emits a 50% SQUARE in every entry, while GProxII holds a level (C223). The
+# mechanism proposed for that is AC coupling: a level that never changes cannot modulate a
+# load-switching emulator seen through a high-pass. AWID, whose entries ARE all squares,
+# stays unexplained.
+#
+# ⇒ This sweeps the high-pass time constant and asks, for each emitter, where its emission
+# stops decoding. If AWID dies at a far shorter time constant than Gallagher, one mechanism
+# covers both failures. If they die together, it covers neither.
+#
+# ⚠ THE TIME CONSTANT IS NOT MEASURED FOR THIS FRONT END. C204 measured ~27 samples at the
+# CHAMELEON's receiver; the Flipper's is a different circuit and nothing here has measured
+# it. So this is a sensitivity analysis over a plausible range, not a prediction — and the
+# useful output is the ORDERING of the protocols, which does not depend on the exact value.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+def render_samples(pairs, us_per_sample=1):
+    """Level/duration pairs -> a sample train, +1 high and -1 low."""
+    out = []
+    for level, duration in pairs:
+        out.extend([1.0 if level else -1.0] * (duration // us_per_sample))
+    return out
+
+
+def highpass(x, tau):
+    """One-pole high-pass, the shape an AC-coupled front end has. tau in samples."""
+    if tau <= 0:
+        return x[:]
+    a = 1.0 - 1.0 / tau
+    out, prev_in, prev_out = [], 0.0, 0.0
+    for v in x:
+        prev_out = a * (prev_out + v - prev_in)
+        prev_in = v
+        out.append(prev_out)
+    return out
+
+
+def to_pairs(x):
+    """Threshold at zero and return (level, duration) runs — what an edge detector sees."""
+    pairs, cur, n = [], x[0] > 0, 0
+    for v in x:
+        lvl = v > 0
+        if lvl == cur:
+            n += 1
+        else:
+            pairs.append((cur, n)); cur, n = lvl, 1
+    pairs.append((cur, n))
+    return pairs
+
+
+def gallagher_ideal(frame_bits):
+    """Gallagher's emitter: ONE entry per bit, always a 50% square, polarity = the data."""
+    out = []
+    for bit in frame_bits:
+        half = 32 * 8 // 2      # RF/32 bit = 32 carrier cycles = 256us; half is 128us
+        if bit:
+            out.append((True, half)); out.append((False, half))
+        else:
+            out.append((False, half)); out.append((True, half))
+    return out
+
+
+def gproxii_ideal(frame_bits):
+    """GProxII's emitter: one entry per bit, a square for a 1 and a HELD level for a 0."""
+    out, level = [], False
+    for bit in frame_bits:
+        level = not level
+        if bit:
+            out.append((level, 64 * 8 // 2))
+            level = not level
+            out.append((level, 64 * 8 // 2))
+        else:
+            out.append((level, 64 * 8))
+    return out
+
+
+# ⛔⛔ THE LIMIT OF THIS MODEL, BEFORE ANYONE READS A RESULT OFF IT. `highpass` decays toward
+# ZERO and `to_pairs` thresholds AT zero, so a held level decays asymptotically and never
+# crosses — it survives as a clean long run no matter how short the time constant is. A real
+# comparator has hysteresis and a baseline of its own, and a decayed level DOES vanish into it.
+# ⇒ This model can say something about emissions made of SQUARES and nothing at all about
+# emissions containing HELD LEVELS. The GProxII row below is printed for completeness and must
+# not be read as evidence either way.
+def sweep():
+    awid = [int(c) for c in bin(int("011db218271bd81111111111", 16))[2:].zfill(96)]
+    gal = [int(c) for c in bin(int("7feaa31e76d86c6d868cc249", 16))[2:].zfill(96)]
+    arms = [
+        ("AWID     FSK2a  squares", emit_ideal(awid * 4)),
+        ("Gallagher ASK   squares", gallagher_ideal(gal * 4)),
+        ("GProxII  biphase HELD  ", gproxii_ideal(gal * 4)),
+    ]
+    want = "".join(map(str, awid))
+    print("\n  tau (samples, 1us each) at which each emission stops decoding as AWID bits")
+    print("  ⚠ only the AWID arm can be scored against a frame; the others are scored on")
+    print("     whether their EDGE STRUCTURE survives at all (run lengths still quantised).")
+    for name, pairs in arms:
+        row = []
+        for tau in (0, 2000, 1000, 500, 200, 100, 50, 20):
+            x = render_samples(pairs)
+            got = to_pairs(highpass(x, tau)) if tau else pairs
+            if "AWID" in name:
+                bits = "".join(map(str, fsk_demod(got)))
+                row.append(f"{tau}:{'Y' if want in bits else 'n'}")
+            else:
+                runs = [d for _, d in got]
+                longest = max(runs) if runs else 0
+                row.append(f"{tau}:{longest}")
+        print(f"  {name}  " + "  ".join(row))
+
+
+if __name__ == "__main__":
+    sweep()
