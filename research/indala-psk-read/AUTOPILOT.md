@@ -53,8 +53,11 @@ restoring it (C242). A biphase 0 IS a held level, so half the frame is silence.
 ⭐⭐ **C45 IS CLOSED (C250).** The HID reader's 15-20% was a BLE advertising burst collapsing the
 field mid-capture, and `cf745fb`'s guard fixes it: 96/96 with the guard, 71/80 without it on one
 tag in one session. ⛔ **The finding that outlives it is that an unguarded read returned FIVE WRONG
-CREDENTIALS as successes and this reader checks no parity** — `hidprox.c` includes `parity.h` and the
-read path never uses it. ⇒ **Next unit: gate `lf hid prox read` on H10301's two parity bits.**
+CREDENTIALS as successes — past a parity check that was working.** `unpack_h10301()` checks both
+bits and the reader does reach it; my first write-up said otherwise and was wrong. ⇒ **Next unit:
+re-run the guard-OFF arm capturing the WHOLE read, not just fc/cn, to separate the two ways a
+corrupted frame can pass — two flips inside one parity group, or `unpack()` relabelling it as a
+different 26-bit format, which it is free to do because `lf hid prox read` passes `format_hint = 0`.**
 
 ⛔ **AWID: STILL OPEN.** Every one of its entries is a 50% square, so C242 does not touch it.
 Eight explanations are dead by measurement: counter_top magnitude, entries per bit, AC
