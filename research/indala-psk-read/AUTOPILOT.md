@@ -47,9 +47,15 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   "Radio Key". ⇒ When a NEW protocol's emulation reads zero, check what Momentum NAMES it
   before believing the number.
 - ⚠ **Standing limitation (C179):** every emulate arm here is verified by the Flipper alone.
-  A T5577 written with the same credential and read by the Proxmark is actual hardware
-  behaviour and can differ at frame boundaries we do not emit. The write arms carry that
-  stronger evidence; the emulate arms need the tag lifted out of the sandwich.
+  A T5577 read by the Proxmark is actual hardware behaviour and can differ at frame
+  boundaries we do not emit. The write arms carry that stronger evidence; the emulate arms
+  need the tag lifted out of the sandwich.
+  ⭐ **Partly answered for Gallagher (C180)**: the real tag's frame period is exactly nominal,
+  12 intervals at 3072 ± 1 sample, so its sequence terminator causes no displacement and our
+  plain loop matches at the boundary. `framedrift.py` does this with no hands.
+  ⛔ **`framedrift.py` is NOT yet trustworthy for Securakey** — it finds no frame in
+  `sk_20.bin` where `ctest/cdemod --securakey` reads it. Fix that disagreement (the shipping
+  decoder sweeps two low-pass widths, this sweeps one) before quoting any Securakey number.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -204,6 +210,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 06:55 | U6 (part) | 38 → 40 | Securakey decoder; `lf_ask_format_t` parameterised by bit rate | 4/4 exact at RF/40, Gallagher unregressed, 21 nulls clean incl. same-family both ways |
 | 2026-09-13 07:35 | U6 (part) | 39 → 42 | Securakey device read + write + emitter, `TAG_TYPE_SECURAKEY`, CLI | read 6/6, write 3/3 via pm3; **emulate 0/6** with Gallagher 4/4 as the same-rig control |
 | 2026-09-13 08:05 | U6 — DONE | 41 → 43 | C177 retracted; `flipper.py` matcher widened for multi-word names | emulate 10/10, null 0/4, return leg tracked a changed credential |
+| 2026-09-13 08:30 | C179 follow-up | 42 → 44 | `framedrift.py`; C180 | Gallagher real-tag frame period 3072 ± 1 over 12 intervals; Securakey withheld — tool disagrees with shipping decoder |
 
 ---
 
