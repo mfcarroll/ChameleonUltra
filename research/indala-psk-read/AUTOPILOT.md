@@ -48,9 +48,23 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   captures or a reading of that state machine's transitions.
 - **U7 is DONE** — §9 of NEXT.md now carries an evidence grade per arm, the three blockers a
   reviewer hits before the protocols, and a three-PR split in dependency order (L151).
-- **Next: U8 (FSK)** — AWID, Paradox, Pyramid, FDX-A. ⛔ Deliberately last: it reuses the HID
-  Prox/ioProx SAADC machinery and HID's 15-20% intermittency (C45) is unexplained and lives in
-  exactly that path. Do not start it without saying so in §4 first.
+- ⭐⭐ **THE OPERATOR WAS ASKED TO LIFT THE T5577 OUT OF THE SANDWICH overnight 2026-09-13.**
+  ⇒ **On resume, CHECK WHETHER IT IS OUT** — one `lf search` on the Proxmark: no tag means it
+  was lifted. If it is out, the highest-value unit is **upgrading every emulate arm from grade
+  B to grade A** by having the PROXMARK read our emulation on Chameleon #2 (Indala224, Keri,
+  NexWatch, Gallagher, Securakey, Noralsy). That answers C179 directly and is why the lift was
+  requested. ⛔ With the tag out, U8 and any read/write work are impossible — do the emulation
+  sweep and the compute units instead.
+- ⭐ **IF THE TAG IS STILL IN, the order is: compute units FIRST, U8 LAST.** The compute queue
+  is better work than FSK and needs no bench: (1) the `lf_psk1_read` rename, which is §9's
+  blocker #1 for upstreaming; (2) `ctest/roundtrip.c` arms for the four ASK protocols — every
+  PSK protocol has one and no ASK protocol does, and that harness exists because three wrong
+  encodings shipped in a single session (C156); (3) InstaFob's emitter rebuilt from Momentum's
+  six-state terminator machine rather than from an approximate capture (C188).
+- **U8 (FSK)** — AWID, Paradox, Pyramid, FDX-A — needs the tag BACK in the sandwich.
+  ⛔ Deliberately last regardless: it reuses the HID Prox/ioProx SAADC machinery and HID's
+  15-20% intermittency (C45) is unexplained and lives in exactly that path. Do not start it
+  without saying so in §4 first.
 - ⭐ Also open and cheap: the ASK protocols have no `ctest/roundtrip.c` arms — the PSK ones all
   do. That harness exists because three wrong encodings shipped in one session (C156).
 - **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
