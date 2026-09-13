@@ -40,8 +40,9 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **Noralsy READS 6/6 on device (C181); its write and emulate are built but
-  NOT yet verified.** Finish those, then InstaFob.
+- **In flight:** nothing. **Noralsy is COMPLETE** (C181, C184) and the drive sweep is
+  regression-clean on Gallagher and Securakey, 4/4 each. **InstaFob is the last of family 2**,
+  then U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
 - ⛔⛔ **The ASK readers now SWEEP DRIVE (C182)** — Noralsy decodes at drive 7 and at no other
   setting, including stock. Every ASK capture in this campaign was taken at `--drive 7`, so
   a host decode does NOT predict a device read unless the reader sweeps too.
@@ -218,6 +219,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 08:30 | C179 follow-up | 42 → 44 | `framedrift.py`; C180 | Gallagher real-tag frame period 3072 ± 1 over 12 intervals; Securakey withheld — tool disagrees with shipping decoder |
 | 2026-09-13 08:55 | C180 completed | 42 → 43 | `framedrift.py` DC estimator now mirrors the firmware | Securakey 8 intervals all exactly 3840; 20 periods total, no terminator gap on either protocol |
 | 2026-09-13 09:45 | Noralsy (read) | 0 → 8 | Noralsy decoder + device arm; ASK drive sweep; BCD field fix | read 0/6 → 6/6 with the sweep; card 112233 year 2024 matching pm3 |
+| 2026-09-13 10:20 | Noralsy — DONE | 3 → 6 | Noralsy write + emulate verified; drive-sweep regression | write 3/3 pm3, emulate 10/10 null 0/4; Gallagher 4/4 and Securakey 4/4 after the shared change |
 
 ---
 

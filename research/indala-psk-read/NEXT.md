@@ -74,7 +74,7 @@ registered `TAG_TYPE_*`.
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | GProxII | ✗ | ✗ | ✗ | ✓ |
-| **Noralsy** | ✓ **6/6 on device (C181)** | ◐ built, unverified | ◐ built, unverified | ✓ |
+| **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
 | InstaFob | ✗ | ✗ | ✗ | ✓ (ASK, RF/32) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
