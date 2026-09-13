@@ -641,7 +641,7 @@ int main(void) {
         const arm_t fsk_awid   = {FAM_FSK, &awid,      0, NULL, NULL, NULL, awid_fsk_decode};
         const arm_t bi_gpii    = {FAM_BIPHASE, &gproxii, 0, NULL, NULL, &LF_BIPHASE_FORMAT_GPROXII, NULL};
 
-        bad += sweep("Indala26  PSK1",  "a0000000e6bd0e92", "a0000000e6bd0e92", 64, &psk_ind, 33, 0, 31);
+        bad += sweep("Indala26  PSK1",  "a0000000e6bd0e92", "a0000000e6bd0e92", 64, &psk_ind, 35, 0, 29);
         bad += sweep("IDTECK    PSK1",  "4944544b55667788", "4944544b55667788", 64, &psk_idteck, 32, 0, 32);
         /* ⛔ Keri emits the block form and decodes to the frame view — the sweep flips bits in
          * what goes ON THE WIRE and compares against what comes BACK, same as its round trip. */

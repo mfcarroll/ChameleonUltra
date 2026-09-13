@@ -67,6 +67,12 @@ def py_decode(path):
     mn = 4.0 * best[2]
     if mean >= STRADDLE_AMP and mn * STRADDLE_DIV < mean:
         return None
+    # ⭐ The reference's two zero bits, mirrored from `indala64_accept` in lf_indala_psk.c.
+    # ⛔ NOT optional here: this file's whole value is that the two decoders agree word for
+    # word INCLUDING their failures, so a gate added on one side and not the other shows up
+    # as four per-capture mismatches — which is exactly how this line came to be written.
+    if best[1][60] != "0" or best[1][61] != "0":
+        return None
     return "%016x" % int(best[1], 2)
 
 

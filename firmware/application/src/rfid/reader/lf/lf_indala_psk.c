@@ -103,6 +103,28 @@ const lf_psk1_format_t LF_PSK1_FORMAT_NEXWATCH = {
     .require_repeat = false,
 };
 
+/* ⭐⭐ THE REFERENCE'S TWO ZERO BITS, AND THEY EARN THEIR PLACE ON REAL CAPTURES RATHER THAN
+ * ON A PRINCIPLE. `protocol_indala26_can_be_decoded` requires bits 60 and 61 to be zero and
+ * offers no comment on why; in the 26-bit layout they sit past the credential and before the
+ * checksum. C252 put this format at 31 wrong frames in 96 flips with a preamble as its only
+ * content check.
+ *
+ * ⭐ Measured on the committed 320-capture corpus BEFORE it was added: of the 68 frames the
+ * decoder produces there, this rejects **4, and all 4 are wrong frames** — the 51 true ones
+ * all pass. Seventeen false frames become thirteen at no cost to a real read.
+ *
+ * ⚠ THE COST, SAID PLAINLY. This format is the generic 64-bit Indala, not format 26 alone,
+ * and these two bits are part of the 26-bit layout. A genuine 64-bit Indala of some other
+ * format with either bit set would now be refused. Every real Indala frame on this bench
+ * comes from ONE tag, so that risk is argued from the reference's own behaviour rather than
+ * measured here — the same shape as the GProxII length gate's cost (C205). */
+static bool indala64_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < INDALA_PSK_FRAME_BITS) {
+        return false;
+    }
+    return (word_bits[60] & 1u) == 0u && (word_bits[61] & 1u) == 0u;
+}
+
 const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     .preamble = LF_PSK1_PREAMBLE_INDALA,
     .preamble_bits = INDALA_PSK_PREAMBLE_BITS,
@@ -110,6 +132,7 @@ const lf_psk1_format_t LF_PSK1_FORMAT_INDALA64 = {
     /* ⛔ The IDTECK veto, one-directional on purpose — C90/C91. */
     .reject_preamble = LF_PSK1_PREAMBLE_IDTECK,
     .reject_preamble_bits = IDTECK_PSK_PREAMBLE_BITS,
+    .accept = indala64_accept,
     .differential_only = false,
     .require_repeat = false,
 };
