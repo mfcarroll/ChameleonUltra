@@ -6621,7 +6621,15 @@ class LFKeriRead(ReaderRequiredUnit):
         raw, internal_id, fc, cn, phase, offset, tries = self.cmd.keri_scan()
         print("Keri PSK1")
         print(f"   Raw: {color_string((CY, raw.hex()))}")
-        print(f"   Internal ID: {color_string((CY, f'{internal_id:08X}'))}")
+        # ⛔ THE INTERNAL ID IS THE FIELD WITHOUT ITS TOP BIT, and printing the whole field
+        # under this label made our reader disagree with the Proxmark on a frame both read
+        # byte-identically (C259). `cmdlfkeri.c` does `ID &= 0x7FFFFFFF` before reporting,
+        # because bit 31 is the 33rd bit of the preamble and not payload — the same bit
+        # `lf keri write --id` REFUSES to let you clear.
+        # ⇒ Both numbers, both labelled: the id the reference and `lf keri clone --cn` use,
+        # and the raw field this CLI's own writer wants back.
+        print(f"   Internal ID: {color_string((CY, internal_id & 0x7FFFFFFF))}"
+              f"   (raw field {internal_id:08X} — that is what `lf keri write --id` takes)")
         # ⚠ ADVISORY, and said so rather than printed as fact. A tag cloned with an
         # internal id directly carries no facility/card structure at all, and there is no
         # flag in the frame that says which kind it is — so these two numbers are a
@@ -6756,7 +6764,9 @@ class LFKeriEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
         internal_id = (block >> 3) & 0xFFFFFFFF
         shape_ok = (block & 7) == 7 and bool(internal_id & 0x80000000)
         print(f" - Keri emu id: {response.hex().upper()}  (block form, on the wire)")
-        print(f"   Internal ID: {internal_id:08X}"
+        # Same pairing as `lf keri read` — see the note there (C259).
+        print(f"   Internal ID: {internal_id & 0x7FFFFFFF}"
+              f"   (raw field {internal_id:08X})"
               + ("" if shape_ok else
                  f"  {color_string((CR, '(not a valid Keri block form)'))}"))
         print(f"   Decode it with {color_string((CG, 'lf keri read'))} against the "
