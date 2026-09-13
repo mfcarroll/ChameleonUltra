@@ -83,10 +83,25 @@ static const nrf_pwm_sequence_t *awid_modulator(awid_codec *d, uint8_t *buf) {
         const uint16_t top = bit ? AWID_TONE_LONG_CYCLES : AWID_TONE_SHORT_CYCLES;
         const uint8_t pulses = bit ? AWID_PULSES_LONG : AWID_PULSES_SHORT;
         for (uint8_t p = 0; p < pulses; p++) {
-            /* Half the period high, half low — one full tone cycle per entry. The top bit of
-             * channel_0 is the polarity and is left clear: unlike ASK, nothing here encodes
-             * data in the level, only in the rate. */
-            m_awid_vals[n].channel_0 = (uint16_t)(top / 2u);
+            /* ⭐⭐ A FIXED 4-CYCLE MARK, AND A GAP THAT CARRIES THE FREQUENCY — NOT 50% DUTY.
+             *
+             * This is copied from a REAL emission rather than assumed. A Flipper emulating
+             * AWID, captured by Chameleon #1 on rig A and decoded byte-exact by our own
+             * reader, puts its HIGH run at 4 samples on essentially every tone (1207 of 1667)
+             * and varies only the LOW run: 4 for the RF/8 tone and 6 for the RF/10 one. The
+             * period histogram is 8 and 10 as expected, but the DUTY is not half.
+             *
+             * ⚠ Our first version emitted 5 high / 5 low for the long tone, which sums to the
+             * same period and which our own decoder reads perfectly — it only ever looks at
+             * the SUM. The Flipper reads it 0 of 6. A real tag shorts its coil for a fixed
+             * time and lets the gap carry the data, so a 50% duty at the longer period leaves
+             * the field loaded 25% longer than any real AWID tag would.
+             *
+             * ⛔ Whether that is what the Flipper objects to is NOT established — its
+             * demodulator sums high and low into one period and should not care. But matching
+             * a measured reference costs one constant, and guessing differently from the only
+             * working emission on this bench needs a reason we do not have. */
+            m_awid_vals[n].channel_0 = (uint16_t)(AWID_TONE_SHORT_CYCLES / 2u);
             m_awid_vals[n].channel_1 = 0;
             m_awid_vals[n].channel_2 = 0;
             m_awid_vals[n].counter_top = top;
