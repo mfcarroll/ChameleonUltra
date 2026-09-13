@@ -209,8 +209,8 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds SECURAKEY `7FCB400001ADEA5344300000` again — C260's audit cycled it through ten
-  credentials in one session; before that Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
+  now holds JABLOTRON `--cn 12345678` — the display audits cycled it through thirteen
+  credentials in one session; before that Securakey, IDTECK, FDX-B, Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
@@ -398,6 +398,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 18:00 | **C265 — the display audit finished properly** | 14 → 15 | C260 missed three protocols. FDX-B and Jablotron agree with the Proxmark; IDTECK printed the checksum byte with no verdict and now prints both | Verified on the tag in BOTH directions — a constructed failing frame and a constructed passing one, each matching pm3's word |
 | 2026-09-14 17:05 | **C264 — the `require_repeat` instrument, second attempt** | 12 → 14 | Built to C254's design with a sanity check and a control, and BACKED OUT: toggling the flag on the format under test moved nothing. Two instruments, two failures, both recorded | The disproof is a flag toggle plus a forced clean rebuild, not an argument about why it should have worked |
 | 2026-09-14 16:20 | **C263 — the instrumentation split, as a checklist** | 12 → 12 | §9h: four items, every call site grepped. Nothing shippable depends on any of them — the probe has one caller, the debug handlers none beyond their dispatch rows, and GProxII's is two lines because `scan_gproxii()` was already in the tree | Pure compute; the "nothing depends on them" claim is a caller count, and deliberately NOT executed — it would break this branch's own tooling |
 | 2026-09-14 15:45 | **C262 — §9 refresh** | 12 → 12 | Command ids recounted from a `data_cmd.h` diff: 48 new, 41 shippable. Three stale rows fixed — HID Prox's "intermittent 15-20%", §9a's grid omitting six protocols, and a blocker arguing from an unread reference. New §9g carries the gate and display audits | Pure compute: every correction is contradicted by a claim already in the ledger, and the count is a `comm` between two checked-out headers |

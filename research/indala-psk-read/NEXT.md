@@ -371,11 +371,20 @@ of the corruption. Low numbers are a FLOOR for repeat-gated formats.
 a frame that passes EVERY check both references make — once in four (C255). A stronger gate
 narrows the window; it does not close it.
 
-**What we PRINT, against the Proxmark, same tag, same minute (C260):** HID Prox, ioProx,
-Indala26, NexWatch, Gallagher, Noralsy, PAC and GProxII all agree field for field. Keri printed
-the raw id field under the label `Internal ID` and is fixed (C259). Securakey printed no derived
-fields at all and now prints length, FC, card and the Wiegand word, with the parity **reported
-and not gated** — which is what the reference does (C261).
+**What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
+each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,
+Gallagher, Noralsy, PAC, GProxII, FDX-B and Jablotron agree field for field. **Three were not
+right and all three are fixed**: Keri printed the raw id field under the label `Internal ID`
+(C259); Securakey printed no derived fields at all and now prints length, FC, card and the
+Wiegand word (C261); IDTECK printed the checksum BYTE with no verdict where the reference
+prints both, so our output was a number and theirs a judgement (C265).
+
+⭐ **Two of those three fixes REPORT rather than GATE**, and that is deliberate. Securakey's
+Wiegand parity and IDTECK's checksum are both computed by the reference and enforced by
+neither, so enforcing them here would make this reader refuse tags both references accept —
+C257 shows what that costs, and it is a cost worth paying only when the evidence is strong.
+⚠ IDTECK's carries the reference's own caveat: `cmdlfidteck.c` marks the check "(TBD)" and its
+worked example disagrees with its code, and no real IDTECK tag exists on this bench.
 
 ⚠ **Why this had never been checked:** every read arm in this campaign scores the RAW FRAME. A
 wrong number printed under a right frame was invisible by construction, in every protocol, for

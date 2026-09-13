@@ -8009,8 +8009,26 @@ class LFIdteckRead(ReaderRequiredUnit):
         raw, chksum, card, phase, offset, tries = self.cmd.idteck_scan()
         print("IDTECK PSK1")
         print(f"   Raw: {color_string((CY, raw.hex()))}")
+        # ⭐ THE CHECKSUM VERDICT, not just the byte. C260's audit found this: we printed
+        # `Checksum byte: 55` and stopped, where `lf idteck reader` prints the same byte AND
+        # says whether it holds — so an operator comparing the two tools saw a number from us
+        # and a judgement from the reference. Transcribed from `cmdlfidteck.c:121-124`: the
+        # top byte of the second word against the sum of the other three, truncated to 8 bits.
+        #
+        # ⚠ REPORTED, NOT GATED, and with a caveat the reference itself supplies: pm3 marks
+        # this "checksum check (TBD)" in its own source, and the worked example in that
+        # comment does NOT agree with the code beside it. We have no real IDTECK tag on this
+        # bench, so an "ok" here has never been seen on a genuine credential — only a "fail"
+        # on a synthetic one. ⇒ Matching the reference byte for byte is the most that can
+        # honestly be claimed, which is why this is a display and not an `accept` hook.
+        calc = sum(raw[5:8]) & 0xFF
+        ok = (chksum == calc)
         print(f"   Card: {color_string((CG, card))} ({card:#08x})  "
-              f"Checksum byte: {color_string((CY, f'{chksum:02x}'))}")
+              f"Checksum: {color_string((CY, f'0x{chksum:02X}'))} "
+              + (f"({color_string((CG, 'ok'))})" if ok
+                 else f"({color_string((CR, 'fail'))} — calculated "
+                      f"{color_string((CY, f'0x{calc:02X}'))})")
+              + f"  {color_string((CY, '⚠ the reference marks this check TBD'))}")
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 
