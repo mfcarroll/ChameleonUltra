@@ -61,6 +61,95 @@ const lf_biphase_format_t LF_BIPHASE_FORMAT_GPROXII = {
     .accept = gproxii_accept,
 };
 
+/* FDX-B's header: ten zeros then a one. */
+const uint8_t LF_BIPHASE_PREAMBLE_FDXB[FDXB_BIPHASE_PREAMBLE_BITS] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+};
+
+/* ⭐ THIRTEEN CONTROL BITS, all of which must be 1 — the same shape of gate as GProxII's 18
+ * spacers, and needed for the same reason: an 11-bit header that is ten zeros and a one is
+ * something a quiet capture produces by accident. ⚠ Unlike GProxII this one does NOT also
+ * check a format field; the frame has no equivalent, so the gate is these 24 bits. Its
+ * cross-protocol null is therefore the only evidence the gate holds — the same caveat
+ * Securakey carries. */
+/* ⭐ CRC-16/KERMIT — poly 0x1021, init 0x0000, reflected in and out, no final XOR. Written as
+ * the right-shifting form with the reversed poly 0x8408, which is the same function.
+ *
+ * ⛔ THE PARAMETERS WERE SOLVED AGAINST THE BENCH FRAME, NOT COPIED. The Proxmark reaches
+ * this through `crc16_fdxb -> crc16_fast(d, n, 0x0000, false, true)`, whose middle argument
+ * reads as "input not reflected" — and that form does NOT reproduce the tag's stored CRC. A
+ * search over poly / init / reflection / xor against the real clone
+ * `00339a080402079f8040797788040201` returns exactly one match: payload `39050000c0f90080`
+ * -> 0x1ED3, which is the CRC the tag carries. ⇒ measured beats read, the same rule that
+ * caught the Gallagher CRC being 0x1D/0xFF from memory when the tag wanted 0x07/0x2C. */
+static uint16_t fdxb_crc16(const uint8_t *d, size_t len) {
+    uint16_t crc = 0;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= d[i];
+        for (uint8_t b = 0; b < 8; b++) {
+            crc = (uint16_t)((crc & 1u) ? ((crc >> 1) ^ 0x8408u) : (crc >> 1));
+        }
+    }
+    return crc;
+}
+
+/* Eight bits least-significant first — FDX-B's field encoding throughout. */
+static uint8_t fdxb_byte_lsbf(const uint8_t *bits) {
+    uint8_t v = 0;
+    for (uint8_t k = 0; k < 8; k++) {
+        v = (uint8_t)(v | ((bits[k] & 1u) << k));
+    }
+    return v;
+}
+
+/* ⛔⛔ THE 24-BIT GATE ON ITS OWN LET AN ALL-ONES FRAME THROUGH, AND IT DID SO ON THE FIRST
+ * CAPTURE TRIED. `00000000001` followed by 117 ones satisfies the header AND every control
+ * bit trivially, and that is exactly what a drive-7 capture of this tag returned:
+ * `003fffffffffffffffffffffffffffff`. A gate that a saturated capture passes is not a gate.
+ *
+ * ⭐ So the CRC is the real check here, where GProxII's is its format-length field. ⚠ The
+ * Proxmark COMPUTES this CRC and only prints ok/fail; it does not reject. We do, for the same
+ * reason as GProxII: a single-protocol demod has nothing to be confused with and a
+ * multi-protocol reader does. Stated rather than smuggled, and the cost is that a genuine
+ * FDX-B with a bad CRC would be rejected here rather than reported as bad. */
+static bool fdxb_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < FDXB_BIPHASE_FRAME_BITS) {
+        return false;
+    }
+    uint8_t body[FDXB_BIPHASE_CONTROL_GROUPS * 8u];
+    for (uint8_t g = 0; g < FDXB_BIPHASE_CONTROL_GROUPS; g++) {
+        const uint8_t *grp = &word_bits[FDXB_BIPHASE_PREAMBLE_BITS + 9u * g];
+        if (grp[8] != 1u) {
+            return false;
+        }
+        for (uint8_t k = 0; k < 8; k++) {
+            body[8u * g + k] = grp[k];
+        }
+    }
+    /* The CRC covers the first EIGHT bytes only — the national and country codes and the
+     * flags. ⚠ It does not protect the extended data that follows it, which the Proxmark's
+     * own source remarks on; that is the protocol's shape, not an omission here. */
+    uint8_t payload[8];
+    for (uint8_t i = 0; i < 8; i++) {
+        payload[i] = fdxb_byte_lsbf(&body[8u * i]);
+    }
+    uint8_t crc_bits[16];
+    for (uint8_t k = 0; k < 16; k++) {
+        crc_bits[k] = body[64u + k];
+    }
+    uint16_t stored = (uint16_t)(fdxb_byte_lsbf(crc_bits) |
+                                 ((uint16_t)fdxb_byte_lsbf(&crc_bits[8]) << 8));
+    return fdxb_crc16(payload, 8) == stored;
+}
+
+const lf_biphase_format_t LF_BIPHASE_FORMAT_FDXB = {
+    .preamble = LF_BIPHASE_PREAMBLE_FDXB,
+    .preamble_bits = FDXB_BIPHASE_PREAMBLE_BITS,
+    .frame_bits = FDXB_BIPHASE_FRAME_BITS,
+    .bit_samples = FDXB_BIPHASE_BIT_SAMPLES,
+    .accept = fdxb_accept,
+};
+
 /* The step across a grid point: the mean of the W samples after it minus the mean of the W
  * before. ⚠ Integer throughout — the sums are kept rather than divided, so this returns W
  * times the step and every comparison below is against a threshold scaled the same way. */
@@ -182,4 +271,8 @@ bool lf_ask_biphase_decode_fmt(const int16_t *samples, size_t n,
 
 bool gproxii_biphase_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_ask_biphase_decode_fmt(samples, n, &LF_BIPHASE_FORMAT_GPROXII, out);
+}
+
+bool fdxb_biphase_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
+    return lf_ask_biphase_decode_fmt(samples, n, &LF_BIPHASE_FORMAT_FDXB, out);
 }

@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0, modepx = 0, modepy = 0, modefa = 0, modegp = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0, modepx = 0, modepy = 0, modefa = 0, modegp = 0, modefb = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -76,6 +76,7 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i], "--pyramid")) { modepy = 1; continue; }
         if (!strcmp(argv[i], "--fdxa")) { modefa = 1; continue; }
         if (!strcmp(argv[i], "--gproxii")) { modegp = 1; continue; }
+        if (!strcmp(argv[i], "--fdxb")) { modefb = 1; continue; }
         if (!strcmp(argv[i], "--nogate")) {
             modenw = 1;
             nogate = 1;
@@ -128,9 +129,11 @@ int main(int argc, char **argv) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
         }
 
-        if (modegp) {
+        if (modegp || modefb) {
             lf_decode_result_t rg;
-            if (!gproxii_biphase_decode(buf, n, &rg)) {
+            bool gok = modegp ? gproxii_biphase_decode(buf, n, &rg)
+                              : fdxb_biphase_decode(buf, n, &rg);
+            if (!gok) {
                 printf(" %-44s %5zu samples  -                          edge %4ld\n",
                        argv[i], n, (long)rg.energy);
                 continue;

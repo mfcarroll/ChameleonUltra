@@ -114,7 +114,52 @@ _Static_assert(LF_BIPHASE_MAX_FRAME_BITS <= LF_DECODE_MAX_FRAME_BITS,
 _Static_assert(GPROXII_BIPHASE_CAPTURE_SAMPLES <= LF_SAMPLED_MAX_CAPTURE_SAMPLES,
                "GProxII's capture must fit the shared sample buffer");
 
+/* FDX-B (ISO 11784/11785, the animal tag): 128 bits at RF/32, and the second protocol of the
+ * biphase family — which is what makes it the test of whether the family is a family.
+ *
+ * ⛔⛔ ITS T5577 CONFIG IS `00098080` AND THAT IS NOT WHAT THE PROXMARK'S HEADER SAYS. The
+ * header carries `T55X7_FDXB_CONFIG_BLOCK 0x903F0082`, an X-mode value; the clone command
+ * actually writes `00098080`, and `lf t55xx detect` reads it back as **BIPHASEa (CDP) / RF/32
+ * / Inverted Yes**. Decomposed, that is RF_32 | DIPHASE | 4 data blocks — the DIPHASE field
+ * value, where GProxII uses BIPHASE, one bit apart. ⇒ The clone's dump wins over the header,
+ * which is the same rule C202 set for the FSK three and the same trap Keri's config was kept
+ * verbatim to avoid.
+ *
+ * ⚠ INVERTED, where GProxII is not. The decoder sweeps inversion anyway, so this costs
+ * nothing — but it is why the two cannot share a format entry.
+ *
+ * ⭐ ITS GATE IS 24 EXACT BITS, like GProxII's and by the same shape: an 11-bit header
+ * `00000000001`, then THIRTEEN groups of nine whose ninth bit is always 1. 11 + 13x9 = 128
+ * exactly. Verified against the bench clone `00339a080402079f8040797788040201` before it
+ * compiled: header matches and all 13 control bits are set. */
+#define FDXB_BIPHASE_FRAME_BITS       128
+#define FDXB_BIPHASE_PREAMBLE_BITS    11
+#define FDXB_BIPHASE_BIT_SAMPLES      32
+#define FDXB_BIPHASE_CONTROL_GROUPS   13
+
+/* ⛔ MEASURED BY TRUNCATION, and for once the shipped value is SHORTER than the buffer on
+ * purpose. Four captures, truncated:
+ *
+ *     4608 .. 8448    2 of 4
+ *     8704 .. 12288   4 of 4
+ *     14336           3 of 4      <- the FULL buffer is WORSE
+ *
+ * ⭐ A 128-bit frame at RF/32 is 4096 samples, so the threshold is 2.1 frames. ⚠ The full
+ * buffer losing one is not noise: at 14336 one capture decodes a frame whose TAIL is wrong and
+ * which passes the CRC anyway (see below). ⇒ 10240 sits in the middle of the 4-of-4 plateau,
+ * which is where a constant belongs when the extremes both fail.
+ *
+ * ⛔⛔ THE CRC COVERS THE FIRST 8 BYTES ONLY — THE LAST 40 BITS ARE UNPROTECTED, and this
+ * bench has already seen that matter: `...88042a01` against the tag's `...88040201`, one
+ * capture in four, gate satisfied. The Proxmark's own source remarks on it ("crc doesn't
+ * protect the extended data"). That is the protocol's shape and not fixable here — but a
+ * reader must not be described as CRC-gated without it. */
+#define FDXB_BIPHASE_CAPTURE_SAMPLES  10240
+_Static_assert(FDXB_BIPHASE_CAPTURE_SAMPLES <= LF_SAMPLED_MAX_CAPTURE_SAMPLES,
+               "FDX-B's capture must fit the shared sample buffer");
+
 extern const uint8_t LF_BIPHASE_PREAMBLE_GPROXII[GPROXII_BIPHASE_PREAMBLE_BITS];
+extern const uint8_t LF_BIPHASE_PREAMBLE_FDXB[FDXB_BIPHASE_PREAMBLE_BITS];
 
 /** A biphase format, mirroring `lf_ask_format_t` so the families read alike. */
 typedef struct {
@@ -129,6 +174,7 @@ typedef struct {
 } lf_biphase_format_t;
 
 extern const lf_biphase_format_t LF_BIPHASE_FORMAT_GPROXII;
+extern const lf_biphase_format_t LF_BIPHASE_FORMAT_FDXB;
 
 /**
  * Demodulate one ASK/biphase frame from a carrier-locked capture.
@@ -144,3 +190,6 @@ bool lf_ask_biphase_decode_fmt(const int16_t *samples, size_t n,
 
 /** GProxII's decode, in the shape the shared capture engine wants. */
 bool gproxii_biphase_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
+
+/** FDX-B's decode — the same decoder, a different format entry. */
+bool fdxb_biphase_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
