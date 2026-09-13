@@ -76,11 +76,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   ⭐⭐ **AWID READS ON DEVICE — 5/5, null 0/3, 4/4 on a changed payload (C196).** The FSK
   family is open and was the CHEAPEST of the three attempted, not the most expensive.
   ⭐⭐ **THREE FSK PROTOCOLS READ ON DEVICE** — AWID, Paradox, Pyramid (C196, C198).
-  ⭐ **FDX-A decodes too (C199)** — all four FSK protocols read on the host. Its device arm is
-  built; **hardware verification is pending only because the flash keeps landing on Chameleon
-  #2**. ⛔ That is the documented trap: the flash script runs its OWN DFU trigger regardless of
-  yours, and it picks whichever port the OS lists first. ⇒ Re-run until `3054 in caps` on #1.
-  **Then: the FSK writers when the tag returns.**
+  ⛔⛔ **FDX-A's hardware arm is BLOCKED: Chameleon #1 is wedged and needs a power cycle**
+  (see §5). It was NOT a flash-targeting problem — the device answers nothing, so every DFU
+  trigger was a no-op and only the script's untargeted one ever worked. ⇒ When #1 is back:
+  trigger DFU on its `/dev/cu.` port, confirm `nrfutil device list` shows exactly one
+  nordicDfu, then run `nrfutil device program --firmware objects/ultra-dfu-app.zip --traits
+  nordicDfu` DIRECTLY — never the script, whose own trigger picks the wrong unit.
+  **Then: FDX-A on hardware, and the FSK writers when the tag returns.**
   ⚠ **After a flash, wait ~15s before querying capabilities** — three "failed" flashes on
   2026-09-13 were the check racing re-enumeration at 6s while the script reported success
   each time (L162). Read the flash script's OUTPUT rather than discarding it.
@@ -302,6 +304,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | | why |
 |---|---|
+| ⛔⛔ **Chameleon #1 is WEDGED — power cycle it** | `hw mode` times out (CMD 1035) and DFU triggers do nothing, because the device is not listening at all. Four flashes landed on #2 as a result. C96's precedent says only a USB unplug clears this. ⇒ **Rig A is unavailable until then** — no Flipper-emulates-to-our-reader, so FDX-A's hardware arm and any new read arm are blocked |
 | Coupling intermittent (C159, C163) | ⚠ **A watch, not a blocker.** Two episodes, two different signatures, both cleared without diagnosis. If it recurs: check enumeration, take the fc/2 pair, **record it** rather than working around it |
 | A free-running source in front of a Chameleon reader | Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked (C87) |
 | Lift the T5577 out of the sandwich | Would make the clock conclusion causal (C139). Not urgent, not blocking |
