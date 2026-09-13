@@ -54,10 +54,12 @@ restoring it (C242). A biphase 0 IS a held level, so half the frame is silence.
 field mid-capture, and `cf745fb`'s guard fixes it: 96/96 with the guard, 71/80 without it on one
 tag in one session. ⛔ **The finding that outlives it is that an unguarded read returned FIVE WRONG
 CREDENTIALS as successes — past a parity check that was working.** `unpack_h10301()` checks both
-bits and the reader does reach it; my first write-up said otherwise and was wrong. ⇒ **Next unit:
-re-run the guard-OFF arm capturing the WHOLE read, not just fc/cn, to separate the two ways a
-corrupted frame can pass — two flips inside one parity group, or `unpack()` relabelling it as a
-different 26-bit format, which it is free to do because `lf hid prox read` passes `format_hint = 0`.**
+bits and the reader does reach it; my first write-up said otherwise and was wrong. ⭐⭐ **SEPARATED (C251): it is mostly the relabelling.** Six of seven wrong reads came back as
+`Indala 26-bit` hugging this tag's own ind26 reading; `-f H10301` cuts it 7/48 → 1/48. Both halves
+are on `main`, so it is UPSTREAM'S defect to report, not ours to patch quietly. ⇒ **Next unit: say so
+in §9's upstreaming notes, then back to the queue.** ⛔ Do not "fix" `unpack()` on this branch — the
+format walk is load-bearing for every reader that guesses a format, and changing it is a decision
+for upstream, not a side effect of an LF research branch.
 
 ⛔ **AWID: STILL OPEN.** Every one of its entries is a 50% square, so C242 does not touch it.
 Eight explanations are dead by measurement: counter_top magnitude, entries per bit, AC
@@ -161,7 +163,8 @@ the two Chameleons face each other.
   ⛔ **The fix was NOT the low-pass sweep I predicted** — it was the slicing reference: a
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
-- ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
+- ⭐ **Chameleon #2 carries `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
+  reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
@@ -347,6 +350,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 07:30 | **C251 — the wrong credentials are Indala** | 10 → 10 | `235dfa3` (probe #2) then `a049bc6` (restore). Guard OFF: hint 0 → 7 wrong of 48, six of them relabelled `Indala 26-bit`; `-f H10301` → 1 wrong of 48. The four H10301-labelled wrongs are two flips inside one parity group | A/B/A, closing arm 48/48 on the restored build; each arm confirmed on the device by `hw version`'s git hash |
 | 2026-09-14 06:10 | **C47's paired test — C45 EXPLAINED** | 10 → 10 | `d37b450` (probe, guard 0) then `ee59b45` (restore, guard 1). Guard ON 96/96 exact, guard OFF 71/80 with **5 wrong credentials**, p = 6.4e-4 (C250). C45's headline corrected: the fault is the capture, not the decoder | A/B/A across three flashed builds, each confirmed on the device by `hw version`'s git hash before any read |
 | 2026-09-14 04:40 | **C45 on the current build** | 10 → 10 | Nothing in firmware — a measurement. A/B/A on the rig-B T5577: legacy HID 32/32 exact, shared-engine AWID 32/32 exact, legacy HID 16/16 after rewriting the credential (C248). ⚠ C249: chained `pm3 -c` reported a pre-wipe credential from a tag that had just been wiped | 80 credential-scored reads + 24 null reads, four blank columns all silent; the closing HID arm rules out drift |
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
