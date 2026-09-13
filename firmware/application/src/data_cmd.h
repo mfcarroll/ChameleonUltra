@@ -216,6 +216,9 @@
 #define DATA_CMD_SECURAKEY_GET_EMU_ID           (5025)
 #define DATA_CMD_NORALSY_SET_EMU_ID             (5026)
 #define DATA_CMD_NORALSY_GET_EMU_ID             (5027)
+/* ⭐ The first FSK2a protocol to EMULATE — the PSK1 and ASK families are both above. */
+#define DATA_CMD_AWID_SET_EMU_ID                (5028)
+#define DATA_CMD_AWID_GET_EMU_ID                (5029)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

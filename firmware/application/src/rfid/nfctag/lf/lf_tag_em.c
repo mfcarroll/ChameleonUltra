@@ -17,6 +17,7 @@
 #include "protocols/keri.h"
 #include "protocols/nexwatch.h"
 #include "protocols/gallagher.h"
+#include "protocols/awid.h"
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
 #include "protocols/pac.h"
@@ -449,6 +450,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_GALLAGHER_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_AWID && buffer->length >= LF_AWID_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = awid.alloc();
+        m_pwm_seq = awid.modulator(codec, buffer->buffer);
+        awid.free(codec);
+        NRF_LOG_INFO("load lf awid data finish.");
+        return LF_AWID_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_SECURAKEY && buffer->length >= LF_SECURAKEY_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = securakey.alloc();
@@ -772,6 +782,28 @@ bool lf_tag_gallagher_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x7F, 0xEA, 0xA3, 0x1E,
         0x76, 0xD8, 0x6C, 0x6D,
         0x86, 0x8C, 0xC2, 0x49,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief AWID data save callback. */
+int lf_tag_awid_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_AWID ? LF_AWID_TAG_ID_SIZE : 0;
+}
+
+/** @brief AWID default: FC 34 / card 5678 — the exact bytes a Proxmark
+ * `lf awid clone --fmt 26 --fc 34 --cn 5678` leaves in T5577 blocks 1-3, and the frame this
+ * bench's own reader read back off that tag 5 times of 5 (C201, C203).
+ *
+ * ⭐ No rotation: the block form IS the air frame, measured per protocol rather than
+ * inherited (C202). ⚠ The frame is zero-heavy, which is also the worst case for the emitter's
+ * entry count — six PWM entries per 0 against five per 1 — so a default that emits correctly
+ * exercises the widest sequence this protocol can produce. */
+bool lf_tag_awid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_AWID_TAG_ID_SIZE] = {
+        0x01, 0x1D, 0xB2, 0x18,
+        0x27, 0x1B, 0xD8, 0x11,
+        0x11, 0x11, 0x11, 0x11,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }

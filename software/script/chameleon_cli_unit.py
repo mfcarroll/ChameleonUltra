@@ -7611,6 +7611,43 @@ class _LFFskWrite(ReaderRequiredUnit):
                   f"back {after}.")
 
 
+@lf_awid.command("econfig")
+class LFAwidEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the AWID frame emulated on a slot. Provide --raw to "
+                              "set; omit it to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>",
+                            help="the 96-bit frame, e.g. 011db218271bd81111111111")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            frame = bytes.fromhex(hexs)
+            if lf_tag_type != TagSpecificType.AWID:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not AWID. "
+                      f"Set it with: hw slot type -s <n> -t AWID")
+            # ⭐ NO ROTATION: AWID's frame begins at a T5577 block boundary, measured off a
+            # real clone's dump rather than assumed from a neighbour (C202). ⛔ Keri's does not,
+            # and sending its frame view instead of its block form gave a wrong credential 6/6.
+            self.cmd.awid_set_emu_id(frame)
+            print(f" - AWID emu set to {color_string((CY, hexs))}")
+        else:
+            if lf_tag_type != TagSpecificType.AWID:
+                print(f"{color_string((CR, 'Slot LF type is not AWID'))}")
+                return
+            print(f" - AWID emu: {color_string((CY, self.cmd.awid_get_emu_id().hex()))}")
+
+
 @lf_awid.command("write")
 class LFAwidWrite(_LFFskWrite):
     PROTOCOL = "AWID"

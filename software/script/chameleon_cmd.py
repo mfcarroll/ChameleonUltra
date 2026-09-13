@@ -1167,6 +1167,29 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def awid_set_emu_id(self, id: bytes):
+        """Set the 96-bit AWID frame emulated on the active slot.
+
+        ⚠ FSK2a, so the emitter spends one PWM entry per TONE PERIOD rather than per bit —
+        six for a 0 and five for a 1 — and the sequence length therefore depends on the data
+        (C216). Nothing here needs to know that, but a frame length that changes with content
+        is worth knowing about when reading the firmware.
+
+        :param id: 12 bytes, MSB first on air, preamble included.
+        """
+        if len(id) != 12:
+            raise ValueError("The id bytes length must equal 12")
+        return self.device.send_cmd_sync(Command.AWID_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def awid_get_emu_id(self):
+        """Get the emulated AWID 96-bit frame."""
+        resp = self.device.send_cmd_sync(Command.AWID_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def gallagher_set_emu_id(self, id: bytes):
         """Set the 96-bit Gallagher frame emulated on the active slot.
 

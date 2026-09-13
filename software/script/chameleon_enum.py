@@ -186,6 +186,8 @@ class Command(enum.IntEnum):
     NEXWATCH_GET_EMU_ID = 5021
     GALLAGHER_SET_EMU_ID = 5022
     GALLAGHER_GET_EMU_ID = 5023
+    AWID_SET_EMU_ID = 5028
+    AWID_GET_EMU_ID = 5029
     SECURAKEY_SET_EMU_ID = 5024
     SECURAKEY_GET_EMU_ID = 5025
     NORALSY_SET_EMU_ID = 5026
@@ -392,6 +394,8 @@ class TagSpecificType(enum.IntEnum):
     Gallagher = 304
     Securakey = 305
     Noralsy = 306
+    # ⭐ The first FSK2a protocol to emulate — the block above it is PSK1 and ASK.
+    AWID = 307
     IDTECK = 310
 
     # Reader-Talk-First       400
@@ -494,6 +498,8 @@ class TagSpecificType(enum.IntEnum):
             return "Securakey"
         elif self == TagSpecificType.Noralsy:
             return "Noralsy"
+        elif self == TagSpecificType.AWID:
+            return "AWID"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:
