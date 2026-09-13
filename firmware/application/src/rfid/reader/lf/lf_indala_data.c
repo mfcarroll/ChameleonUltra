@@ -320,7 +320,7 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
              * `capture_begin`/`capture_end`, and the duty written into the PWM sequence does
              * not survive that cycle reliably.
              * ⚠ `drive` 0 means "leave it alone", which is what every existing reader passes —
-             * they sweep drive themselves in `lf_ask_read` or take the stock field. */
+             * they sweep drive themselves in `lf_drive_swept_read` or take the stock field. */
             if (drive != 0) {
                 lf_125khz_radio_drive_set(drive);
             }
@@ -647,9 +647,16 @@ bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
-/* Forward declaration: the ASK field-strength sweep is defined with the Noralsy reader, where
- * the measurement that forced it is written up. ⚠ All three ASK readers go through it. */
-static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
+/* Forward declaration: the field-strength sweep is defined with the Noralsy reader, where the
+ * measurement that forced it is written up.
+ *
+ * ⚠ IT IS NOT AN ASK THING, WHICH IS WHY IT IS NO LONGER CALLED ONE. It was named `lf_ask_read`
+ * when three ASK protocols were its only callers; today the four FSK2a readers go through it
+ * too, and a reviewer reading `lf_fsk2a.c` call `lf_ask_read` would reasonably take it for a
+ * mistake. Same class of rename as C192, and for the same reason: a shared thing named after
+ * the first family to use it is a trap for whoever comes second. ⚠ GProxII does NOT use it —
+ * it needs a fixed drive and its own phase order, not a sweep. */
+static bool lf_drive_swept_read(lf_sampled_decode_fn decode, size_t capture_samples,
                         lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
 
 /* ⭐ GALLAGHER — the first protocol of the ASK/biphase family, and it goes through the SAME
@@ -662,7 +669,7 @@ static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
  * the threshold was MEASURED at 10240 and the guess of 6144 decoded 0 of 4 (C172). */
 bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -679,7 +686,7 @@ bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * `lf_ask_format_t`. The only protocol-specific thing here is the capture length. */
 bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -722,7 +729,7 @@ static const uint8_t LF_ASK_DRIVE_STEPS[] = { 4, 7, 6, 2 };
  * the sample phase and requires two independent captures to agree; this wraps it in the field
  * strength sweep the ASK family needs, and divides the caller's budget between the steps
  * rather than multiplying it — the same discipline `pac_read` uses, and for the same reason. */
-static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
+static bool lf_drive_swept_read(lf_sampled_decode_fn decode, size_t capture_samples,
                         lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
     uint32_t steps = timeout_ms / LF_ASK_DRIVE_MIN_STEP_MS;
     if (steps < 1) {
@@ -757,7 +764,7 @@ static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
  * stream rather than a hundred bits in (C181). */
 bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(noralsy_ask_decode, NORALSY_ASK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(noralsy_ask_decode, NORALSY_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -776,7 +783,7 @@ bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * (C185). ⚠ That is why this one uses the buffer maximum and has no margin to give. */
 bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(instafob_ask_decode, INSTAFOB_ASK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(instafob_ask_decode, INSTAFOB_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -795,7 +802,7 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * assumption that it must reuse that path; it does not (C193). */
 bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(awid_fsk_decode, AWID_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
+    if (!lf_drive_swept_read(awid_fsk_decode, AWID_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
         return false;
     }
     memcpy(&data[0], r.res.id, 12);
@@ -812,7 +819,7 @@ bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * third protocol genuinely cost one descriptor each (C197). */
 bool paradox_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(paradox_fsk_decode, PARADOX_FSK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(paradox_fsk_decode, PARADOX_FSK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -826,7 +833,7 @@ bool paradox_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 
 bool pyramid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(pyramid_fsk_decode, PYRAMID_FSK_CAPTURE_SAMPLES,
+    if (!lf_drive_swept_read(pyramid_fsk_decode, PYRAMID_FSK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
     }
@@ -842,7 +849,7 @@ bool pyramid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * FSK2a on the wire carrying Manchester inside it (C199). */
 bool fdxa_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    if (!lf_ask_read(fdxa_fsk_decode, FDXA_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
+    if (!lf_drive_swept_read(fdxa_fsk_decode, FDXA_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
         return false;
     }
     memcpy(&data[0], r.res.id, 12);
@@ -867,7 +874,7 @@ bool fdxa_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * is only 1.12x headroom above it. */
 bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_sampled_read_t r;
-    /* ⛔⛔ FIXED AT DRIVE 7 — NOT `lf_ask_read`'s SWEEP, AND THE SWEEP IS WHAT THIS FIXES.
+    /* ⛔⛔ FIXED AT DRIVE 7 — NOT `lf_drive_swept_read`'s SWEEP, AND THE SWEEP IS WHAT THIS FIXES.
      *
      * The first device reads of this protocol went through that sweep, which starts at the
      * stock drive 4 and stops at the FIRST success. Drive 4 succeeded — with bit errors that

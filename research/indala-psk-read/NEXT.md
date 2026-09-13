@@ -266,6 +266,7 @@ project exists downstream of (C185).
 
 | | |
 |---|---|
+| ✅ ~~**Naming, round two**~~ **DONE 2026-09-13** | ~~`lf_ask_read` was the field-strength sweep, named when three ASK protocols were its only callers — and the four FSK2a readers go through it too, so a reviewer reading `lf_fsk2a.c` call `lf_ask_read` would take it for a mistake. Renamed `lf_drive_swept_read`, which says what it does rather than who used it first. Same class as C192.~~ |
 | ✅ ~~**Naming**~~ **DONE (C192)** | ~~`lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Renamed 2026-09-13: shared things are `lf_sampled_*` / `lf_decode_*`, genuinely-PSK things keep `psk1`.~~ |
 | ⛔ **Shared-struct sizing** | `LF_PSK1_MAX_FRAME_BITS` is 240, raised from Indala224's 224 because InstaFob's frame is 225 bits and would have overflowed `id[]` and `word_bits[]` by one bit's worth (C186). It costs 16 bytes in a struct there is one of, and it is load-bearing |
 | ⛔ **Command-id allocation** | ⚠ **46 new ids**, not the 32 this row said before it was recounted 2026-09-13 — 3033-3062 and 5016-5029. Needs coordinating with upstream rather than asserted, and the number is now a `grep`, not a memory |
