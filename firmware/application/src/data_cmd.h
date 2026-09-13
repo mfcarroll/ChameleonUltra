@@ -214,6 +214,8 @@
 #define DATA_CMD_GALLAGHER_GET_EMU_ID           (5023)
 #define DATA_CMD_SECURAKEY_SET_EMU_ID           (5024)
 #define DATA_CMD_SECURAKEY_GET_EMU_ID           (5025)
+#define DATA_CMD_NORALSY_SET_EMU_ID             (5026)
+#define DATA_CMD_NORALSY_GET_EMU_ID             (5027)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
@@ -233,5 +235,7 @@
 #define DATA_CMD_GALLAGHER_WRITE_TO_T55XX       (3045)
 #define DATA_CMD_SECURAKEY_SCAN                 (3046)
 #define DATA_CMD_SECURAKEY_WRITE_TO_T55XX       (3047)
+#define DATA_CMD_NORALSY_SCAN                   (3048)
+#define DATA_CMD_NORALSY_WRITE_TO_T55XX         (3049)
 
 #endif

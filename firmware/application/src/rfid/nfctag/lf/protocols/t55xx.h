@@ -169,6 +169,15 @@ extern "C" {
 // a family constant, and the difference from `00088060` is exactly that field.
 #define T5577_SECURAKEY_CONFIG (0x000C8060)
 
+// Noralsy: ASK at RF/32, three data blocks (96-bit frame).
+//
+// ⛔⛔ COPIED VERBATIM FROM A CLONE'S BLOCK DUMP, AND `lf t55xx detect` CANNOT VERIFY IT.
+// The Proxmark writes `00088068` and then reports "Could not detect modulation automatically"
+// on the tag it just created — so unlike every other config in this file, there is no second
+// opinion available from `detect`. ⚠ It differs from Gallagher's `00088060` in one bit, and
+// what that bit does is NOT established here; do not derive it from the named flags.
+#define T5577_NORALSY_CONFIG (0x00088068)
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

@@ -18,6 +18,7 @@
 #include "protocols/nexwatch.h"
 #include "protocols/gallagher.h"
 #include "protocols/securakey.h"
+#include "protocols/noralsy.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
@@ -457,6 +458,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_SECURAKEY_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_NORALSY && buffer->length >= LF_NORALSY_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = noralsy.alloc();
+        m_pwm_seq = noralsy.modulator(codec, buffer->buffer);
+        noralsy.free(codec);
+        NRF_LOG_INFO("load lf noralsy data finish.");
+        return LF_NORALSY_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -714,6 +724,22 @@ bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 /** @brief Keri data save callback. */
 int lf_tag_keri_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     return m_tag_type == TAG_TYPE_KERI ? LF_KERI_TAG_ID_SIZE : 0;
+}
+
+/** @brief Noralsy data save callback. */
+int lf_tag_noralsy_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_NORALSY ? LF_NORALSY_TAG_ID_SIZE : 0;
+}
+
+/** @brief Noralsy default: card 112233 / year 2024, the bytes a Proxmark clone leaves in
+ * blocks 1-3. ⭐ No rotation — block 1 is the frame head (C181). */
+bool lf_tag_noralsy_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_NORALSY_TAG_ID_SIZE] = {
+        0xBB, 0x02, 0x14, 0xFF,
+        0x01, 0x12, 0x40, 0x22,
+        0x33, 0x67, 0x00, 0x00,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 
 /** @brief Securakey data save callback. */

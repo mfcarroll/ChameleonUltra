@@ -480,6 +480,11 @@ bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* Forward declaration: the ASK field-strength sweep is defined with the Noralsy reader, where
+ * the measurement that forced it is written up. ⚠ All three ASK readers go through it. */
+static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
+                        lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
+
 /* ⭐ GALLAGHER — the first protocol of the ASK/biphase family, and it goes through the SAME
  * capture engine as every PSK protocol here. `lf_psk1_read` is modulation-agnostic despite
  * its name: it rotates the sample phase, suspends BLE advertising (C47) and requires two
@@ -490,8 +495,8 @@ bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * the threshold was MEASURED at 10240 and the guess of 6144 decoded 0 of 4 (C172). */
 bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_psk1_read_t r;
-    if (!lf_psk1_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
-                      &r, timeout_ms, energy_out)) {
+    if (!lf_ask_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
         return false;
     }
     memcpy(&data[0], r.res.id, 12);
@@ -507,8 +512,8 @@ bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * `lf_ask_format_t`. The only protocol-specific thing here is the capture length. */
 bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     lf_psk1_read_t r;
-    if (!lf_psk1_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
-                      &r, timeout_ms, energy_out)) {
+    if (!lf_ask_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
         return false;
     }
     memcpy(&data[0], r.res.id, 12);
@@ -517,6 +522,84 @@ bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     data[14] = r.tries;
     data[15] = 0;
     NRF_LOG_INFO("securakey phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
+    return true;
+}
+
+/* ⛔⛔ THE ASK READS SWEEP DRIVE, AND THIS REINSTATES A RULE I WITHDREW ONE PROTOCOL TOO EARLY.
+ *
+ * C169 found our reader saturating on a Gallagher tag at every drive but 7, and inferred that
+ * every ASK reader must sweep drive as `pac_read()` does. C171 then measured Gallagher
+ * decoding 4 of 4 from the CLIPPED captures as well as the clean ones, so the rule was
+ * withdrawn: Manchester is a transition code, clipping keeps the sign and destroys only the
+ * magnitude.
+ *
+ * ⛔ NORALSY REFUTES THE WITHDRAWAL. Measured on the bench tag, the shipping decoder against
+ * one capture per setting: **stock, 1, 2, 4 and 6 all decode 0; drive 7 decodes.** The device
+ * read returned `LF tag not found` 6 times while the host read the same tag 4 of 4 from
+ * captures that had been taken at `--drive 7` — the reader was simply never given the field
+ * strength the evidence was collected at.
+ *
+ * ⇒ The honest rule is neither of the two I wrote. Clipping does not stop Manchester in
+ * PRINCIPLE (C171 stands), and it demonstrably stops it for SOME protocols in practice. Both
+ * of my earlier claims generalised from a single protocol — PAC to the family, then Gallagher
+ * to the family — and the family disagrees with both. Sweep, and let the tag decide.
+ *
+ * ⚠ Step order matters for latency, not correctness: 4 is the stock value and is what
+ * Gallagher and Securakey read at, so it goes first and those protocols pay nothing. */
+static const uint8_t LF_ASK_DRIVE_STEPS[] = { 4, 7, 6, 2 };
+#define LF_ASK_DRIVE_STEP_COUNT (sizeof(LF_ASK_DRIVE_STEPS) / sizeof(LF_ASK_DRIVE_STEPS[0]))
+/* A 96-bit frame at RF/32 is 24.6ms and the capture engine wants several tries per step. */
+#define LF_ASK_DRIVE_MIN_STEP_MS (250)
+
+/* ⭐ One capture engine, one acceptance rule, one extra loop. `lf_psk1_read` already rotates
+ * the sample phase and requires two independent captures to agree; this wraps it in the field
+ * strength sweep the ASK family needs, and divides the caller's budget between the steps
+ * rather than multiplying it — the same discipline `pac_read` uses, and for the same reason. */
+static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
+                        lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+    uint32_t steps = timeout_ms / LF_ASK_DRIVE_MIN_STEP_MS;
+    if (steps < 1) {
+        steps = 1;
+    } else if (steps > LF_ASK_DRIVE_STEP_COUNT) {
+        steps = LF_ASK_DRIVE_STEP_COUNT;
+    }
+    uint32_t step_ms = timeout_ms / steps;
+
+    bool ok = false;
+    int32_t loudest = 0;
+    for (uint32_t i = 0; i < steps && !ok; i++) {
+        lf_125khz_radio_drive_set(LF_ASK_DRIVE_STEPS[i]);
+        int32_t e = 0;
+        ok = lf_psk1_read(decode, capture_samples, out, step_ms, &e);
+        if (e > loudest) {
+            loudest = e;
+        }
+    }
+    /* ⚠ RESTORE THE STOCK DRIVE. A reader that leaves the field weakened breaks whatever runs
+     * next, which is invisible in the thing being measured — exactly the bug found in
+     * `cmd_processor_lf_sniff` (C148/L122). */
+    lf_125khz_radio_drive_set(4);
+    if (energy_out != NULL) {
+        *energy_out = loudest;
+    }
+    return ok;
+}
+
+/* ⭐ NORALSY — the third ASK protocol, and the cheapest read in the family: 6144 samples
+ * against Gallagher's and Securakey's 14336, because its frame sits near the start of the
+ * stream rather than a hundred bits in (C181). */
+bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_ask_read(noralsy_ask_decode, NORALSY_ASK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    data[12] = r.phase;
+    data[13] = r.res.offset;
+    data[14] = r.tries;
+    data[15] = 0;
+    NRF_LOG_INFO("noralsy phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
     return true;
 }
 

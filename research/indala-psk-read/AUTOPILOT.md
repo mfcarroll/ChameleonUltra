@@ -40,8 +40,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** nothing. **Securakey is COMPLETE** — read 6/6, write 3/3, emulate 10/10
-  (C176, C178). **Noralsy is next, then InstaFob.**
+- **In flight:** **Noralsy READS 6/6 on device (C181); its write and emulate are built but
+  NOT yet verified.** Finish those, then InstaFob.
+- ⛔⛔ **The ASK readers now SWEEP DRIVE (C182)** — Noralsy decodes at drive 7 and at no other
+  setting, including stock. Every ASK capture in this campaign was taken at `--drive 7`, so
+  a host decode does NOT predict a device read unless the reader sweeps too.
 - ⛔⛔ **C177 was RETRACTED: `flipper.py`'s success matcher could not express a protocol name
   containing a space, so a working emulation reported 0 of 6.** Momentum calls Securakey
   "Radio Key". ⇒ When a NEW protocol's emulation reads zero, check what Momentum NAMES it
@@ -214,6 +217,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 08:05 | U6 — DONE | 41 → 43 | C177 retracted; `flipper.py` matcher widened for multi-word names | emulate 10/10, null 0/4, return leg tracked a changed credential |
 | 2026-09-13 08:30 | C179 follow-up | 42 → 44 | `framedrift.py`; C180 | Gallagher real-tag frame period 3072 ± 1 over 12 intervals; Securakey withheld — tool disagrees with shipping decoder |
 | 2026-09-13 08:55 | C180 completed | 42 → 43 | `framedrift.py` DC estimator now mirrors the firmware | Securakey 8 intervals all exactly 3840; 20 periods total, no terminator gap on either protocol |
+| 2026-09-13 09:45 | Noralsy (read) | 0 → 8 | Noralsy decoder + device arm; ASK drive sweep; BCD field fix | read 0/6 → 6/6 with the sweep; card 112233 year 2024 matching pm3 |
 
 ---
 

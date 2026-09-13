@@ -1000,6 +1000,7 @@ lf_keri = lf.subgroup("keri", "Keri commands")
 lf_nexwatch = lf.subgroup("nexwatch", "NexWatch commands")
 lf_gallagher = lf.subgroup("gallagher", "Gallagher commands")
 lf_securakey = lf.subgroup("securakey", "Securakey commands")
+lf_noralsy = lf.subgroup("noralsy", "Noralsy commands")
 
 
 @root.command("clear")
@@ -7316,6 +7317,143 @@ class LFSecurakeyEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
             return
         response = self.cmd.securakey_get_emu_id()
         print(f" - Securakey emu frame: {response.hex().upper()}")
+
+
+def _noralsy_fields(frame: bytes):
+    """(card, year, checks_ok) out of a 96-bit Noralsy frame.
+
+    ⛔ Both checksums are verified here and asserted below against a real clone — the same
+    discipline that caught Gallagher's CRC parameters being wrong from memory."""
+    bits = [(frame[i // 8] >> (7 - i % 8)) & 1 for i in range(96)]
+
+    def gb(at, n):
+        v = 0
+        for k in range(n):
+            v = (v << 1) | bits[at + k]
+        return v
+
+    def nib_xor(start, length):
+        s = 0
+        for i in range(0, length, 4):
+            s ^= gb(start + i, 4)
+        return s & 0xF
+
+    ok = (gb(0, 12) == 0b101110110000 and
+          nib_xor(32, 40) == gb(72, 4) and
+          nib_xor(0, 76) == gb(76, 4))
+    # ⛔ THE FIELDS ARE BCD, AND MY FIRST VERSION IGNORED THAT — it printed card 1315392 /
+    # year 255 for a tag the Proxmark reads as 112233 / 2024. Scattered nibbles reassembled
+    # from two 32-bit words, then BCD-to-decimal, exactly as cmdlfnoralsy.c does it.
+    raw2, raw3 = gb(32, 32), gb(64, 32)
+    packed = (((raw2 & 0xFFF00000) >> 20) << 16) | ((raw2 & 0xFF) << 8) | ((raw3 >> 24) & 0xFF)
+    card = int(f"{packed:X}")            # BCD2DEC: each nibble is a decimal digit
+    yy = int(f"{(raw2 & 0x000FF000) >> 12:X}")
+    year = yy + (1900 if yy > 60 else 2000)
+    return card, year, ok
+
+
+# ⛔⛔ ASSERT WHAT YOU REPORT, NOT ONLY WHAT YOU GATE ON. The first version of this assertion
+# checked `[2]` — the checksums — and passed while the card number and year it PRINTS were
+# both wrong (1315392 / 255 against the Proxmark's 112233 / 2024), because the fields are BCD
+# and the extraction was not. A check that covers the safe half of a function certifies
+# nothing about the half the user reads.
+assert _noralsy_fields(bytes.fromhex("bb0214ff0112402233670000")) == (112233, 2024, True), \
+    "Noralsy field extraction disagrees with the reference clone"
+
+
+@lf_noralsy.command("read")
+class LFNoralsyRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a Noralsy credential (ASK/Manchester, RF/32). The "
+                              "fastest LF read here — 6144 samples against Gallagher's 14336.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, offset, tries = self.cmd.noralsy_scan()
+        card, year, ok = _noralsy_fields(raw)
+        print("Noralsy ASK/Manchester")
+        print(f"   Raw: {color_string((CY, raw.hex()))}")
+        print(f"   Card: {color_string((CY, card))}  Year: {color_string((CG, year))}")
+        if not ok:
+            print(f"   {color_string((CR, 'CHECKSUM MISMATCH'))} — the firmware accepted a "
+                  f"frame the host rejects; that is a disagreement between them, not a bad tag.")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_noralsy.command("write")
+class LFNoralsyWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Write a Noralsy credential to a T5577 (ASK, RF/32, 00088068)."
+        parser.add_argument("--raw", type=str, required=True, metavar="<24 hex>")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        hexs = args.raw.strip().lower().removeprefix("0x")
+        if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+            print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+            return
+        frame = bytes.fromhex(hexs)
+        if not _noralsy_fields(frame)[2]:
+            print(f"   {color_string((CY, 'WARNING'))}: this frame fails its own checksums, "
+                  f"so no Noralsy reader will accept it.")
+        before = self._try_read()
+        print(f"   before: {color_string((CY, before or 'nothing readable'))}")
+        self.cmd.noralsy_write_to_t55xx(frame)
+        after = self._try_read()
+        if after == hexs:
+            card, year, _ = _noralsy_fields(frame)
+            print(f"{color_string((CG, 'VERIFIED'))} card {card} year {year} — read back off the tag.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED or tag not coupled'))} — before {before}, nothing after.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — still reads {after}.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {hexs}, read {after}.")
+
+    def _try_read(self):
+        try:
+            return self.cmd.noralsy_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_noralsy.command("econfig")
+class LFNoralsyEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Get or set the Noralsy frame emulated on a slot."
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            if lf_tag_type != TagSpecificType.Noralsy:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Noralsy. "
+                      f"Set it with: hw slot type -s <n> -t Noralsy")
+            self.cmd.noralsy_set_emu_id(bytes.fromhex(hexs))
+            card, year, _ = _noralsy_fields(bytes.fromhex(hexs))
+            print(f" - Noralsy emu set to card {card} year {year}.")
+            return
+        if lf_tag_type != TagSpecificType.Noralsy:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}{color_string((CR, ', not Noralsy.'))}")
+            return
+        response = self.cmd.noralsy_get_emu_id()
+        card, year, ok = _noralsy_fields(response)
+        print(f" - Noralsy emu frame: {response.hex().upper()}")
+        print(f"   Card: {card}  Year: {year}" + ("" if ok else
+              f"  {color_string((CR, '(checksums fail)'))}"))
 
 
 @lf_idteck.command("read")

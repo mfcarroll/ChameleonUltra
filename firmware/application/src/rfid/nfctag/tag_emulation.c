@@ -110,6 +110,7 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_LF, TAG_TYPE_NEXWATCH,    lf_tag_data_loadcb,           lf_tag_nexwatch_data_savecb,  lf_tag_nexwatch_data_factory,  &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_GALLAGHER,   lf_tag_data_loadcb,           lf_tag_gallagher_data_savecb, lf_tag_gallagher_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_SECURAKEY,   lf_tag_data_loadcb,           lf_tag_securakey_data_savecb, lf_tag_securakey_data_factory, &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_NORALSY,     lf_tag_data_loadcb,           lf_tag_noralsy_data_savecb,   lf_tag_noralsy_data_factory,   &m_tag_data_lf},
     // MF1 tag emulation
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_Mini, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_1024, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},

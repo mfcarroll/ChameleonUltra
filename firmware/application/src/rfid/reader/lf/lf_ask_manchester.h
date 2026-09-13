@@ -64,6 +64,23 @@
  * `can_be_decoded` tests nothing but those 19 bits. So this format's entire gate is 19 bits,
  * 10 of which are a run, where Gallagher has 16 bits plus a CRC-8. ⇒ Its cross-protocol null
  * is not a formality here, it is the only evidence that the gate holds. */
+/* Noralsy: 96-bit frame at RF/32, config `00088068`.
+ *
+ * ⚠ ONE BIT OF CONFIG FROM GALLAGHER'S `00088060`, AND `lf t55xx detect` CANNOT IDENTIFY IT
+ * — the Proxmark reports "Could not detect modulation automatically" on a tag its own clone
+ * command just wrote. ⇒ Do NOT use `detect` as the oracle for this protocol; the clone's
+ * block dump is the authority, and it is what T5577_NORALSY_CONFIG is copied from.
+ *
+ * ⭐ ITS GATE IS THE STRONGEST IN THE ASK FAMILY: a 12-bit preamble plus TWO computed 4-bit
+ * checksums, where Gallagher has 16 bits + CRC-8 and Securakey has 19 bits and nothing.
+ * ⚠ Momentum checks only 12 preamble bits and says why in a comment: the frame's next 20 look
+ * constant on every specimen but are not confirmed to be. Copied verbatim rather than
+ * "improved" to 32 — widening a gate on an unconfirmed constant is how a format starts
+ * rejecting legitimate tags nobody has seen yet. */
+#define NORALSY_ASK_FRAME_BITS      96
+#define NORALSY_ASK_PREAMBLE_BITS   12
+#define NORALSY_ASK_BIT_SAMPLES     32
+
 #define SECURAKEY_ASK_FRAME_BITS    96
 #define SECURAKEY_ASK_PREAMBLE_BITS 19
 #define SECURAKEY_ASK_BIT_SAMPLES   40
@@ -95,8 +112,24 @@
  * growing LF_PSK1_MAX_CAPTURE_SAMPLES. Worth knowing before the next RF/40 protocol. */
 #define SECURAKEY_ASK_CAPTURE_SAMPLES 14336
 
+/* ⛔ MEASURED by truncation like the rest, and this one is the CHEAPEST in the family:
+ *
+ *     3456 samples  0 of 4
+ *     3584 samples  4 of 4      <- 112 bits: the 96-bit frame plus 16 of slack
+ *     3712 .. 14336 4 of 4
+ *
+ * ⭐ Against Gallagher's 10240 at the SAME bit rate and the SAME frame length. The difference
+ * is where the frame sits: Noralsy's decodes at bit 12 of the stream where Gallagher's sits
+ * at 104, so far less of the buffer is spent reaching the first whole frame. ⚠ Inferred from
+ * the reported bit positions, not demonstrated — the same caveat C165 carries.
+ *
+ * 6144 is two whole frames and 1.7x the measured threshold, at 49ms on the wire against the
+ * 114ms Gallagher and Securakey need. */
+#define NORALSY_ASK_CAPTURE_SAMPLES 6144
+
 extern const uint8_t LF_ASK_PREAMBLE_GALLAGHER[GALLAGHER_ASK_PREAMBLE_BITS];
 extern const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS];
+extern const uint8_t LF_ASK_PREAMBLE_NORALSY[NORALSY_ASK_PREAMBLE_BITS];
 
 /** An ASK format, mirroring `lf_psk1_format_t` so the two families read alike. */
 typedef struct {
@@ -113,6 +146,7 @@ typedef struct {
 
 extern const lf_ask_format_t LF_ASK_FORMAT_GALLAGHER;
 extern const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY;
+extern const lf_ask_format_t LF_ASK_FORMAT_NORALSY;
 
 /**
  * Demodulate one ASK/Manchester frame from a carrier-locked capture.
@@ -131,3 +165,6 @@ bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** Securakey's decode. ⚠ Its gate is the 19-bit preamble alone — see the note above. */
 bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** Noralsy's decode — 12-bit preamble plus TWO computed nibble checksums. */
+bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);

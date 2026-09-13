@@ -77,6 +77,50 @@ const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS] = {
  * the 19 preamble bits and nothing else. ⇒ Whether that is sufficient is a MEASUREMENT, and
  * the cross-protocol null is the one that makes it. Do not quote this format's reliability
  * from Gallagher's. */
+/* Noralsy: the first 12 bits of `0xBB0`. */
+const uint8_t LF_ASK_PREAMBLE_NORALSY[NORALSY_ASK_PREAMBLE_BITS] = {
+    1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0
+};
+
+/* ⭐ NORALSY'S TWO CHECKSUMS, and they are the reason a 12-bit preamble is enough here where
+ * 19 bits are thin for Securakey. Each is the XOR of 4-bit nibbles over a span; both are
+ * verified against the bench credential `BB0214FF0112402233670000` before this shipped —
+ * calc1 = 6 against chk1 = 6, calc2 = 7 against chk2 = 7.
+ *
+ * ⚠ THE SPANS OVERLAP THE CHECKS THEMSELVES, which looks wrong and is not: calc2 covers bits
+ * 0..75, and chk1 lives at 72..75 inside that range. Transcribed from the reference exactly
+ * rather than "corrected" to a tidier span — the verification above is what says the
+ * transcription is right, and a tidier span would fail it. */
+static uint8_t noralsy_nibble_xor(const uint8_t *word_bits, uint16_t start, uint16_t len) {
+    uint8_t sum = 0;
+    for (uint16_t i = 0; i < len; i += 4) {
+        uint8_t v = 0;
+        for (uint8_t k = 0; k < 4; k++) {
+            v = (uint8_t)(((unsigned)v << 1) | (word_bits[start + i + k] & 1u));
+        }
+        sum ^= v;
+    }
+    return (uint8_t)(sum & 0x0Fu);
+}
+
+static bool noralsy_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < NORALSY_ASK_FRAME_BITS) {
+        return false;
+    }
+    uint8_t chk1 = noralsy_nibble_xor(word_bits, 72, 4);
+    uint8_t chk2 = noralsy_nibble_xor(word_bits, 76, 4);
+    return noralsy_nibble_xor(word_bits, 32, 40) == chk1 &&
+           noralsy_nibble_xor(word_bits, 0, 76) == chk2;
+}
+
+const lf_ask_format_t LF_ASK_FORMAT_NORALSY = {
+    .preamble = LF_ASK_PREAMBLE_NORALSY,
+    .preamble_bits = NORALSY_ASK_PREAMBLE_BITS,
+    .frame_bits = NORALSY_ASK_FRAME_BITS,
+    .bit_samples = NORALSY_ASK_BIT_SAMPLES,
+    .accept = noralsy_accept,
+};
+
 const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY = {
     .preamble = LF_ASK_PREAMBLE_SECURAKEY,
     .preamble_bits = SECURAKEY_ASK_PREAMBLE_BITS,
@@ -236,4 +280,8 @@ bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) 
 
 bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_SECURAKEY, out);
+}
+
+bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_NORALSY, out);
 }

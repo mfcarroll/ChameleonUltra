@@ -23,6 +23,8 @@ uint8_t write_keri_to_t55xx(uint8_t *frame8, uint8_t *new_passwd, uint8_t *old_p
 uint8_t scan_nexwatch(uint8_t *data);
 uint8_t scan_gallagher(uint8_t *data);
 uint8_t scan_securakey(uint8_t *data);
+uint8_t scan_noralsy(uint8_t *data);
+uint8_t write_noralsy_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_securakey_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_gallagher_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_nexwatch_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);

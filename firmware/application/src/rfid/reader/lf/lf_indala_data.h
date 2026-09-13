@@ -104,6 +104,10 @@ bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 #define SECURAKEY_READ_DATA_SIZE 16
 bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by noralsy_read(): the 12-byte frame, then phase, offset, tries, pad. */
+#define NORALSY_READ_DATA_SIZE 16
+bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */
