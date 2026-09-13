@@ -62,9 +62,8 @@ in the field, GProxII returned a frame that passes EVERY check both references m
 four. A stronger gate narrows the window; it does not close it.
 
 ⇒ **Candidates next, all no-hands unless marked:**
-- ⭐ **Indala26 bits 60 and 61 must be zero** — the reference checks it, we do not, it is pure
-  frame content and safe to add. Cheapest remaining item and it needs a device arm to confirm
-  the real tag still reads.
+- ✅ **DONE (C257)** — Indala26's two zero bits. ⚠ It made us STRICTER THAN THE PROXMARK, which
+  reads the rejected frame perfectly; the disagreement is recorded rather than smoothed over.
 - ⚠ **The REPEAT requirements (Indala26 at offset 64, Keri's same-id-in-both-frames) are NOT
   safe to add blind.** Whether our capture window holds two frames is per-protocol and measured
   (C161). Measure first: truncate a good capture and find the threshold.
@@ -195,7 +194,7 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds SECURAKEY `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
+  now holds INDALA `A0000000E6BD0E92`; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
@@ -383,6 +382,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 11:40 | **C257 — Indala26's two zero bits** | 11 → 11 | `9bd111d` flashed to #2. Corpus 68→64 frames, 51 true kept, 4 wrong dropped; `compare.py` mirrored because the harness caught the one-sided gate | Hardware A/B/A: valid 8/8, bit 61 set 0/4 **while the Proxmark reads that tag perfectly**, restored 6/6 |
 | 2026-09-14 10:45 | **C255/C256 — gate audit, GProxII closed** | 8 → 11 | `3f46af2` flashed to #2. GProxII gains the reference's Wiegand parity check (sweep 36→64 rejected); every other format audited against its reference — IDTECK, InstaFob and Indala224 MATCH, Indala26 and Keri have open gaps | Hardware A/B/A: valid 8/8, one named bit broken 0 exact/3 silent/**1 self-consistent false frame**, restored 8/8 |
 | 2026-09-14 08:20 | **C252 — the error-detection sweep** | 10 → 10 | `6b51ccb`. 1,024 corrupted frames through emitter and decoder, 10 protocols. Rejected/wrong runs AWID 96/0 to Indala224 28/196. Counts PINNED so a weakened gate fails `make check` | Sensitivity by deliberate break: Gallagher's accept hook removed moved it 88/8 → 16/80 while its round trip stayed ✓ exact |
 | 2026-09-14 09:15 | **C253 — Securakey's missing gate** | 10 → 10 | `f536b44` flashed to #2. `securakey_accept()` enforces the reference's ten zero spacers; sweep 19→28 caught | Hardware A/B/A: valid 8/8, spacer bit 46 flipped 0/4 with the field loud and pm3's readback proving the tag held it, restored 4/4 |
