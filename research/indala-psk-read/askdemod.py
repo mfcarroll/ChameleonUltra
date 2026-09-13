@@ -92,6 +92,52 @@ def find_frame(bits, preamble_bits, frame_bits):
                 return seq[i:i+frame_bits], i, inv
     return None, None, None
 
+def bitcentre_bits(x, k_lp, spb, phase):
+    """Manchester by SAMPLING THE LEVEL AT BIT CENTRES, with run lengths never consulted.
+
+    ⭐⭐ THIS IS THE ROUTE C145 ENDORSED AND THE EDGE DECODER IS THE ONE IT REFUTED. Scored on
+    PAC, edge timings gave 26 errors of 128 against the level path's 6, because rising and
+    falling edges cross the slicer at different points and the run lengths carry a systematic
+    duty bias — 1-bit runs measuring 30.0 samples where the true period is 32.000 (C141).
+    A bias like that corrupts every run length while leaving the LEVEL at the middle of each
+    half-bit completely intact. ⇒ Sample where the bias is not.
+
+    Each RF/32 bit is two 16-sample half-bits; the centres sit at +8 and +24. Manchester is
+    the transition between them: (1,0) is one bit value, (0,1) the other, and a matched pair
+    is an encoding violation that is reported rather than guessed at."""
+    sm = boxcar(x, k_lp)
+    dc = boxcar(sm, 512)
+    bits, viol = [], 0
+    i = phase
+    while i + spb <= len(x):
+        a = 1 if sm[i + spb//4] > dc[i + spb//4] else 0
+        b = 1 if sm[i + 3*spb//4] > dc[i + 3*spb//4] else 0
+        if a == b:
+            bits.append(None); viol += 1
+        else:
+            bits.append(1 if a == 1 and b == 0 else 0)
+        i += spb
+    return bits, viol
+
+
+def decode_bitcentre(x, pre, nbits, spb=32):
+    """Sweep low-pass width and all 32 bit phases; return the first clean frame."""
+    best_viol = None
+    for k in (1, 3, 5, 7, 9, 13, 17, 25):
+        for phase in range(spb):
+            bits, viol = bitcentre_bits(x, k, spb, phase)
+            if not bits:
+                continue
+            rate = viol / len(bits)
+            if best_viol is None or rate < best_viol[0]:
+                best_viol = (rate, k, phase)
+            frame, pos, inv = find_frame(bits, pre, nbits)
+            if frame:
+                h = "".join(str(b) for b in frame)
+                return ("%0*x" % (nbits//4, int(h, 2))), k, phase, pos, inv, rate
+    return None, None, None, None, None, (best_viol[0] if best_viol else 1.0)
+
+
 def main():
     args = [a for a in sys.argv[1:]]
     pre_hex, nbits = "7FEA", 96
@@ -103,6 +149,16 @@ def main():
 
     for path in args:
         x = load16(path)
+        # ⭐ THE BIT-CENTRE PATH FIRST — see bitcentre_bits for why it outranks the edge
+        # decoder on this front end. The edge route stays below as the paired comparison.
+        hexs, k, ph, pos, inv, viol = decode_bitcentre(x, pre, nbits)
+        if hexs:
+            print(f"  {path.split('/')[-1]:<28} centre lp={k} ph={ph} pos={pos} "
+                  f"{'inv' if inv else '   '}  {hexs}")
+            continue
+        print(f"  {path.split('/')[-1]:<28} centre: no frame "
+              f"(best violation rate {viol:.1%})")
+
         best = None
         # ⭐ SWEEP the low-pass, because the right width is a property of the front end and
         # not knowable a priori. A blank column across the whole sweep is itself a finding.
