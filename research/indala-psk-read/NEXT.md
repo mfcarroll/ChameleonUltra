@@ -74,9 +74,9 @@ registered `TAG_TYPE_*`.
 | **FDX-B** | ✓ **6/6 on device, nulls 0/386 (C214, C215)** | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
 | **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
-| **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
+| **Keri** | ✓ **6/6 on device (C161)** | ✓ **4/4, ROTATION verified against a reference clone (C234)** | ✓ **6/6 via Flipper (C160)** | ✓ |
 | **Gallagher** | ✓ **6/6 on device (C173)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C174)** | ✓ |
-| **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
+| **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **4/4, wiped tag + changed credential (C234)** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **4/4, wiped tag (C233)** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
 | **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ⛔ **emitter round-trips, SILENT to the Flipper 0/6, control 6/6 (C222)** | ✓ |
