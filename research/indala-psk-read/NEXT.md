@@ -77,7 +77,7 @@ registered `TAG_TYPE_*`.
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | GProxII | ✗ | ✗ | ✗ | ✓ |
 | **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **GProxII** | ⛔ **NOT VERIFIED — host 5/5 exact, device wrong by one bit every read (C206)** | ◐ built, unverified | ✗ | ✓ |
+| **GProxII** | ⛔ **NOT VERIFIED — host exact, device wrong or blank (C206)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✗ | ✓ |
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
