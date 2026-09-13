@@ -21,6 +21,7 @@
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
 #include "protocols/fsk2a_t55xx.h"
+#include "lf_ask_biphase.h"
 #include "lf_fsk2a.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
@@ -177,6 +178,20 @@ uint8_t scan_pyramid(uint8_t *data) {
     if (pyramid_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
         return STATUS_LF_TAG_OK;
     }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t scan_gproxii(uint8_t *data) {
+    int32_t energy = 0;
+    if (gproxii_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    /* ⚠ NOT `lf_psk1_failure_status`, for the same reason scan_gallagher gives — and more
+     * strongly here. The biphase decoder's `energy` is the mean bit-boundary STEP in ADC
+     * counts, which is neither the PSK integrator amplitude that mapping expects nor the
+     * violation percentage the ASK decoder reports. Three decoders, three different
+     * quantities; only the PSK one has a calibrated threshold. */
+    (void)energy;
     return STATUS_LF_TAG_NO_FOUND;
 }
 
@@ -560,6 +575,22 @@ uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *o
 uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[5] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_PYRAMID_CONFIG, blks);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 96-bit GProxII frame to a T55xx tag (BIPHASE, RF/64, 3 data blocks).
+ *
+ * ⚠ The block form is the air frame unrotated — measured from the reference clone's own dump
+ * (C204), the same question Keri answers differently (C160). Shares fsk2a_t55xx_blocks()
+ * because the transcription is identical; only the config word differs, and the function is
+ * named for where it came from rather than for the only family allowed to use it.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
+ */
+uint8_t write_gproxii_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[4] = {0x00};
+    uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_GPROXII_CONFIG, blks);
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 

@@ -134,12 +134,20 @@ bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
  * ⇒ Read only, until the Flipper can face the T5577 (C185, and it is in Needs hands). */
 bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by gproxii_read(): the 12-byte frame, then phase, bit position, tries and
+ *  the inversion flag.
+ *
+ *  ⚠ The frame and nothing else — same reasoning as Gallagher's. GProxII's facility code and
+ *  card number come out of an XOR descramble plus bit-field extractions whose layout depends
+ *  on the format length, and that interpretation is testable on the host against a credential
+ *  we chose. */
+#define GPROXII_READ_DATA_SIZE 16
+bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes written by awid_read(): the 12-byte frame, the 9-byte payload, then phase/tries.
  *
- * ⚠ NO `write_awid_to_t55xx` YET, and this is a DEFERRAL rather than InstaFob's refusal.
- * The Proxmark does have `lf awid clone`, so the write arm is verifiable — just not while the
- * T5577 is lifted out of the sandwich for the emulation work (C185, C190). ⇒ Add it when the
- * tag goes back, and verify it the way every other writer here was: our write, their read. */
+ * ✅ `write_awid_to_t55xx` SHIPS and is verified: our write, the Proxmark's read, 5 of 5, with
+ * the tag wiped first and the block dump identical to the Proxmark's own clone (C203). */
 #define AWID_READ_DATA_SIZE 24
 bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 

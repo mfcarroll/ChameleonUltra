@@ -6,6 +6,7 @@
 #include "lf_indala_psk.h"
 #include "lf_ask_manchester.h"
 #include "lf_fsk2a.h"
+#include "lf_ask_biphase.h"
 #include "lf_reader_generic.h"
 
 #define NRF_LOG_MODULE_NAME lf_indala
@@ -684,6 +685,74 @@ bool fdxa_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     data[17] = r.phase;
     data[18] = r.tries;
     data[19] = 0;
+    return true;
+}
+
+/* ⭐ GPROXII — the same capture engine again, with the BIPHASE decoder rather than the
+ * ASK/Manchester or FSK2a one. Four decode paths now share `lf_sampled_read`: it rotates the
+ * sample phase, suspends BLE advertising (C47) and requires two independent captures to agree,
+ * and none of that has ever been specific to a modulation.
+ *
+ * ⛔ THE TWO-AGREEING-STACKS RULE IS LOAD-BEARING HERE IN A WAY IT IS NOT FOR THE OTHERS.
+ * GProxII's remaining false positive is NexWatch at 1 capture in 4 (C205) — sporadic, so two
+ * captures agreeing does reject it. It was NOT load-bearing against the Securakey false
+ * positive, which was byte-identical on three captures; that one had to be killed in the gate.
+ *
+ * ⚠ 114ms per capture — the buffer maximum — because the threshold measured 12800 and there
+ * is only 1.12x headroom above it. */
+bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    /* ⛔⛔ FIXED AT DRIVE 7 — NOT `lf_ask_read`'s SWEEP, AND THE SWEEP IS WHAT THIS FIXES.
+     *
+     * The first device reads of this protocol went through that sweep, which starts at the
+     * stock drive 4 and stops at the FIRST success. Drive 4 succeeded — with bit errors that
+     * cleared the preamble, all 18 spacers AND the format-length gate:
+     *
+     *     fac2a38c2b081af0212b12c2   Length 26  FC 123  Card 1081   <- wrong card, confident
+     *     fac2a38c2b081af0250b12c6   Length 26  FC 123  Card 1321   <- wrong card, confident
+     *
+     * ⛔ TWO CAPTURES AGREED ON EACH OF THOSE. The capture engine's two-agreeing-stacks rule
+     * did not catch it and could not: at a fixed drive the distortion is the same in both
+     * captures, so they agree on the same wrong answer. 2 reads of 6 returned a WRONG card
+     * number — the stable-wrong-credential failure this project exists downstream of (C160).
+     *
+     * ⭐ The host had already measured the answer and the sweep discarded it: at drive 7 this
+     * decoder is 96/96 bits exact, at drive 6 it is 95/96 and at drives 4 and 2 it is in the
+     * low 80s (C204). Only drive 7 is clean, so only drive 7 is used.
+     *
+     * ⚠ A SWEEP STARTING AT 7 WOULD STILL BE WRONG. It would fall through to 6, 4 and 2 on a
+     * weakly coupled tag and hand back exactly these frames. A fixed drive fails to read
+     * instead, which is the safe direction: "not found" is recoverable, a wrong card number
+     * read confidently is not. ⇒ If a GProxII turns up that needs another field strength, the
+     * answer is a stronger gate, not a wider sweep.
+     *
+     * ⛔⛔ AND PINNING THE DRIVE WAS NOT SUFFICIENT — THIS ARM IS NOT VERIFIED. At drive 7 the
+     * device returns `fac2a38c2b081af0210b12c6` where the tag holds `...12c2`: a PERSISTENT
+     * single-bit error at frame bit 93, on 8 reads of 8. It happens to sit outside format 26's
+     * facility and card fields, so 7 of those 8 still print the right credential — and the
+     * eighth printed **Card 1321** instead of 1337. ⇒ Do NOT read this as "works with a cosmetic
+     * raw difference". A decoder that is one bit wrong every time is one bit away from being
+     * wrong where it matters, and once in eight it already is.
+     *
+     * ⚠ The host decodes `lf sniff --drive 7` captures from this same device 4 of 4 EXACT, so
+     * the algorithm is right and something between the sniff path and the reader path is not.
+     * That is the open question; see NEXT.md. Until it is answered this command ships as
+     * research, and the grid must say NOT VERIFIED rather than a read count. */
+    lf_125khz_radio_drive_set(7);
+    bool ok = lf_sampled_read(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
+                              &r, timeout_ms, energy_out);
+    /* ⚠ Restore the stock drive — a reader that leaves the field weakened breaks whatever runs
+     * next, invisibly (C148/L122). */
+    lf_125khz_radio_drive_set(4);
+    if (!ok) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    data[12] = r.phase;
+    data[13] = r.res.bit_pos;
+    data[14] = r.tries;
+    data[15] = r.res.inverted ? 1u : 0u;
+    NRF_LOG_INFO("gproxii phase %u pos %u tries %u", r.phase, r.res.bit_pos, r.tries);
     return true;
 }
 

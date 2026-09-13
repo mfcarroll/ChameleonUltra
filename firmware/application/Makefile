@@ -359,6 +359,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_gap.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_data.c \
   $(PROJ_DIR)/rfid/reader/lf/lf_ask_manchester.c \
+  $(PROJ_DIR)/rfid/reader/lf/lf_ask_biphase.c \
   $(PROJ_DIR)/rfid/reader/lf/lf_fsk2a.c \
   $(PROJ_DIR)/rfid/reader/lf/lf_slicer.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_psk.c \

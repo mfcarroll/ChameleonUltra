@@ -1002,10 +1002,11 @@ lf_gallagher = lf.subgroup("gallagher", "Gallagher commands")
 lf_securakey = lf.subgroup("securakey", "Securakey commands")
 lf_noralsy = lf.subgroup("noralsy", "Noralsy commands")
 lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
-lf_awid = lf.subgroup("awid", "AWID commands (read only for now)")
-lf_paradox = lf.subgroup("paradox", "Paradox commands (read only for now)")
-lf_pyramid = lf.subgroup("pyramid", "Pyramid commands (read only for now)")
-lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only for now)")
+lf_awid = lf.subgroup("awid", "AWID commands")
+lf_paradox = lf.subgroup("paradox", "Paradox commands")
+lf_pyramid = lf.subgroup("pyramid", "Pyramid commands")
+lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only — nothing here can verify a write)")
+lf_gproxii = lf.subgroup("gproxii", "GProxII commands")
 
 
 @root.command("clear")
@@ -7653,6 +7654,94 @@ class LFPyramidWrite(_LFFskWrite):
     def _try_read(self):
         try:
             return self.cmd.pyramid_scan()[0].hex()
+        except Exception:
+            return None
+
+
+def _gproxii_fields(frame12: bytes):
+    """(xor_key, fmt_len, fc, card, ok) from a 96-bit GProxII frame.
+
+    ⭐ VERIFIED AGAINST A CREDENTIAL WE CHOSE, not against itself: the bench tag was cloned
+    with `--xor 141 --fmt 26 --fc 123 --cn 1337` and this returns exactly those four numbers.
+    That is what makes the descramble a measurement rather than a self-consistent story — the
+    failure mode `idteck.c` shipped upstream.
+
+    ⚠ THE BYTES ARE LEAST-SIGNIFICANT-BIT FIRST. Reading them MSB first gives a format length
+    of 5 where the tag says 26, which looks like a broken tag rather than a broken reader.
+    """
+    bits = [(frame12[i // 8] >> (7 - i % 8)) & 1 for i in range(96)]
+    body = []
+    for g in range(18):
+        grp = bits[6 + 5 * g:6 + 5 * g + 5]
+        if grp[4] != 0:
+            return None, None, None, None, False
+        body.extend(grp[:4])
+
+    def lsbf(at):
+        return sum(body[at + k] << k for k in range(8))
+
+    xor_key = lsbf(0)
+    plain = [lsbf(8 + 8 * i) ^ xor_key for i in range(8)]
+    fmt_len = plain[0] >> 2
+    if fmt_len == 26:
+        fc = ((plain[3] & 0x7F) << 1) | (plain[4] >> 7)
+        card = ((plain[4] & 0x7F) << 9) | (plain[5] << 1) | (plain[6] >> 7)
+    elif fmt_len == 36:
+        fc = ((plain[3] & 0x7F) << 7) | (plain[4] >> 1)
+        card = (((plain[4] & 1) << 19) | (plain[5] << 11) | (plain[6] << 3)
+                | ((plain[7] & 0xE0) >> 5))
+    else:
+        return xor_key, fmt_len, None, None, False
+    return xor_key, fmt_len, fc, card, True
+
+
+@lf_gproxii.command("read")
+class LFGProxIIRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a GProxII credential (ASK BIPHASE, RF/64, 96-bit frame). "
+                              "⚠ Slowest read here — the capture is 114ms, the buffer maximum, "
+                              "because the length threshold measured 12800 samples.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, pos, tries, inv = self.cmd.gproxii_scan()
+        xor_key, fmt_len, fc, card, ok = _gproxii_fields(raw)
+        print("GProxII ASK/biphase")
+        print(f"   Raw (96 bits): {color_string((CY, raw.hex()))}")
+        if ok:
+            print(f"   Length: {color_string((CG, fmt_len))}  FC: {color_string((CY, fc))}  "
+                  f"Card: {color_string((CY, card))}  xor: {color_string((CG, xor_key))}")
+        else:
+            # ⚠ Should be unreachable — the firmware gates on this same length field — so if it
+            # prints, the host and firmware disagree about the frame, which is worth knowing.
+            print(f"   {color_string((CR, 'UNKNOWN FORMAT LENGTH'))} {fmt_len} — the firmware "
+                  f"accepted a frame the host rejects. A disagreement between them, not a bad tag.")
+        print(f"   Read at sample phase {phase} ticks, bit position {pos}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken{' (inverted)' if inv else ''}")
+
+
+@lf_gproxii.command("write")
+class LFGProxIIWrite(_LFFskWrite):
+    PROTOCOL = "GProxII"
+    HEX_DIGITS = 24
+    EXAMPLE = "fac2a38c2b081af0210b12c2"
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        # ⚠ The shared base says FSK2a/RF-50; this one is biphase at RF/64. Same write-and-
+        # verify flow, different modulation — so only the sentence is overridden.
+        parser.description = ("Write a GProxII credential to a T5577. Configures BIPHASE, "
+                              "RF/64, 3 data blocks (00150060). Reads the tag back afterwards "
+                              "— a T5577 does not acknowledge writes.")
+        return parser
+
+    def _write(self, frame):
+        self.cmd.gproxii_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.gproxii_scan()[0].hex()
         except Exception:
             return None
 

@@ -248,5 +248,8 @@
 #define DATA_CMD_AWID_WRITE_TO_T55XX            (3055)
 #define DATA_CMD_PARADOX_WRITE_TO_T55XX         (3056)
 #define DATA_CMD_PYRAMID_WRITE_TO_T55XX         (3057)
+/* ⭐ The BIPHASE family opens here — GProxII, the fourth line coding on this device. */
+#define DATA_CMD_GPROXII_SCAN                   (3058)
+#define DATA_CMD_GPROXII_WRITE_TO_T55XX         (3059)
 
 #endif

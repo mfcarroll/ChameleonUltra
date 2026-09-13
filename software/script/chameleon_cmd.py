@@ -959,6 +959,36 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def gproxii_scan(self):
+        """Read a GProxII credential (ASK BIPHASE, RF/64, 96-bit frame).
+
+        ⭐ The fourth decode path on this device, and the first that never asks what level the
+        envelope is sitting at — the front end's AC coupling has decayed away inside an RF/64
+        half-bit, so the decoder asks only whether the middle of each bit STEPPED (C204).
+
+        Returns (raw12, phase, bit_pos, tries, inverted).
+        """
+        resp = self.device.send_cmd_sync(Command.GPROXII_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, pos, tries, inv = struct.unpack(">12sBBBB", resp.data[:16])
+            resp.parsed = (raw, phase, pos, tries, bool(inv))
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def gproxii_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                               old_keys: list = None):
+        """Write a raw 96-bit GProxII frame onto a T55xx (BIPHASE, RF/64, 3 data blocks).
+
+        ⭐ `frame12` is BOTH the air frame and the block contents — measured off the reference
+        clone's own dump (C204), the question Keri answers differently (C160).
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.GPROXII_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def awid_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
                             old_keys: list = None):
         """Write a raw 96-bit AWID frame onto a T55xx (FSK2a, RF/50, 3 data blocks).

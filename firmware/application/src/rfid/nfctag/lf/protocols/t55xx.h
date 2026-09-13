@@ -209,6 +209,25 @@ extern "C" {
     T5577_MODULATION_FSK2a |      \
     (4 << T5577_MAXBLOCK_SHIFT))
 
+// GProxII: BIPHASE at RF/64, three data blocks (96-bit frame).
+//
+// ⭐ MEASURED from a Proxmark `lf gproxii clone --xor 141 --fmt 26 --fc 123 --cn 1337`: block 0
+// reads back `00150060` and `lf t55xx detect` reports **BIPHASE / RF/64 / Inverted No / Seq.
+// terminator No** (C204). Its blocks 1-3 are the air frame unrotated, like the FSK three and
+// unlike Keri.
+//
+// ⚠ THE ONLY BIPHASE CONFIG HERE THAT IS NOT DIPHASE. Jablotron above uses
+// T5577_MODULATION_DIPHASE (0x00018000); this is T5577_MODULATION_BIPHASE (0x00010000), a
+// different field value for a different line coding, and the two are one bit apart. Composed
+// from the named flags because it composes exactly: RF_64 | BIPHASE | (3 << MAXBLOCK_SHIFT).
+//
+// ⚠ T5577_PWD absent, as for every other measured clone here — `detect` reports
+// "Password set...... No".
+#define T5577_GPROXII_CONFIG (   \
+    T5577_BITRATE_RF_64 |        \
+    T5577_MODULATION_BIPHASE |   \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

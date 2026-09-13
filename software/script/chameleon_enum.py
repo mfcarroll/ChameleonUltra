@@ -218,6 +218,8 @@ class Command(enum.IntEnum):
     AWID_WRITE_TO_T55XX = 3055
     PARADOX_WRITE_TO_T55XX = 3056
     PYRAMID_WRITE_TO_T55XX = 3057
+    GPROXII_SCAN = 3058
+    GPROXII_WRITE_TO_T55XX = 3059
 
 @enum.unique
 class Status(enum.IntEnum):

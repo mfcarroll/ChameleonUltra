@@ -26,6 +26,10 @@ uint8_t scan_securakey(uint8_t *data);
 uint8_t scan_noralsy(uint8_t *data);
 /** ⚠ Read only — see the note on instafob_read for why there is no writer. */
 uint8_t scan_instafob(uint8_t *data);
+/** ⭐ The BIPHASE family's first protocol — a fourth decode path, not a flag on the ASK one.
+ *  See lf_ask_biphase.h for why the level path cannot read RF/64 at all. */
+uint8_t scan_gproxii(uint8_t *data);
+uint8_t write_gproxii_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t scan_awid(uint8_t *data);
 uint8_t scan_paradox(uint8_t *data);
 uint8_t scan_pyramid(uint8_t *data);
