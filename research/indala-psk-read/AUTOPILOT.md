@@ -46,7 +46,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   Manchester runs and Momentum decodes it with a six-state machine, so an emitter would be a
   fitted guess against a shape measurable only approximately. Revisit only with better
   captures or a reading of that state machine's transitions.
-- **Next: U7** (upstreaming prep, pure compute), then U8 (FSK, deliberately last).
+- **U7 is DONE** — §9 of NEXT.md now carries an evidence grade per arm, the three blockers a
+  reviewer hits before the protocols, and a three-PR split in dependency order (L151).
+- **Next: U8 (FSK)** — AWID, Paradox, Pyramid, FDX-A. ⛔ Deliberately last: it reuses the HID
+  Prox/ioProx SAADC machinery and HID's 15-20% intermittency (C45) is unexplained and lives in
+  exactly that path. Do not start it without saying so in §4 first.
+- ⭐ Also open and cheap: the ASK protocols have no `ctest/roundtrip.c` arms — the PSK ones all
+  do. That harness exists because three wrong encodings shipped in one session (C156).
 - **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
 - ⛔⛔ **The ASK readers now SWEEP DRIVE (C182)** — Noralsy decodes at drive 7 and at no other
   setting, including stock. Every ASK capture in this campaign was taken at `--drive 7`, so
@@ -233,6 +239,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 11:35 | InstaFob decoder | 4 → 7 | InstaFob format; shared frame bound 224 → 240 | 2 payloads tracked across a change, 24 nulls clean, 320-capture regression holds |
 | 2026-09-13 12:15 | InstaFob read arm | 4 → 8 | device read arm, read-only by design; M29 rule hardened | 5/5 on device, null 0/4 after an explicit stop, 4/4 on a changed payload |
 | 2026-09-13 12:45 | InstaFob terminator | 7 → 9 | C188; `framedrift.py` InstaFob arm | 98-99 samples excess vs 0 across 20 control intervals; emitter deliberately not attempted |
+| 2026-09-13 13:15 | U7 — DONE | 8 → 10 | §9 rewritten: evidence grades, blockers, three-PR split | static assessment; no hardware claim |
 
 ---
 

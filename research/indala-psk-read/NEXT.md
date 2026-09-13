@@ -209,7 +209,68 @@ is a new transport behind the existing command layer. ⚠ A live BLE connection 
 is itself uncharacterised, and C47 has advertising bursts collapsing the field — measure with
 and without before trusting it.
 
-## 9. Upstreamable?
+## 9. Upstreamable? — assessed 2026-09-13
+
+⚠ **This section was written when the branch was Indala-only. It is now 49 files and ~7,500
+lines across NINE protocols in two modulation families**, so the question is no longer "is
+this one reader upstreamable" but "what would a maintainer have to trust, and on what
+evidence".
+
+### 9a. ⭐ The evidence grade of every arm — the part a reviewer actually needs
+
+⭐ **Grades are about WHO verified it, not how confident I feel.**
+**A** = verified on hardware against an independent tool (Proxmark or Flipper) *with* a null
+and a changed-plaintext control. **B** = verified on hardware against ONE independent reader.
+**C** = host-only, against committed captures. **D** = not verified — none ship.
+
+| protocol | read | write | emulate |
+|---|---|---|---|
+| Indala26 / Indala224 / IDTECK | **A** | **A** (pm3 reads our tag) | **B** |
+| Keri | **A** 6/6 | **A** 3/3 | **B** 6/6 |
+| NexWatch | **A** 6/6 | **A** 3/3 | **B** 10/10 |
+| Gallagher | **A** 6/6 | **A** 3/3 | **B** 10/10 |
+| Securakey | **A** 6/6 | **A** 3/3 | **B** 10/10 |
+| Noralsy | **A** 6/6 | **A** 3/3 | **B** 10/10 |
+| InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
+
+⛔ **Why no emulate arm is grade A, and it is not modesty.** Every one is verified by a Flipper
+reading rig A. A T5577 written with the same credential and read by the Proxmark is *actual
+tag behaviour*, and the two can differ at the frame boundary — which is not hypothetical:
+InstaFob's real frame period exceeds its nominal by 98 samples where the other three ASK tags
+show zero (C188). Reading our own emulation on the Proxmark needs the tag lifted out of the
+sandwich, which is in **Needs hands** (C179).
+
+⛔ **InstaFob is deliberately partial.** Its write arm is four lines of known-good code and is
+NOT shipped, because nothing on this bench can read an InstaFob tag back — the Proxmark has no
+support at all. Shipping it would be self-certification, which is the `idteck.c` failure this
+project exists downstream of (C185).
+
+### 9b. What would block a PR, in order
+
+| | |
+|---|---|
+| ⛔ **Naming** | `lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Rename before proposing, not after |
+| ⛔ **Shared-struct sizing** | `LF_PSK1_MAX_FRAME_BITS` is 240, raised from Indala224's 224 because InstaFob's frame is 225 bits and would have overflowed `id[]` and `word_bits[]` by one bit's worth (C186). It costs 16 bytes in a struct there is one of, and it is load-bearing |
+| ⛔ **Command-id allocation** | 32 new ids in the 3000/5000 blocks. Needs coordinating with upstream rather than asserted |
+| ⚠ **Instrumentation** | the table below, unchanged and still correct |
+| ⚠ **Two formats have no payload check** | Securakey's gate is 19 preamble bits and InstaFob's is the T5577 config word; neither validates the card data, so a bit error inside it is undetectable. Gallagher (CRC-8) and Noralsy (two nibble checksums) do. ⇒ Document, do not "fix" — both references are the same |
+| ⚠ **ASK reads sweep field strength** | `lf_ask_read` divides the caller's timeout across drive steps {4,7,6,2}. Noralsy decodes at drive 7 and NO other setting (C182), so it is required; but it changes the latency profile of every ASK read and a reviewer should be told why rather than discovering it |
+
+### 9c. ⭐ Recommended shape — three PRs, not one
+
+⭐ **7,500 lines in one PR will not be reviewed; it will be declined.** The branch splits along
+its own dependency order:
+
+1. **The shared capture engine, renamed** — `lf_psk1_read` → a modulation-neutral name, the
+   result struct with it, and the sizing constants. No new protocols. Reviewable in isolation
+   and everything else depends on it.
+2. **The PSK1 family** — `lf_psk1_format_t` plus Keri and NexWatch. Indala and IDTECK already
+   exist upstream, so this is the descriptor refactor plus two formats.
+3. **The ASK/biphase family** — `lf_ask_manchester.c`, the drive sweep, and Gallagher,
+   Securakey, Noralsy. ⚠ InstaFob stays out until its write arm can be verified.
+
+⚠ **`idteck.c` upstream ships a PSK1 emulation nobody verified end to end** (§6). Worth
+reporting independently of any of this.
 
 ⛔ **REMOVE THE INSTRUMENTATION FIRST — here is the exact list.** All of it exists to answer
 questions this project had, and none of it belongs in a PR:
@@ -226,13 +287,6 @@ instrumentation. ⚠ Keep `hw lfdebug` until C148 is understood; it is the only 
 diagnose it and the fault has never yet been seen with it armed (C151).
 
 
-Read and write are solid and independently verified. Emulation works against two readers.
-The pieces a PR would need: the tag-type registration (done here), emulation (done here), and
-a decision on whether `lf indala read`'s specialisation is acceptable upstream — §1's status
-message is what makes it honest.
-
-⚠ `idteck.c` ships a PSK1 emulation nobody has verified end to end (§6). Worth reporting
-upstream independently of anything here.
 
 ## 10. ⭐ The twelve missing protocols — grouped by modulation, cheapest family first
 ⭐ **Group by modulation, not by name.** Each family shares a capture path, a decoder shape and
