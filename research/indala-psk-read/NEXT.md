@@ -177,7 +177,13 @@ lf indala write -r a0000000e6bd0e92
 ⚠ Verify the 224 write against the **T5577 memory dump**, not against `lf indala reader`: the
 Proxmark's own 224-bit read-back is right about one time in three (C153).
 
-## 5. ⚠ Carrier locking — a decision, and it is now a cheap one
+## 5. ⛔ Carrier locking — a decision, and it now has a MEASURED cost
+
+⛔⛔ **2026-09-13: this is no longer theoretical.** With the T5577 lifted out of the sandwich,
+the Proxmark reads our **ASK** emulation 16 of 16 and our **PSK1** emulation **1 of 13**
+(C189). The Flipper reads the same PSK emulations 6/6 and 10/10, so one reader was hiding it.
+⇒ Whatever is decided here, the price of NOT carrier-locking is now known: PSK emulation
+works against a Flipper and effectively does not against a Proxmark.
 
 Our subcarrier free-runs; a T5577 divides the reader's own carrier. That is the whole
 difference, and both halves of it are now measured.

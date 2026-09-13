@@ -48,7 +48,16 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   captures or a reading of that state machine's transitions.
 - **U7 is DONE** — §9 of NEXT.md now carries an evidence grade per arm, the three blockers a
   reviewer hits before the protocols, and a three-PR split in dependency order (L151).
-- ⭐⭐ **THE OPERATOR WAS ASKED TO LIFT THE T5577 OUT OF THE SANDWICH overnight 2026-09-13.**
+- ⭐⭐ **THE TAG IS OUT (operator lifted it 2026-09-13). Rig B is now Proxmark <-> Chameleon #2.**
+  ⛔ **Its first measurement found C189: our PSK emulation is 1 of 13 to the Proxmark where our
+  ASK emulation is 16 of 16.** That is the free-running-clock cost (C74) and it makes §5 a
+  measured decision. ⇒ Next on this rig: confirm Indala224 and Indala26 show the same PSK
+  split (expected), and DO NOT re-grade the PSK emulate arms to A — the honest grade is now
+  "A against a Flipper, fails against a Proxmark".
+  ⚠ A slot's LF TYPE CHANGE needs `hw mode -r` then `-e` before it takes effect.
+- ⚠ Rig A stays as it is — the operator confirmed the Chameleon there CANNOT reach a tag, so a
+  tag on that pad would only be readable by the Flipper and would corrupt the emulation path.
+- **(historical) The lift was requested for this reason:**
   ⇒ **On resume, CHECK WHETHER IT IS OUT** — one `lf search` on the Proxmark: no tag means it
   was lifted. If it is out, the highest-value unit is **upgrading every emulate arm from grade
   B to grade A** by having the PROXMARK read our emulation on Chameleon #2 (Indala224, Keri,
@@ -254,6 +263,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 12:15 | InstaFob read arm | 4 → 8 | device read arm, read-only by design; M29 rule hardened | 5/5 on device, null 0/4 after an explicit stop, 4/4 on a changed payload |
 | 2026-09-13 12:45 | InstaFob terminator | 7 → 9 | C188; `framedrift.py` InstaFob arm | 98-99 samples excess vs 0 across 20 control intervals; emitter deliberately not attempted |
 | 2026-09-13 13:15 | U7 — DONE | 8 → 10 | §9 rewritten: evidence grades, blockers, three-PR split | static assessment; no hardware claim |
+| 2026-09-13 14:05 | emulate sweep on rig B | 9 → 13 | C189; §5 upgraded to a measured decision | ASK 16/16, PSK 1/13 to the Proxmark — a clean modulation split |
 
 ---
 
