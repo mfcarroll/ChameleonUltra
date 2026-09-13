@@ -41,6 +41,10 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 - **Last landed:** `e0eb44b` — NexWatch **reader** done. 4/4 exact on real tag captures
   (`5600000000436455121e6000`), 508 cross-protocol nulls clean, `make check` green.
 - **In flight:** nothing. U1 is next.
+- **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
+  ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
+  which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
+  session is closed, and auto-expires after 7 days. Re-seed from §6.
 - **Bench:** all four devices enumerate. T5577 currently holds the **NexWatch** credential
   written this session (`lf nexwatch clone --cn 12345678 -m 1 --nc`, block 0 `00081060`).
 - **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
