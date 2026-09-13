@@ -60,8 +60,8 @@ registered `TAG_TYPE_*`.
 | protocol | read | write | emulate | Momentum |
 |---|---|---|---|---|
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
-| HID Prox (H10301, generic, ex-generic) | ⚠ **intermittent, 15-20% (C45)** | ✓ | ✓ | ✓ |
-| ioProx (IOProxXSF) | ✓ | ✓ | ✓ | ✓ |
+| HID Prox (H10301, generic, ex-generic) | ⚠ **intermittent, 15-20% (C45)** | ✓ | ⛔ **0/6 — FSK2a emulation does not work on this device (C246)** | ✓ |
+| ioProx (IOProxXSF) | ✓ | ✓ | ⛔ **0/6 — same as HID Prox (C246)** | ✓ |
 | PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
 | Jablotron | ✓ | ✓ | ✓ | ✓ |
@@ -69,7 +69,7 @@ registered `TAG_TYPE_*`.
 | **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
-| **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **emitter round-trips on the host, SILENT to the Flipper 0/6 with the control at 6/6 (C217)** | ✓ |
+| **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **0/6 — and so are the two SHIPPED FSK2a emitters, so this is the device, not our emitter (C246)** | ✓ |
 | **FDX-A** | ✓ **4/4, emulation only — pm3 has no FDX-A (C201)** | ⛔ **refused, not deferred** — unverifiable here (C185) | ✗ | ✓ |
 | **FDX-B** | ✓ **6/6 on device, nulls 0/386 (C214, C215)** | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
 | **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
