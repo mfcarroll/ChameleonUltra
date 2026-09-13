@@ -228,6 +228,22 @@ extern "C" {
     T5577_MODULATION_BIPHASE |   \
     (3 << T5577_MAXBLOCK_SHIFT))
 
+// FDX-B (ISO 11784/11785): DIPHASE at RF/32, four data blocks (128-bit frame).
+//
+// ⛔⛔ `00098080`, AND THE PROXMARK'S OWN HEADER SAYS SOMETHING ELSE. `cmdlft55xx.h` carries
+// `T55X7_FDXB_CONFIG_BLOCK 0x903F0082`, an X-mode value; what `lf fdxb clone` actually writes
+// is `00098080`, and `lf t55xx detect` reads that back as **BIPHASEa (CDP) / RF/32 / Inverted
+// Yes** (C214). ⇒ The clone's block dump wins over the header, which is the rule C202 set
+// after the same disagreement on the FSK three.
+//
+// ⚠ DIPHASE, NOT BIPHASE — one bit apart, and GProxII next door uses the other one.
+// 0x00018000 is T5577_MODULATION_DIPHASE and 0x00010000 is BIPHASE; composing this as BIPHASE
+// would write a tag nothing here could read. Jablotron above is the only other DIPHASE config.
+#define T5577_FDXB_CONFIG (       \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_DIPHASE |    \
+    (4 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

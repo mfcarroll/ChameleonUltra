@@ -159,6 +159,13 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
                              uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got);
 
+/** Bytes written by fdxb_read(): the 16-byte frame, then phase, bit position, tries and the
+ *  inversion flag. ⚠ The frame and nothing else — country code, national code and the flags
+ *  are LSB-first bit fields inside it, which the host decodes and can test against a
+ *  credential we chose. */
+#define FDXB_READ_DATA_SIZE 20
+bool fdxb_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 #define GPROXII_READ_DATA_SIZE 16
 bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 

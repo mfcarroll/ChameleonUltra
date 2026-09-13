@@ -959,6 +959,35 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def fdxb_scan(self):
+        """Read an FDX-B credential (ISO 11784/11785, ASK biphase inverted, RF/32, 128 bits).
+
+        ⚠ NOT FDX-A, which is FSK2a and a different protocol entirely — the Proxmark's
+        `lf fdx` is this one, which is why FDX-A has no writer anywhere (C185, C201).
+
+        Returns (raw16, phase, bit_pos, tries, inverted).
+        """
+        resp = self.device.send_cmd_sync(Command.FDXB_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, pos, tries, inv = struct.unpack(">16sBBBB", resp.data[:20])
+            resp.parsed = (raw, phase, pos, tries, bool(inv))
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def fdxb_write_to_t55xx(self, frame16: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                            old_keys: list = None):
+        """Write a raw 128-bit FDX-B frame onto a T55xx (DIPHASE, RF/32, 4 data blocks).
+
+        ⚠ DIPHASE, not GProxII's BIPHASE — one bit apart in the config word, and the wrong one
+        writes a tag nothing here can read. Measured from the reference clone's dump (C214).
+        """
+        if len(frame16) != 16:
+            raise ValueError("The raw frame must be exactly 16 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!16s4s{4*len(old_keys)}s', frame16, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def gproxii_scan(self):
         """Read a GProxII credential (ASK BIPHASE, RF/64, 96-bit frame).
 

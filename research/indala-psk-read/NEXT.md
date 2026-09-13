@@ -69,7 +69,7 @@ registered `TAG_TYPE_*`.
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **FDX-A** | ✓ **4/4, emulation only — pm3 has no FDX-A (C201)** | ⛔ **refused, not deferred** — unverifiable here (C185) | ✗ | ✓ |
-| FDX-B | ✗ | ✗ | ✗ | ✓ |
+| **FDX-B** | ✓ **6/6 on device, nulls 0/386 (C214, C215)** | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
 | **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |

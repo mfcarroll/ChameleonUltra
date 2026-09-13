@@ -924,6 +924,31 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ FDX-B — the second biphase protocol, and it takes NONE of GProxII's special handling.
+ *
+ * ⚠ Measured rather than inherited, which is the whole point of doing the second protocol of
+ * a family: it reads at the STOCK drive where GProxII needs 7 and decodes at nothing else, and
+ * four captures back to back with no gap decode exactly where GProxII's second capture is
+ * already wrong (C211, C214). So it uses the plain shared reader — shared rotation, no drive
+ * override, no gap — and GProxII's overrides stay GProxII's.
+ *
+ * ⚠ Its capture is 10240 samples, deliberately NOT the buffer maximum: at 14336 one capture
+ * in four comes back with a corrupted tail that the CRC cannot see. */
+bool fdxb_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    if (!lf_sampled_read(fdxb_biphase_decode, FDXB_BIPHASE_CAPTURE_SAMPLES,
+                         &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 16);
+    data[16] = r.phase;
+    data[17] = r.res.bit_pos;
+    data[18] = r.tries;
+    data[19] = r.res.inverted ? 1u : 0u;
+    NRF_LOG_INFO("fdxb phase %u pos %u tries %u", r.phase, r.res.bit_pos, r.tries);
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

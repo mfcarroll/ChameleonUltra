@@ -1007,6 +1007,7 @@ lf_paradox = lf.subgroup("paradox", "Paradox commands")
 lf_pyramid = lf.subgroup("pyramid", "Pyramid commands")
 lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only — nothing here can verify a write)")
 lf_gproxii = lf.subgroup("gproxii", "GProxII commands")
+lf_fdxb = lf.subgroup("fdxb", "FDX-B commands (ISO 11784/5 — NOT FDX-A)")
 
 
 @root.command("clear")
@@ -7693,6 +7694,93 @@ def _gproxii_fields(frame12: bytes):
     else:
         return xor_key, fmt_len, None, None, False
     return xor_key, fmt_len, fc, card, True
+
+
+def _fdxb_fields(frame16: bytes):
+    """(country, national, animal, crc_ok) from a 128-bit FDX-B frame.
+
+    ⭐ VERIFIED AGAINST A CREDENTIAL WE CHOSE: the bench tag was cloned `--country 999
+    --national 1337 --animal`, and this returns exactly those. That is what makes the field
+    layout a measurement rather than a self-consistent story.
+
+    ⚠ EVERY FIELD IS LEAST-SIGNIFICANT-BIT FIRST, and the national code straddles a byte
+    boundary — 32 bits then 6 more.
+    """
+    bits = [(frame16[i // 8] >> (7 - i % 8)) & 1 for i in range(128)]
+    body = []
+    for g in range(13):
+        grp = bits[11 + 9 * g:11 + 9 * g + 9]
+        if grp[8] != 1:
+            return None, None, None, False
+        body.extend(grp[:8])
+
+    def lsbf(at, n):
+        return sum(body[at + k] << k for k in range(n))
+
+    national = (lsbf(32, 6) << 32) | lsbf(0, 32)
+    country = lsbf(38, 10)
+    animal = bool(body[63])
+    payload = bytes(lsbf(8 * i, 8) for i in range(8))
+    crc = 0
+    for b in payload:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0x8408 if crc & 1 else crc >> 1
+    return country, national, animal, crc == lsbf(64, 16)
+
+
+@lf_fdxb.command("read")
+class LFFdxbRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an FDX-B credential (ISO 11784/5 animal tag, ASK biphase "
+                              "inverted, RF/32, 128-bit frame, CRC-16 gated). ⚠ Not FDX-A, "
+                              "which is FSK2a — see `lf fdxa read`.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, pos, tries, inv = self.cmd.fdxb_scan()
+        country, national, animal, crc_ok = _fdxb_fields(raw)
+        print("FDX-B ASK/biphase (ISO 11784/5)")
+        print(f"   Raw (128 bits): {color_string((CY, raw.hex()))}")
+        if country is None:
+            print(f"   {color_string((CR, 'CONTROL BITS BAD'))} — the firmware accepted a frame "
+                  f"the host rejects. A disagreement between them, not a bad tag.")
+        else:
+            print(f"   Country: {color_string((CG, country))}  National: "
+                  f"{color_string((CY, national))}  Animal: {color_string((CG, animal))}")
+            if not crc_ok:
+                print(f"   {color_string((CR, 'CRC MISMATCH'))} — should be unreachable, the "
+                      f"firmware gates on this same CRC.")
+            # ⚠ Said every time rather than left to be discovered: the CRC does not cover the
+            # tail, so a corrupted extended-data field reads back as valid. Seen on this bench.
+            print(f"   {color_string((CY, 'note'))}: the CRC covers the first 8 bytes only — the "
+                  f"last 40 bits of that raw are NOT protected.")
+        print(f"   Read at sample phase {phase} ticks, bit position {pos}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken{' (inverted)' if inv else ''}")
+
+
+@lf_fdxb.command("write")
+class LFFdxbWrite(_LFFskWrite):
+    PROTOCOL = "FDX-B"
+    HEX_DIGITS = 32
+    EXAMPLE = "00339a080402079f8040797788040201"
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = ("Write an FDX-B credential to a T5577. Configures DIPHASE, "
+                              "RF/32, 4 data blocks (00098080). Reads the tag back afterwards "
+                              "— a T5577 does not acknowledge writes.")
+        return parser
+
+    def _write(self, frame):
+        self.cmd.fdxb_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.fdxb_scan()[0].hex()
+        except Exception:
+            return None
 
 
 @lf_gproxii.command("read")

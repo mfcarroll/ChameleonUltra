@@ -220,6 +220,9 @@ class Command(enum.IntEnum):
     PYRAMID_WRITE_TO_T55XX = 3057
     GPROXII_SCAN = 3058
     GPROXII_WRITE_TO_T55XX = 3059
+    LF_READER_CAPTURE = 3060
+    FDXB_SCAN = 3061
+    FDXB_WRITE_TO_T55XX = 3062
 
 @enum.unique
 class Status(enum.IntEnum):

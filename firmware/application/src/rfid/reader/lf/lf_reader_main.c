@@ -181,6 +181,14 @@ uint8_t scan_pyramid(uint8_t *data) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 
+uint8_t scan_fdxb(uint8_t *data) {
+    int32_t energy = 0;
+    if (fdxb_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
 uint8_t scan_gproxii(uint8_t *data) {
     int32_t energy = 0;
     return scan_gproxii_energy(data, &energy);
@@ -590,6 +598,21 @@ uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *o
 uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[5] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_PYRAMID_CONFIG, blks);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+/**
+ * @brief Write a raw 128-bit FDX-B frame to a T55xx tag (DIPHASE, RF/32, 4 data blocks).
+ *
+ * ⚠ The block form is the air frame unrotated, measured from the reference clone's dump
+ * (C214). Shares fsk2a_t55xx_blocks() because the transcription is identical — the function is
+ * named for where it came from, not for the only family allowed to use it.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
+ */
+uint8_t write_fdxb_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[5] = {0x00};
+    uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_FDXB_CONFIG, blks);
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 

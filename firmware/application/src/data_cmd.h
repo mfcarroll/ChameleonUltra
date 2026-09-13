@@ -254,5 +254,7 @@
 /* ⚠ INSTRUMENTATION for C209 — run the READER's capture and return the samples undecoded.
  * `lf sniff` is the OTHER path, which is precisely why it cannot answer the question. */
 #define DATA_CMD_LF_READER_CAPTURE              (3060)
+#define DATA_CMD_FDXB_SCAN                      (3061)
+#define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)
 
 #endif
