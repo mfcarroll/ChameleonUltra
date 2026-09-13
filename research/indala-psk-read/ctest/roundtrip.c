@@ -653,7 +653,7 @@ int main(void) {
         bad += sweep("Securakey ASK",   "7fcb400001adea5344300000", "7fcb400001adea5344300000", 96, &ask_sk, 28, 0, 68);
         bad += sweep("Noralsy   ASK",   "bb0214ff0112402233670000", "bb0214ff0112402233670000", 96, &ask_nor, 80, 0, 16);
         bad += sweep("AWID      FSK2a", "011db218271bd81111111111", "011db218271bd81111111111", 96, &fsk_awid, 96, 0, 0);
-        bad += sweep("GProxII   biphase", "f84602a46119d4a114211046", "f84602a46119d4a114211046", 96, &bi_gpii, 36, 0, 60);
+        bad += sweep("GProxII   biphase", "f84602a46119d4a114211046", "f84602a46119d4a114211046", 96, &bi_gpii, 64, 0, 32);
     }
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");

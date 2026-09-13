@@ -28,6 +28,41 @@ static uint8_t bits_to_byte_lsbf(const uint8_t *bits) {
     return v;
 }
 
+/* ⭐⭐ THE WIEGAND PARITY OVER THE DESCRAMBLED PAYLOAD — the reference's last gate, and the
+ * one we were missing. `protocol_gproxii_can_be_decoded` does not stop at the format length:
+ * it reads the 24-bit (26-format) or 34-bit (36-format) credential out of the descrambled
+ * stream and checks the two Wiegand parity bits either side of it. C252 measured what leaving
+ * it out cost — 60 of 96 single-bit flips came back as a confident wrong credential.
+ *
+ * ⭐ VERIFIED AGAINST A CREDENTIAL WE CHOSE, not against its own inverse: the bench frame
+ * `f84602a46119d4a114211046` descrambles to xor key 200, length 26, FC 45, card 6789 — which
+ * are exactly the `--xor 200 --fmt 26 --fc 45 --cn 6789` the Proxmark cloned (C207) — and
+ * both parities check out on it.
+ *
+ * ⚠ The reference reads the credential as an integer and indexes it from the LSB; this walks
+ * the stream from the MSB instead, so the spans are written out rather than transliterated.
+ * For the 26-bit format even parity covers stream bits 33..44 and odd covers 45..56, with the
+ * parity bits at 32 and 57; for the 36-bit format, 33..49 and 50..66, with bits at 32 and 67. */
+static bool gproxii_wiegand_ok(const uint8_t *dec, uint8_t card_len) {
+    const uint8_t span = (card_len == 26u) ? 24u : 34u;
+    const uint8_t half = (card_len == 26u) ? 12u : 17u;
+    const uint8_t odd_at = (uint8_t)(33u + span);
+    uint8_t even_sum = 0;
+    uint8_t odd_sum = 1;              /* ⚠ seeded at 1 — this half is ODD parity */
+    for (uint8_t i = 0; i < span; i++) {
+        const uint8_t b = (uint8_t)(33u + i);
+        const uint8_t bit = (uint8_t)((dec[b / 8u] >> (7u - (b % 8u))) & 1u);
+        if (i < half) {
+            even_sum = (uint8_t)(even_sum + bit);
+        } else {
+            odd_sum = (uint8_t)(odd_sum + bit);
+        }
+    }
+    const uint8_t even_bit = (uint8_t)((dec[32u / 8u] >> (7u - (32u % 8u))) & 1u);
+    const uint8_t odd_bit = (uint8_t)((dec[odd_at / 8u] >> (7u - (odd_at % 8u))) & 1u);
+    return (even_sum & 1u) == even_bit && (odd_sum & 1u) == odd_bit;
+}
+
 static bool gproxii_accept(const uint8_t *word_bits, uint16_t frame_bits) {
     if (frame_bits < GPROXII_BIPHASE_FRAME_BITS) {
         return false;
@@ -49,8 +84,16 @@ static bool gproxii_accept(const uint8_t *word_bits, uint16_t frame_bits) {
      * --fmt 26` the Proxmark cloned — so the descramble is confirmed by a value we chose
      * ourselves, not merely by self-consistency. */
     const uint8_t xor_key = bits_to_byte_lsbf(body);
-    const uint8_t fmt_len = (uint8_t)((bits_to_byte_lsbf(body + 8) ^ xor_key) >> 2);
-    return fmt_len == 26u || fmt_len == 36u;
+    uint8_t dec[GPROXII_BIPHASE_SPACER_GROUPS * 4u / 8u];
+    dec[0] = xor_key;
+    for (uint8_t i = 1; i < sizeof(dec); i++) {
+        dec[i] = (uint8_t)(bits_to_byte_lsbf(body + 8u * i) ^ xor_key);
+    }
+    const uint8_t fmt_len = (uint8_t)(dec[1] >> 2);
+    if (fmt_len != 26u && fmt_len != 36u) {
+        return false;
+    }
+    return gproxii_wiegand_ok(dec, fmt_len);
 }
 
 const lf_biphase_format_t LF_BIPHASE_FORMAT_GPROXII = {
