@@ -650,7 +650,7 @@ int main(void) {
         bad += sweep("Indala224 PSK2",  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e4",
                                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e4", 224, &psk_224, 28, 0, 196);
         bad += sweep("Gallagher ASK",   "7feaa31e76d86c6d868cc249", "7feaa31e76d86c6d868cc249", 96, &ask_gal, 88, 0, 8);
-        bad += sweep("Securakey ASK",   "7fcb400001adea5344300000", "7fcb400001adea5344300000", 96, &ask_sk, 19, 0, 77);
+        bad += sweep("Securakey ASK",   "7fcb400001adea5344300000", "7fcb400001adea5344300000", 96, &ask_sk, 28, 0, 68);
         bad += sweep("Noralsy   ASK",   "bb0214ff0112402233670000", "bb0214ff0112402233670000", 96, &ask_nor, 80, 0, 16);
         bad += sweep("AWID      FSK2a", "011db218271bd81111111111", "011db218271bd81111111111", 96, &fsk_awid, 96, 0, 0);
         bad += sweep("GProxII   biphase", "f84602a46119d4a114211046", "f84602a46119d4a114211046", 96, &bi_gpii, 36, 0, 60);

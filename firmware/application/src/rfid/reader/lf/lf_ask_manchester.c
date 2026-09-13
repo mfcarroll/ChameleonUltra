@@ -73,11 +73,35 @@ const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS] = {
     0, 0, 1, 0, 1, 1, 0, 1, 0
 };
 
-/* ⛔ NO `accept` — AND THAT IS A GAP, NOT A DESIGN. Gallagher gates on a CRC-8 over its
- * payload; Securakey has no checksum either reference knows how to compute, so the gate is
- * the 19 preamble bits and nothing else. ⇒ Whether that is sufficient is a MEASUREMENT, and
- * the cross-protocol null is the one that makes it. Do not quote this format's reliability
- * from Gallagher's. */
+/* ⭐ SECURAKEY'S GATE IS STRUCTURAL, NOT A CHECKSUM — and the earlier note here was wrong to
+ * conclude that "no checksum" meant "nothing to check". It said the gate was the 19 preamble
+ * bits and nothing else, and C252 measured what that costs: 77 of 96 single-bit flips came
+ * back as a confident wrong credential, the second-weakest gate we ship.
+ *
+ * ⭐ The reference DOES have a check and it is not a checksum: the frame is a 10-bit preamble
+ * and then 9-bit groups of one ZERO SPACER followed by eight data bits, and
+ * `protocol_securakey_can_be_decoded` rejects any frame where a spacer is not zero —
+ * `bit_lib_test_parity(.., 2, 90, BitLibParityAlways0, 9)`, which tests the last bit of each
+ * 9-bit group rather than its parity. Ten spacers at bits 10, 19, 28 ... 91.
+ *
+ * ⚠ The frame ALSO carries Wiegand even/odd parity at bits 35 and 63, which `encoder_start`
+ * writes and which NEITHER reference checks on decode. Enforcing it would be a stronger gate
+ * than the references apply, on the strength of one bench credential — that is how a format
+ * starts rejecting real tags, so it stays unenforced and written down instead. */
+static bool securakey_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < SECURAKEY_ASK_FRAME_BITS) {
+        return false;
+    }
+    /* Every 9th bit from 10 to 91 is the group's spacer and must be zero. Bit 10 is inside
+     * the preamble the caller already matched; checking it again costs nothing and keeps the
+     * loop the same shape as the reference's. */
+    for (uint16_t b = 10; b <= 91; b = (uint16_t)(b + 9)) {
+        if (word_bits[b] & 1u) {
+            return false;
+        }
+    }
+    return true;
+}
 /* Noralsy: the first 12 bits of `0xBB0`. */
 const uint8_t LF_ASK_PREAMBLE_NORALSY[NORALSY_ASK_PREAMBLE_BITS] = {
     1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0
@@ -148,7 +172,7 @@ const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY = {
     .preamble_bits = SECURAKEY_ASK_PREAMBLE_BITS,
     .frame_bits = SECURAKEY_ASK_FRAME_BITS,
     .bit_samples = SECURAKEY_ASK_BIT_SAMPLES,
-    .accept = NULL,
+    .accept = securakey_accept,
 };
 
 static int preamble_err(const uint8_t *bits, size_t at, bool inv,
