@@ -111,6 +111,66 @@ int main(void) {
         }
     }
 
+
+    /* ⭐⭐⭐ THE SAME QUESTION AT EVERY OTHER BIT LENGTH. At 26 bits H10301 accepts every valid
+     * ind26 frame, so a non-HID format can never win and a non-HID result means corruption. The
+     * message `lf hid prox read` prints for OTHER lengths hedges — "either the tag really carries
+     * that layout or the capture was corrupted" — and that hedge has never been checked.
+     *
+     * ⇒ For each length, pack credentials under each NON-HID format there and ask whether some
+     * HID format at that length accepts the result. If one always does, the hedge is wrong there
+     * too and the message can be definite. If not, a genuine foreign credential really can win. */
+    int verdict_moved = 0;
+    {
+        /* The formats the table's own `// HID …` comments name. Not my idea of who makes what. */
+        static const card_format_t HIDF[] = {
+            H10301, ADT31, HCP32, HPP32, D10202, H10306, C1K35S, C15001,
+            S12906, SIE36, H10320, H10302, H10304, P10004, HGEN37, ACTPHID,
+        };
+        printf("\nCan a NON-HID format ever win, by bit length?\n");
+        for (uint8_t len = 26; len <= 56; len++) {
+            int foreign = 0, covered = 0, uncovered = 0;
+            for (size_t i = 0; i < ALL_COUNT; i++) {
+                int is_hid = 0;
+                for (size_t k = 0; k < sizeof(HIDF)/sizeof(HIDF[0]); k++) {
+                    if (HIDF[k] == ALL[i]) { is_hid = 1; break; }
+                }
+                if (is_hid) { continue; }
+                for (uint32_t fc = 1; fc < 1024; fc += 101) {
+                    for (uint64_t cn = 1; cn < 65536; cn += 6151) {
+                        wiegand_card_t c;
+                        memset(&c, 0, sizeof(c));
+                        c.format = ALL[i]; c.facility_code = fc; c.card_number = cn;
+                        uint64_t w = pack(&c);
+                        if (w == 0) { continue; }
+                        wiegand_card_t *self = unpack((uint8_t)ALL[i], len, 0, w);
+                        if (self == NULL) { continue; }   /* not this format's length */
+                        free(self);
+                        foreign++;
+                        int hid_takes = 0;
+                        for (size_t k = 0; k < sizeof(HIDF)/sizeof(HIDF[0]); k++) {
+                            wiegand_card_t *h = unpack((uint8_t)HIDF[k], len, 0, w);
+                            if (h != NULL) { hid_takes = 1; free(h); break; }
+                        }
+                        if (hid_takes) { covered++; } else { uncovered++; }
+                    }
+                }
+            }
+            if (foreign == 0) { continue; }
+            printf("  %2d bits: %5d foreign frames, %5d also taken by an HID format, "
+                   "%5d NOT -> %s\n", len, foreign, covered, uncovered,
+                   uncovered == 0 ? "non-HID can never win" : "a genuine foreign tag CAN win");
+            /* ⛔ PINNED PER LENGTH, because `lf hid prox read`'s message now BRANCHES on this.
+             * The counts themselves depend on the credential grid and are not pinned; the
+             * VERDICT is the claim the CLI relies on. */
+            int expect_total_cover = (len == 26 || len == 32 || len == 37);
+            if (expect_total_cover != (uncovered == 0)) {
+                printf("    ⛔ MOVED: the CLI's per-length wording assumes otherwise\n");
+                verdict_moved = 1;
+            }
+        }
+    }
+
     /* ⛔ PINNED. If the formats table is reordered, extended or narrowed, these numbers move
      * and this arm says so — which is the whole reason a measurement belongs in the harness
      * rather than in a notebook. */
@@ -120,6 +180,7 @@ int main(void) {
     if (rejected != 13 || stays_h10301 != 0 || becomes_other != 13 || ambiguous != 0) {
         printf("⛔ MOVED: corruption outcome counts\n"); bad = 1;
     }
+    if (verdict_moved) { bad = 1; }
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ ambiguity counts unchanged");
     return bad;
 }

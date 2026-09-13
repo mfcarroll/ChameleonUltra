@@ -5963,6 +5963,26 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
 # HID layout" is a question only the table can answer.
 # ⚠ H10301 is the only one of these at 26 bits, which is why a 26-bit read that lands outside
 # this set has necessarily left the HID family (C277).
+# ⭐⭐ WHAT A NON-HID WINNER MEANS DEPENDS ON THE BIT LENGTH, and `ctest/ambig.c` measured it
+# per length against the shipping `wiegand.c` rather than leaving the message to guess:
+#
+#   26, 32, 37 bits  an HID format accepts EVERY valid foreign frame, so a foreign result
+#                    cannot be a genuine foreign tag — it is a corrupted capture
+#   34 bits          HID formats cover most foreign frames but not all (307 of 484), so both
+#                    explanations are live and the reader cannot tell them apart
+#   27, 28, 29, 30   there is NO HID format at these lengths at all. A foreign result is simply
+#                    what the reader found, and warning about it would be crying wolf
+#
+# ⚠ Lengths above 37 are NOT measured — `ambig`'s credential grid produces no valid frames
+# there — so they fall through to the cautious "either" wording.
+FOREIGN_MEANS_CORRUPTION = frozenset({          # 26, 32 and 37-bit foreign formats
+    HIDFormat.IND26, HIDFormat.KASTLE, HIDFormat.KANTECH, HIDFormat.WIE32, HIDFormat.MDI37,
+})
+NO_HID_AT_THIS_LENGTH = frozenset({             # 27, 28, 29 and 30-bit formats
+    HIDFormat.IND27, HIDFormat.INDASC27, HIDFormat.TECOM27,
+    HIDFormat.W2804, HIDFormat.IND29, HIDFormat.ATSW30,
+})
+
 HID_BRANDED_FORMATS = frozenset({
     HIDFormat.H10301, HIDFormat.ADT31, HIDFormat.HCP32, HIDFormat.HPP32,
     HIDFormat.D10202, HIDFormat.H10306, HIDFormat.C1K35S, HIDFormat.C15001,
@@ -6012,17 +6032,28 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
                 # H10301 frame either dies or reappears under another format's name (C277).
                 # ⚠ Saying "this is corruption" would have been wrong, and was caught by writing
                 # a genuine ind26 credential to a tag and reading it back.
+                if format in NO_HID_AT_THIS_LENGTH:
+                    # ⭐ NOT A WARNING. There is no HID format at this bit length, so a foreign
+                    # layout is the only thing the reader could possibly have returned and
+                    # flagging it would be noise on every read (measured in ctest/ambig.c).
+                    print(f"   {color_string((CY, 'note'))}: no HID format exists at this frame "
+                          f"length — {color_string((CY, str(HIDFormat(format))))} is simply the "
+                          f"layout that fits, and that is normal here.")
+                    print(f" FC: {color_string((CG, fc))}" if fc > 0 else "", end="")
+                    print()
+                    print(f" CN: {color_string((CG, cn))}")
+                    return
                 print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
                       f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")
-                if format == HIDFormat.IND26:
+                if format in FOREIGN_MEANS_CORRUPTION:
                     # ⭐ AT 26 BITS THIS IS CORRUPTION, and that is measured rather than assumed:
                     # H10301 accepts all 8,658 validly packed ind26 frames swept in ctest/ambig.c,
                     # so a genuine Indala-26 credential on an HID Prox tag reports as H10301 and
                     # never reaches here. Only a frame that BREAKS H10301's parity falls through
                     # to ind26 — which is what a corrupted capture does (C277, C251).
-                    print(f"   {color_string((CR, 'At 26 bits that means the capture was corrupted'))}"
-                          f": H10301 accepts every valid ind26 frame, so a real Indala-layout tag "
-                          f"reports as H10301 and never lands here (C277). "
+                    print(f"   {color_string((CR, 'At this frame length that means the capture was '
+                          'corrupted'))}: an HID format accepts every VALID frame of this foreign "
+                          f"layout, so a real one reports as HID and never lands here (C277, C280). "
                           f"{color_string((CY, 'The numbers below are fiction'))} — re-read.")
                 else:
                     # ⚠ At other lengths an HID format need not accept a valid non-HID credential,
