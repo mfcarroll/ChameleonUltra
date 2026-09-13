@@ -1003,6 +1003,8 @@ lf_securakey = lf.subgroup("securakey", "Securakey commands")
 lf_noralsy = lf.subgroup("noralsy", "Noralsy commands")
 lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
 lf_awid = lf.subgroup("awid", "AWID commands (read only for now)")
+lf_paradox = lf.subgroup("paradox", "Paradox commands (read only for now)")
+lf_pyramid = lf.subgroup("pyramid", "Pyramid commands (read only for now)")
 
 
 @root.command("clear")
@@ -7500,6 +7502,38 @@ class LFAwidRead(ReaderRequiredUnit):
         # the tail of the 9-byte credential is structurally absent, not lost in the read.
         print(f"   ⚠ AWID carries only 66 payload bits — the last 6 bits of those 9 bytes "
               f"are not on the wire and read back zero.")
+        print(f"   Read at sample phase {phase} ticks, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_paradox.command("read")
+class LFParadoxRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a Paradox credential (FSK2a, 96-bit frame). Read only for "
+                              "now — the writer waits for the T5577 to return.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, tries = self.cmd.paradox_scan()
+        print("Paradox FSK2a")
+        print(f"   Raw (96 bits): {color_string((CY, raw.hex()))}")
+        print(f"   Read at sample phase {phase} ticks, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_pyramid.command("read")
+class LFPyramidRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a Pyramid credential (FSK2a, 128-bit frame, CRC-8 gated). "
+                              "Read only for now — the writer waits for the T5577 to return.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, tries = self.cmd.pyramid_scan()
+        print("Pyramid FSK2a")
+        print(f"   Raw (128 bits): {color_string((CY, raw.hex()))}")
         print(f"   Read at sample phase {phase} ticks, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 

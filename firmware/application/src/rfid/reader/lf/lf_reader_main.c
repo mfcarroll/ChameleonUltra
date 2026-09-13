@@ -155,6 +155,22 @@ uint8_t scan_gallagher(uint8_t *data) {
     return STATUS_LF_TAG_NO_FOUND;
 }
 
+uint8_t scan_paradox(uint8_t *data) {
+    int32_t energy = 0;
+    if (paradox_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t scan_pyramid(uint8_t *data) {
+    int32_t energy = 0;
+    if (pyramid_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
 uint8_t scan_awid(uint8_t *data) {
     int32_t energy = 0;
     if (awid_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {

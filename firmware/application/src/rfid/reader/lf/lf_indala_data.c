@@ -641,6 +641,37 @@ bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ PARADOX AND PYRAMID — the same decoder as AWID with a different `lf_fsk2a_format_t`,
+ * which is the whole claim the FSK design made and the only family here where a second and
+ * third protocol genuinely cost one descriptor each (C197). */
+bool paradox_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    if (!lf_ask_read(paradox_fsk_decode, PARADOX_FSK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    data[12] = r.phase;
+    data[13] = r.tries;
+    data[14] = 0;
+    data[15] = 0;
+    return true;
+}
+
+bool pyramid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    if (!lf_ask_read(pyramid_fsk_decode, PYRAMID_FSK_CAPTURE_SAMPLES,
+                     &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 16);
+    data[16] = r.phase;
+    data[17] = r.tries;
+    data[18] = 0;
+    data[19] = 0;
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

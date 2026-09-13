@@ -143,6 +143,14 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 #define AWID_READ_DATA_SIZE 24
 bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by paradox_read(): the 12-byte frame, then phase, tries, pad. */
+#define PARADOX_READ_DATA_SIZE 16
+bool paradox_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
+/** Bytes written by pyramid_read(): the 16-byte frame, then phase, tries, pad. */
+#define PYRAMID_READ_DATA_SIZE 20
+bool pyramid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */

@@ -897,6 +897,33 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def paradox_scan(self):
+        """Read a Paradox credential (FSK2a, 96-bit frame).
+
+        ⭐ Its gate is structural rather than a checksum: an 8-bit preamble, the frame
+        repeating, and 44 INDEPENDENT alternating-pair checks over bits 8..95.
+        """
+        resp = self.device.send_cmd_sync(Command.PARADOX_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, tries = struct.unpack(">12sBB2x", resp.data[:16])
+            resp.parsed = (raw, phase, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def pyramid_scan(self):
+        """Read a Pyramid credential (FSK2a, 128-bit frame).
+
+        ⭐ The strongest gate in the FSK family: a 24-bit preamble, the frame repeating at
+        128, AND a CRC-8 over 13 bytes — poly 0x31 with both ends reflected, verified against
+        a real capture rather than transcribed and hoped for.
+        """
+        resp = self.device.send_cmd_sync(Command.PYRAMID_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, tries = struct.unpack(">16sBB2x", resp.data[:20])
+            resp.parsed = (raw, phase, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def awid_scan(self):
         """Read an AWID credential (FSK2a, RF/8 and RF/10 tones, 96-bit frame).
 

@@ -241,5 +241,7 @@
 #define DATA_CMD_INSTAFOB_SCAN                  (3050)
 /* ⚠ Scan only for now — the AWID writer is deferred until the tag is back in the sandwich. */
 #define DATA_CMD_AWID_SCAN                      (3051)
+#define DATA_CMD_PARADOX_SCAN                   (3052)
+#define DATA_CMD_PYRAMID_SCAN                   (3053)
 
 #endif
