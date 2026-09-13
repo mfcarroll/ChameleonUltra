@@ -38,17 +38,17 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE — updated 2026-09-13 01:30
 
-- **Last landed:** U1, U2, U3 all done — **NexWatch is complete** (read, write, emulate) and
-  the PSK1 family is closed (C164-C167).
-- **In flight:** nothing. **U4 (re-test C162) is next**, then U5 (Gallagher, opens ASK/biphase).
+- **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
+  C162 re-tested at n=70 with half of it retracted (C168).
+- **In flight:** nothing. **U5 (Gallagher, opens the ASK/biphase family) is next**, then U6.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
   which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
   session is closed, and auto-expires after 7 days. Re-seed from §6.
-- **Bench:** all four devices enumerate. T5577 now holds **our own** NexWatch write —
-  card 87654321, mode 2, Quadrakey, block 0 `00081060`.
+- **Bench:** all four devices enumerate. T5577 now holds the **Indala224** credential
+  `80000001b23523a6...928c14e5`, PSK2, block 0 `000820E0` (written for U4).
 - **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
@@ -111,60 +111,67 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
    cannot settle it (`GIT_VERSION` arrives as a `-D` flag, so the object is not rebuilt).
    Trigger DFU on the port you want, then **ask the device what command ids it declares** —
    see README.md **Working conventions** for both commands.
-8. ⭐ **Build:** `cd firmware && docker compose up --pull=always build-ultra`.
+8. ⚠ **`lf t55xx dump` NEEDS `lf t55xx detect` IN THE SAME `pm3 -c` INVOCATION.** It reads
+   the chip config that `detect` caches, and every `./pm3 -c` is a fresh session — without it
+   the dump comes back completely EMPTY, which looks exactly like a dead tag and nearly got
+   written up as a fourth coupling failure (L134).
+9. ⭐ **Build:** `cd firmware && docker compose up --pull=always build-ultra`.
    ⚠ `./build.sh` does **not** work on this host — bad interpreter, and the SDK expects the
    ARM toolchain at `/usr/bin` where Homebrew puts it in `/opt/homebrew/bin`. Do not spend
    time fixing that; Docker carries the pinned toolchain and is what the flash script uses.
 
 **Evidence — `METHOD.md` binds**
 
-9. Nothing enters `FINDINGS.md` without its **n**, its **null** and its **independent
+10. Nothing enters `FINDINGS.md` without its **n**, its **null** and its **independent
    check**. ⭐ A blank column IS the finding — say so. (The NexWatch parity gate's null came
    back blank and that is recorded as a blank, not dressed up.)
-10. ⛔ **A new format is not done until its cross-protocol nulls pass** — against the
+11. ⛔ **A new format is not done until its cross-protocol nulls pass** — against the
     committed Indala26, IDTECK, Indala224, Keri, NexWatch and empty captures, **both
     directions**. The Keri veto was refuted into existence in ten minutes by exactly that
     (C157). A preamble-only match is never acceptable.
-11. ⛔ **Emulate what the tag puts on the wire, not the reader's frame view.** They differ by
+12. ⛔ **Emulate what the tag puts on the wire, not the reader's frame view.** They differ by
     a rotation and it cost a stable wrong credential 6/6 (C160). Verify against a real
     clone's own block dump.
-12. ⛔ **Capture length is per-protocol and MEASURED by truncating one good capture** — never
+13. ⛔ **Capture length is per-protocol and MEASURED by truncating one good capture** — never
     guessed from the frame length (C161, C165). NexWatch's real threshold was 3456 where the
     design guessed 12288.
-13. ⛔ **Control the plaintext**: write a KNOWN credential and score **bit errors**, not
+14. ⛔ **Control the plaintext**: write a KNOWN credential and score **bit errors**, not
     pass/fail (M33).
-14. ⛔ Against anything intermittent, **A/B is not an experiment — A/B/A is** (M35).
-15. ⛔ Before designing a measurement, **grep `FINDINGS.md` for the subsystem it touches**
+15. ⛔ Against anything intermittent, **A/B is not an experiment — A/B/A is** (M35).
+16. ⛔ Before designing a measurement, **grep `FINDINGS.md` for the subsystem it touches**
     (M32). The answer has been sitting there more than once.
-16. ⚠ **Do NOT verify a PSK2 write against `lf t55xx dump`** — its per-block first bit is
-    wrong (C162, n=1, U4 re-tests it). Use two independent readers.
-17. ⭐ `cd ctest && make check` runs the 320-capture cross-check **and** the emitter round
+17. ⛔ **Do NOT verify a PSK2 write against `lf t55xx dump`, and do NOT trust a clean one
+    either.** Measured at n=70: **33% of PSK2 block reads have bit 31 wrong**, zero errors in
+    any other bit, and only **1 dump in 10 is completely clean** — so a single good dump is
+    not evidence any more than a bad one is (C168). The PSK1 control is 40/40 exact. Use two
+    independent readers.
+18. ⭐ `cd ctest && make check` runs the 320-capture cross-check **and** the emitter round
     trip. **A new protocol gets a `roundtrip.c` arm; a new reader gets its captures
     committed under `caps/`.** That harness exists because a bug shipped three times.
 
 **Git**
 
-18. ⛔ **`./autopilot.sh gate` before every commit.** It scans the **staged** diff and exits
+19. ⛔ **`./autopilot.sh gate` before every commit.** It scans the **staged** diff and exits
     non-zero on a match. Verified to fire in both directions on 2026-09-13 — do not "fix" it
     into a `||` chain, which would invert it into a rubber stamp.
-19. ⛔ **Always `git commit --no-gpg-sign`.** 1Password is locked overnight; a plain commit
+20. ⛔ **Always `git commit --no-gpg-sign`.** 1Password is locked overnight; a plain commit
     blocks on an unlock prompt or fails. Use a **quoted** heredoc (`-F - <<'MSG'`) so the
     body is not command-substituted.
-20. `./checkdocs.sh` passes before every commit — run it **WITHOUT a pipe**.
-21. ⛔ **Never `--amend`, never `--force`.** `LOG.md` cites hashes and `checkdocs.sh` asks
+21. `./checkdocs.sh` passes before every commit — run it **WITHOUT a pipe**.
+22. ⛔ **Never `--amend`, never `--force`.** `LOG.md` cites hashes and `checkdocs.sh` asks
     whether each is reachable from HEAD. Land it, then fix it forward.
-22. ⭐ **A change and the note describing it belong in the same commit.** Write the LOG entry
+23. ⭐ **A change and the note describing it belong in the same commit.** Write the LOG entry
     with `` `this commit` ``, then point it at its own hash in a follow-up commit.
-23. ⛔ **Push to `origin indala-psk-read` only.** Never `upstream`, never `main`, no PR, no
+24. ⛔ **Push to `origin indala-psk-read` only.** Never `upstream`, never `main`, no PR, no
     upstream comment, no public post. ⚠ If `indala-psk-read` ever becomes the head of an
     open PR, **stop pushing and ask** — that is a standing rule from the operator's global
     config and it outranks this file.
-24. ⚠ `NEXT.md` is a plan, not a journal. Finished sections collapse to one line; history
+25. ⚠ `NEXT.md` is a plan, not a journal. Finished sections collapse to one line; history
     goes to `LOG.md`; what is believed now goes to `FINDINGS.md`.
 
 **Stop conditions** — report and halt, do not work around:
 
-25. The build stays broken after one honest attempt; a device stops enumerating and stays
+26. The build stays broken after one honest attempt; a device stops enumerating and stays
     gone; `checkdocs.sh` fails without an obvious fix; `util7 > 30`; or everything
     remaining needs hands.
 
@@ -177,6 +184,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
 | 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
 | 2026-09-13 02:45 | U2 | 29 → 31 | NexWatch emulation: protocol struct, `TAG_TYPE_NEXWATCH`, econfig, 2 roundtrip arms | Flipper 6/6, null 0/4, return leg 4/4 — A/B/A |
+| 2026-09-13 03:20 | U4 | 27 → 30 | C162 re-tested at n=70; C168 added, C162 corrected in place | 23/70 PSK2 block reads wrong at bit 31, 0/2170 elsewhere; PSK1 control 40/40 exact |
 
 ---
 
