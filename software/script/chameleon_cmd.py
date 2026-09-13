@@ -896,6 +896,46 @@ class ChameleonCMD:
             resp.parsed = resp.data[:8]
         return resp
 
+    @expect_response(Status.LF_TAG_OK)
+    def securakey_scan(self):
+        """Read a Securakey credential (ASK/Manchester, RF/40, 96-bit frame).
+
+        ⚠ Its only gate is a 19-bit preamble — no checksum is known to either reference
+        implementation — so this format is less strongly verified than Gallagher's (C175).
+
+        Returns (raw, phase, offset, tries).
+        """
+        resp = self.device.send_cmd_sync(Command.SECURAKEY_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, offset, tries = struct.unpack(">12sBBB1x", resp.data[:16])
+            resp.parsed = (raw, phase, offset, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def securakey_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                                 old_keys: list = None):
+        """Write a raw 96-bit Securakey frame onto a T55xx (ASK, RF/40, 3 data blocks)."""
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.SECURAKEY_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def securakey_set_emu_id(self, id: bytes):
+        """Set the 96-bit Securakey frame emulated on the active slot."""
+        if len(id) != 12:
+            raise ValueError("The id bytes length must equal 12")
+        return self.device.send_cmd_sync(Command.SECURAKEY_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def securakey_get_emu_id(self):
+        """Get the emulated Securakey 96-bit frame."""
+        resp = self.device.send_cmd_sync(Command.SECURAKEY_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:12]
+        return resp
+
     @expect_response(Status.SUCCESS)
     def gallagher_set_emu_id(self, id: bytes):
         """Set the 96-bit Gallagher frame emulated on the active slot.

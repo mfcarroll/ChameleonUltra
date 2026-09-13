@@ -186,6 +186,8 @@ class Command(enum.IntEnum):
     NEXWATCH_GET_EMU_ID = 5021
     GALLAGHER_SET_EMU_ID = 5022
     GALLAGHER_GET_EMU_ID = 5023
+    SECURAKEY_SET_EMU_ID = 5024
+    SECURAKEY_GET_EMU_ID = 5025
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -202,6 +204,8 @@ class Command(enum.IntEnum):
     NEXWATCH_WRITE_TO_T55XX = 3043
     GALLAGHER_SCAN = 3044
     GALLAGHER_WRITE_TO_T55XX = 3045
+    SECURAKEY_SCAN = 3046
+    SECURAKEY_WRITE_TO_T55XX = 3047
 
 @enum.unique
 class Status(enum.IntEnum):
@@ -369,6 +373,7 @@ class TagSpecificType(enum.IntEnum):
     Keri = 302
     NexWatch = 303
     Gallagher = 304
+    Securakey = 305
     IDTECK = 310
 
     # Reader-Talk-First       400
@@ -467,6 +472,8 @@ class TagSpecificType(enum.IntEnum):
             return "NexWatch"
         elif self == TagSpecificType.Gallagher:
             return "Gallagher"
+        elif self == TagSpecificType.Securakey:
+            return "Securakey"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

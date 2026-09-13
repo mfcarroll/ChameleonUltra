@@ -40,13 +40,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **U6 — Securakey's DECODER is host-verified 4/4 with 21 nulls clean (C175);
-  the device arm is not wired.** Next: `securakey_read` + `scan_securakey` +
-  `DATA_CMD_SECURAKEY_*` + CLI + writer (`T5577_SECURAKEY_CONFIG 0x000C8060`, 3 blocks,
-  **check alignment against the clone's blocks before assuming transcribe**), then emulate
-  (`counter_top = 40`, NOT 32). Then Noralsy, then InstaFob.
-  ⚠ Securakey has NO computed check — its whole gate is 19 preamble bits. Do not carry
-  Gallagher's reliability over to it.
+- **In flight:** **U6 — Securakey READS and WRITES on device (C176). Its EMULATION is 0 of 6
+  and that is an open defect, not a bench problem** — Gallagher read 4/4 on the same rig in
+  the same minute (C177). ⭐ **Resume there, and the next step is the SEQUENCE TERMINATOR**,
+  not the bit rate: Momentum's Securakey decoder checks its preamble once where Gallagher's
+  checks it at bit 0 and again at bit 96, so a plain looping frame may give Securakey no
+  frame boundary. ⛔ Already eliminated by measurement: inverted polarity (also 0/4), and
+  "the reader wasn't asked" (both are `LFRFIDFeatureASK`). Then Noralsy, then InstaFob.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -199,6 +199,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 05:45 | U5 (read+write) | 33 → 36 | Gallagher device read + write, config `00088060`, CLI with host descramble | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all four fields changed |
 | 2026-09-13 06:20 | U5 (emulate) — DONE | 34 → 37 | Gallagher ASK emitter, `TAG_TYPE_GALLAGHER`, econfig | Flipper 6/6, null 0/4, return leg 4/4 with a CHANGED credential it tracked |
 | 2026-09-13 06:55 | U6 (part) | 38 → 40 | Securakey decoder; `lf_ask_format_t` parameterised by bit rate | 4/4 exact at RF/40, Gallagher unregressed, 21 nulls clean incl. same-family both ways |
+| 2026-09-13 07:35 | U6 (part) | 39 → 42 | Securakey device read + write + emitter, `TAG_TYPE_SECURAKEY`, CLI | read 6/6, write 3/3 via pm3; **emulate 0/6** with Gallagher 4/4 as the same-rig control |
 
 ---
 

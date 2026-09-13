@@ -810,6 +810,34 @@ static data_frame_tx_t *cmd_processor_keri_write_to_t55xx(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_securakey_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[SECURAKEY_READ_DATA_SIZE] = { 0x00 };
+    status = scan_securakey(card_data);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
+static data_frame_tx_t *cmd_processor_securakey_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t frame12[12];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_securakey_to_t55xx(payload->frame12, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_gallagher_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[GALLAGHER_READ_DATA_SIZE] = { 0x00 };
     status = scan_gallagher(card_data);
@@ -1357,6 +1385,26 @@ static data_frame_tx_t *cmd_processor_keri_get_emu_id(uint16_t cmd, uint16_t sta
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_KERI);
     return data_frame_make(cmd, STATUS_SUCCESS, LF_KERI_TAG_ID_SIZE, buffer->buffer);
+}
+
+static data_frame_tx_t *cmd_processor_securakey_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_SECURAKEY_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SECURAKEY);
+    memcpy(buffer->buffer, data, LF_SECURAKEY_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_SECURAKEY, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_securakey_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_SECURAKEY) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, data);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SECURAKEY);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_SECURAKEY_TAG_ID_SIZE, buffer->buffer);
 }
 
 static data_frame_tx_t *cmd_processor_gallagher_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3480,6 +3528,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_NEXWATCH_WRITE_TO_T55XX,      before_reader_run,           cmd_processor_nexwatch_write_to_t55xx,       NULL                   },
     {    DATA_CMD_GALLAGHER_SCAN,               before_reader_run,           cmd_processor_gallagher_scan,                NULL                   },
     {    DATA_CMD_GALLAGHER_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_gallagher_write_to_t55xx,      NULL                   },
+    {    DATA_CMD_SECURAKEY_SCAN,               before_reader_run,           cmd_processor_securakey_scan,                NULL                   },
+    {    DATA_CMD_SECURAKEY_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_securakey_write_to_t55xx,      NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
@@ -3572,6 +3622,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_NEXWATCH_GET_EMU_ID,            NULL,                      cmd_processor_nexwatch_get_emu_id,           NULL                   },
     {    DATA_CMD_GALLAGHER_SET_EMU_ID,           NULL,                      cmd_processor_gallagher_set_emu_id,          NULL                   },
     {    DATA_CMD_GALLAGHER_GET_EMU_ID,           NULL,                      cmd_processor_gallagher_get_emu_id,          NULL                   },
+    {    DATA_CMD_SECURAKEY_SET_EMU_ID,           NULL,                      cmd_processor_securakey_set_emu_id,          NULL                   },
+    {    DATA_CMD_SECURAKEY_GET_EMU_ID,           NULL,                      cmd_processor_securakey_get_emu_id,          NULL                   },
     {    DATA_CMD_IDTECK_GET_EMU_ID,              NULL,                      cmd_processor_idteck_get_emu_id,             NULL                   },
 
     {    DATA_CMD_SEOS_READ_EMU_DATA,             NULL,                      cmd_processor_seos_read_emu_data,            NULL                   },

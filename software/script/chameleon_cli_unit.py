@@ -999,6 +999,7 @@ lf_indala = lf.subgroup("indala", "Indala commands")
 lf_keri = lf.subgroup("keri", "Keri commands")
 lf_nexwatch = lf.subgroup("nexwatch", "NexWatch commands")
 lf_gallagher = lf.subgroup("gallagher", "Gallagher commands")
+lf_securakey = lf.subgroup("securakey", "Securakey commands")
 
 
 @root.command("clear")
@@ -7217,6 +7218,104 @@ class LFGallagherEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
               + ("" if crc_ok else f"  {color_string((CR, '(CRC does not check out)'))}"))
         print(f"   Decode it with {color_string((CG, 'lf gallagher read'))} against the "
               f"emulated slot on a second device.")
+
+
+# ⚠ SECURAKEY HAS NO CHECKSUM ANYONE KNOWS HOW TO COMPUTE, so unlike Gallagher there is no
+# host-side verification to assert here and the raw frame is what gets reported. The Proxmark's
+# own reader says the same thing in as many words. ⇒ Do not add a plausible-looking field
+# extraction without a reference to check it against — that is how idteck.c shipped a format
+# nobody had verified.
+@lf_securakey.command("read")
+class LFSecurakeyRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a Securakey credential (ASK/Manchester, RF/40). ⚠ Gated "
+                              "on a 19-bit preamble only — no checksum is known.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, phase, offset, tries = self.cmd.securakey_scan()
+        print("Securakey ASK/Manchester")
+        print(f"   Raw: {color_string((CY, raw.hex()))}")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_securakey.command("write")
+class LFSecurakeyWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Write a Securakey credential to a T5577. Configures ASK, "
+                              "RF/40, 3 data blocks (000C8060).")
+        parser.add_argument("--raw", type=str, required=True, metavar="<24 hex>",
+                            help="the 96-bit frame, e.g. 7fcb400001adea5344300000")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        hexs = args.raw.strip().lower().removeprefix("0x")
+        if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+            print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+            return
+        frame = bytes.fromhex(hexs)
+        before = self._try_read()
+        if before is None:
+            print(f"   {color_string((CY, 'No Securakey frame before the write.'))} Expected "
+                  f"for a blank or non-Securakey tag, but it also means there is no proof "
+                  f"this tag is coupled.")
+        else:
+            print(f"   before: {color_string((CY, before))}")
+        self.cmd.securakey_write_to_t55xx(frame)
+        after = self._try_read()
+        if after == hexs:
+            print(f"{color_string((CG, 'VERIFIED'))} {hexs} — read back off the tag.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — read {before} before, nothing after.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — still reads {after}.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {hexs}, read {after}.")
+
+    def _try_read(self):
+        try:
+            return self.cmd.securakey_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_securakey.command("econfig")
+class LFSecurakeyEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the Securakey frame emulated on a slot. Provide "
+                              "--raw to set; omit it to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            if lf_tag_type != TagSpecificType.Securakey:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Securakey. "
+                      f"Set it with: hw slot type -s <n> -t Securakey")
+            self.cmd.securakey_set_emu_id(bytes.fromhex(hexs))
+            print(f" - Securakey emu frame set to {hexs.upper()}.")
+            return
+        if lf_tag_type != TagSpecificType.Securakey:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}"
+                  f"{color_string((CR, ', not Securakey.'))}")
+            return
+        response = self.cmd.securakey_get_emu_id()
+        print(f" - Securakey emu frame: {response.hex().upper()}")
 
 
 @lf_idteck.command("read")

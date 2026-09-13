@@ -503,6 +503,23 @@ bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     return true;
 }
 
+/* ⭐ SECURAKEY — the same capture engine and the same decoder as Gallagher, with a different
+ * `lf_ask_format_t`. The only protocol-specific thing here is the capture length. */
+bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    data[12] = r.phase;
+    data[13] = r.res.offset;
+    data[14] = r.tries;
+    data[15] = 0;
+    NRF_LOG_INFO("securakey phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
+    return true;
+}
+
 /* ⭐ INDALA224, and the only thing that differs from the others is the capture length and
  * the payload. 28 bytes of frame is more than the 16-byte scan convention carries, so this
  * returns the frame in full and leaves interpretation to the host — there is no agreed

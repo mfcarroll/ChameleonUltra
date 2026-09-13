@@ -162,6 +162,13 @@ extern "C" {
 // bench has not checked. Keri's config is kept verbatim for the same reason.
 #define T5577_GALLAGHER_CONFIG (0x00088060)
 
+// Securakey: ASK at RF/40, three data blocks (96-bit frame), sequence terminator SET.
+//
+// ⭐ MEASURED from a Proxmark `lf securakey clone`: block 0 `000C8060`, `lf t55xx detect`
+// reports ASK / RF/40 / ST Yes (C175). ⛔ RF/40, not Gallagher's RF/32 — the bit rate is not
+// a family constant, and the difference from `00088060` is exactly that field.
+#define T5577_SECURAKEY_CONFIG (0x000C8060)
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

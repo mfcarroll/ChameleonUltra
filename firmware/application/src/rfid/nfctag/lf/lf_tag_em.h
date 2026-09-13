@@ -20,6 +20,7 @@
 #define LF_KERI_TAG_ID_SIZE 8
 #define LF_NEXWATCH_TAG_ID_SIZE 12
 #define LF_GALLAGHER_TAG_ID_SIZE 12
+#define LF_SECURAKEY_TAG_ID_SIZE 12
 
 void lf_tag_125khz_sense_switch(bool enable);
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer);
@@ -47,6 +48,8 @@ int lf_tag_nexwatch_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buf
 bool lf_tag_nexwatch_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_gallagher_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_gallagher_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int lf_tag_securakey_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_securakey_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);
 
 /** ⚠ §3 instrumentation: 12 bytes of LF emulation state. ⛔ Remove before upstreaming. */

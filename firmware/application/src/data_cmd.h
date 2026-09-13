@@ -212,6 +212,8 @@
 #define DATA_CMD_NEXWATCH_GET_EMU_ID            (5021)
 #define DATA_CMD_GALLAGHER_SET_EMU_ID           (5022)
 #define DATA_CMD_GALLAGHER_GET_EMU_ID           (5023)
+#define DATA_CMD_SECURAKEY_SET_EMU_ID           (5024)
+#define DATA_CMD_SECURAKEY_GET_EMU_ID           (5025)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
@@ -229,5 +231,7 @@
 #define DATA_CMD_NEXWATCH_WRITE_TO_T55XX        (3043)
 #define DATA_CMD_GALLAGHER_SCAN                 (3044)
 #define DATA_CMD_GALLAGHER_WRITE_TO_T55XX       (3045)
+#define DATA_CMD_SECURAKEY_SCAN                 (3046)
+#define DATA_CMD_SECURAKEY_WRITE_TO_T55XX       (3047)
 
 #endif
