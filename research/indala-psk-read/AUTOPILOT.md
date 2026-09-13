@@ -38,15 +38,16 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE — updated 2026-09-13 01:30
 
-- **Last landed:** `e0eb44b` — NexWatch **reader** done. 4/4 exact on real tag captures
-  (`5600000000436455121e6000`), 508 cross-protocol nulls clean, `make check` green.
-- **In flight:** nothing. U1 is next.
+- **Last landed:** U1 + U3 — NexWatch **read and write** verified on hardware (C166).
+- **In flight:** nothing. **U2 (emulate) is next**, then U4.
+- ⚠ **Chameleon #2 (`F429364E46961`) carries the new build; Chameleon #1 does NOT yet** —
+  U2 needs #1 flashed, since rig A is the emulation rig.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
   which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
   session is closed, and auto-expires after 7 days. Re-seed from §6.
-- **Bench:** all four devices enumerate. T5577 currently holds the **NexWatch** credential
-  written this session (`lf nexwatch clone --cn 12345678 -m 1 --nc`, block 0 `00081060`).
+- **Bench:** all four devices enumerate. T5577 now holds **our own** NexWatch write —
+  card 87654321, mode 2, Quadrakey, block 0 `00081060`.
 - **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
@@ -173,6 +174,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
+| 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
 
 ---
 

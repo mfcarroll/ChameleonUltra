@@ -15,6 +15,7 @@
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/keri.h"
+#include "protocols/nexwatch.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
@@ -427,6 +428,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_KERI_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_NEXWATCH && buffer->length >= LF_NEXWATCH_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = nexwatch.alloc();
+        m_pwm_seq = nexwatch.modulator(codec, buffer->buffer);
+        nexwatch.free(codec);
+        NRF_LOG_INFO("load lf nexwatch data finish.");
+        return LF_NEXWATCH_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -684,6 +694,29 @@ bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 /** @brief Keri data save callback. */
 int lf_tag_keri_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     return m_tag_type == TAG_TYPE_KERI ? LF_KERI_TAG_ID_SIZE : 0;
+}
+
+/** @brief NexWatch data save callback. */
+int lf_tag_nexwatch_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_NEXWATCH ? LF_NEXWATCH_TAG_ID_SIZE : 0;
+}
+
+/** @brief NexWatch default: the 96-bit frame of card 12345678, mode 1, Nexkey — the exact
+ * bytes a Proxmark `lf nexwatch clone --cn 12345678 -m 1 --nc` leaves in T5577 blocks 1-3.
+ *
+ * ⭐ NO ROTATION, and that is measured rather than assumed: those blocks are
+ * `56000000 / 00436455 / 121E6000`, so the frame's `0x56` preamble IS the top of block 1 and
+ * the block form and the air frame coincide. ⛔ Keri's do NOT — see the note on its factory
+ * — and emitting the wrong one of the two gave a stable wrong credential 6 of 6 (C160). The
+ * rule is the same either way: emulate what the tag puts on the wire, and check which that
+ * is against a real clone's own block dump. */
+bool lf_tag_nexwatch_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_NEXWATCH_TAG_ID_SIZE] = {
+        0x56, 0x00, 0x00, 0x00,
+        0x00, 0x43, 0x64, 0x55,
+        0x12, 0x1E, 0x60, 0x00,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 
 /** @brief Keri default: the BLOCK form of internal id 0x80003039, `(id << 3) | 7` — what

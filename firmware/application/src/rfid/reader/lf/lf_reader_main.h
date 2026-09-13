@@ -20,6 +20,8 @@ uint8_t scan_indala(uint8_t *data);
 uint8_t scan_idteck(uint8_t *data);
 uint8_t scan_keri(uint8_t *data);
 uint8_t write_keri_to_t55xx(uint8_t *frame8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
+uint8_t scan_nexwatch(uint8_t *data);
+uint8_t write_nexwatch_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t scan_indala224(uint8_t *data);
 uint8_t scan_pac(uint8_t *card_id);
 uint8_t scan_viking(uint8_t *uid);

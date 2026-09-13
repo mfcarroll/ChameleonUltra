@@ -208,6 +208,8 @@
 #define DATA_CMD_INDALA224_GET_EMU_ID           (5017)
 #define DATA_CMD_KERI_SET_EMU_ID                (5018)
 #define DATA_CMD_KERI_GET_EMU_ID                (5019)
+#define DATA_CMD_NEXWATCH_SET_EMU_ID            (5020)
+#define DATA_CMD_NEXWATCH_GET_EMU_ID            (5021)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
@@ -221,5 +223,7 @@
 #define DATA_CMD_INDALA224_WRITE_TO_T55XX       (3039)
 #define DATA_CMD_KERI_SCAN                      (3040)
 #define DATA_CMD_KERI_WRITE_TO_T55XX            (3041)
+#define DATA_CMD_NEXWATCH_SCAN                  (3042)
+#define DATA_CMD_NEXWATCH_WRITE_TO_T55XX        (3043)
 
 #endif

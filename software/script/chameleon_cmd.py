@@ -897,6 +897,65 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def nexwatch_scan(self):
+        """
+        Read a NexWatch credential (PSK1, RF/32, fc/2 subcarrier, 96-bit frame).
+
+        ⭐ The same capture engine and demodulator as Indala, IDTECK and Keri — the fourth
+        protocol through `lf_psk1_format_t`. Only the preamble, the acceptance rule and the
+        payload interpretation differ.
+
+        Returns (raw, cn, magic, mode, phase, offset) where raw is the full 96-bit frame.
+
+        ⚠ `magic` is INFERRED, not read: it is not carried in the frame at all. The firmware
+        tries the three known vendor constants (0xBE Quadrakey, 0x88 Nexkey, 0x86 Honeywell)
+        and reports whichever reproduces the frame's checksum, or 0x00 for none — which is a
+        valid read from an unknown vendor, not a failure.
+        """
+        resp = self.device.send_cmd_sync(Command.NEXWATCH_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, cn, magic, mode, phase, offset = struct.unpack(">12sIBBBB", resp.data[:20])
+            resp.parsed = (raw, cn, magic, mode, phase, offset)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def nexwatch_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                                old_keys: list = None):
+        """Write a raw 96-bit NexWatch frame onto a T55xx tag (PSK1, RF/32, 3 data blocks).
+
+        ⭐ `frame12` is BOTH the air frame and the block contents — NexWatch's frame starts at
+        a block boundary, so the firmware transcribes rather than rotating. ⛔ That is the
+        opposite of Keri, whose T5577 holds `(id << 3) | 7`; the two cases are distinguished
+        by a real clone's block dump, never by assumption (C158, C160).
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write.
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.NEXWATCH_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.SUCCESS)
+    def nexwatch_set_emu_id(self, id: bytes):
+        """Set the 96-bit NexWatch frame emulated on the active slot.
+
+        :param id: 12 bytes, MSB first on air. A valid frame starts 0x56 followed by four
+                   zero bytes — the 8-bit magic and the 32 reserved bits.
+        """
+        if len(id) != 12:
+            raise ValueError("The id bytes length must equal 12")
+        return self.device.send_cmd_sync(Command.NEXWATCH_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def nexwatch_get_emu_id(self):
+        """Get the emulated NexWatch 96-bit frame."""
+        resp = self.device.send_cmd_sync(Command.NEXWATCH_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:12]
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def ioprox_write_to_t55xx(self, id_bytes: bytes):
         """
         Write ioProx card data to a T55XX tag.

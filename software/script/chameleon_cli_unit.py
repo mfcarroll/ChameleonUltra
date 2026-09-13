@@ -997,6 +997,7 @@ lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_indala = lf.subgroup("indala", "Indala commands")
 lf_keri = lf.subgroup("keri", "Keri commands")
+lf_nexwatch = lf.subgroup("nexwatch", "NexWatch commands")
 
 
 @root.command("clear")
@@ -6749,6 +6750,273 @@ class LFKeriEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
               + ("" if shape_ok else
                  f"  {color_string((CR, '(not a valid Keri block form)'))}"))
         print(f"   Decode it with {color_string((CG, 'lf keri read'))} against the "
+              f"emulated slot on a second device.")
+
+
+# ⭐ NEXWATCH'S FRAME MATHS, HOST SIDE. The firmware needs only the de-scramble (to report a
+# card number) but the CLI has to build a whole frame from a card number, which needs the
+# scramble, the parity and the checksum. All three are transcribed from the two references,
+# which agree with each other — cmdlfnexwatch.c and Momentum's protocol_nexwatch.c — and the
+# whole set is checked against a real Proxmark clone in the round-trip assertion below.
+NEXWATCH_HEX_2_ID = [31, 27, 23, 19, 15, 11, 7, 3, 30, 26, 22, 18, 14, 10, 6, 2,
+                     29, 25, 21, 17, 13, 9, 5, 1, 28, 24, 20, 16, 12, 8, 4, 0]
+NEXWATCH_MAGIC = {"nexkey": 0x88, "quadrakey": 0xBE, "honeywell": 0x86}
+
+
+def _nexwatch_scramble(card_id: int) -> int:
+    scrambled = 0
+    for idx in range(32):
+        if (card_id >> idx) & 1:
+            scrambled |= 1 << (31 - NEXWATCH_HEX_2_ID[idx])
+    return scrambled
+
+
+def _nexwatch_descramble(scrambled: int) -> int:
+    card_id = 0
+    for idx in range(32):
+        if (scrambled >> NEXWATCH_HEX_2_ID[idx]) & 1:
+            card_id |= 1 << (31 - idx)
+    return card_id
+
+
+def _nexwatch_reflect8(v: int) -> int:
+    r = 0
+    for i in range(8):
+        r = (r << 1) | ((v >> i) & 1)
+    return r & 0xFF
+
+
+def _nexwatch_parity(scrambled: int, mode: int) -> int:
+    """4 bits over the scrambled id and the mode: XOR of nine nibbles, swapped 1234 -> 4231."""
+    payload = (scrambled << 4) | (mode & 0xF)      # 36 bits
+    p = 0
+    for nib in range(9):
+        p ^= (payload >> (32 - nib * 4)) & 0xF
+    return (((p >> 3) & 1) | (((p >> 1) & 1) << 1) |
+            (((p >> 2) & 1) << 2) | ((p & 1) << 3))
+
+
+def _nexwatch_checksum(magic: int, card_id: int, parity: int) -> int:
+    a = (card_id >> 24) & 0xFF
+    a = (a - ((card_id >> 16) & 0xFF)) & 0xFF
+    a = (a - ((card_id >> 8) & 0xFF)) & 0xFF
+    a = (a - (card_id & 0xFF)) & 0xFF
+    a = (a - magic) & 0xFF
+    a = (a - (_nexwatch_reflect8(parity) >> 4)) & 0xFF
+    return _nexwatch_reflect8(a)
+
+
+def _nexwatch_build_frame(card_id: int, mode: int, magic: int) -> bytes:
+    """The 96-bit frame: 0x56, 32 reserved zeros, scrambled id, mode, parity, checksum."""
+    scrambled = _nexwatch_scramble(card_id)
+    parity = _nexwatch_parity(scrambled, mode)
+    chk = _nexwatch_checksum(magic, card_id, parity)
+    return bytes([0x56, 0, 0, 0, 0,
+                  (scrambled >> 24) & 0xFF, (scrambled >> 16) & 0xFF,
+                  (scrambled >> 8) & 0xFF, scrambled & 0xFF,
+                  ((mode & 0xF) << 4) | parity, chk, 0x00])
+
+
+def _nexwatch_fingerprint(frame: bytes):
+    """(card_id, mode, magic_name_or_None) read back out of a frame."""
+    scrambled = int.from_bytes(frame[5:9], "big")
+    card_id = _nexwatch_descramble(scrambled)
+    mode = frame[9] >> 4
+    parity = frame[9] & 0xF
+    chk = frame[10]
+    for name, magic in NEXWATCH_MAGIC.items():
+        if _nexwatch_checksum(magic, card_id, parity) == chk:
+            return card_id, mode, name
+    return card_id, mode, None
+
+
+# ⛔ THE ROUND TRIP IS ASSERTED AGAINST A REAL CLONE, not against itself. These are the exact
+# bytes a Proxmark `lf nexwatch clone --cn 12345678 -m 1 --nc` wrote to this bench's T5577,
+# read back by its own reader (C164). A scramble checked only against its own inverse would
+# pass with both directions wrong — which is the shape of bug that cost this project a
+# fortnight on a decoder whose test encoded with the same mistake it decoded with.
+assert _nexwatch_build_frame(12345678, 1, NEXWATCH_MAGIC["nexkey"]).hex() == \
+    "5600000000436455121e6000", "NexWatch frame builder disagrees with the reference clone"
+
+
+@lf_nexwatch.command("read")
+class LFNexWatchRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan a NexWatch credential (PSK1, RF/32, 96-bit frame). "
+                              "Shares the Indala capture engine and its timing.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, cn, magic, mode, phase, offset = self.cmd.nexwatch_scan()
+        names = {v: k for k, v in NEXWATCH_MAGIC.items()}
+        print("NexWatch PSK1")
+        print(f"   Raw: {color_string((CY, raw.hex()))}")
+        print(f"   Card: {color_string((CY, cn))}  Mode: {color_string((CG, mode))}")
+        if magic:
+            print(f"   Fingerprint: {color_string((CG, names.get(magic, f'0x{magic:02X}')))}"
+                  f"  (magic 0x{magic:02X})")
+        else:
+            # ⚠ A valid read, not a failure. The magic is not in the frame — it is inferred
+            # from the checksum, so an unknown vendor reads fine and simply is not named.
+            print(f"   Fingerprint: {color_string((CY, 'unknown vendor'))} — the checksum "
+                  f"matches none of the three known magics. The credential above is still "
+                  f"valid: it passed the 40-bit preamble and the parity.")
+        print(f"   Read at sample phase {phase} ticks, bit offset {offset}")
+
+
+@lf_nexwatch.command("write")
+class LFNexWatchWrite(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Write a NexWatch credential to a T5577. Configures PSK1, "
+                              "RF/32, 3 data blocks (00081060).")
+        parser.add_argument("--cn", type=int, required=False, help="card number (decimal)")
+        parser.add_argument("-m", "--mode", type=int, default=1, help="mode 0-15 (default 1)")
+        parser.add_argument("--magic", type=str, default="nexkey",
+                            choices=sorted(NEXWATCH_MAGIC.keys()),
+                            help="vendor magic used for the checksum (default nexkey)")
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>",
+                            help="write a 96-bit frame verbatim instead of building one")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if (args.cn is None) == (args.raw is None):
+            print(f"{color_string((CR, 'Give exactly one of --cn or --raw'))}")
+            return
+
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            frame = bytes.fromhex(hexs)
+            if frame[0] != 0x56 or frame[1:5] != b"\x00\x00\x00\x00":
+                # ⚠ A warning, not a refusal — a raw write is the escape hatch for testing
+                # exactly this kind of malformed frame. But say so, because no reader here
+                # or anywhere else will accept it.
+                print(f"   {color_string((CY, 'WARNING'))}: the first 40 bits are not "
+                      f"0x56 + 32 zeros, so no NexWatch reader will accept this frame.")
+        else:
+            if not 0 <= args.mode <= 15:
+                print(f"{color_string((CR, 'Mode must be 0-15'))}")
+                return
+            if not 0 <= args.cn <= 0xFFFFFFFF:
+                print(f"{color_string((CR, 'Card number must fit in 32 bits'))}")
+                return
+            frame = _nexwatch_build_frame(args.cn, args.mode, NEXWATCH_MAGIC[args.magic])
+
+        # ⭐ READ BEFORE WRITING — the coupling bracket, as `lf keri write` has: a tag that
+        # cannot be heard cannot be shown to have been written.
+        before = self._try_read()
+        if before is None:
+            print(f"   {color_string((CY, 'No NexWatch frame before the write.'))} Expected "
+                  f"for a blank or non-NexWatch tag, but it also means there is no proof "
+                  f"this tag is coupled — so a failure after the write will not be "
+                  f"distinguishable from a tag the reader cannot hear.")
+        else:
+            print(f"   before: {color_string((CY, before))}")
+
+        self.cmd.nexwatch_write_to_t55xx(frame)
+
+        after = self._try_read()
+        want = frame.hex()
+        if after == want:
+            cn, mode, magic = _nexwatch_fingerprint(frame)
+            print(f"{color_string((CG, 'VERIFIED'))} card {cn} mode {mode} "
+                  f"({magic or 'unknown vendor'}) — read back off the tag. The config block "
+                  f"landed too, or it could not have been read.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after. "
+                  f"The tag may be uncoupled rather than unwritten; reposition it on the "
+                  f"FRONT of the device and try `lf nexwatch read` first.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — the tag read {before} before and "
+                  f"nothing after, so it was coupled and is now not transmitting a readable "
+                  f"frame.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — the tag still reads "
+                  f"{after}, unchanged.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {want}, read "
+                  f"back {after}.")
+
+    def _try_read(self):
+        """The NexWatch frame on the tag, or None. ⚠ None is NOT proof of absence."""
+        try:
+            return self.cmd.nexwatch_scan()[0].hex()
+        except Exception:
+            return None
+
+
+@lf_nexwatch.command("econfig")
+class LFNexWatchEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the NexWatch frame emulated on a slot. Provide "
+                              "--cn (or --raw) to set; omit both to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--cn", type=int, required=False, help="card number (decimal)")
+        parser.add_argument("-m", "--mode", type=int, default=1, help="mode 0-15 (default 1)")
+        parser.add_argument("--magic", type=str, default="nexkey",
+                            choices=sorted(NEXWATCH_MAGIC.keys()),
+                            help="vendor magic used for the checksum (default nexkey)")
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>",
+                            help="set a 96-bit frame verbatim")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.cn is not None or args.raw is not None:
+            if args.cn is not None and args.raw is not None:
+                print(f"{color_string((CR, 'Give --cn or --raw, not both'))}")
+                return
+            if args.raw is not None:
+                hexs = args.raw.strip().lower().removeprefix("0x")
+                if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                    print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                    return
+                frame = bytes.fromhex(hexs)
+            else:
+                if not 0 <= args.mode <= 15 or not 0 <= args.cn <= 0xFFFFFFFF:
+                    print(f"{color_string((CR, 'Mode must be 0-15 and cn must fit 32 bits'))}")
+                    return
+                frame = _nexwatch_build_frame(args.cn, args.mode, NEXWATCH_MAGIC[args.magic])
+            if lf_tag_type != TagSpecificType.NexWatch:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not NexWatch. "
+                      f"Set it with: hw slot type -s <n> -t NexWatch")
+            # ⭐ NO ROTATION HERE, and that is the measured case rather than the lazy one.
+            # NexWatch's frame begins at a T5577 block boundary — a real clone holds
+            # `56000000 / 00436455 / 121E6000` — so the block form and the air frame are the
+            # same bytes. ⛔ Keri's are NOT, and sending its frame view instead of its block
+            # form gave a stable WRONG credential 6 of 6 (C160). Which case a protocol is in
+            # is decided by a clone's block dump, never by assumption.
+            self.cmd.nexwatch_set_emu_id(frame)
+            cn, mode, magic = _nexwatch_fingerprint(frame)
+            print(f" - NexWatch emu set to card {cn} mode {mode} "
+                  f"({magic or 'unknown vendor'}).")
+            return
+
+        if lf_tag_type != TagSpecificType.NexWatch:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}"
+                  f"{color_string((CR, ', not NexWatch.'))}")
+            print(f"   Either pick the slot: {color_string((CG, 'lf nexwatch econfig -s <n>'))}")
+            print(f"   or set this one:     "
+                  f"{color_string((CG, 'hw slot type -s ' + str(selected) + ' -t NexWatch'))}")
+            return
+        response = self.cmd.nexwatch_get_emu_id()
+        cn, mode, magic = _nexwatch_fingerprint(response)
+        shape_ok = response[0] == 0x56 and response[1:5] == b"\x00\x00\x00\x00"
+        print(f" - NexWatch emu frame: {response.hex().upper()}")
+        print(f"   Card: {cn}  Mode: {mode}  "
+              f"Fingerprint: {magic or 'unknown vendor'}"
+              + ("" if shape_ok else
+                 f"  {color_string((CR, '(not a valid NexWatch frame)'))}"))
+        print(f"   Decode it with {color_string((CG, 'lf nexwatch read'))} against the "
               f"emulated slot on a second device.")
 
 

@@ -133,6 +133,21 @@ extern "C" {
 //   T5577_TESTMODE_DISABLED | T5577_X_MODE | PSK1 | PSKCF_RF_2 | (0xF << 18) | 2 blocks
 #define T5577_KERI_CONFIG (0x603E1040)
 
+// NexWatch: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), THREE data blocks (96-bit frame).
+//
+// ⭐ MEASURED, not derived: a Proxmark `lf nexwatch clone --cn 12345678 -m 1 --nc` writes
+// block 0 = `00081060` and `lf t55xx detect` reads it back as PSK1 / RF/32 (C164). That is
+// Indala26's `00081040` with the block count raised 2 -> 3, which is exactly what a 96-bit
+// frame needs and is the whole difference between the two at this layer.
+//
+// ⚠ T5577_PWD is absent, as it is for Indala26 and Indala224 — the tag the Proxmark writes
+// reports "Password set...... No", and matching the reference clone is the point.
+#define T5577_NEXWATCH_CONFIG (   \
+    T5577_BITRATE_RF_32 |         \
+    T5577_MODULATION_PSK1 |       \
+    T5577_PSKCF_RF_2 |            \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
