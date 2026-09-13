@@ -73,8 +73,10 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 - ⭐⭐ **U8 (FSK) IS NOW THE NEXT UNIT, and its deferral reason is retracted (C193).** The
   physical layer is confirmed at 99% on our sampler, and the read arms need NO tag — the
   Flipper emulates AWID/Paradox/Pyramid into Chameleon #1 exactly as it did for InstaFob.
-  ⭐ Build an FSK decoder on `lf_sampled_read`: pair adjacent slicer runs into sub-periods,
-  classify 8 vs 10 samples, group into bits. Captures are committed under `caps/awid-flipper/`.
+  ⭐ **`fskdemod.py` already does this on the host and recovers AWID frames (C194)** — port it
+  to firmware next. ⛔ **The open piece is the FIELD MAPPING**: stripping AWID's parity does
+  not recover the bytes passed to `rfid emulate`, so its encoder does more than insert parity.
+  Read `protocol_awid_encoder_start` / `protocol_awid_decode` before claiming a credential.
   ⚠ Only the WRITE arms need the tag back in the sandwich.
 - **(superseded) U8 was deferred because it reused the HID machinery** — it no longer does.
   ⛔ Deliberately last regardless: it reuses the HID Prox/ioProx SAADC machinery and HID's
@@ -274,6 +276,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 15:15 | ASK roundtrip arms | 11 → 13 | 3 arms on the shipping emitters; `make check` false-pass fixed | 10/10 arms exact; deliberate break fails the suite |
 | 2026-09-13 15:50 | §9 blocker #1 | 11 → 14 | shared engine renamed off `psk1` (~120 refs) | builds; 10/10 arms; 320 captures; reader 4/4 on hardware, null clean |
 | 2026-09-13 16:25 | FSK feasibility | 12 → 14 | C193; 2 committed captures; §10's FSK row rewritten | 1650/1655 sub-periods exactly RF/8 or RF/10; null has no structure |
+| 2026-09-13 17:00 | AWID frames | 12 → 15 | `fskdemod.py`; C194; 3 committed captures | 2 payloads → 2 distinct gated frames; null returns 0 bits; field mapping unsolved |
 
 ---
 
