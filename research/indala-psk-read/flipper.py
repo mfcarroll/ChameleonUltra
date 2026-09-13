@@ -53,7 +53,19 @@ ETX = b"\x03"
 
 # name, single space, an even number of uppercase hex digits, end of line. The shortest
 # lfrfid payload is 3 bytes, so 4 digits is a safe floor that still excludes stray words.
-SUCCESS = re.compile(r"^([A-Za-z][A-Za-z0-9]*) ((?:[0-9A-F]{2}){2,})$")
+# ⛔⛔ THE NAME MAY CONTAIN SPACES, AND ASSUMING IT COULD NOT COST A WRONG PUBLISHED CLAIM.
+# This pattern was `[A-Za-z][A-Za-z0-9]*` — one word — which cannot match Momentum's name for
+# Securakey, which is "Radio Key". A working emulation therefore reported 0 of 6, and that
+# number went into FINDINGS.md as an emulation defect with an isolating control beside it
+# (C177). The control was sound; the instrument was not.
+#
+# ⚠ This is M28 biting from the other side. The rule says match the success PATH rather than
+# the protocol name — and this pattern did match the path, but encoded an assumption about
+# names that no reference supports. ⇒ The name is now `[A-Za-z][A-Za-z0-9 ]*?`, non-greedy so
+# the hex group stays maximal. The structural rejections still hold: the "Available
+# protocols:" listing is tab-indented so it fails `^[A-Za-z]`, and no banner line ends in an
+# even run of hex digits.
+SUCCESS = re.compile(r"^([A-Za-z][A-Za-z0-9 ]*?) ((?:[0-9A-F]{2}){2,})$")
 
 # The CLI printed usage or a protocol listing instead of running what we asked. That means the
 # command or an argument was rejected, and every count after it would be meaningless.

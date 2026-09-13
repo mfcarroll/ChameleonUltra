@@ -40,13 +40,16 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **U6 — Securakey READS and WRITES on device (C176). Its EMULATION is 0 of 6
-  and that is an open defect, not a bench problem** — Gallagher read 4/4 on the same rig in
-  the same minute (C177). ⭐ **Resume there, and the next step is the SEQUENCE TERMINATOR**,
-  not the bit rate: Momentum's Securakey decoder checks its preamble once where Gallagher's
-  checks it at bit 0 and again at bit 96, so a plain looping frame may give Securakey no
-  frame boundary. ⛔ Already eliminated by measurement: inverted polarity (also 0/4), and
-  "the reader wasn't asked" (both are `LFRFIDFeatureASK`). Then Noralsy, then InstaFob.
+- **In flight:** nothing. **Securakey is COMPLETE** — read 6/6, write 3/3, emulate 10/10
+  (C176, C178). **Noralsy is next, then InstaFob.**
+- ⛔⛔ **C177 was RETRACTED: `flipper.py`'s success matcher could not express a protocol name
+  containing a space, so a working emulation reported 0 of 6.** Momentum calls Securakey
+  "Radio Key". ⇒ When a NEW protocol's emulation reads zero, check what Momentum NAMES it
+  before believing the number.
+- ⚠ **Standing limitation (C179):** every emulate arm here is verified by the Flipper alone.
+  A T5577 written with the same credential and read by the Proxmark is actual hardware
+  behaviour and can differ at frame boundaries we do not emit. The write arms carry that
+  stronger evidence; the emulate arms need the tag lifted out of the sandwich.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -200,6 +203,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 06:20 | U5 (emulate) — DONE | 34 → 37 | Gallagher ASK emitter, `TAG_TYPE_GALLAGHER`, econfig | Flipper 6/6, null 0/4, return leg 4/4 with a CHANGED credential it tracked |
 | 2026-09-13 06:55 | U6 (part) | 38 → 40 | Securakey decoder; `lf_ask_format_t` parameterised by bit rate | 4/4 exact at RF/40, Gallagher unregressed, 21 nulls clean incl. same-family both ways |
 | 2026-09-13 07:35 | U6 (part) | 39 → 42 | Securakey device read + write + emitter, `TAG_TYPE_SECURAKEY`, CLI | read 6/6, write 3/3 via pm3; **emulate 0/6** with Gallagher 4/4 as the same-rig control |
+| 2026-09-13 08:05 | U6 — DONE | 41 → 43 | C177 retracted; `flipper.py` matcher widened for multi-word names | emulate 10/10, null 0/4, return leg tracked a changed credential |
 
 ---
 
