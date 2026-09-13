@@ -37,6 +37,8 @@
 #include "securakey.h"
 #include "noralsy.h"
 #include "awid.h"
+#include "gproxii.h"
+#include "lf_ask_biphase.h"
 #include "fsk2a_t55xx.h"
 #include "t55xx.h"
 
@@ -84,6 +86,59 @@ static size_t render_ask(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out
         }
     }
     return n;
+}
+
+static int hexeq(const uint8_t *got, const char *want, size_t bytes);
+
+/* ⭐⭐ THE BIPHASE RENDERER, and it is the first here that HONOURS THE DUTY. render_ask()
+ * hard-codes half the period high because every ASK and FSK entry is a 50% square; a biphase
+ * entry holds ONE level for its whole period, expressed as duty 0 or duty == counter_top.
+ * Rendering that with render_ask() would turn every held level into a square wave and the
+ * round trip would be testing a different emitter than the one that ships. */
+static size_t render_level(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len) {
+    const size_t entries = (size_t)seq->length / 4u;
+    size_t n = 0;
+    for (size_t i = 0; n < out_len; i++) {
+        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i % entries];
+        const size_t top = e->counter_top;
+        const size_t duty = e->channel_0 & 0x7FFFu;
+        for (size_t s = 0; s < top && n < out_len; s++) {
+            const int high = (s < duty);
+            out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
+        }
+    }
+    return n;
+}
+
+/* ⚠ The biphase decoder wants a STEP at each grid point, and a perfectly square rendering
+ * gives it one — but its threshold is a fraction of the MEAN boundary step, so a capture in
+ * which every boundary steps by the same amount is the easiest case it will ever see. This arm
+ * therefore proves the ENCODING, not the decoder's robustness; the capture tests do that. */
+static int trial_biphase(const char *name, const char *hex, size_t bits,
+                         const protocol *proto, const lf_biphase_format_t *fmt) {
+    uint8_t frame[32] = {0};
+    for (size_t i = 0; i < bits / 8u; i++) {
+        unsigned v; sscanf(hex + 2 * i, "%2x", &v); frame[i] = (uint8_t)v;
+    }
+    void *codec = proto->alloc();
+    const nrf_pwm_sequence_t *seq = proto->modulator(codec, frame);
+    if (seq == NULL) {
+        printf("  %-28s \u26d4 modulator returned NULL\n", name);
+        proto->free(codec);
+        return 1;
+    }
+    const size_t entries = (size_t)seq->length / 4u;
+    static int16_t air[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
+    size_t n = render_level(seq, air, sizeof(air) / sizeof(air[0]));
+    proto->free(codec);
+
+    lf_decode_result_t r;
+    int ok = lf_ask_biphase_decode_fmt(air, n, fmt, &r);
+    int exact = ok && hexeq(r.id, hex, bits / 8u);
+    printf("  %-28s %s  entries %4zu             %s\n", name,
+           exact ? "\u2713" : "\u26d4", entries,
+           ok ? (exact ? "decode exact" : "DECODED WRONG") : "NO DECODE");
+    return exact ? 0 : 1;
 }
 
 static int hexeq(const uint8_t *got, const char *want, size_t bytes) {
@@ -325,6 +380,12 @@ int main(void) {
      * count: a 0 costs six entries and a 1 costs five. */
     bad += trial_fsk("AWID     FSK2a RF/8-10", "011db218271bd81111111111", 96,
                      &awid, awid_fsk_decode);
+
+    /* ⭐⭐ THE FIRST BIPHASE EMITTER, on the credential the Proxmark wrote and our own reader
+     * read back 12 of 12 exact (C213). ⚠ Its entry count is FIXED at two per bit where AWID's
+     * varies with the data — biphase spends the same time on both symbols. */
+    bad += trial_biphase("GProxII  biphase RF/64", "f84602a46119d4a114211046", 96,
+                         &gproxii, &LF_BIPHASE_FORMAT_GPROXII);
 
     /* ⭐⭐ THE FSK2a T5577 WRITER, pinned to three real Proxmark clones' own block dumps.
      * ⚠ AWID and Paradox share a config word exactly; only Pyramid differs, and only in the
