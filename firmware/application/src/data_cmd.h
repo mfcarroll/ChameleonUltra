@@ -251,5 +251,8 @@
 /* ⭐ The BIPHASE family opens here — GProxII, the fourth line coding on this device. */
 #define DATA_CMD_GPROXII_SCAN                   (3058)
 #define DATA_CMD_GPROXII_WRITE_TO_T55XX         (3059)
+/* ⚠ INSTRUMENTATION for C209 — run the READER's capture and return the samples undecoded.
+ * `lf sniff` is the OTHER path, which is precisely why it cannot answer the question. */
+#define DATA_CMD_LF_READER_CAPTURE              (3060)
 
 #endif

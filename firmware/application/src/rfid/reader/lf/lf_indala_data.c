@@ -225,6 +225,40 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
                                   INDALA_TRIES_PER_PHASE);
 }
 
+/* ⭐⭐ THE INSTRUMENT C209 ASKED FOR: run the READER's own capture and hand back the samples
+ * it actually got, instead of decoding them.
+ *
+ * ⛔ WHY IT HAD TO EXIST. On the same tag in the same minute, the reader path measures a mean
+ * bit-boundary step of ~5070 ADC counts and `lf sniff` measures 2819 — and the sniff capture
+ * decodes exactly on the host while the reader finds nothing. Every setting the two paths
+ * differ in has been swept without reproducing it, and both go through the same
+ * `capture_begin` and the same SAADC init, so INSPECTION has run out. The only thing left is
+ * to look at the reader's own samples, and nothing could.
+ *
+ * ⭐ It costs no RAM: it captures into `m_samples`, the buffer the reader already fills, and
+ * the caller chunks straight out of it. ⚠ Which also means a subsequent read overwrites it,
+ * so a host must fetch all the chunks before scanning again — the same contract `lf sniff`
+ * already has with its own static buffer.
+ *
+ * ⚠ Instrumentation. Remove with the rest before upstreaming (§9b). */
+bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
+                             const int16_t **out, size_t *got) {
+    if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
+        capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
+    }
+    lf_125khz_radio_drive_set(drive);
+    lf_125khz_radio_saadc_phase_set(phase);
+    *got = 0;
+    bool ok = raw_read_samples(m_samples, capture_samples,
+                               INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got, 0);
+    /* ⚠ Restore both, for the reason the sniff command's own note gives: a reader that leaves
+     * the field or the sample phase altered breaks whatever runs next, invisibly. */
+    lf_125khz_radio_drive_set(4);
+    lf_125khz_radio_saadc_phase_set(0);
+    *out = m_samples;
+    return ok;
+}
+
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
                   const uint8_t *phases, uint8_t phase_count, uint8_t tries) {

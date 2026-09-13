@@ -844,6 +844,48 @@ static data_frame_tx_t *cmd_processor_pyramid_scan(uint16_t cmd, uint16_t status
  * The decoder's `energy` is the mean bit-boundary step in ADC counts, and on the sniff
  * captures it runs 270-360; a clipped capture (gain 1) gives 40. ⇒ Reporting it on FAILURE
  * splits the hypothesis in one read. Remove with the rest of the instrumentation (§9b). */
+/* ⚠ INSTRUMENTATION — the reader's own capture, undecoded, chunked exactly as `lf sniff`
+ * chunks its own. Payload: [0..1] samples (BE), [2] drive, [3] SAADC phase, [4] chunk index.
+ * Chunk 0 captures; later chunks slice the SAME buffer, so the host reassembles one
+ * acquisition rather than stitching several — the mistake the sniff command's note calls out.
+ * ⚠ The buffer is the reader's own `m_samples`, so any scan between chunks destroys it. */
+static data_frame_tx_t *cmd_processor_lf_reader_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static const int16_t *buf = NULL;
+    static size_t nsamp = 0;
+
+    size_t want = (length >= 2) ? (((size_t)data[0] << 8) | data[1]) : 14336u;
+    uint8_t drive = (length >= 3 && data[2] != 0) ? data[2] : 4;
+    uint8_t phase = (length >= 4) ? data[3] : 0;
+    uint8_t chunk = (length >= 5) ? data[4] : 0;
+
+    if (chunk == 0) {
+        nsamp = 0;
+        lf_reader_capture_probe(want, drive, phase, &buf, &nsamp);
+    }
+    if (buf == NULL || nsamp == 0) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+
+    /* Two bytes per sample, big-endian — the same wire format `lf sniff --bits 16` uses, so
+     * every host tool that already parses one parses the other. */
+    const size_t per_chunk = LF_SNIFF_CHUNK_BYTES / 2u;
+    size_t off = (size_t)chunk * per_chunk;
+    if (off >= nsamp) {
+        return data_frame_make(cmd, STATUS_LF_TAG_OK, 0, NULL);
+    }
+    size_t n = nsamp - off;
+    if (n > per_chunk) {
+        n = per_chunk;
+    }
+    static uint8_t out[LF_SNIFF_CHUNK_BYTES];
+    for (size_t i = 0; i < n; i++) {
+        uint16_t v = (uint16_t)buf[off + i] & 0x3FFFu;
+        out[2 * i] = (uint8_t)(v >> 8);
+        out[2 * i + 1] = (uint8_t)(v & 0xFFu);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)(n * 2u), out);
+}
+
 static data_frame_tx_t *cmd_processor_gproxii_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[GPROXII_READ_DATA_SIZE] = { 0x00 };
     int32_t energy = 0;
@@ -3736,6 +3778,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_PYRAMID_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_pyramid_write_to_t55xx,        NULL                   },
     {    DATA_CMD_GPROXII_SCAN,                 before_reader_run,           cmd_processor_gproxii_scan,                  NULL                   },
     {    DATA_CMD_GPROXII_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_gproxii_write_to_t55xx,        NULL                   },
+    {    DATA_CMD_LF_READER_CAPTURE,            before_reader_run,           cmd_processor_lf_reader_capture,             NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
