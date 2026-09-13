@@ -243,7 +243,8 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
  *
  * ⚠ Instrumentation. Remove with the rest before upstreaming (§9b). */
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
-                             uint8_t repeats, const int16_t **out, size_t *got) {
+                             uint8_t repeats, uint16_t settle_ms,
+                             const int16_t **out, size_t *got) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -260,7 +261,7 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
         lf_125khz_radio_drive_set(drive);
         *got = 0;
         ok = raw_read_samples(m_samples, capture_samples,
-                              INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got, 0);
+                              INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got, settle_ms);
     }
     /* ⚠ Restore both, for the reason the sniff command's own note gives: a reader that leaves
      * the field or the sample phase altered breaks whatever runs next, invisibly. */

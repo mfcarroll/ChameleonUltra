@@ -37,6 +37,8 @@ def main():
     p.add_argument("--phase", type=int, default=0)
     p.add_argument("--repeats", type=int, default=1,
                    help="take N captures back to back and return the LAST")
+    p.add_argument("--settle", type=int, default=0,
+                   help="field-on settle before EACH capture, ms (0 = the stock 2ms)")
     p.add_argument("--port", default=PORT)
     a = p.parse_args()
 
@@ -46,8 +48,8 @@ def main():
 
     blob = b""
     for chunk in range(32):
-        payload = struct.pack(">HBBBB", a.samples, a.drive, a.phase, chunk,
-                              a.repeats)
+        payload = struct.pack(">HBBBBB", a.samples, a.drive, a.phase, chunk,
+                              a.repeats, a.settle)
         r = d.send_cmd_sync(CMD, payload, timeout=20)
         if r.status != Status.LF_TAG_OK:
             sys.exit(f"chunk {chunk}: status {r.status}")

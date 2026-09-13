@@ -151,7 +151,8 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
  *  The one measurement `lf sniff` cannot make, because sniff is the other path. See C209 and
  *  the long note in lf_indala_data.c. Remove with the rest of the instrumentation. */
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
-                             uint8_t repeats, const int16_t **out, size_t *got);
+                             uint8_t repeats, uint16_t settle_ms,
+                             const int16_t **out, size_t *got);
 
 #define GPROXII_READ_DATA_SIZE 16
 bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);

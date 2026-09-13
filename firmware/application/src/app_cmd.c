@@ -858,10 +858,11 @@ static data_frame_tx_t *cmd_processor_lf_reader_capture(uint16_t cmd, uint16_t s
     uint8_t phase = (length >= 4) ? data[3] : 0;
     uint8_t chunk = (length >= 5) ? data[4] : 0;
     uint8_t repeats = (length >= 6 && data[5] != 0) ? data[5] : 1;
+    uint16_t settle = (length >= 7) ? data[6] : 0;
 
     if (chunk == 0) {
         nsamp = 0;
-        lf_reader_capture_probe(want, drive, phase, repeats, &buf, &nsamp);
+        lf_reader_capture_probe(want, drive, phase, repeats, settle, &buf, &nsamp);
     }
     if (buf == NULL || nsamp == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
