@@ -148,6 +148,20 @@ extern "C" {
     T5577_PSKCF_RF_2 |            \
     (3 << T5577_MAXBLOCK_SHIFT))
 
+// Gallagher: ASK at RF/32, THREE data blocks (96-bit frame), sequence terminator SET.
+//
+// ⭐ MEASURED from a Proxmark `lf gallagher clone`: block 0 reads back `00088060` and
+// `lf t55xx detect` reports **ASK, RF/32, Seq. terminator Yes** (C171). ⛔ The ST bit is what
+// distinguishes this from every other config in this file — no PSK protocol here sets it —
+// and it is kept because it is what the reference clone writes, not because its effect on
+// our own reader has been measured.
+//
+// ⚠ Written as the literal the clone produces rather than composed from the flags above:
+// T5577_MODULATION_ASK and the ST bit are not both expressed by the named constants here, and
+// inventing a composition that happens to equal 0x00088060 would assert an equivalence this
+// bench has not checked. Keri's config is kept verbatim for the same reason.
+#define T5577_GALLAGHER_CONFIG (0x00088060)
+
 // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
 #define T5577_IDTECK_CONFIG (     \
     T5577_BITRATE_RF_32 |         \

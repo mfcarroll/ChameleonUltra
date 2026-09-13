@@ -4,6 +4,7 @@
 #include "lf_125khz_radio.h"
 #include "lf_indala_data.h"
 #include "lf_indala_psk.h"
+#include "lf_ask_manchester.h"
 #include "lf_reader_generic.h"
 
 #define NRF_LOG_MODULE_NAME lf_indala
@@ -476,6 +477,29 @@ bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 
     NRF_LOG_INFO("nexwatch cn %lu mode %u magic %02x phase %u tries %u",
                  (unsigned long)cn, mode, magic, r.phase, r.tries);
+    return true;
+}
+
+/* ⭐ GALLAGHER — the first protocol of the ASK/biphase family, and it goes through the SAME
+ * capture engine as every PSK protocol here. `lf_psk1_read` is modulation-agnostic despite
+ * its name: it rotates the sample phase, suspends BLE advertising (C47) and requires two
+ * independent captures to agree before returning, and none of that is PSK-specific. Only the
+ * decoder handed to it changes.
+ *
+ * ⚠ The capture is 14336 samples — 114ms, against 33ms for the 64-bit PSK formats — because
+ * the threshold was MEASURED at 10240 and the guess of 6144 decoded 0 of 4 (C172). */
+bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_psk1_read_t r;
+    if (!lf_psk1_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
+                      &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    data[12] = r.phase;
+    data[13] = r.res.offset;
+    data[14] = r.tries;
+    data[15] = 0;
+    NRF_LOG_INFO("gallagher phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
     return true;
 }
 

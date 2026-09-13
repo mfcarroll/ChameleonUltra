@@ -897,6 +897,40 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def gallagher_scan(self):
+        """
+        Read a Gallagher credential (ASK/Manchester, RF/32, 96-bit frame).
+
+        ⭐ The first protocol of the biphase family, and it goes through the SAME capture
+        engine as the PSK readers — only the decoder differs. Returns (raw, phase, offset,
+        tries); the region / facility / card / issue are descrambled by the CLI, not here.
+
+        ⚠ Slower than the PSK reads: the capture is 14336 samples (114ms) against 4096 (33ms)
+        for Indala26, because the threshold was measured at 10240 (C172).
+        """
+        resp = self.device.send_cmd_sync(Command.GALLAGHER_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, phase, offset, tries = struct.unpack(">12sBBB1x", resp.data[:16])
+            resp.parsed = (raw, phase, offset, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
+    def gallagher_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+                                 old_keys: list = None):
+        """Write a raw 96-bit Gallagher frame onto a T55xx (ASK, RF/32, 3 data blocks).
+
+        ⭐ `frame12` is BOTH the air frame and the block contents — Gallagher's frame starts at
+        a block boundary, so the firmware transcribes rather than rotating (C158, C160).
+
+        ⚠ Returns LF_TAG_OK regardless — a T5577 does not acknowledge a write.
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.GALLAGHER_WRITE_TO_T55XX, data)
+
+    @expect_response(Status.LF_TAG_OK)
     def nexwatch_scan(self):
         """
         Read a NexWatch credential (PSK1, RF/32, fc/2 subcarrier, 96-bit frame).

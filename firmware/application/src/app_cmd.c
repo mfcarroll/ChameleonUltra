@@ -810,6 +810,34 @@ static data_frame_tx_t *cmd_processor_keri_write_to_t55xx(uint16_t cmd, uint16_t
     return data_frame_make(cmd, status, 0, NULL);
 }
 
+static data_frame_tx_t *cmd_processor_gallagher_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_data[GALLAGHER_READ_DATA_SIZE] = { 0x00 };
+    status = scan_gallagher(card_data);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
+}
+
+static data_frame_tx_t *cmd_processor_gallagher_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t frame12[12];
+        uint8_t new_key[4];
+        uint8_t old_keys[4];
+    } PACKED payload_t;
+
+    payload_t *payload = (payload_t *)data;
+
+    if (length < sizeof(payload_t) ||
+        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
+    status = write_gallagher_to_t55xx(payload->frame12, payload->new_key, payload->old_keys, old_cnt);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
 static data_frame_tx_t *cmd_processor_nexwatch_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[NEXWATCH_READ_DATA_SIZE] = { 0x00 };
     status = scan_nexwatch(card_data);
@@ -3430,6 +3458,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_KERI_WRITE_TO_T55XX,          before_reader_run,           cmd_processor_keri_write_to_t55xx,           NULL                   },
     {    DATA_CMD_NEXWATCH_SCAN,                before_reader_run,           cmd_processor_nexwatch_scan,                 NULL                   },
     {    DATA_CMD_NEXWATCH_WRITE_TO_T55XX,      before_reader_run,           cmd_processor_nexwatch_write_to_t55xx,       NULL                   },
+    {    DATA_CMD_GALLAGHER_SCAN,               before_reader_run,           cmd_processor_gallagher_scan,                NULL                   },
+    {    DATA_CMD_GALLAGHER_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_gallagher_write_to_t55xx,      NULL                   },
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },

@@ -88,6 +88,16 @@ bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 #define NEXWATCH_MAGIC_HONEYWELL 0x86
 bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** Bytes written by gallagher_read(): the 12-byte frame, then phase, offset, and a pad.
+ *
+ * ⭐ THE FRAME AND NOTHING ELSE, deliberately. Gallagher's region / facility / card / issue
+ * come out of a 256-byte descramble LUT plus four bit-field extractions, and that
+ * interpretation belongs on the host for the same reason Indala224's does: it is pure data
+ * manipulation the CLI can do, it is testable there against a known credential, and putting
+ * it in firmware would spend flash to produce numbers the host must re-derive anyway. */
+#define GALLAGHER_READ_DATA_SIZE 16
+bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
+
 /** Bytes of frame in an Indala224 read: 224 bits. */
 #define INDALA224_READ_FRAME_BYTES 28
 /** Bytes written by indala224_read(): the frame, then phase, offset, tries, and a pad. */

@@ -17,6 +17,7 @@
 #include "protocols/jablotron.h"
 #include "protocols/keri.h"
 #include "protocols/nexwatch.h"
+#include "protocols/gallagher.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 
@@ -139,6 +140,18 @@ uint8_t scan_keri(uint8_t *data) {
  *               number, the inferred magic byte, the mode, phase and offset
  * @return STATUS_LF_TAG_OK on success
  */
+uint8_t scan_gallagher(uint8_t *data) {
+    int32_t energy = 0;
+    if (gallagher_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
+    /* ⚠ NOT `lf_psk1_failure_status` — that maps the PSK decoder's `energy`, which is a bit
+     * integrator amplitude, against INDALA_PSK_ENERGY_PRESENT. The ASK decoder reports a
+     * Manchester-violation percentage instead, a different quantity on a different scale, and
+     * passing it to that mapping would produce a confident and meaningless hint. */
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
 uint8_t scan_nexwatch(uint8_t *data) {
     int32_t energy = 0;
     if (nexwatch_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
@@ -412,6 +425,15 @@ uint8_t write_indala224_to_t55xx(uint8_t *raw28, uint8_t *new_passwd, uint8_t *o
 uint8_t write_keri_to_t55xx(uint8_t *frame8, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = keri_t55xx_writer(frame8, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
+uint8_t write_gallagher_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[4] = {0x00};
+    uint8_t blk_count = gallagher_t55xx_writer(frame12, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }

@@ -70,7 +70,7 @@ registered `TAG_TYPE_*`.
 | Paradox | ✗ | ✗ | ✗ | ✓ |
 | Pyramid | ✗ | ✗ | ✗ | ✓ |
 | **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
-| Gallagher | ✗ | ✗ | ✗ | ✓ |
+| **Gallagher** | ✓ **6/6 on device (C173)** | ✓ **3/3 via Proxmark** | ✗ needs an ASK emitter | ✓ |
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | Securakey | ✗ | ✗ | ✗ | ✓ |
 | GProxII | ✗ | ✗ | ✗ | ✓ |

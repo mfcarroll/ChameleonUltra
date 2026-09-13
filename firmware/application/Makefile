@@ -48,6 +48,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/indala.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/keri.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/nexwatch.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/gallagher.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
@@ -354,6 +355,7 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_em4x05_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_gap.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_data.c \
+  $(PROJ_DIR)/rfid/reader/lf/lf_ask_manchester.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_psk.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_generic.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \

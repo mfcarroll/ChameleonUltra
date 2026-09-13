@@ -225,5 +225,7 @@
 #define DATA_CMD_KERI_WRITE_TO_T55XX            (3041)
 #define DATA_CMD_NEXWATCH_SCAN                  (3042)
 #define DATA_CMD_NEXWATCH_WRITE_TO_T55XX        (3043)
+#define DATA_CMD_GALLAGHER_SCAN                 (3044)
+#define DATA_CMD_GALLAGHER_WRITE_TO_T55XX       (3045)
 
 #endif

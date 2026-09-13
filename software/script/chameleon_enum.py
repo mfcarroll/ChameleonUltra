@@ -198,6 +198,8 @@ class Command(enum.IntEnum):
     KERI_WRITE_TO_T55XX = 3041
     NEXWATCH_SCAN = 3042
     NEXWATCH_WRITE_TO_T55XX = 3043
+    GALLAGHER_SCAN = 3044
+    GALLAGHER_WRITE_TO_T55XX = 3045
 
 @enum.unique
 class Status(enum.IntEnum):
