@@ -33,10 +33,7 @@ void clear_lf_counter_value(void) { nrfx_timer_clear(&m_pwm_timer_counter); }
 /* ⭐ A SWITCH, SO C47 CAN BE MEASURED RATHER THAN ASSUMED. Setting this to 0 builds the
  * firmware exactly as it was before the guard existed, so the same tag can be read with and
  * without it in one session — the paired test C47 has never had. ⛔ Ship it at 1. */
-/* ⛔⛔ PROBE BUILD #3 — THIS IS 0 AND MUST NOT STAY 0. C278 shipped a user-facing message on
- * the relabelling path and NOBODY HAS SEEN IT RENDER: reaching that path needs frame
- * corruption, and corruption on demand needs this guard off. The next commit restores it. */
-#define LF_ADV_GUARD_ENABLED 0
+#define LF_ADV_GUARD_ENABLED 1
 
 void lf_adv_suspend(lf_adv_guard_t *guard) {
     guard->paused = false;
