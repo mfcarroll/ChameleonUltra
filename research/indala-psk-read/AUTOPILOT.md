@@ -50,6 +50,12 @@ NOTHING — proved by making two of em410x's 64 entries held, watching a 4/4 arm
 restoring it (C242). A biphase 0 IS a held level, so half the frame is silence.
 ⇒ biphase emulation needs a different mechanism entirely, not a better emitter.
 
+⭐⭐ **C45 IS CLOSED (C250).** The HID reader's 15-20% was a BLE advertising burst collapsing the
+field mid-capture, and `cf745fb`'s guard fixes it: 96/96 with the guard, 71/80 without it on one
+tag in one session. ⛔ **The finding that outlives it is that an unguarded read returned FIVE WRONG
+CREDENTIALS as successes and this reader checks no parity** — `hidprox.c` includes `parity.h` and the
+read path never uses it. ⇒ **Next unit: gate `lf hid prox read` on H10301's two parity bits.**
+
 ⛔ **AWID: STILL OPEN.** Every one of its entries is a 50% square, so C242 does not touch it.
 Eight explanations are dead by measurement: counter_top magnitude, entries per bit, AC
 coupling, duty shape, the design itself (checked against Momentum's own demodulator AND its
@@ -338,6 +344,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 06:10 | **C47's paired test — C45 EXPLAINED** | 10 → 10 | `d37b450` (probe, guard 0) then `ee59b45` (restore, guard 1). Guard ON 96/96 exact, guard OFF 71/80 with **5 wrong credentials**, p = 6.4e-4 (C250). C45's headline corrected: the fault is the capture, not the decoder | A/B/A across three flashed builds, each confirmed on the device by `hw version`'s git hash before any read |
 | 2026-09-14 04:40 | **C45 on the current build** | 10 → 10 | Nothing in firmware — a measurement. A/B/A on the rig-B T5577: legacy HID 32/32 exact, shared-engine AWID 32/32 exact, legacy HID 16/16 after rewriting the credential (C248). ⚠ C249: chained `pm3 -c` reported a pre-wipe credential from a tag that had just been wiped | 80 credential-scored reads + 24 null reads, four blank columns all silent; the closing HID arm rules out drift |
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
 | 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
