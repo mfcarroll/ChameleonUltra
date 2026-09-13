@@ -60,7 +60,7 @@ registered `TAG_TYPE_*`.
 | protocol | read | write | emulate | Momentum |
 |---|---|---|---|---|
 | EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
-| HID Prox (H10301, generic, ex-generic) | ⚠ **intermittent, 15-20% (C45)** | ✓ | ⛔ **0/6 — FSK2a emulation does not work on this device (C246)** | ✓ |
+| HID Prox (H10301, generic, ex-generic) | ✓ **96/96 exact — C45 is CLOSED, it was a BLE advertising burst and `cf745fb`'s guard fixes it (C250)** | ✓ | ⛔ **0/6 — FSK2a emulation does not work on this device (C246)** | ✓ |
 | ioProx (IOProxXSF) | ✓ | ✓ | ⛔ **0/6 — same as HID Prox (C246)** | ✓ |
 | PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
 | Viking | ✓ | ✓ | ✓ | ✓ |
@@ -249,6 +249,16 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Securakey | **A** 6/6 | **A** 3/3 | **B** 10/10 |
 | Noralsy | **A** 6/6 | **A** 3/3 | **B** 10/10 |
 | InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
+| AWID | **A** 5/5 real tag (C201) | **A** pm3 reads our write (C203) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
+| Paradox | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
+| Pyramid | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
+| FDX-A | **B** 4/4 — ⚠ against a Flipper EMULATION, pm3 has no FDX-A (C201) | ⛔ **refused** (C185) | ⛔ **not built** |
+| GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** pm3 reads our write (C207) | ⛔ **impossible as designed (C242)** |
+| FDX-B | **A** 6/6, nulls 0/386 (C214) | **A** 4/4 (C215) | ⛔ **not built** |
+
+⚠ **These six were missing from this grid entirely** until 2026-09-14 — it was written before the
+FSK and biphase families existed and nobody widened it. A reviewer handed a grid that silently
+omits a third of the protocols is worse off than one handed no grid at all.
 
 ⛔ **Why no emulate arm is grade A, and it is not modesty.** Every one is verified by a Flipper
 reading rig A. A T5577 written with the same credential and read by the Proxmark is *actual
@@ -269,10 +279,10 @@ project exists downstream of (C185).
 | ✅ ~~**Naming, round two**~~ **DONE 2026-09-13** | ~~`lf_ask_read` was the field-strength sweep, named when three ASK protocols were its only callers — and the four FSK2a readers go through it too, so a reviewer reading `lf_fsk2a.c` call `lf_ask_read` would take it for a mistake. Renamed `lf_drive_swept_read`, which says what it does rather than who used it first. Same class as C192.~~ |
 | ✅ ~~**Naming**~~ **DONE (C192)** | ~~`lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Renamed 2026-09-13: shared things are `lf_sampled_*` / `lf_decode_*`, genuinely-PSK things keep `psk1`.~~ |
 | ⛔ **Shared-struct sizing** | `LF_PSK1_MAX_FRAME_BITS` is 240, raised from Indala224's 224 because InstaFob's frame is 225 bits and would have overflowed `id[]` and `word_bits[]` by one bit's worth (C186). It costs 16 bytes in a struct there is one of, and it is load-bearing |
-| ⛔ **Command-id allocation** | ⚠ **46 new ids**, not the 32 this row said before it was recounted 2026-09-13 — 3033-3062 and 5016-5029. Needs coordinating with upstream rather than asserted, and the number is now a `grep`, not a memory |
+| ⛔ **Command-id allocation** | ⚠ **48 new ids**, and the ranges this row gave before were wrong in both directions — recounted against `main` 2026-09-14 by diffing `data_cmd.h`, not by memory. **3033-3062** (30: the scans and T5577 writers) and **5014-5031** (18: nine `SET`/`GET_EMU_ID` pairs). The previous "46 … 5016-5029" missed Indala's own pair at 5014/5015 and GProxII's at 5030/5031. ⭐ **The shippable subset is 41**: drop the three instrumentation ids (3037 `LF_EMU_DEBUG`, 3038 `LF_RADIO_DEBUG`, 3060 `LF_READER_CAPTURE`) and the four emu-id pairs belonging to the two emitters §9d marks DO NOT SHIP (AWID 5028/5029, GProxII 5030/5031). ⇒ Needs coordinating with upstream — but as 41 with a reason, not 48 with a shrug |
 | ⛔ **Instrumentation has GROWN and the table below is no longer complete** | Three things were added chasing the GProxII read and none of them ship: **`DATA_CMD_LF_READER_CAPTURE` (3060)** with `lf_reader_capture_probe()`, which runs the reader's own capture and returns the samples undecoded; **the GProxII scan's failure-energy payload**, which returns 4 bytes on a FAILED read where every other scan returns none; and **`rdrcap.py`**. ⭐ They earned their place — the probe is what cracked C211 after six hypotheses had been refuted — but a reviewer must not be handed them as if they were features. ⇒ Strip all three, or land them in a separate "LF diagnostics" change with their own justification |
 | ⚠ **A protocol now overrides the shared reader's parameters** | `lf_sampled_read_phases()` takes a phase list, a try count, a drive and an inter-capture gap, and GProxII passes its own for all four. ⚠ That is four new degrees of freedom on a function every LF reader calls, added for ONE protocol — and FDX-B, the second in the same family, needs none of them (C215). A reviewer will ask whether the shape is right; the honest answer is that the gap is a real hardware fix and the rest is tuning |
-| ⚠ **Two formats have no payload check** | Securakey's gate is 19 preamble bits and InstaFob's is the T5577 config word; neither validates the card data, so a bit error inside it is undetectable. Gallagher (CRC-8) and Noralsy (two nibble checksums) do. ⇒ Document, do not "fix" — both references are the same |
+| ✅ ~~**Two formats have no payload check**~~ **HALF OF THIS WAS WRONG AND IS FIXED (2026-09-14)** | ~~Securakey's gate is 19 preamble bits~~ — it was, and the reason given here ("both references are the same") was not checked. It is false: `protocol_securakey_can_be_decoded` rejects any frame whose 9-bit groups do not open with a zero spacer, and we did not. `securakey_accept()` now enforces exactly those ten spacers (C253), and the reader REPORTS the Wiegand parity without gating on it, which is what the reference does (C261). ⭐ **InstaFob's `NULL` hook is confirmed CORRECT**: its reference checks the 32-bit block-1 constant and nothing else (C256) — so that half of the row stands, now measured rather than assumed. ⇒ **The lesson is the row itself**: "both references are the same" was written without reading either one's `can_be_decoded` |
 | ⚠ **ASK reads sweep field strength** | `lf_ask_read` divides the caller's timeout across drive steps {4,7,6,2}. Noralsy decodes at drive 7 and NO other setting (C182), so it is required; but it changes the latency profile of every ASK read and a reviewer should be told why rather than discovering it |
 
 ### 9e. ⛔ A PRE-EXISTING DEFECT THIS BRANCH FOUND AND DID NOT CAUSE
@@ -330,6 +340,46 @@ so — but even that is a change to shared behaviour and belongs in its own upst
 tag reads 96/96 and 48/48 exact with zero wrong. So this is reachable only when something else
 is already perturbing the capture — a BLE burst over a live link, where `lf_adv_suspend` cannot
 fire by design, is the configuration to worry about, and it has not been measured here.
+
+### 9g. ⭐ TWO AUDITS A REVIEWER CANNOT DO THEMSELVES — the frame gates, and what we PRINT
+
+Both were run 2026-09-14 and both found something. They are here because neither is visible in
+a diff: the first needs every reference implementation open beside ours, and the second needs
+the hardware.
+
+**The frame gates, each read against its own reference's `can_be_decoded` (C256):**
+
+| | verdict |
+|---|---|
+| IDTECK, InstaFob, Indala224 | ✅ **match the reference exactly.** InstaFob's `.accept = NULL` looks like a gap and is not one — its reference checks the 32-bit block-1 constant and nothing else |
+| Securakey | ⛔ **was a real gap, now closed (C253).** The reference checks ten 9-bit zero spacers; we checked 19 preamble bits and nothing else |
+| GProxII | ⛔ **was a real gap, now closed (C255).** The reference checks Wiegand parity over the descrambled credential; we stopped at the format length |
+| Indala26 | ⛔ **was a real gap, now closed (C257).** The reference requires bits 60 and 61 to be zero. ⚠ **This makes us stricter than the PROXMARK**, which reads the frames we now refuse — the two references disagree and we followed Momentum, on C205's precedent |
+| Keri | ⛔ **was a real gap, now closed (C258).** The reference requires the frame twice and the same id in both; affordable for Keri's 8192-sample window and NOT for Indala26's 4096 |
+
+⭐ **What makes the table trustworthy is `ctest`'s sweep (C252)**: one flipped frame bit, every
+bit, every protocol with an emitter — 1,024 corrupted frames — with the rejected/accepted counts
+**pinned**, so a gate that quietly weakens fails `make check` rather than printing a smaller
+number. Its sensitivity is proven by a deliberate break: removing Gallagher's hook moved it
+88/8 → 16/80 while its round-trip arm stayed ✓ exact.
+
+⛔ **And the limit is stated rather than hidden (C254):** the sweep cannot reach `require_repeat`,
+because the renderer loops the corrupted frame and a repeat check then sees two agreeing copies
+of the corruption. Low numbers are a FLOOR for repeat-gated formats.
+
+⛔⛔ **One measured caution over all of it.** With a corrupted tag in the field, GProxII returned
+a frame that passes EVERY check both references make — once in four (C255). A stronger gate
+narrows the window; it does not close it.
+
+**What we PRINT, against the Proxmark, same tag, same minute (C260):** HID Prox, ioProx,
+Indala26, NexWatch, Gallagher, Noralsy, PAC and GProxII all agree field for field. Keri printed
+the raw id field under the label `Internal ID` and is fixed (C259). Securakey printed no derived
+fields at all and now prints length, FC, card and the Wiegand word, with the parity **reported
+and not gated** — which is what the reference does (C261).
+
+⚠ **Why this had never been checked:** every read arm in this campaign scores the RAW FRAME. A
+wrong number printed under a right frame was invisible by construction, in every protocol, for
+the whole branch.
 
 ### 9c. ⭐ Recommended shape — three PRs, not one
 

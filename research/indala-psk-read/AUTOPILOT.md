@@ -67,10 +67,15 @@ four. A stronger gate narrows the window; it does not close it.
 - ✅ **DONE (C258, C259, C260)** — Keri took the repeat check, Indala26 was refused it, Keri's
   `Internal ID` was printing the raw field and is fixed, and ALL TEN displays are now audited
   against the Proxmark: eight clean, one fixed, one gap.
-  ✅ **AND Securakey's display is built (C261)** — length, FC, card and the wiegand word, the
-  parity reported and not gated. ⇒ **The display layer is now complete and verified in all ten
-  protocols.** Next: back to §2's queue — everything left there needs hands or upstream
-  coordination, so the honest next step is §9's upstreaming prep rather than more protocol work.
+  ✅ **AND Securakey's display is built (C261)** — the display layer is complete and verified in
+  all ten protocols. ✅ **§9 refreshed (C262)**: 48 new command ids of which 41 are shippable,
+  three stale rows fixed, and §9g now carries the gate and display audits for a reviewer.
+  ⇒ **Next: the instrumentation strip, §9b's last ⛔ that is ours to act on.** Three ids
+  (3037 `LF_EMU_DEBUG`, 3038 `LF_RADIO_DEBUG`, 3060 `LF_READER_CAPTURE`) plus
+  `lf_reader_capture_probe()`, the GProxII failure-energy payload, `rdrcap.py`, `hw emudebug`
+  and `hw lfdebug`. ⛔ Do NOT delete them — they earned their place (the probe cracked C211
+  after six refuted hypotheses). The unit is to establish EXACTLY what the split touches, so a
+  diagnostics change can be lifted out whole rather than picked apart later.
 - The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
@@ -387,6 +392,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 15:45 | **C262 — §9 refresh** | 12 → 12 | Command ids recounted from a `data_cmd.h` diff: 48 new, 41 shippable. Three stale rows fixed — HID Prox's "intermittent 15-20%", §9a's grid omitting six protocols, and a blocker arguing from an unread reference. New §9g carries the gate and display audits | Pure compute: every correction is contradicted by a claim already in the ledger, and the count is a `comm` between two checked-out headers |
 | 2026-09-14 14:40 | **C261 — Securakey's display** | 11 → 12 | `_securakey_fields()` in the CLI: length, FC, card and the Wiegand word, matching the Proxmark field for field. The parity is REPORTED, not gated — the third option C253 did not list | A/B/A on the tag: valid fields 4/4 matching pm3, bit 38 flipped read 4/4 with `PARITY FAILS` flagged (the gate cannot be what changed), restored 4/4 |
 | 2026-09-14 13:55 | **C259/C260 — the display layer** | 11 → 11 | Keri's `Internal ID` fixed (it printed the raw field under the reference's label); the other half of C259 retracted as my own comparison error. Then all ten displays audited: 8 clean, 1 fixed, 1 gap — Securakey prints nothing derived | Each protocol cloned by the Proxmark with a credential WE chose, read by both tools in the same minute |
 | 2026-09-14 12:35 | **C258/C259 — Keri's repeat check** | 11 → 11 | `57aa2f9` flashed to #2. Keri `require_repeat` on (3/4 either way on captures), Indala26 refused it (51→43 true frames). ⚠ C259 found: our Keri reader's `Internal ID` and MS card number disagree with the Proxmark's on an identical raw frame | Hardware 8/8 with the Proxmark reading the same tag 3/3, raw byte-identical; the control is Indala26 under the same flag, and it moves |
