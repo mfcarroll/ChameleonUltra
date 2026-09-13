@@ -209,7 +209,7 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds SECURAKEY `7FCB400001ADEA5344300000` (confirmed by `lf search`) — the audits and
+  now holds FDX-B `-c 999 -n 1234567890 -a` (raw `0029740b4e4a079f80406af958040201`) — the audits and
   field sweeps cycled it through seventeen credentials in one session; before that Securakey, IDTECK, FDX-B, Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
@@ -398,6 +398,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 22:50 | **C272/C273 — FDX-B settles C270** | 18 → 19 | Same biphase decoder as GProxII, RF/32 not RF/64: 56 captures, 24 frames, **zero wrong credentials** — so it is the bit rate, not the decoder. ⛔ And FDX-B reads at drive 4 and NO other setting, working only because the shared sweep tries 4 first | Two passes at drives 7 and 6 to rule out a fluke; drive 4's 16/16 in the same sweeps is the positive control |
 | 2026-09-14 22:00 | **C270/C271 — field sweep across the ASK family** | 18 → 18 | Gallagher (RF/32) and Securakey (RF/40) have NO marginal regime — perfect, then a cliff to nothing, 0 false in 40 captures each. Only GProxII (RF/64) degrades into wrong answers, and it has the strongest gate of the three | 120 captures × 5 drives with drive 7 as the in-sweep control; the drive-1 cliff reproduces on both protocols and on two passes |
 | 2026-09-14 21:05 | **C269 — why the two failure modes differ** | 17 → 18 | Broken tag captured C268's way: 48 captures, 13 frames, 12 distinct, 12/12 wrong credentials, on-tag frame returned 0 times. **One frame recurs at two phases** — that is what passes two-agreeing-stacks, and it explains C266 | A/B/A: restored tag reads 8/8 exact; the two recurring captures committed under `caps/gproxii-broken/` and reproduce it off-bench |
 | 2026-09-14 20:20 | **C268 — do marginal errors repeat?** | 17 → 17 | No: 92 captures, 33 frames, 12 odd raws, all 12 unique, while the true frame repeated 13 times in the same set. Two-agreeing-stacks rejects marginal-field errors — measured, not inferred | The repeating TRUE frame is the positive control: the pipeline can produce a repeat, so "none repeated" is not an artefact of never seeing one |

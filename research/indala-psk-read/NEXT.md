@@ -407,6 +407,20 @@ that emits wrong credentials.** Gate strength and field robustness are independe
 sweep above measures only the first. A reviewer reading that table as a safety ranking would
 get it backwards.
 
+⭐⭐ **C272 settles it with the one comparison that separates decoder from bit rate.** GProxII
+and FDX-B share `lf_ask_biphase.c` WHOLE — same decoder, same acceptance machinery — and FDX-B
+is RF/32 where GProxII is RF/64. Swept the same way: **56 captures, 24 frames, zero wrong
+credentials.** The one differing raw is a single bit at position 113, past the 64 the CRC
+covers, and the credential decodes identically. ⇒ It is the bit rate against the front end's
+coupling constant, not the decoder and not the gate.
+
+⛔ **A fragility found on the way (C273): FDX-B reads at drive 4 and at no other setting** —
+16/16 at 4, 0/16 at 7, 0/16 at 6, nothing at 2 or 1. It works only because the shared ASK
+reader sweeps `{4, 7, 6, 2}` with 4 FIRST, and nothing at the call site says that ordering is
+load-bearing. C182 has Noralsy needing drive 7 and only 7. Two protocols, two different single
+settings, one undocumented sweep — a reviewer shortening or reordering it breaks a reader with
+no other symptom.
+
 **What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
 each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,
 Gallagher, Noralsy, PAC, GProxII, FDX-B and Jablotron agree field for field. **Three were not
