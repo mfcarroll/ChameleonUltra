@@ -134,6 +134,23 @@ int main(void) {
     bad += trial2("Keri      PSK1 block form", "00000004000181cf", "e000000080003039", 64,
                   LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_KERI);
 
+    /* ⭐ NexWatch, the fourth protocol through the shared encoder and the first at 96 bits.
+     * ⛔ NO ROTATION, and the contrast with the Keri arm directly above is the point: these
+     * are the exact bytes a Proxmark clone of card 12345678 leaves in T5577 blocks 1-3, and
+     * they are ALSO the air frame, because NexWatch's preamble starts at the block boundary
+     * where Keri's sits three bits before one. Both arms are `trial`/`trial2` against a real
+     * clone's own dump, so neither protocol's alignment rests on an assumption (C164, C166). */
+    bad += trial("NexWatch  PSK1 96-bit", "5600000000436455121e6000", 96,
+                 LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_NEXWATCH);
+
+    /* ⭐ A SECOND NEXWATCH FRAME, AND IT IS NOT PADDING. The first is even-parity by luck of
+     * the credential; this is our own written card 87654321 / mode 2 / Quadrakey, whose
+     * frame differs in the mode nibble, the parity nibble and the checksum byte. An encoder
+     * that mangled any of those three would still pass the arm above, because the preamble
+     * and the scrambled id would survive. */
+    bad += trial("NexWatch  PSK1 2nd credential", "560000000012776a2f207b00", 96,
+                 LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_NEXWATCH);
+
     /* ⭐ C152's frame. Its bits XOR to 1, so the encoder MUST emit two copies. */
     bad += trial("Indala224 PSK2 odd parity",
                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 224,

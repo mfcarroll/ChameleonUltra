@@ -71,7 +71,7 @@ registered `TAG_TYPE_*`.
 | Pyramid | ✗ | ✗ | ✗ | ✓ |
 | **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
 | Gallagher | ✗ | ✗ | ✗ | ✓ |
-| NexWatch | ✗ | ✗ | ✗ | ✓ |
+| **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | Securakey | ✗ | ✗ | ✗ | ✓ |
 | GProxII | ✗ | ✗ | ✗ | ✓ |
 | Noralsy | ✗ | ✗ | ✗ | ✓ |
@@ -240,7 +240,7 @@ rest of it nearly free, and doing one from each family makes all of them expensi
 
 | family | protocols | the path it reuses | why this order |
 |---|---|---|---|
-| **1. PSK1** | **Keri**, **NexWatch** | `lf_indala_psk.c` + `lf_indala_data.c`, parameterised by `lf_psk1_format_t` — the same descriptor that already carries Indala64, Indala224 and IDTECK | ⭐ cheapest by a wide margin. The decoder is generic already, `tag_base_type.h` reserves both in the 300 block, and the PSK1 transmit path is proven on three protocols |
+| ~~**1. PSK1**~~ ✅ | ~~Keri~~ ✓, ~~NexWatch~~ ✓ | `lf_indala_psk.c` + `lf_indala_data.c`, parameterised by `lf_psk1_format_t` — the same descriptor that already carries Indala64, Indala224 and IDTECK | ⭐ cheapest by a wide margin. The decoder is generic already, `tag_base_type.h` reserves both in the 300 block, and the PSK1 transmit path is proven on three protocols |
 | **2. ASK / biphase** | **Gallagher**, **Securakey**, **Noralsy**, **InstaFob** | the GPIO/comparator path — `register_rio_callback`, 128-entry ring, no SAADC — that em410x, Viking and Jablotron use | ⚠ the path that is **not** affected by the saturation the SAADC readers suffer (C140), so it starts from a healthy instrument |
 | **3. FSK** | **AWID**, **Paradox**, **Pyramid**, **FDX-A** | the HID Prox / ioProx SAADC machinery | ⛔ last of the three: HID's intermittency (C45) is unexplained and lives in exactly this path. Adding four protocols on top of an unexplained defect is what Phase 2 existed to prevent |
 | **4. biphase, long frames** | **FDX-B**, **GProxII** | closest to ASK/biphase, but 128-bit animal-ID framing and different bit rates | likely the most work; leave until a family is proven end to end |
@@ -256,51 +256,13 @@ rig B and rig A already provide.
 starting its second.** The shared path is only proven once something has gone through it end to
 end, and a half-finished family is how three protocols end up sharing one untested assumption.
 
-## 10a. NexWatch — designed from both references, nothing built yet
+## 10a. ✅ NexWatch — DONE: read, write and emulate, all verified on hardware
 
-⭐ **Same air layer as the rest of the family**: `NEXWATCH_US_PER_BIT 255` and
-`NEXWATCH_ENCODER_PULSES_PER_BIT 16` in Momentum's `protocol_nexwatch.c` — RF/32 on an fc/2
-subcarrier, exactly like Indala26, IDTECK and Keri. The T5577 config is
-`T55x7_MODULATION_PSK1 | T55x7_BITRATE_RF_32 | 3 << MAXBLOCK` = **`0x00081060`**, which is
-Indala's `0x00081040` with the block count raised from 2 to 3. ⇒ 96 bits, three data blocks.
-
-⛔⛔ **CORRECTION TO WHAT THIS FILE SAID EARLIER TODAY.** I wrote that NexWatch has an
-"8-bit preamble" and that eight bits is dangerously weak. That was read off
-`NEXWATCH_PREAMBLE_BIT_SIZE (8)` without reading the acceptance rule underneath it.
-**The fixed structure is 40 bits, not 8**, and there are two more checks on top:
-
-| bits | contents | what it gives the reader |
-|---|---|---|
-| 0-7 | `0x56` = `01010110` | 8 bits, high-transition — no long run |
-| 8-39 | **reserved, must be ZERO** | 32 more fixed bits, checked by `can_be_decoded` |
-| 40-71 | scrambled 32-bit card id | payload |
-| 72-75 | mode (4 bits) | payload |
-| 76-79 | parity over bits 40-75 | ⭐ a computed check, not a constant |
-| 80-87 | checksum over id, magic and parity | ⭐ a second computed check |
-| 88-95 | unused | |
-
-⇒ **NexWatch is the best-gated protocol in this family, not the worst.** 40 fixed bits plus
-a 4-bit parity plus an 8-bit checksum, against Indala's 33 fixed bits and no checksum at all.
-⚠ The one caveat that survives: 32 of those 40 bits are a **constant run**, the same shape
-that made Indala's preamble forgeable (C90, C157). The parity and checksum are what make the
-difference, so **both must be enforced — a preamble-only match is not acceptable here.**
-
-**What it needs, in order:**
-
-| | |
-|---|---|
-| `LF_PSK1_MAX_PREAMBLE_BITS` | ⛔ **raise 33 → 40.** The whole `0x56` + 32 zeros must be the preamble, or the gate is 8 bits and the earlier worry becomes real |
-| format descriptor | `frame_bits` 96, `differential_only` false (PSK1), `require_repeat` — decide against a real tag, since unlike Indala224 this format has real checks |
-| acceptance | parity and checksum verified in the reader, not just reported. ⚠ Momentum computes both inside `can_be_decoded`, so a frame failing either is never returned — copy that, it is the right shape |
-| capture length | 96 bits is 3072 samples per frame. Keri needed 8192 for a 64-bit frame (C161), so start at **12288** and measure the threshold the same way — truncate one good capture, do not guess |
-| buffers | all existing limits already fit: 96 < `LF_PSK1_MAX_FRAME_BITS` 224, 12288 < `LF_PSK1_MAX_CAPTURE_SAMPLES` 14336, 96 entries < the 448-entry PWM buffer |
-| emulate | ⛔ **emit what a T5577 emits, not the reader's frame view** (C160). Check whether NexWatch's frame starts at a block boundary as Indala's does or 3 bits off as Keri's does — the Proxmark's `raw[12]` starts at `0x56`, which suggests aligned, but verify it against a real clone's block dump before trusting it |
-| scramble | `nexwatch_scamble()` both ways, plus the three magic bytes — `0xBE` Quadrakey, `0x88` Nexkey, `0x86` Honeywell. ⚠ The magic is NOT in the frame; it is inferred by testing which one makes the checksum work, which is why the Proxmark brute-forces it |
-
-⭐ **The cheapest first step is unchanged from Keri's and needs one working rig:**
-`lf keri clone`'s equivalent is `lf nexwatch clone --cn <n>`; write one, capture it with
-`lf sniff --bits 16`, and decode it on the host before any firmware is written. That is what
-made Keri's air-layer claim a measurement rather than an assumption (C157).
+Read 6/6 on device and 4/4 on committed captures with 508 cross-protocol nulls (C164/C165),
+write read back 3/3 by the Proxmark from a wiped tag (C166), emulate 10/10 via the Flipper
+with a 0/4 null (C167). ⭐ **The PSK1 family is closed** — Indala26, Indala224, IDTECK, Keri
+and NexWatch all read, write and emulate through one `lf_psk1_format_t` and one modulator.
+Detail in LOG.md L131-L133; the design that produced it is in the git history of this file.
 
 ## ⭐ What the saturation lever REOPENS — a review of older conclusions
 

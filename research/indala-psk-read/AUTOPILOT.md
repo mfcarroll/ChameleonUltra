@@ -38,10 +38,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE — updated 2026-09-13 01:30
 
-- **Last landed:** U1 + U3 — NexWatch **read and write** verified on hardware (C166).
-- **In flight:** nothing. **U2 (emulate) is next**, then U4.
-- ⚠ **Chameleon #2 (`F429364E46961`) carries the new build; Chameleon #1 does NOT yet** —
-  U2 needs #1 flashed, since rig A is the emulation rig.
+- **Last landed:** U1, U2, U3 all done — **NexWatch is complete** (read, write, emulate) and
+  the PSK1 family is closed (C164-C167).
+- **In flight:** nothing. **U4 (re-test C162) is next**, then U5 (Gallagher, opens ASK/biphase).
+- ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
+  NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
   which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
@@ -175,6 +176,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 |---|---|---|---|---|
 | 2026-09-13 01:30 | — | 17 → 24 | NexWatch reader (`c5ffd94`, `e0eb44b`) | 4/4 exact on real-tag captures, 508 nulls clean, `make check` green |
 | 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
+| 2026-09-13 02:45 | U2 | 29 → 31 | NexWatch emulation: protocol struct, `TAG_TYPE_NEXWATCH`, econfig, 2 roundtrip arms | Flipper 6/6, null 0/4, return leg 4/4 — A/B/A |
 
 ---
 
