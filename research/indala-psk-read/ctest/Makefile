@@ -38,11 +38,20 @@ roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_
 # would print a PASS for code that no longer exists. A false pass in a correctness harness is
 # worse than a false failure, and costs a few seconds to remove entirely.
 .PHONY: check
-check: clean cdemod roundtrip
+check: clean cdemod roundtrip ambig
 	@./roundtrip
+	@echo
+	@./ambig
 	@echo
 	@$(PY) compare.py
 
 .PHONY: clean
 clean:
-	rm -f cdemod roundtrip
+	rm -f cdemod roundtrip ambig
+
+# ⭐ Compiles the SHIPPING wiegand.c. `parity.h` lives under rfid/ and is header-only with
+# GCC builtins, so it needs an include path and no shim; `nordic_common.h` needs a one-line
+# shim for ARRAY_SIZE, copied verbatim.
+RFID := ../../../firmware/application/src/rfid
+ambig: ambig.c $(PROTO)/wiegand.c $(PROTO)/wiegand.h
+	$(CC) $(CFLAGS) -I$(PROTO) -I$(RFID) -Ishim -o $@ ambig.c $(PROTO)/wiegand.c
