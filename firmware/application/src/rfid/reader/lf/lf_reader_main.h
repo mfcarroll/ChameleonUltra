@@ -29,6 +29,8 @@ uint8_t scan_instafob(uint8_t *data);
 /** ⭐ The BIPHASE family's first protocol — a fourth decode path, not a flag on the ASK one.
  *  See lf_ask_biphase.h for why the level path cannot read RF/64 at all. */
 uint8_t scan_gproxii(uint8_t *data);
+/** ⚠ Instrumentation — the same read, reporting the decoder's energy on failure. */
+uint8_t scan_gproxii_energy(uint8_t *data, int32_t *energy_out);
 uint8_t write_gproxii_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t scan_awid(uint8_t *data);
 uint8_t scan_paradox(uint8_t *data);

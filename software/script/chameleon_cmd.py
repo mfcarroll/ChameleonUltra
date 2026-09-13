@@ -968,10 +968,14 @@ class ChameleonCMD:
 
         Returns (raw12, phase, bit_pos, tries, inverted).
         """
-        resp = self.device.send_cmd_sync(Command.GPROXII_SCAN, timeout=10)
+        resp = self.device.send_cmd_sync(Command.GPROXII_SCAN, timeout=20)
         if resp.status == Status.LF_TAG_OK:
             raw, phase, pos, tries, inv = struct.unpack(">12sBBBB", resp.data[:16])
             resp.parsed = (raw, phase, pos, tries, bool(inv))
+        elif len(resp.data) == 4:
+            # ⚠ Instrumentation: on failure the firmware returns the decoder's energy, which
+            # says whether the CAPTURE was wrong or the DECODE was. See the firmware note.
+            resp.parsed = ("energy", struct.unpack(">i", resp.data)[0])
         return resp
 
     @expect_response(Status.LF_TAG_OK)

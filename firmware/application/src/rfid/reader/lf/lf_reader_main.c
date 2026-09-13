@@ -183,7 +183,22 @@ uint8_t scan_pyramid(uint8_t *data) {
 
 uint8_t scan_gproxii(uint8_t *data) {
     int32_t energy = 0;
-    if (gproxii_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+    return scan_gproxii_energy(data, &energy);
+}
+
+/* ⚠ The energy-reporting variant — see the note on cmd_processor_gproxii_scan. */
+uint8_t scan_gproxii_energy(uint8_t *data, int32_t *energy_out) {
+    int32_t energy = 0;
+    /* ⚠ TEMPORARY, FOR ONE MEASUREMENT ONLY — 8s instead of the usual budget, to test whether
+     * this arm's failures are the DECODER RUNNING OUT OF TIME rather than a capture problem.
+     * The biphase decoder sweeps 64 sample phases x 3 thresholds where the ASK one sweeps 32
+     * phases x 2 low-pass widths, and it recomputes every slope for each threshold. Revert or
+     * justify before this ships. */
+    bool got = gproxii_read(data, 8000u, &energy);
+    if (energy_out != NULL) {
+        *energy_out = energy;
+    }
+    if (got) {
         return STATUS_LF_TAG_OK;
     }
     /* ⚠ NOT `lf_psk1_failure_status`, for the same reason scan_gallagher gives — and more
@@ -191,7 +206,9 @@ uint8_t scan_gproxii(uint8_t *data) {
      * counts, which is neither the PSK integrator amplitude that mapping expects nor the
      * violation percentage the ASK decoder reports. Three decoders, three different
      * quantities; only the PSK one has a calibrated threshold. */
-    (void)energy;
+    if (energy_out != NULL) {
+        *energy_out = energy;
+    }
     return STATUS_LF_TAG_NO_FOUND;
 }
 

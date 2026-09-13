@@ -837,11 +837,23 @@ static data_frame_tx_t *cmd_processor_pyramid_scan(uint16_t cmd, uint16_t status
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
+/* ⚠ INSTRUMENTATION, and it is here to settle one question: when this read fails, is the
+ * CAPTURE wrong or the DECODE wrong? The host decodes `lf sniff` captures from this same
+ * device exactly while the reader path returns nothing, and every parameter that could differ
+ * between the two paths has now been swept on the sniff side without reproducing it (C206).
+ * The decoder's `energy` is the mean bit-boundary step in ADC counts, and on the sniff
+ * captures it runs 270-360; a clipped capture (gain 1) gives 40. ⇒ Reporting it on FAILURE
+ * splits the hypothesis in one read. Remove with the rest of the instrumentation (§9b). */
 static data_frame_tx_t *cmd_processor_gproxii_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[GPROXII_READ_DATA_SIZE] = { 0x00 };
-    status = scan_gproxii(card_data);
+    int32_t energy = 0;
+    status = scan_gproxii_energy(card_data, &energy);
     if (status != STATUS_LF_TAG_OK) {
-        return data_frame_make(cmd, status, 0, NULL);
+        uint8_t e[4] = {
+            (uint8_t)(energy >> 24), (uint8_t)(energy >> 16),
+            (uint8_t)(energy >> 8), (uint8_t)energy
+        };
+        return data_frame_make(cmd, status, sizeof(e), e);
     }
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
