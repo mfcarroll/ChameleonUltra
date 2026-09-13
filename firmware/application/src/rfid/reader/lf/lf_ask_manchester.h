@@ -33,16 +33,40 @@
  * same decoder reads the clipped captures 4 of 4 as well as the clean ones (C169 corrected).
  */
 
-/** Samples per bit. The biphase family here is RF/32, one sample per carrier cycle. */
-#define LF_ASK_BIT_SAMPLES   32
+/* ⛔⛔ THE BIT RATE IS PER-PROTOCOL AND IS NOT RF/32 FOR THE WHOLE FAMILY. Gallagher is
+ * RF/32, Securakey is RF/40, and em410x on the other reader is RF/64. This was a hard-coded
+ * 32 for exactly one protocol's lifetime; it is a format field now, because a decoder that
+ * silently samples a 40-sample bit at 32 finds nothing and gives no hint why. */
+#define LF_ASK_MAX_BIT_SAMPLES   64
+#define LF_ASK_MIN_BIT_SAMPLES   32
 
-/** Longest frame any ASK format here uses. Gallagher is 96 bits. */
+/** Longest frame any ASK format here uses. Gallagher and Securakey are both 96 bits. */
 #define LF_ASK_MAX_FRAME_BITS  128
-#define LF_ASK_MAX_PREAMBLE_BITS 16
+/** ⛔ 19 is Securakey's, and all 19 must be the preamble: the first 10 are a constant run
+ *  and the next 9 are the format selector, so truncating to 16 would keep the run and throw
+ *  away the discriminating half. */
+#define LF_ASK_MAX_PREAMBLE_BITS 24
 
-/** Gallagher: 96-bit frame, 16-bit preamble 0x7FEA (C171). */
+/** Gallagher: 96-bit frame, 16-bit preamble 0x7FEA, RF/32 (C171). */
 #define GALLAGHER_ASK_FRAME_BITS    96
 #define GALLAGHER_ASK_PREAMBLE_BITS 16
+#define GALLAGHER_ASK_BIT_SAMPLES   32
+
+/* Securakey: 96-bit frame at RF/40, config `000C8060`, and a 19-bit preamble.
+ *
+ * ⚠ THE PREAMBLE IS 10 CONSTANT BITS PLUS A 9-BIT FORMAT SELECTOR, and there are THREE known
+ * selectors — `000000000`, `001011010` and `001100000` — of which only the middle one is on
+ * this bench. The other two are NOT implemented, because a format nobody here can test is
+ * worth less than nothing: it looks supported. That is `idteck.c`'s lesson.
+ *
+ * ⛔⛔ AND UNLIKE GALLAGHER THERE IS NO COMPUTED CHECK TO GATE ON. The Proxmark's own reader
+ * says so in as many words — "How the checksum is calculated is unknown" — and Momentum's
+ * `can_be_decoded` tests nothing but those 19 bits. So this format's entire gate is 19 bits,
+ * 10 of which are a run, where Gallagher has 16 bits plus a CRC-8. ⇒ Its cross-protocol null
+ * is not a formality here, it is the only evidence that the gate holds. */
+#define SECURAKEY_ASK_FRAME_BITS    96
+#define SECURAKEY_ASK_PREAMBLE_BITS 19
+#define SECURAKEY_ASK_BIT_SAMPLES   40
 
 /* ⛔⛔ MEASURED BY TRUNCATION, AND THE GUESS WAS WRONG BY MORE THAN A FACTOR OF TWO — which
  * is the third time this rule has paid for itself (C161, C165). This constant read 6144
@@ -62,19 +86,33 @@
  * That is the honest cost of this protocol, not a tuning failure. */
 #define GALLAGHER_ASK_CAPTURE_SAMPLES 14336
 
+/* ⛔ MEASURED, like every other capture length here, and the prediction held. Securakey's bit
+ * is RF/40, so its 96-bit frame is 3840 samples against Gallagher's 3072 — less slack in the
+ * same buffer — and the threshold came out HIGHER as expected: 7680 -> 0 of 4, 9216 -> 4 of
+ * 4, flat to 14336, against Gallagher's 10240 measured in frames rather than samples (2.4
+ * frames here, 3.3 there). ⚠ 14336 is the shipped value and also the buffer maximum, so this
+ * format has NO headroom left: a variant needing a longer capture could not be added without
+ * growing LF_PSK1_MAX_CAPTURE_SAMPLES. Worth knowing before the next RF/40 protocol. */
+#define SECURAKEY_ASK_CAPTURE_SAMPLES 14336
+
 extern const uint8_t LF_ASK_PREAMBLE_GALLAGHER[GALLAGHER_ASK_PREAMBLE_BITS];
+extern const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS];
 
 /** An ASK format, mirroring `lf_psk1_format_t` so the two families read alike. */
 typedef struct {
     const uint8_t *preamble;   /**< one byte per bit, MSB of the frame first. */
     uint8_t  preamble_bits;
     uint16_t frame_bits;
+    /** ⛔ Carrier cycles per bit — RF/32 for Gallagher, RF/40 for Securakey. Not a family
+     *  constant; see the note at LF_ASK_MAX_BIT_SAMPLES. */
+    uint8_t  bit_samples;
     /** ⭐ The format's own acceptance rule, checked INSIDE the candidate search — the same
      *  shape and the same reason as `lf_psk1_format_t.accept`. NULL for none. */
     bool (*accept)(const uint8_t *word_bits, uint16_t frame_bits);
 } lf_ask_format_t;
 
 extern const lf_ask_format_t LF_ASK_FORMAT_GALLAGHER;
+extern const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY;
 
 /**
  * Demodulate one ASK/Manchester frame from a carrier-locked capture.
@@ -90,3 +128,6 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
 
 /** Gallagher's decode, in the shape the shared capture engine wants. */
 bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** Securakey's decode. ⚠ Its gate is the 19-bit preamble alone — see the note above. */
+bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);

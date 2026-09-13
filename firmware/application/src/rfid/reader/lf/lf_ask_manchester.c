@@ -60,7 +60,29 @@ const lf_ask_format_t LF_ASK_FORMAT_GALLAGHER = {
     .preamble = LF_ASK_PREAMBLE_GALLAGHER,
     .preamble_bits = GALLAGHER_ASK_PREAMBLE_BITS,
     .frame_bits = GALLAGHER_ASK_FRAME_BITS,
+    .bit_samples = GALLAGHER_ASK_BIT_SAMPLES,
     .accept = gallagher_accept,
+};
+
+/* Securakey: 0111111111 then the format selector 001011010 — the one variant on this bench.
+ * ⚠ The other two selectors both reference implementations know are deliberately absent; see
+ * the note in the header for why an untestable format is worse than a missing one. */
+const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS] = {
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 1, 0, 1, 1, 0, 1, 0
+};
+
+/* ⛔ NO `accept` — AND THAT IS A GAP, NOT A DESIGN. Gallagher gates on a CRC-8 over its
+ * payload; Securakey has no checksum either reference knows how to compute, so the gate is
+ * the 19 preamble bits and nothing else. ⇒ Whether that is sufficient is a MEASUREMENT, and
+ * the cross-protocol null is the one that makes it. Do not quote this format's reliability
+ * from Gallagher's. */
+const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY = {
+    .preamble = LF_ASK_PREAMBLE_SECURAKEY,
+    .preamble_bits = SECURAKEY_ASK_PREAMBLE_BITS,
+    .frame_bits = SECURAKEY_ASK_FRAME_BITS,
+    .bit_samples = SECURAKEY_ASK_BIT_SAMPLES,
+    .accept = NULL,
 };
 
 /* ⭐ THE LOCAL DC, AS BLOCK MEANS RATHER THAN A PREFIX SUM. A single global threshold is
@@ -123,24 +145,28 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
                                   const lf_ask_format_t *fmt, indala_psk_result_t *out) {
     memset(out, 0, sizeof(*out));
     const uint16_t FB = fmt->frame_bits;
-    if (n < (size_t)(FB + 4) * LF_ASK_BIT_SAMPLES) {
+    const uint8_t SPB = fmt->bit_samples;
+    if (SPB < LF_ASK_MIN_BIT_SAMPLES || SPB > LF_ASK_MAX_BIT_SAMPLES) {
+        return false;
+    }
+    if (n < (size_t)(FB + 4) * SPB) {
         return false;
     }
 
-    static uint8_t bits[LF_PSK1_MAX_CAPTURE_SAMPLES / LF_ASK_BIT_SAMPLES];
+    static uint8_t bits[LF_PSK1_MAX_CAPTURE_SAMPLES / LF_ASK_MIN_BIT_SAMPLES];
     int32_t best_energy = 0;
 
     for (uint8_t lp = 1; lp <= 3; lp += 2) {
         build_dc(samples, n);
-        for (uint8_t phase = 0; phase < LF_ASK_BIT_SAMPLES; phase++) {
+        for (uint8_t phase = 0; phase < SPB; phase++) {
             size_t nb = 0;
             int32_t viol = 0;
-            for (size_t i = phase; i + LF_ASK_BIT_SAMPLES <= n; i += LF_ASK_BIT_SAMPLES) {
+            for (size_t i = phase; i + SPB <= n; i += SPB) {
                 /* ⭐ The two half-bit centres. Manchester's bit is the transition between
                  * them; a MATCHED pair is an encoding violation, marked 2 so the preamble
                  * search can never match it rather than being silently guessed. */
-                bool a = level_at(samples, n, i + LF_ASK_BIT_SAMPLES / 4, lp);
-                bool b = level_at(samples, n, i + (3 * LF_ASK_BIT_SAMPLES) / 4, lp);
+                bool a = level_at(samples, n, i + SPB / 4u, lp);
+                bool b = level_at(samples, n, i + (3u * SPB) / 4u, lp);
                 if (a == b) {
                     bits[nb++] = 2;
                     viol++;
@@ -206,4 +232,8 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
 
 bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_GALLAGHER, out);
+}
+
+bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_SECURAKEY, out);
 }

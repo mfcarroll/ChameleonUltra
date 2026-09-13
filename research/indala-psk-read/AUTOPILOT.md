@@ -40,12 +40,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** nothing. **U5 is COMPLETE** — Gallagher reads, writes and emulates, all
-  verified on hardware (C171-C174). **U6 is next**: Securakey, then Noralsy, then InstaFob,
-  one at a time. ⭐ They should be cheap now — `lf_ask_format_t` + the bit-centre decoder
-  carry a new ASK protocol, and the emitter is two numbers (`counter_top` and frame length).
-  ⚠ Check each one's bit rate: Gallagher and em410x are RF/32 and RF/64 respectively, so
-  `counter_top` is NOT a constant across the family.
+- **In flight:** **U6 — Securakey's DECODER is host-verified 4/4 with 21 nulls clean (C175);
+  the device arm is not wired.** Next: `securakey_read` + `scan_securakey` +
+  `DATA_CMD_SECURAKEY_*` + CLI + writer (`T5577_SECURAKEY_CONFIG 0x000C8060`, 3 blocks,
+  **check alignment against the clone's blocks before assuming transcribe**), then emulate
+  (`counter_top = 40`, NOT 32). Then Noralsy, then InstaFob.
+  ⚠ Securakey has NO computed check — its whole gate is 19 preamble bits. Do not carry
+  Gallagher's reliability over to it.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -197,6 +198,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 05:05 | U5 (part) | 32 → 34 | `lf_ask_manchester.c/h` shipping decoder, ctest arm, CRC and capture length both corrected | 4/4 host-compiled exact, 17 nulls clean; CRC 0x07/0x2C verified, capture threshold 10240 measured |
 | 2026-09-13 05:45 | U5 (read+write) | 33 → 36 | Gallagher device read + write, config `00088060`, CLI with host descramble | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all four fields changed |
 | 2026-09-13 06:20 | U5 (emulate) — DONE | 34 → 37 | Gallagher ASK emitter, `TAG_TYPE_GALLAGHER`, econfig | Flipper 6/6, null 0/4, return leg 4/4 with a CHANGED credential it tracked |
+| 2026-09-13 06:55 | U6 (part) | 38 → 40 | Securakey decoder; `lf_ask_format_t` parameterised by bit rate | 4/4 exact at RF/40, Gallagher unregressed, 21 nulls clean incl. same-family both ways |
 
 ---
 
