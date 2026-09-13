@@ -306,6 +306,25 @@ The branch splits along its own dependency order:
 number would have meant either a dishonest count or two families smuggled into someone else's
 review.
 
+### 9d. ⭐ The split at FILE level — so it can be executed rather than re-derived
+
+61 files change. Listing them by PR is the difference between a plan and an intention, and the
+shared files are the part that actually needs thought: `app_cmd.c`, `data_cmd.h`,
+`lf_reader_main.c/.h`, `lf_indala_data.c/.h`, `tag_base_type.h`, `tag_emulation.c`, the
+`Makefile` and all three Python files are touched by EVERY PR and must be split by hunk.
+
+| PR | files it OWNS | notes |
+|---|---|---|
+| **1. Shared engine** | `lf_indala_psk.c/.h`, `lf_slicer.c/.h`, `lf_reader_generic.c/.h`, `lf_reader_data.c/.h`, `lf_125khz_radio.c/.h`, `netdata.h` | ⛔ Also carries the RENAMES (`lf_sampled_*`, `lf_drive_swept_read`) and the sizing constants. Everything below depends on it, and it touches no protocol |
+| **2. PSK1 family** | `keri.c/.h`, `nexwatch.c/.h`, `psk1.c/.h`, `indala.c/.h`, `idteck.c` | The `lf_psk1_format_t` descriptor refactor plus two formats. Indala and IDTECK exist upstream, so most of this is the refactor |
+| **3. ASK/Manchester family** | `lf_ask_manchester.c/.h`, `gallagher.c/.h`, `securakey.c/.h`, `noralsy.c/.h` | ⚠ Carries the drive sweep. ⛔ InstaFob stays OUT — no verifiable write arm |
+| **4. FSK2a family** | `lf_fsk2a.c/.h`, `fsk2a_t55xx.c/.h`, `awid.c/.h` | ⚠ FDX-A ships READ ONLY and the PR must say why (C185). ⛔ The AWID EMITTER should not ship at all until C243's mystery is solved — it is silent on hardware and shipping it would be the self-certification this project refuses |
+| **5. ASK/biphase family** | `lf_ask_biphase.c/.h`, `gproxii.c/.h` | ⭐ Carries the 50ms inter-capture gap, which is a HARDWARE finding (C213) and the part most worth a reviewer's time. ⛔ The GProxII EMITTER must not ship: a biphase 0 is a held level and this PWM emits nothing for one (C242). Delete it or land it behind a comment saying so |
+| **(separate)** | `DATA_CMD_LF_READER_CAPTURE`, `lf_reader_capture_probe`, the GProxII failure-energy payload, `rdrcap.py`, `hw emudebug`, `hw lfdebug` | ⛔ INSTRUMENTATION. Strip, or land as its own "LF diagnostics" change with its own justification. It earned its place — the probe cracked C211 — but it is not a feature |
+
+⚠ **Two emitters in that table must NOT ship**, and both for measured reasons rather than
+taste. A reviewer handed a silent emitter has no way to know it is silent.
+
 ⚠ **`idteck.c` upstream ships a PSK1 emulation nobody verified end to end** (§6). Worth
 reporting independently of any of this.
 
