@@ -367,9 +367,14 @@ number. Its sensitivity is proven by a deliberate break: removing Gallagher's ho
 because the renderer loops the corrupted frame and a repeat check then sees two agreeing copies
 of the corruption. Low numbers are a FLOOR for repeat-gated formats.
 
-⛔⛔ **One measured caution over all of it.** With a corrupted tag in the field, GProxII returned
-a frame that passes EVERY check both references make — once in four (C255). A stronger gate
-narrows the window; it does not close it.
+⛔⛔ **One measured caution over all of it, and it is now measured properly.** With a corrupted
+tag in the field, GProxII returns a frame that passes EVERY check both references make —
+**3 times in 52 reads, about 6%** (C266; C255 saw one in four and n=4 could not carry a rate).
+The mechanism is exact: the tag's frame fails Wiegand parity, and a single mis-sliced bit
+inside the same parity group RESTORES it. ⛔ **Every one of those false frames carried the
+right card number and a wrong facility code** — which is the near-miss that matters in access
+control, not a harmless garble. ⇒ A stronger gate narrows the window; it does not close it,
+and a reviewer should be told that in those terms.
 
 **What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
 each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,

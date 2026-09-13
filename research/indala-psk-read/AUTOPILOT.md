@@ -209,8 +209,8 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds JABLOTRON `--cn 12345678` — the display audits cycled it through thirteen
-  credentials in one session; before that Securakey, IDTECK, FDX-B, Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
+  now holds GPROXII `--fmt 26 --fc 45 --cn 6789 --xor 200` — the audits cycled it through
+  fourteen credentials in one session; before that Securakey, IDTECK, FDX-B, Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
@@ -398,6 +398,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 18:50 | **C266 — the false frame, measured** | 15 → 15 | C255's "one in four" is n=4; the rate is 3 in 52 (~6%) and the mechanism is a mis-sliced bit restoring the parity the tag's frame breaks. All three false frames: right card number, wrong facility code | A/B/A: valid 12/12 before, 8/8 after; each false frame re-run through the full gate offline and it passes on its own merits |
 | 2026-09-14 18:00 | **C265 — the display audit finished properly** | 14 → 15 | C260 missed three protocols. FDX-B and Jablotron agree with the Proxmark; IDTECK printed the checksum byte with no verdict and now prints both | Verified on the tag in BOTH directions — a constructed failing frame and a constructed passing one, each matching pm3's word |
 | 2026-09-14 17:05 | **C264 — the `require_repeat` instrument, second attempt** | 12 → 14 | Built to C254's design with a sanity check and a control, and BACKED OUT: toggling the flag on the format under test moved nothing. Two instruments, two failures, both recorded | The disproof is a flag toggle plus a forced clean rebuild, not an argument about why it should have worked |
 | 2026-09-14 16:20 | **C263 — the instrumentation split, as a checklist** | 12 → 12 | §9h: four items, every call site grepped. Nothing shippable depends on any of them — the probe has one caller, the debug handlers none beyond their dispatch rows, and GProxII's is two lines because `scan_gproxii()` was already in the tree | Pure compute; the "nothing depends on them" claim is a caller count, and deliberately NOT executed — it would break this branch's own tooling |
