@@ -79,7 +79,7 @@ registered `TAG_TYPE_*`.
 | **NexWatch** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C234)** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag (C233)** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | **Noralsy** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ⛔ **emitter round-trips, SILENT to the Flipper 0/6, control 6/6 (C222)** | ✓ |
+| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ⛔ **IMPOSSIBLE as designed — a biphase 0 is a HELD level and this PWM emits nothing for one (C242)** | ✓ |
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
