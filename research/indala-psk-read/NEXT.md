@@ -68,8 +68,8 @@ registered `TAG_TYPE_*`.
 | **AWID** | ✓ **5/5 on device, null 0/3 (C196)** | ◐ deferred — needs the tag back | ✗ | ✓ |
 | FDX-A | ✗ | ✗ | ✗ | ✓ |
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
-| Paradox | ✗ | ✗ | ✗ | ✓ |
-| Pyramid | ✗ | ✗ | ✗ | ✓ |
+| **Paradox** | ◐ **host-verified (C197)**, device arm next | ✗ | ✗ | ✓ |
+| **Pyramid** | ◐ **host-verified (C197)**, device arm next | ✗ | ✗ | ✓ |
 | **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
 | **Gallagher** | ✓ **6/6 on device (C173)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C174)** | ✓ |
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |

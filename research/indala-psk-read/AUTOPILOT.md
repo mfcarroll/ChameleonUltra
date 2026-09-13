@@ -75,9 +75,10 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   Flipper emulates AWID/Paradox/Pyramid into Chameleon #1 exactly as it did for InstaFob.
   ⭐⭐ **AWID READS ON DEVICE — 5/5, null 0/3, 4/4 on a changed payload (C196).** The FSK
   family is open and was the CHEAPEST of the three attempted, not the most expensive.
-  **Next: Paradox and Pyramid** — same tones, same pulse counts, so each should cost one
-  `lf_fsk2a_format_t` entry plus its preamble and gate. Verify each the same way: Flipper
-  emulates into Chameleon #1, changed payload on the return leg, explicit stop for the null.
+  ⭐ **Paradox and Pyramid DECODE (C197)** — one format entry each, host-verified, 26 nulls
+  clean. **Next: their device arms** — `paradox_read`/`pyramid_read`, `scan_*`, commands 3052
+  and 3053, CLI; then verify each with the Flipper emulating into Chameleon #1, a changed
+  payload on the return leg and an explicit stop for the null.
   ⚠ AWID's WRITER is deferred until the tag is back — the Proxmark can verify it then.
   ⚠ Paradox and Pyramid share the tones and the pulse counts — only preamble and payload
   layout differ, so they should be format entries rather than new decoders.
@@ -284,6 +285,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 17:30 | AWID payload | 13 → 15 | payload decode added; C194 amended | both payloads exact; the earlier failure was my own preamble-shift bug |
 | 2026-09-13 18:05 | FSK in firmware | 13 → 16 | `lf_fsk2a.c/h`, `lf_slicer.c/h` shared, ctest arm | shipping decoder matches host byte for byte; 22 nulls; ASK unregressed |
 | 2026-09-13 18:40 | AWID on device | 14 → 17 | `awid_read`, `scan_awid`, `DATA_CMD_AWID_SCAN`, CLI | 5/5 on device, null 0/3, 4/4 on a changed payload |
+| 2026-09-13 19:15 | Paradox + Pyramid | 14 → 17 | 2 format entries, 2 committed captures | both decode first try; 26 nulls clean; Pyramid's CRC verified on a real signal |
 
 ---
 

@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0, modepx = 0, modepy = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -71,6 +71,8 @@ int main(int argc, char **argv) {
             modeawid = 1;
             continue;
         }
+        if (!strcmp(argv[i], "--paradox")) { modepx = 1; continue; }
+        if (!strcmp(argv[i], "--pyramid")) { modepy = 1; continue; }
         if (!strcmp(argv[i], "--nogate")) {
             modenw = 1;
             nogate = 1;
@@ -121,6 +123,21 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modepx || modepy) {
+            lf_decode_result_t rp;
+            bool ok = modepx ? paradox_fsk_decode(buf, n, &rp) : pyramid_fsk_decode(buf, n, &rp);
+            if (!ok) {
+                printf(" %-44s %5zu samples  -                          bits %4ld\n",
+                       argv[i], n, (long)rp.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < rp.frame_bits / 8; k++) printf("%02x", rp.id[k]);
+            printf("\n");
+            continue;
         }
 
         if (modeawid) {

@@ -36,7 +36,7 @@
 
 /** Longest frame this family uses. AWID, Paradox and Pyramid are all 96 or 128 bits. */
 #define LF_FSK2A_MAX_FRAME_BITS 128
-#define LF_FSK2A_MAX_PREAMBLE_BITS 16
+#define LF_FSK2A_MAX_PREAMBLE_BITS 24
 
 /** AWID: 96-bit frame, 8-bit preamble `00000001`, and 66 carried payload bits. */
 #define AWID_FSK_FRAME_BITS    96
@@ -44,7 +44,22 @@
 /** ⛔ MEASURED, like every capture length here — see FINDINGS.md. */
 #define AWID_FSK_CAPTURE_SAMPLES 14336
 
+/* Paradox: 96-bit frame, 8-bit preamble `00001111`. ⭐ Its real gate is structural — every
+ * bit PAIR from 8 to 95 must differ, which is 44 independent checks and far stronger than the
+ * preamble. */
+#define PARADOX_FSK_FRAME_BITS    96
+#define PARADOX_FSK_PREAMBLE_BITS 8
+#define PARADOX_FSK_CAPTURE_SAMPLES 14336
+
+/* Pyramid: 128-bit frame, 24-bit preamble, and a CRC-8 over 13 bytes. ⭐ The strongest gate
+ * in the FSK family: 24 fixed bits, the frame repeating, AND a computed checksum. */
+#define PYRAMID_FSK_FRAME_BITS    128
+#define PYRAMID_FSK_PREAMBLE_BITS 24
+#define PYRAMID_FSK_CAPTURE_SAMPLES 14336
+
 extern const uint8_t LF_FSK2A_PREAMBLE_AWID[AWID_FSK_PREAMBLE_BITS];
+extern const uint8_t LF_FSK2A_PREAMBLE_PARADOX[PARADOX_FSK_PREAMBLE_BITS];
+extern const uint8_t LF_FSK2A_PREAMBLE_PYRAMID[PYRAMID_FSK_PREAMBLE_BITS];
 
 typedef struct {
     const uint8_t *preamble;
@@ -63,6 +78,8 @@ typedef struct {
 } lf_fsk2a_format_t;
 
 extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_AWID;
+extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_PARADOX;
+extern const lf_fsk2a_format_t LF_FSK2A_FORMAT_PYRAMID;
 
 /** Demodulate one FSK2a frame. ⚠ `samples` is NOT modified. */
 bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
@@ -70,6 +87,12 @@ bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
 
 /** AWID's decode, in the shape the shared capture engine wants. */
 bool awid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
+
+/** Paradox's decode — preamble, repeat, and 44 alternating bit-pairs. */
+bool paradox_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
+
+/** Pyramid's decode — 24-bit preamble, repeat at 128, and a CRC-8 over 13 bytes. */
+bool pyramid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** The 66 payload bits an AWID frame carries, left-aligned into 9 bytes.
  *  ⭐ Each nibble at `8 + 4i` is THREE data bits plus an odd-parity LSB (C194). */

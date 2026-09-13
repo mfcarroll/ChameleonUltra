@@ -52,6 +52,88 @@ void awid_fsk_payload(const uint8_t *word_bits, uint8_t out9[9]) {
     }
 }
 
+/* Paradox: `00001111`. */
+const uint8_t LF_FSK2A_PREAMBLE_PARADOX[PARADOX_FSK_PREAMBLE_BITS] = { 0, 0, 0, 0, 1, 1, 1, 1 };
+
+/* ⭐ PARADOX'S REAL GATE IS STRUCTURAL, NOT A CHECKSUM: every bit PAIR from 8 to 95 must
+ * DIFFER. That is 44 independent one-bit checks — far stronger than its 8-bit preamble, and
+ * it is what makes an 8-bit preamble survivable here. */
+static bool paradox_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < PARADOX_FSK_FRAME_BITS) {
+        return false;
+    }
+    for (uint16_t i = PARADOX_FSK_PREAMBLE_BITS; i < PARADOX_FSK_FRAME_BITS; i += 2) {
+        if ((word_bits[i] & 1u) == (word_bits[i + 1] & 1u)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const lf_fsk2a_format_t LF_FSK2A_FORMAT_PARADOX = {
+    .preamble = LF_FSK2A_PREAMBLE_PARADOX,
+    .preamble_bits = PARADOX_FSK_PREAMBLE_BITS,
+    .frame_bits = PARADOX_FSK_FRAME_BITS,
+    .pulses_short = 6,
+    .pulses_long = 5,
+    .require_repeat = true,
+    .accept = paradox_accept,
+};
+
+/* Pyramid: sixteen bits of `0000000000000001` then eight of `00000001`. */
+const uint8_t LF_FSK2A_PREAMBLE_PYRAMID[PYRAMID_FSK_PREAMBLE_BITS] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 1
+};
+
+/* ⭐ PYRAMID'S CRC-8, poly 0x31 with input and output REFLECTED — `bit_lib_crc8(data, 13,
+ * 0x31, 0x00, true, true, 0x00)`. Reflecting both ends is equivalent to running the mirrored
+ * polynomial 0x8C right-to-left, which is what this does.
+ *
+ * ⛔ The parameters are transcribed and then CHECKED against a real capture before shipping,
+ * because Gallagher's were written from memory and were wrong in a way that reads NOTHING
+ * rather than reading badly (C172). */
+static uint8_t pyramid_crc8(const uint8_t *d, size_t len) {
+    uint8_t crc = 0x00;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= d[i];
+        for (uint8_t b = 0; b < 8; b++) {
+            crc = (uint8_t)((crc & 1u) ? (((unsigned)crc >> 1) ^ 0x8Cu) : ((unsigned)crc >> 1));
+        }
+    }
+    return crc;
+}
+
+static bool pyramid_accept(const uint8_t *word_bits, uint16_t frame_bits) {
+    if (frame_bits < PYRAMID_FSK_FRAME_BITS) {
+        return false;
+    }
+    uint8_t body[13];
+    for (uint8_t i = 0; i < 13; i++) {
+        uint8_t v = 0;
+        for (uint8_t k = 0; k < 8; k++) {
+            v = (uint8_t)(((unsigned)v << 1) | (word_bits[16 + i * 8u + k] & 1u));
+        }
+        body[i] = v;
+    }
+    uint8_t want = 0;
+    for (uint8_t k = 0; k < 8; k++) {
+        want = (uint8_t)(((unsigned)want << 1) | (word_bits[120 + k] & 1u));
+    }
+    return pyramid_crc8(body, 13) == want;
+}
+
+const lf_fsk2a_format_t LF_FSK2A_FORMAT_PYRAMID = {
+    .preamble = LF_FSK2A_PREAMBLE_PYRAMID,
+    .preamble_bits = PYRAMID_FSK_PREAMBLE_BITS,
+    .frame_bits = PYRAMID_FSK_FRAME_BITS,
+    .pulses_short = 6,
+    .pulses_long = 5,
+    .require_repeat = true,
+    .accept = pyramid_accept,
+};
+
 bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
                          const lf_fsk2a_format_t *fmt, lf_decode_result_t *out) {
     memset(out, 0, sizeof(*out));
@@ -155,4 +237,12 @@ bool lf_fsk2a_decode_fmt(int16_t *samples, size_t n,
 
 bool awid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_fsk2a_decode_fmt(samples, n, &LF_FSK2A_FORMAT_AWID, out);
+}
+
+bool paradox_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
+    return lf_fsk2a_decode_fmt(samples, n, &LF_FSK2A_FORMAT_PARADOX, out);
+}
+
+bool pyramid_fsk_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
+    return lf_fsk2a_decode_fmt(samples, n, &LF_FSK2A_FORMAT_PYRAMID, out);
 }
