@@ -21,6 +21,7 @@
 #include "lf_indala_psk.h"
 #include "lf_ask_manchester.h"
 #include "lf_fsk2a.h"
+#include "lf_ask_biphase.h"
 
 static const char TRUTH[] = "a0000000e6bd0e92";
 
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0, modepx = 0, modepy = 0, modefa = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0, modepx = 0, modepy = 0, modefa = 0, modegp = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -74,6 +75,7 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i], "--paradox")) { modepx = 1; continue; }
         if (!strcmp(argv[i], "--pyramid")) { modepy = 1; continue; }
         if (!strcmp(argv[i], "--fdxa")) { modefa = 1; continue; }
+        if (!strcmp(argv[i], "--gproxii")) { modegp = 1; continue; }
         if (!strcmp(argv[i], "--nogate")) {
             modenw = 1;
             nogate = 1;
@@ -124,6 +126,21 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modegp) {
+            lf_decode_result_t rg;
+            if (!gproxii_biphase_decode(buf, n, &rg)) {
+                printf(" %-44s %5zu samples  -                          edge %4ld\n",
+                       argv[i], n, (long)rg.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < rg.frame_bits / 8; k++) printf("%02x", rg.id[k]);
+            printf("  ph %2u pos %3u %s edge %4ld\n", rg.offset, rg.bit_pos,
+                   rg.inverted ? "inv" : "   ", (long)rg.energy);
+            continue;
         }
 
         if (modefa) {

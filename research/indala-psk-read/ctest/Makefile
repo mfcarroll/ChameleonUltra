@@ -8,8 +8,8 @@ CAP := ../caps/phasebits
 
 CFLAGS := -std=c11 -O2 -Wall -Wextra -Wconversion -I$(FW)
 
-cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c
-	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c
+cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c
+	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c
 
 # ⭐ THE ASK ARMS COMPILE THE SHIPPING EMITTERS TOO — gallagher.c, securakey.c, noralsy.c —
 # not copies of them. That is the whole point of this harness (C156).
