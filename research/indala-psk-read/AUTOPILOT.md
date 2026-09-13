@@ -83,7 +83,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   to a REAL TAG** written by the Proxmark, which is the stronger evidence (C179).
   ⚠ With the tag IN, the Proxmark can no longer read our emulation — but that sweep is
   COMPLETE (C190) and the four FSK protocols have no emulator, so nothing is lost.
-  ⛔⛔ **FDX-A's hardware arm needs rig A, which is down: Chameleon #1 is not enumerating**
+  ✅ **FDX-A reads on device 4/4 (C199). All four FSK protocols read on hardware.**
   (see §5). It was NOT a flash-targeting problem — the device answers nothing, so every DFU
   trigger was a no-op and only the script's untargeted one ever worked. ⇒ When #1 is back:
   trigger DFU on its `/dev/cu.` port, confirm `nrfutil device list` shows exactly one
@@ -311,7 +311,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | | why |
 |---|---|
-| ⛔⛔ **Chameleon #1 (rig A, the Flipper pad) was power-cycled 2026-09-13 ~09:00 and is now NOT ENUMERATING AT ALL** — three devices on USB where there were four. That is worse than the wedged state; check it is seated and powering up. Original fault: | `hw mode` times out (CMD 1035) and DFU triggers do nothing, because the device is not listening at all. Four flashes landed on #2 as a result. C96's precedent says only a USB unplug clears this. ⇒ **Rig A is unavailable until then** — no Flipper-emulates-to-our-reader, so FDX-A's hardware arm and any new read arm are blocked |
+| ✅ ~~Chameleon #1 wedged~~ **CLEARED 2026-09-13 09:10 by a power cycle.** ⭐ To flash ONE named unit: trigger DFU on its `/dev/cu.` port, confirm exactly one nordicDfu via `/Users/Shared/code/personal/rfid/.tools/bin/nrfutil device list` (⛔ the bare name is NOT on PATH — that read as "no DFU device" for four hours, C200), then `nrfutil device program --firmware firmware/objects/ultra-dfu-app.zip --traits nordicDfu`. Never the script: its own trigger picks whichever port the OS lists first | `hw mode` times out (CMD 1035) and DFU triggers do nothing, because the device is not listening at all. Four flashes landed on #2 as a result. C96's precedent says only a USB unplug clears this. ⇒ **Rig A is unavailable until then** — no Flipper-emulates-to-our-reader, so FDX-A's hardware arm and any new read arm are blocked |
 | Coupling intermittent (C159, C163) | ⚠ **A watch, not a blocker.** Two episodes, two different signatures, both cleared without diagnosis. If it recurs: check enumeration, take the fc/2 pair, **record it** rather than working around it |
 | A free-running source in front of a Chameleon reader | Two Chameleons must face each other; the rigs do not. The Flipper cannot stand in — it is carrier-locked (C87) |
 | Lift the T5577 out of the sandwich | Would make the clock conclusion causal (C139). Not urgent, not blocking |
