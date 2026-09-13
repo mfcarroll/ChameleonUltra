@@ -41,9 +41,20 @@
 /** Bits in an Indala224 frame. */
 #define INDALA224_PSK_FRAME_BITS 224
 
-/** The longest frame any format here uses, for fixed-size storage. */
-#define LF_PSK1_MAX_FRAME_BITS  INDALA224_PSK_FRAME_BITS
+/* ⛔⛔ THE LONGEST FRAME ANY FORMAT USES — PSK *OR* ASK — AND IT IS NO LONGER INDALA224's.
+ * `indala_psk_result_t` is shared by both decoder families, so this bound is what stops one
+ * of them writing past the other's buffers. InstaFob's frame is **225 bits**, one more than
+ * Indala224's 224, which would have overflowed BOTH `id[]` (28 bytes, needs 29) and
+ * `word_bits[]` (224, needs 225) by exactly one bit's worth.
+ *
+ * ⚠ Caught by arithmetic before the format was written, not by a crash afterwards — an
+ * off-by-one into a struct field is the kind of fault that corrupts a neighbouring member
+ * and surfaces as a wrong credential somewhere unrelated. 240 leaves headroom and costs 16
+ * bytes of RAM in a struct there is one of. */
+#define LF_PSK1_MAX_FRAME_BITS  (240)
 #define LF_PSK1_MAX_FRAME_BYTES (LF_PSK1_MAX_FRAME_BITS / 8)
+_Static_assert(LF_PSK1_MAX_FRAME_BITS >= INDALA224_PSK_FRAME_BITS,
+               "the shared result buffer must hold the longest PSK frame");
 
 /** Bits in the fixed preamble (cmdlfindala.c:50) — and the first 33 bits of every ID. */
 #define INDALA_PSK_PREAMBLE_BITS 33

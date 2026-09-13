@@ -113,6 +113,27 @@ static bool noralsy_accept(const uint8_t *word_bits, uint16_t frame_bits) {
            noralsy_nibble_xor(word_bits, 0, 76) == chk2;
 }
 
+/* InstaFob: the 32 bits of `0x00107060`, which is the tag's own T5577 config word. */
+const uint8_t LF_ASK_PREAMBLE_INSTAFOB[INSTAFOB_ASK_PREAMBLE_BITS] = {
+    0, 0, 0, 0, 0, 0, 0, 0,   /* 0x00 */
+    0, 0, 0, 1, 0, 0, 0, 0,   /* 0x10 */
+    0, 1, 1, 1, 0, 0, 0, 0,   /* 0x70 */
+    0, 1, 1, 0, 0, 0, 0, 0    /* 0x60 */
+};
+
+/* ⛔ NO `accept`, and unlike Securakey's that is not a gap: the 32 gated bits here are an
+ * exact configuration word, not a vendor tag with a constant run in it. ⚠ What it does NOT
+ * give is any check on the PAYLOAD — nothing in the frame validates the credential — so a
+ * bit error inside the card data is undetectable by this format. Securakey shares that
+ * weakness and Gallagher and Noralsy do not. */
+const lf_ask_format_t LF_ASK_FORMAT_INSTAFOB = {
+    .preamble = LF_ASK_PREAMBLE_INSTAFOB,
+    .preamble_bits = INSTAFOB_ASK_PREAMBLE_BITS,
+    .frame_bits = INSTAFOB_ASK_FRAME_BITS,
+    .bit_samples = INSTAFOB_ASK_BIT_SAMPLES,
+    .accept = NULL,
+};
+
 const lf_ask_format_t LF_ASK_FORMAT_NORALSY = {
     .preamble = LF_ASK_PREAMBLE_NORALSY,
     .preamble_bits = NORALSY_ASK_PREAMBLE_BITS,
@@ -284,4 +305,8 @@ bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) 
 
 bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_NORALSY, out);
+}
+
+bool instafob_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+    return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_INSTAFOB, out);
 }

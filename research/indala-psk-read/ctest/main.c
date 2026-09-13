@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -60,6 +60,10 @@ int main(int argc, char **argv) {
         }
         if (!strcmp(argv[i], "--noralsy")) {
             modenor = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--instafob")) {
+            modeif = 1;
             continue;
         }
         if (!strcmp(argv[i], "--nogate")) {
@@ -112,6 +116,20 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modeif) {
+            indala_psk_result_t ri2;
+            if (!instafob_ask_decode(buf, n, &ri2)) {
+                printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
+                       argv[i], n, (long)ri2.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 29; k++) printf("%02x", ri2.id[k]);
+            printf("  ph %2u pos %3u %s\n", ri2.offset, ri2.bit_pos, ri2.inverted ? "inv" : "");
+            continue;
         }
 
         if (modenor) {

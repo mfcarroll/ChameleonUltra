@@ -40,8 +40,11 @@
 #define LF_ASK_MAX_BIT_SAMPLES   64
 #define LF_ASK_MIN_BIT_SAMPLES   32
 
-/** Longest frame any ASK format here uses. Gallagher and Securakey are both 96 bits. */
-#define LF_ASK_MAX_FRAME_BITS  128
+/** Longest frame any ASK format here uses. Gallagher, Securakey and Noralsy are 96 bits;
+ *  ⛔ InstaFob is 225, because the tag transmits its whole T5577 page 0. */
+#define LF_ASK_MAX_FRAME_BITS  240
+_Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_PSK1_MAX_FRAME_BITS,
+               "the shared result buffer must hold the longest ASK frame too");
 /** ⛔ 19 is Securakey's, and all 19 must be the preamble: the first 10 are a constant run
  *  and the next 9 are the format selector, so truncating to 16 would keep the run and throw
  *  away the discriminating half. */
@@ -80,6 +83,25 @@
 #define NORALSY_ASK_FRAME_BITS      96
 #define NORALSY_ASK_PREAMBLE_BITS   12
 #define NORALSY_ASK_BIT_SAMPLES     32
+
+/* InstaFob: 225 bits at RF/32, and its structure is unlike anything else in this family.
+ *
+ * ⭐⭐ ITS "PREAMBLE" IS THE T5577 CONFIGURATION WORD ITSELF, TRANSMITTED AS DATA. The frame
+ * is 1 + 7x32 bits — the tag clocks out its ENTIRE page 0, block 0 included — and Momentum
+ * identifies it by finding `0x00107060` at bit 7 of that stream. So the 32 "fixed" bits this
+ * format gates on are not a vendor preamble at all; they are the chip's own configuration.
+ *
+ * ⭐ That makes the gate strong — 32 exact bits, against Securakey's 19 — but it also means a
+ * DIFFERENTLY CONFIGURED InstaFob tag would not match, and there is no way to know from here
+ * whether other configurations exist in the field.
+ *
+ * ⚠ THE FRAME THIS DECODER RETURNS IS A ROTATION of Momentum's buffer: we search for the
+ * config word and return 225 bits starting there, where Momentum's numbering puts it at bit
+ * 7. The two are the same cycle 7 bits apart — exactly the Keri situation (C158) — and
+ * anything comparing our raw against a reference must account for it. */
+#define INSTAFOB_ASK_FRAME_BITS     225
+#define INSTAFOB_ASK_PREAMBLE_BITS  32
+#define INSTAFOB_ASK_BIT_SAMPLES    32
 
 #define SECURAKEY_ASK_FRAME_BITS    96
 #define SECURAKEY_ASK_PREAMBLE_BITS 19
@@ -130,6 +152,7 @@
 extern const uint8_t LF_ASK_PREAMBLE_GALLAGHER[GALLAGHER_ASK_PREAMBLE_BITS];
 extern const uint8_t LF_ASK_PREAMBLE_SECURAKEY[SECURAKEY_ASK_PREAMBLE_BITS];
 extern const uint8_t LF_ASK_PREAMBLE_NORALSY[NORALSY_ASK_PREAMBLE_BITS];
+extern const uint8_t LF_ASK_PREAMBLE_INSTAFOB[INSTAFOB_ASK_PREAMBLE_BITS];
 
 /** An ASK format, mirroring `lf_psk1_format_t` so the two families read alike. */
 typedef struct {
@@ -147,6 +170,7 @@ typedef struct {
 extern const lf_ask_format_t LF_ASK_FORMAT_GALLAGHER;
 extern const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY;
 extern const lf_ask_format_t LF_ASK_FORMAT_NORALSY;
+extern const lf_ask_format_t LF_ASK_FORMAT_INSTAFOB;
 
 /**
  * Demodulate one ASK/Manchester frame from a carrier-locked capture.
@@ -168,3 +192,6 @@ bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
 
 /** Noralsy's decode — 12-bit preamble plus TWO computed nibble checksums. */
 bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+
+/** InstaFob's decode. ⚠ Returns a 225-bit frame ROTATED 7 bits from Momentum's numbering. */
+bool instafob_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);

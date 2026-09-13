@@ -76,7 +76,7 @@ registered `TAG_TYPE_*`.
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | GProxII | ✗ | ✗ | ✗ | ✓ |
 | **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **InstaFob** | ◐ scoped, read arm available via rig A (C185) | ⛔ **unverifiable here** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
+| **InstaFob** | ✓ **decoder verified on 2 payloads + null (C186)**, not yet on device | ⛔ **unverifiable here** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
 works, and every one of them now emulates too.** The only Indala gap left is the 224-bit
