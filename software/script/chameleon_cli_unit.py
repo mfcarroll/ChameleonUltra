@@ -5957,6 +5957,20 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
         print(f" - EM410x ID write done: {id_hex}")
 
 
+# ⭐ THE FORMATS THE TABLE ITSELF CALLS HID. Taken from the `// HID …` comments on
+# `formats[]` in `wiegand.c` rather than from my own idea of who makes what — that table is the
+# Proxmark's shared WIEGAND LAYOUT list and it carries many vendors, so "did this frame match an
+# HID layout" is a question only the table can answer.
+# ⚠ H10301 is the only one of these at 26 bits, which is why a 26-bit read that lands outside
+# this set has necessarily left the HID family (C277).
+HID_BRANDED_FORMATS = frozenset({
+    HIDFormat.H10301, HIDFormat.ADT31, HIDFormat.HCP32, HIDFormat.HPP32,
+    HIDFormat.D10202, HIDFormat.H10306, HIDFormat.C1K35S, HIDFormat.C15001,
+    HIDFormat.S12906, HIDFormat.SIE36, HIDFormat.H10320, HIDFormat.H10302,
+    HIDFormat.H10304, HIDFormat.P10004, HIDFormat.HGEN37, HIDFormat.ACTPHID,
+})
+
+
 @lf_hid_prox.command("read")
 class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -5985,11 +5999,38 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         # ⛔ The fix is deliberately HERE and not in `unpack()`: that walk is shared by every
         # reader which guesses a format, and narrowing it is a change to other people's readers.
         if args.format is None:
-            print(f"   {color_string((CY, '⚠ no format pinned'))} — this is the FIRST layout "
-                  f"that fits, not the only one. Re-run with "
-                  f"{color_string((CG, '-f ' + HIDFormat(format).name))} to require it; on a "
-                  f"perturbed capture an unpinned read was wrong 7 times in 48 against 1 in 48 "
-                  f"pinned (C251).")
+            if format in HID_BRANDED_FORMATS:
+                print(f"   {color_string((CY, '⚠ no format pinned'))} — this is the FIRST layout "
+                      f"that fits, not the only one. A VALID 26-bit HID frame is accepted by TWO "
+                      f"formats and the table's order picks (C277). Re-run with "
+                      f"{color_string((CG, '-f ' + HIDFormat(format).name))} to require it.")
+            else:
+                # ⛔ NO HID LAYOUT FIT THIS FRAME. Two things cause that and the message must
+                # not pick one: the tag may genuinely carry another vendor's 26-bit layout — the
+                # Proxmark will happily write `lf hid clone -w ind26` onto an HID Prox tag — or
+                # the capture may be corrupted, since every single-bit corruption of a real
+                # H10301 frame either dies or reappears under another format's name (C277).
+                # ⚠ Saying "this is corruption" would have been wrong, and was caught by writing
+                # a genuine ind26 credential to a tag and reading it back.
+                print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
+                      f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")
+                if format == HIDFormat.IND26:
+                    # ⭐ AT 26 BITS THIS IS CORRUPTION, and that is measured rather than assumed:
+                    # H10301 accepts all 8,658 validly packed ind26 frames swept in ctest/ambig.c,
+                    # so a genuine Indala-26 credential on an HID Prox tag reports as H10301 and
+                    # never reaches here. Only a frame that BREAKS H10301's parity falls through
+                    # to ind26 — which is what a corrupted capture does (C277, C251).
+                    print(f"   {color_string((CR, 'At 26 bits that means the capture was corrupted'))}"
+                          f": H10301 accepts every valid ind26 frame, so a real Indala-layout tag "
+                          f"reports as H10301 and never lands here (C277). "
+                          f"{color_string((CY, 'The numbers below are fiction'))} — re-read.")
+                else:
+                    # ⚠ At other lengths an HID format need not accept a valid non-HID credential,
+                    # so this can be a genuine tag of another vendor's layout. Not measured.
+                    print(f"   Either the tag really carries that layout or the capture was "
+                          f"corrupted, and {color_string((CY, 'at this length the reader cannot tell'))}"
+                          f" — a corrupted frame reappears under another name rather than failing "
+                          f"(C277). Re-read before trusting the numbers below.")
         if fc > 0:
             print(f" FC: {color_string((CG, fc))}")
         if il > 0:

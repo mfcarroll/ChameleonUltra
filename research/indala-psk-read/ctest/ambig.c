@@ -82,6 +82,35 @@ int main(void) {
     printf("  first-matched a DIFFERENT fmt %2d\n", becomes_other);
     printf("  accepted by MORE than one fmt %2d\n", ambiguous);
 
+
+    /* ⭐⭐ CAN A NON-HID FORMAT EVER WIN AT 26 BITS? Three real ind26 credentials written to a
+     * tag all read back as H10301, which suggests H10301 accepts everything ind26 does. If that
+     * holds, the "no HID layout fits" branch in `lf hid prox read` is unreachable at 26 bits and
+     * saying so is better than shipping a message nobody can see. */
+    {
+        int ind26_total = 0, h10301_also = 0;
+        for (uint32_t fc = 0; fc < 4096; fc += 37) {
+            for (uint32_t cn = 0; cn < 4096; cn += 53) {
+                wiegand_card_t c;
+                memset(&c, 0, sizeof(c));
+                c.format = IND26; c.facility_code = fc; c.card_number = cn;
+                uint64_t w = pack(&c);
+                if (w == 0) { continue; }
+                wiegand_card_t *as_ind = unpack(IND26, 26, 0, w);
+                if (as_ind == NULL) { continue; }
+                free(as_ind);
+                ind26_total++;
+                wiegand_card_t *as_hid = unpack(H10301, 26, 0, w);
+                if (as_hid != NULL) { h10301_also++; free(as_hid); }
+            }
+        }
+        printf("\nind26 frames that H10301 ALSO accepts: %d of %d\n", h10301_also, ind26_total);
+        if (h10301_also == ind26_total) {
+            printf("  ⇒ H10301 accepts EVERY ind26 frame, so at 26 bits a non-HID format can\n"
+                   "    never win the walk — H10301 is first in the table.\n");
+        }
+    }
+
     /* ⛔ PINNED. If the formats table is reordered, extended or narrowed, these numbers move
      * and this arm says so — which is the whole reason a measurement belongs in the harness
      * rather than in a notebook. */
