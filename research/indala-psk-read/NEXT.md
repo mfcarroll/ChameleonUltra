@@ -66,11 +66,11 @@ registered `TAG_TYPE_*`.
 | **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
-| **AWID** | ✓ **5/5 on device, null 0/3 (C196)** | ◐ deferred — needs the tag back | ✗ | ✓ |
-| **FDX-A** | ✓ **4/4 on device, null 0/2 (C199)** | ◐ deferred — tag is back, do it | ✗ | ✓ |
+| **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ◐ writer not built yet | ✗ | ✓ |
+| **FDX-A** | ✓ **4/4, emulation only — pm3 has no FDX-A (C201)** | ⛔ unverifiable here | ✗ | ✓ |
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
-| **Paradox** | ✓ **4/4 on device, null 0/2 (C198)** | ◐ deferred — needs the tag back | ✗ | ✓ |
-| **Pyramid** | ✓ **4/4 + 3/3 on a changed payload (C198)** | ◐ deferred — needs the tag back | ✗ | ✓ |
+| **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ◐ writer not built yet | ✗ | ✓ |
+| **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ◐ writer not built yet | ✗ | ✓ |
 | **Keri** | ✓ **6/6 on device (C161)** | ✓ **3/3 via Proxmark** | ✓ **6/6 via Flipper (C160)** | ✓ |
 | **Gallagher** | ✓ **6/6 on device (C173)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C174)** | ✓ |
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |

@@ -77,10 +77,10 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   family is open and was the CHEAPEST of the three attempted, not the most expensive.
   ⭐⭐ **THREE FSK PROTOCOLS READ ON DEVICE** — AWID, Paradox, Pyramid (C196, C198).
   ⭐⭐ **THE T5577 GOES BACK INTO RIG B (the Proxmark sandwich) for the day, 2026-09-13.**
-  ⇒ **On resume, check with one `lf search`.** If the tag is back, the queue is: (1) the four
-  **FSK WRITE arms** — AWID, Paradox, Pyramid, FDX-A — each verified our-write/their-read as
-  every other writer here was; (2) ⭐ **upgrade the four FSK READ arms from a Flipper emulation
-  to a REAL TAG** written by the Proxmark, which is the stronger evidence (C179).
+  ✅ **The tag is back and the READ upgrade is DONE (C201)** — AWID, Paradox and Pyramid all
+  read real tags byte-exactly. ⛔ FDX-A could not be upgraded: pm3 has no FDX-A clone.
+  ⇒ **Next: the FSK WRITE arms.** AWID, Paradox and Pyramid are verifiable (pm3 reads them
+  back); FDX-A's is not, so do NOT ship an FDX-A writer — that is InstaFob's situation (C185).
   ⚠ With the tag IN, the Proxmark can no longer read our emulation — but that sweep is
   COMPLETE (C190) and the four FSK protocols have no emulator, so nothing is lost.
   ✅ **FDX-A reads on device 4/4 (C199). All four FSK protocols read on hardware.**
@@ -302,6 +302,8 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 19:15 | Paradox + Pyramid | 14 → 17 | 2 format entries, 2 committed captures | both decode first try; 26 nulls clean; Pyramid's CRC verified on a real signal |
 | 2026-09-13 19:50 | both on device | 15 → 18 | device arms, commands 3052/3053, CLI | Paradox 4/4 null 0/2; Pyramid 4/4 then 3/3 on a changed payload |
 | 2026-09-13 20:25 | FDX-A | 15 → 18 | format + device arm + CLI; C199 | decodes host-side, 26 nulls; hardware pending on a misdirected flash |
+| 2026-09-14 09:25 | FDX-A hardware + C200 | 5 → 6 | targeted flash proven; nrfutil PATH root cause | FDX-A 4/4 on device, null 0/2 |
+| 2026-09-14 09:45 | real-tag read upgrade | 6 → 7 | C201, no new code | AWID 5/5, Paradox 4/4, Pyramid 4/4 on real T5577s, all byte-exact |
 
 ---
 
