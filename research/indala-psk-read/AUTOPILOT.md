@@ -40,11 +40,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** nothing. **InstaFob READS on device** (C186, C187) and ships read-only —
-  ⛔ no writer, because nothing here can verify one (Needs hands). Its emulate arm is the only
-  thing left in family 2, and ⚠ it needs a SEQUENCE TERMINATOR, the first in this family that
-  does — the plain loop that carried the other three will not carry it.
-- **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
+- **In flight:** nothing. **InstaFob READS on device** (C186, C187), ships read-only, and its
+  terminator is now MEASURED at 98-99 samples of frame-boundary excess (C188).
+  ⛔ **Its emulate arm is deliberately NOT attempted**: the gap does not decompose into clean
+  Manchester runs and Momentum decodes it with a six-state machine, so an emitter would be a
+  fitted guess against a shape measurable only approximately. Revisit only with better
+  captures or a reading of that state machine's transitions.
+- **Next: U7** (upstreaming prep, pure compute), then U8 (FSK, deliberately last).
 - **Then:** U7 (upstreaming prep, pure compute) and U8 (FSK, deliberately last).
 - ⛔⛔ **The ASK readers now SWEEP DRIVE (C182)** — Noralsy decodes at drive 7 and at no other
   setting, including stock. Every ASK capture in this campaign was taken at `--drive 7`, so
@@ -230,6 +232,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 10:55 | InstaFob scoping | 3 → 5 | C185; 2 committed captures | Flipper emulation audible at fs/2 39314 vs 15287 null; write arm unverifiable, in Needs hands |
 | 2026-09-13 11:35 | InstaFob decoder | 4 → 7 | InstaFob format; shared frame bound 224 → 240 | 2 payloads tracked across a change, 24 nulls clean, 320-capture regression holds |
 | 2026-09-13 12:15 | InstaFob read arm | 4 → 8 | device read arm, read-only by design; M29 rule hardened | 5/5 on device, null 0/4 after an explicit stop, 4/4 on a changed payload |
+| 2026-09-13 12:45 | InstaFob terminator | 7 → 9 | C188; `framedrift.py` InstaFob arm | 98-99 samples excess vs 0 across 20 control intervals; emitter deliberately not attempted |
 
 ---
 

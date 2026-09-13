@@ -53,6 +53,8 @@ def block_dc(sm, shift=8):
 
 
 GALLAGHER_PRE = [0,1,1,1,1,1,1,1,1,1,1,0,1,0,1,0]
+# InstaFob: the 32 bits of 0x00107060 — the tag's own T5577 config word (C186).
+INSTAFOB_PRE = [int(b) for b in format(0x00107060, '032b')]
 SECURAKEY_PRE = [0,1,1,1,1,1,1,1,1,1,0,0,1,0,1,1,0,1,0]
 
 
@@ -113,5 +115,11 @@ if __name__ == "__main__":
     print()
     for f in ("sk_0", "sk_12", "sk_20", "sk_28"):
         report(f"caps/securakey-tag/{f}.bin", 40, SECURAKEY_PRE, 96, f"Securakey {f[-2:]}")
+    print()
+    # ⭐ THE ONE THAT SHOULD BE DIFFERENT. InstaFob is the first protocol here whose reader
+    # explicitly times a sequence terminator, so if any tag in this family emits a
+    # frame-boundary gap, it is this one — and the excess column is where it would appear.
+    for f in ("emu_drive7", "emu_b_drive7"):
+        report(f"caps/instafob-flipper/{f}.bin", 32, INSTAFOB_PRE, 225, f"InstaFob {f[:5]}")
     print("\n  ⛔ AGREEMENT CHECK — every capture the shipping decoder reads must yield at")
     print("     least one frame here, or this tool is measuring itself (see the note above).")
