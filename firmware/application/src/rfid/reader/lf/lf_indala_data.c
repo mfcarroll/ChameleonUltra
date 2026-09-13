@@ -718,8 +718,25 @@ bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * of my earlier claims generalised from a single protocol — PAC to the family, then Gallagher
  * to the family — and the family disagrees with both. Sweep, and let the tag decide.
  *
- * ⚠ Step order matters for latency, not correctness: 4 is the stock value and is what
- * Gallagher and Securakey read at, so it goes first and those protocols pay nothing. */
+ * ⛔⛔ "STEP ORDER MATTERS FOR LATENCY, NOT CORRECTNESS" IS WHAT THIS COMMENT USED TO SAY,
+ * AND IT IS FALSE. Two protocols in this sweep read at ONE field strength and no other:
+ * Noralsy at drive 7 (C182) and FDX-B at drive 4 (C273, measured 16/16 at 4 against 0/16
+ * at 7, 0/16 at 6 and nothing at 2 or 1). For those two the sweep is not an optimisation,
+ * it is the only reason they read at all.
+ *
+ * ⚠ AND THE TABLE TRUNCATES. `steps = timeout_ms / LF_ASK_DRIVE_MIN_STEP_MS` takes a
+ * PREFIX of this array, so under a short budget the tail is never tried: 250ms reaches
+ * only drive 4, 500ms only {4,7}. Noralsy needs the second entry and would go unreadable
+ * with no other symptom.
+ *
+ * ⭐ Nothing is broken today and the margin is why: every caller passes
+ * INDALA_READ_TIMEOUT_MS = 3000, which asks for 12 steps and clamps to 4, so all four are
+ * always tried. ⇒ **That margin is load-bearing. Shortening the timeout to make reads
+ * snappier is the change that breaks Noralsy**, and this note exists so that is discovered
+ * here rather than in the field.
+ *
+ * ⚠ 4 goes first because it is the stock value and what Gallagher, Securakey and FDX-B
+ * read at, so the common case pays nothing. That part of the old note stands. */
 static const uint8_t LF_ASK_DRIVE_STEPS[] = { 4, 7, 6, 2 };
 #define LF_ASK_DRIVE_STEP_COUNT (sizeof(LF_ASK_DRIVE_STEPS) / sizeof(LF_ASK_DRIVE_STEPS[0]))
 /* A 96-bit frame at RF/32 is 24.6ms and the capture engine wants several tries per step. */
