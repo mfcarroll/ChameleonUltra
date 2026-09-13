@@ -32,9 +32,11 @@
 #include "lf_indala_psk.h"
 #include "psk1.h"
 #include "lf_ask_manchester.h"
+#include "lf_fsk2a.h"
 #include "gallagher.h"
 #include "securakey.h"
 #include "noralsy.h"
+#include "awid.h"
 #include "fsk2a_t55xx.h"
 #include "t55xx.h"
 
@@ -170,6 +172,46 @@ static int trial_ask(const char *name, const char *hex, size_t bits,
     return exact ? 0 : 1;
 }
 
+/* ⭐⭐ THE FSK2a ROUND TRIP, and it reuses render_ask() unchanged — which is worth saying
+ * rather than hiding, because it looks like a shortcut and is not. That renderer emits
+ * `counter_top` samples per entry, the first half high and the rest low. For an ASK entry
+ * that is one Manchester bit; for an FSK entry with counter_top 8 or 10 it is one tone cycle.
+ * The same three lines describe both because the peripheral really does treat them the same:
+ * one tick is one carrier cycle for every non-PSK1 tag type.
+ *
+ * ⛔ WHAT THIS ARM IS FOR. The FSK emitter is the first on this branch whose ENTRY COUNT
+ * depends on the data — six entries for a 0 and five for a 1 — so the sequence length is
+ * computed per call rather than fixed at compile time. An off-by-one there emits a frame that
+ * is very slightly the wrong length, which no preamble check would catch and which would show
+ * up only as a reader that sometimes works. */
+static int trial_fsk(const char *name, const char *hex, size_t bits,
+                     const protocol *proto,
+                     bool (*decode)(int16_t *, size_t, lf_decode_result_t *)) {
+    uint8_t frame[32] = {0};
+    for (size_t i = 0; i < bits / 8u; i++) {
+        unsigned v; sscanf(hex + 2 * i, "%2x", &v); frame[i] = (uint8_t)v;
+    }
+    void *codec = proto->alloc();
+    const nrf_pwm_sequence_t *seq = proto->modulator(codec, frame);
+    if (seq == NULL) {
+        printf("  %-28s ⛔ modulator returned NULL\n", name);
+        proto->free(codec);
+        return 1;
+    }
+    const size_t entries = (size_t)seq->length / 4u;
+    static int16_t air[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
+    size_t n = render_ask(seq, air, sizeof(air) / sizeof(air[0]));
+    proto->free(codec);
+
+    lf_decode_result_t r;
+    int ok = decode(air, n, &r);
+    int exact = ok && hexeq(r.id, hex, bits / 8u);
+    printf("  %-28s %s  entries %4zu             %s\n", name,
+           exact ? "✓" : "⛔", entries,
+           ok ? (exact ? "decode exact" : "DECODED WRONG") : "NO DECODE");
+    return exact ? 0 : 1;
+}
+
 /* ⭐⭐ A TRANSCRIPTION PIN, NOT A ROUND TRIP — said plainly because the arms above are round
  * trips and this one is a different kind of evidence. There is no air and no decoder here: it
  * asserts that the shipping writer turns a frame into the EXACT block words a Proxmark clone
@@ -276,6 +318,13 @@ int main(void) {
     bad += trial_ask("Noralsy   ASK RF/32", "bb0214ff0112402233670000", 96,
                      &noralsy, &LF_ASK_FORMAT_NORALSY);
 
+
+    /* ⭐⭐ THE FIRST FSK2a EMITTER — emitter to air to decoder, both halves the shipping
+     * firmware, on the credential the Proxmark wrote and this bench read back byte-exactly
+     * (C201, C203). ⚠ The frame is all-zeros-heavy, which is the WORST case for the entry
+     * count: a 0 costs six entries and a 1 costs five. */
+    bad += trial_fsk("AWID     FSK2a RF/8-10", "011db218271bd81111111111", 96,
+                     &awid, awid_fsk_decode);
 
     /* ⭐⭐ THE FSK2a T5577 WRITER, pinned to three real Proxmark clones' own block dumps.
      * ⚠ AWID and Paradox share a config word exactly; only Pyramid differs, and only in the

@@ -72,6 +72,11 @@ typedef enum {
     TAG_TYPE_GALLAGHER,
     TAG_TYPE_SECURAKEY,
     TAG_TYPE_NORALSY,
+    /* ⭐ AWID is FSK2a, not PSK1 or ASK — a third air layer in this block. It sits here
+     * because the block is "LF tags we emulate", not "tags that share a modulator", and
+     * `IS_PSK1_TYPE` is what actually selects the 1MHz base clock. AWID must stay OUT of
+     * that macro: at 1MHz its tones would be eight times too fast. */
+    TAG_TYPE_AWID,
     // NexWatch
     TAG_TYPE_IDTECK = 310,
 
@@ -123,7 +128,7 @@ typedef enum {
     }
 
 #define TAG_SPECIFIC_TYPE_LF_VALUES \
-    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK, TAG_TYPE_INDALA, TAG_TYPE_INDALA224, TAG_TYPE_KERI, TAG_TYPE_NEXWATCH, TAG_TYPE_GALLAGHER, TAG_TYPE_SECURAKEY, TAG_TYPE_NORALSY
+    TAG_TYPE_EM410X, TAG_TYPE_EM410X_ELECTRA, TAG_TYPE_PAC, TAG_TYPE_HID_PROX, TAG_TYPE_IOPROX, TAG_TYPE_VIKING, TAG_TYPE_JABLOTRON, TAG_TYPE_IDTECK, TAG_TYPE_INDALA, TAG_TYPE_INDALA224, TAG_TYPE_KERI, TAG_TYPE_NEXWATCH, TAG_TYPE_GALLAGHER, TAG_TYPE_SECURAKEY, TAG_TYPE_NORALSY, TAG_TYPE_AWID
 
 // Tag types that use PSK1 modulation for emulation. These require the PWM
 // base clock to be set to 1MHz (see lf_tag_em.c pwm_init) so the 16us
