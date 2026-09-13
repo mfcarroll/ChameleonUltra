@@ -25,7 +25,7 @@
  * Flipper will not read, and Momentum's own demodulator accepts its ideal output (C220). If
  * this one reads on the same rig, the difference between them is the counter_top magnitude and
  * that localises the AWID defect. If it does NOT read, the fault is broader than FSK. */
-static nrf_pwm_values_wave_form_t m_gproxii_vals[GPROXII_PWM_ENTRIES] = {};
+static nrf_pwm_values_wave_form_t m_gproxii_vals[GPROXII_BIT_COUNT] = {};
 
 static const nrf_pwm_sequence_t m_gproxii_seq = {
     .values.p_wave_form = m_gproxii_vals,
@@ -34,7 +34,7 @@ static const nrf_pwm_sequence_t m_gproxii_seq = {
     .end_delay = 0,
 };
 
-#define GPROXII_CARRIER_CYCLES_PER_HALF_BIT (32)
+#define GPROXII_CARRIER_CYCLES_PER_BIT (64)
 
 static gproxii_codec *gproxii_alloc(void) {
     gproxii_codec *d = malloc(sizeof(gproxii_codec));
@@ -64,23 +64,47 @@ static bool gproxii_decoder_feed(gproxii_codec *d, uint16_t val) {
 }
 
 // buf is the 12-byte frame, MSB first on air, preamble included.
+//
+// ⭐⭐ ONE ENTRY PER BIT, AND THAT IS AN EXPERIMENT RATHER THAN A TIDY-UP. The first version of
+// this emitter spent TWO entries per bit, one per half-bit, each holding a level — and the
+// Flipper read it 0 of 6 with a Gallagher control at 6 of 6, exactly as it reads AWID's
+// five-or-six-entries-per-bit emitter at 0 of 6 (C222).
+//
+// ⭐ The only structural property separating the seven emitters that work from the two that do
+// not is that every working one stores ONE entry per bit. This version makes GProxII one of
+// them WITHOUT changing anything else, which turns that correlation into a two-way test:
+//
+//   reads now  -> entries-per-bit was the cause, and held levels are fine
+//   still 0/6  -> held levels are the cause, since Gallagher works with one entry per bit
+//
+// ⚠ Either answer is worth having and neither needs an instrument this bench lacks.
+//
+// The encoding: a bit period is 64 carrier cycles and a transition falls at every boundary by
+// construction, so the level at the START of each bit alternates. A 1 adds a mid-bit
+// transition, which is a 50% square — Gallagher's exact shape. A 0 holds its level for the
+// whole bit, which is duty 0 or duty == counter_top.
 static const nrf_pwm_sequence_t *gproxii_modulator(gproxii_codec *d, uint8_t *buf) {
     (void)d;
     bool level = false;
     for (int i = 0; i < GPROXII_BIT_COUNT; i++) {
         const bool bit = (buf[i / 8] >> (7 - (i % 8))) & 1u;
-        /* Every bit boundary is a transition. */
-        level = !level;
-        for (uint8_t half = 0; half < 2; half++) {
-            if (half == 1 && bit) {
-                level = !level;      /* the extra mid-bit transition IS the 1 */
-            }
-            /* A HELD level: duty 0 or the whole period, never half. */
-            m_gproxii_vals[i * 2 + half].channel_0 =
-                (uint16_t)(level ? GPROXII_CARRIER_CYCLES_PER_HALF_BIT : 0u);
-            m_gproxii_vals[i * 2 + half].channel_1 = 0;
-            m_gproxii_vals[i * 2 + half].channel_2 = 0;
-            m_gproxii_vals[i * 2 + half].counter_top = GPROXII_CARRIER_CYCLES_PER_HALF_BIT;
+        level = !level;                     /* the boundary transition */
+        uint16_t ch0;
+        if (bit) {
+            /* Half at `level`, half at its opposite. The top bit of channel_0 inverts the
+             * output, so it carries which half is high — the same trick gallagher.c uses. */
+            ch0 = (uint16_t)((level ? 0u : (1u << 15)) |
+                             (GPROXII_CARRIER_CYCLES_PER_BIT / 2));
+        } else {
+            /* Held for the whole bit: all of it, or none of it. */
+            ch0 = (uint16_t)(level ? GPROXII_CARRIER_CYCLES_PER_BIT : 0u);
+        }
+        m_gproxii_vals[i].channel_0 = ch0;
+        m_gproxii_vals[i].channel_1 = 0;
+        m_gproxii_vals[i].channel_2 = 0;
+        m_gproxii_vals[i].counter_top = GPROXII_CARRIER_CYCLES_PER_BIT;
+        if (bit) {
+            level = !level;                 /* the mid-bit transition leaves the level flipped */
         }
     }
     return &m_gproxii_seq;

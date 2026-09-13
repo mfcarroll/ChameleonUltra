@@ -102,8 +102,9 @@ static size_t render_level(const nrf_pwm_sequence_t *seq, int16_t *out, size_t o
         const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i % entries];
         const size_t top = e->counter_top;
         const size_t duty = e->channel_0 & 0x7FFFu;
+        const int polarity = (e->channel_0 & (1u << 15)) ? 1 : 0;
         for (size_t s = 0; s < top && n < out_len; s++) {
-            const int high = (s < duty);
+            const int high = (s < duty) ^ polarity;
             out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
         }
     }
