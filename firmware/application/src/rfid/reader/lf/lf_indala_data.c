@@ -178,25 +178,56 @@ static int16_t m_samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
  * amplitude the sniff path does on the same tag, which would point at clipping that only an
  * extreme sampling instant escapes — but that is a hypothesis, and the phase order here is
  * justified by the device measurement alone. */
+/* ⭐ THE UPPER BAND, SWEPT DENSELY, AND FEWER TRIES EACH — both halves are forced by the same
+ * arithmetic. A GProxII capture is 14336 samples = 114ms, so a 3-second budget buys about 20
+ * captures TOTAL. At the shared 8 tries per phase that is two and a half phases: a rotation of
+ * eight is a fiction, and the read spends itself before reaching anything that works.
+ *
+ * ⚠ THE BAND IS CHOSEN FROM THE DEVICE, the only evidence that ranks phases at all. It read
+ * at 112 once and at 104 the next run; the sniff path decodes at ALL 16 phases tried across
+ * 0..120, so it cannot rank them. Two device wins, both in the upper band, is thin — said
+ * plainly — but it is what there is, and the neighbours are included because of it.
+ *
+ * ⚠ MECHANISM, HYPOTHESIS ONLY: the phase sets where in the 8us carrier period the ADC
+ * samples, and every failing device read reports a mean boundary step of ~5050 ADC counts
+ * against the sniff path's 2300-2900. A step that large on every boundary is not tag envelope;
+ * it looks like residual CARRIER being sampled, which an envelope decoder cannot see past and
+ * a PSK one would not care about. The shared rotation was tuned on PSK. Not established. */
 static const uint8_t GPROXII_PHASE_ROTATION[] = {
     112, 120, 104, 96, 20, 0
 };
 #define GPROXII_PHASE_ROTATION_COUNT \
     (sizeof(GPROXII_PHASE_ROTATION) / sizeof(GPROXII_PHASE_ROTATION[0]))
+/* ⛔⛔ THREE CONFIGURATIONS TRIED, AND THE BEST OF THEM IS 3 OF 10. Recorded as a table
+ * because each was a real measurement and the next person should not repeat them:
+ *
+ *   phases {112,120,104,96,20,0}  8 tries  3s   3 of 10 exact, 0 wrong   <- shipped
+ *   phases {104,112,96,120,88}    4 tries  3s   0 of 12
+ *   phases {104,112,120,96,88,20} 8 tries  6s   0 of 12
+ *
+ * ⚠ Fewer tries per phase buys phase coverage and costs the two-agreeing-captures rule its
+ * chances; on this protocol that trade is the wrong way round. And a longer budget did not
+ * help either, which is what rules TIME out as the remaining cause.
+ * ⛔ The bench was checked immediately after the 0-of-12 run and is FINE: the Proxmark reads
+ * the tag, and a `lf sniff` capture taken by this same device decodes exactly on the host with
+ * an edge of 2819. The reader path measures ~5070 on the same tag minutes apart. That 1.8x is
+ * the whole remaining mystery and no configuration here can tune past it. */
+#define GPROXII_TRIES_PER_PHASE 8
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                             lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
-                            const uint8_t *phases, uint8_t phase_count);
+                            const uint8_t *phases, uint8_t phase_count, uint8_t tries);
 
 bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
                      lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
     return lf_sampled_read_phases(decode, capture_samples, out, timeout_ms, energy_out,
-                                  PHASE_ROTATION, (uint8_t)PHASE_ROTATION_COUNT);
+                                  PHASE_ROTATION, (uint8_t)PHASE_ROTATION_COUNT,
+                                  INDALA_TRIES_PER_PHASE);
 }
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
-                  const uint8_t *phases, uint8_t phase_count) {
+                  const uint8_t *phases, uint8_t phase_count, uint8_t tries) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -223,7 +254,7 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
         uint8_t prev_word[8] = { 0 };
         lf_decode_result_t res;
 
-        for (uint8_t k = 0; k < INDALA_TRIES_PER_PHASE && !ok; k++) {
+        for (uint8_t k = 0; k < tries && !ok; k++) {
             if (!NO_TIMEOUT_1MS(p_at, timeout_ms)) {
                 break;
             }
@@ -787,7 +818,8 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     bool ok = lf_sampled_read_phases(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
                                      &r, timeout_ms, energy_out,
                                      GPROXII_PHASE_ROTATION,
-                                     (uint8_t)GPROXII_PHASE_ROTATION_COUNT);
+                                     (uint8_t)GPROXII_PHASE_ROTATION_COUNT,
+                                     GPROXII_TRIES_PER_PHASE);
     /* ⚠ Restore the stock drive — a reader that leaves the field weakened breaks whatever runs
      * next, invisibly (C148/L122). */
     lf_125khz_radio_drive_set(4);

@@ -189,10 +189,10 @@ uint8_t scan_gproxii(uint8_t *data) {
 /* ⚠ The energy-reporting variant — see the note on cmd_processor_gproxii_scan. */
 uint8_t scan_gproxii_energy(uint8_t *data, int32_t *energy_out) {
     int32_t energy = 0;
-    /* ✅ BACK TO THE STANDARD BUDGET. The 8s was instrumentation for C208 and it did its job:
-     * it showed the read succeeds at phase 112, seventh of eight in the shared rotation. The
-     * fix is the ORDER, not the budget — GProxII now tries 112 first and finds it immediately. */
-    bool got = gproxii_read(data, INDALA_READ_TIMEOUT_MS, &energy);
+    /* ⚠ SIX SECONDS, NOT THE SHARED THREE — and that is a measured cost, not a shrug. See
+     * GPROXII_READ_TIMEOUT_MS for the arithmetic: a 114ms capture and eight tries across
+     * several sample phases does not fit in three. */
+    bool got = gproxii_read(data, GPROXII_READ_TIMEOUT_MS, &energy);
     if (energy_out != NULL) {
         *energy_out = energy;
     }

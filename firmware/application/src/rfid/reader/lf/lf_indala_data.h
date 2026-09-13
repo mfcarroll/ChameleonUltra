@@ -141,6 +141,12 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
  *  card number come out of an XOR descramble plus bit-field extractions whose layout depends
  *  on the format length, and that interpretation is testable on the host against a credential
  *  we chose. */
+/* ⚠ THE SHARED BUDGET, after 6000 was tried and was WORSE (0 of 12 against 3 of 10). A
+ * GProxII capture is 114ms, so 3s buys about 20 captures = two and a half sample phases —
+ * which sounds like the problem and is not: doubling the budget to reach five phases did not
+ * recover a single read. ⇒ time is ruled out; see the note by GPROXII_PHASE_ROTATION. */
+#define GPROXII_READ_TIMEOUT_MS INDALA_READ_TIMEOUT_MS
+
 #define GPROXII_READ_DATA_SIZE 16
 bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
