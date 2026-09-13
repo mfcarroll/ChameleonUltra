@@ -40,15 +40,20 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** nothing. **U5 (Gallagher, opens the ASK/biphase family) is next**, then U6.
+- **In flight:** **U5 (Gallagher) is STARTED, not finished.** Characterised and captured;
+  the host decode does not yet work (C170). ⭐ Resume at the level-plus-bit-centre path, NOT
+  more sweeping of the edge decoder — C145 measured that route losing 26 errors to 6 on PAC.
+  ⛔ Capture at `--drive 7`: every other drive clips 26-36% and ASK carries its data in the
+  amplitude (C169).
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
   which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
   session is closed, and auto-expires after 7 days. Re-seed from §6.
-- **Bench:** all four devices enumerate. T5577 now holds the **Indala224** credential
-  `80000001b23523a6...928c14e5`, PSK2, block 0 `000820E0` (written for U4).
+- **Bench:** all four devices enumerate. T5577 now holds a **Gallagher** credential —
+  region 1 / facility 4321 / card 6789 / issue 2, raw `7FEAA31E76D86C6D868CC249`,
+  ASK, block 0 `00088060`, sequence terminator SET.
 - **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
@@ -185,6 +190,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 02:10 | U1 + U3 | 25 → 29 | NexWatch write + read commands, CLI, T5577 config `00081060` | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all three fields changed |
 | 2026-09-13 02:45 | U2 | 29 → 31 | NexWatch emulation: protocol struct, `TAG_TYPE_NEXWATCH`, econfig, 2 roundtrip arms | Flipper 6/6, null 0/4, return leg 4/4 — A/B/A |
 | 2026-09-13 03:20 | U4 | 27 → 30 | C162 re-tested at n=70; C168 added, C162 corrected in place | 23/70 PSK2 block reads wrong at bit 31, 0/2170 elsewhere; PSK1 control 40/40 exact |
+| 2026-09-13 04:05 | U5 (part) | 28 → 31 | Gallagher characterised, `askdemod.py`, 8 captures | saturation found at every drive but 7 (C169); decode still open (C170) |
 
 ---
 
