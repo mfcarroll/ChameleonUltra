@@ -161,8 +161,42 @@ static const uint8_t PHASE_ROTATION[] = {
  * a 64-bit read that captured the whole buffer would be 3.5x slower for nothing. */
 static int16_t m_samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
+/* ⭐⭐ GPROXII'S OWN PHASE ORDER, AND IT IS MEASURED ON THE DEVICE RATHER THAN INHERITED.
+ *
+ * The shared rotation above was tuned on an Indala tag and its own comment warns that the map
+ * "could move". It does: with the default order this protocol reads at phase 112, which sits
+ * SEVENTH of eight, so a 3-second budget spends itself on six phases that never decode and
+ * then times out — or worse, accepts a marginal frame from one of them (C206, C208).
+ *
+ * ⚠ WHY 112'S NEIGHBOURS COME NEXT RATHER THAN THE OLD ENTRIES. On the sniff path this tag
+ * decodes at ALL 16 phases tried across 0..120, so the sniff evidence cannot rank them at all;
+ * the only ranking that exists is the device's, and it has exactly one winner. Ordering the
+ * fallbacks by DISTANCE from that winner is a guess about smoothness, and it is labelled as
+ * one. The old rotation's entries are kept at the end so nothing that used to work is lost.
+ *
+ * ⛔ The mechanism is NOT established. The reader path reports roughly twice the edge
+ * amplitude the sniff path does on the same tag, which would point at clipping that only an
+ * extreme sampling instant escapes — but that is a hypothesis, and the phase order here is
+ * justified by the device measurement alone. */
+static const uint8_t GPROXII_PHASE_ROTATION[] = {
+    112, 120, 104, 96, 20, 0
+};
+#define GPROXII_PHASE_ROTATION_COUNT \
+    (sizeof(GPROXII_PHASE_ROTATION) / sizeof(GPROXII_PHASE_ROTATION[0]))
+
+bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
+                            lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
+                            const uint8_t *phases, uint8_t phase_count);
+
 bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
-                  lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+                     lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+    return lf_sampled_read_phases(decode, capture_samples, out, timeout_ms, energy_out,
+                                  PHASE_ROTATION, (uint8_t)PHASE_ROTATION_COUNT);
+}
+
+bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
+                  lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
+                  const uint8_t *phases, uint8_t phase_count) {
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -178,8 +212,8 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
 
     autotimer *p_at = bsp_obtain_timer(0);
 
-    for (size_t pi = 0; pi < PHASE_ROTATION_COUNT && !ok; pi++) {
-        const uint8_t phase = PHASE_ROTATION[pi];
+    for (size_t pi = 0; pi < phase_count && !ok; pi++) {
+        const uint8_t phase = phases[pi];
         lf_125khz_radio_saadc_phase_set(phase);
 
         /* ⚠ RESET PER PHASE. A word decoded at one sample phase does not corroborate one at
@@ -750,8 +784,10 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
      * That is the open question; see NEXT.md. Until it is answered this command ships as
      * research, and the grid must say NOT VERIFIED rather than a read count. */
     lf_125khz_radio_drive_set(7);
-    bool ok = lf_sampled_read(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
-                              &r, timeout_ms, energy_out);
+    bool ok = lf_sampled_read_phases(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
+                                     &r, timeout_ms, energy_out,
+                                     GPROXII_PHASE_ROTATION,
+                                     (uint8_t)GPROXII_PHASE_ROTATION_COUNT);
     /* ⚠ Restore the stock drive — a reader that leaves the field weakened breaks whatever runs
      * next, invisibly (C148/L122). */
     lf_125khz_radio_drive_set(4);

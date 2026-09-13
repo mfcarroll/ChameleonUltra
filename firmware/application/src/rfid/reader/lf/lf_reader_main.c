@@ -189,12 +189,10 @@ uint8_t scan_gproxii(uint8_t *data) {
 /* ⚠ The energy-reporting variant — see the note on cmd_processor_gproxii_scan. */
 uint8_t scan_gproxii_energy(uint8_t *data, int32_t *energy_out) {
     int32_t energy = 0;
-    /* ⚠ TEMPORARY, FOR ONE MEASUREMENT ONLY — 8s instead of the usual budget, to test whether
-     * this arm's failures are the DECODER RUNNING OUT OF TIME rather than a capture problem.
-     * The biphase decoder sweeps 64 sample phases x 3 thresholds where the ASK one sweeps 32
-     * phases x 2 low-pass widths, and it recomputes every slope for each threshold. Revert or
-     * justify before this ships. */
-    bool got = gproxii_read(data, 8000u, &energy);
+    /* ✅ BACK TO THE STANDARD BUDGET. The 8s was instrumentation for C208 and it did its job:
+     * it showed the read succeeds at phase 112, seventh of eight in the shared rotation. The
+     * fix is the ORDER, not the budget — GProxII now tries 112 first and finds it immediately. */
+    bool got = gproxii_read(data, INDALA_READ_TIMEOUT_MS, &energy);
     if (energy_out != NULL) {
         *energy_out = energy;
     }
