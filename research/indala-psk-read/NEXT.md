@@ -179,11 +179,18 @@ Proxmark's own 224-bit read-back is right about one time in three (C153).
 
 ## 5. ⛔ Carrier locking — a decision, and it now has a MEASURED cost
 
-⛔⛔ **2026-09-13: this is no longer theoretical.** With the T5577 lifted out of the sandwich,
-the Proxmark reads our **ASK** emulation 16 of 16 and our **PSK1** emulation **1 of 13**
-(C189). The Flipper reads the same PSK emulations 6/6 and 10/10, so one reader was hiding it.
-⇒ Whatever is decided here, the price of NOT carrier-locking is now known: PSK emulation
-works against a Flipper and effectively does not against a Proxmark.
+⛔⛔ **2026-09-13: this is no longer theoretical, and the price is now MEASURED.** With the
+T5577 lifted out, the Proxmark reads our emulation as follows (C190):
+
+| encoding | protocols | read rate |
+|---|---|---|
+| ASK / Manchester | Gallagher, Securakey, Noralsy | **16 of 16** |
+| PSK2 — differential | Indala224 | **14 of 16** |
+| **PSK1 — absolute phase** | Indala26, NexWatch, Keri | **3 of 21** |
+
+⇒ The cost of not carrier-locking falls entirely on **absolute-phase** encoding. Differential
+and amplitude encodings are invariant to a slowly-drifting global phase and are unaffected.
+⚠ The Flipper reads all of them 6/6 to 10/10, so this is invisible from rig A alone.
 
 Our subcarrier free-runs; a T5577 divides the reader's own carrier. That is the whole
 difference, and both halves of it are now measured.
