@@ -65,7 +65,7 @@ registered `TAG_TYPE_*`.
 | **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** | ✓ |
 | **IDTECK** | ✓ | ✓ | ✓ | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
-| **AWID** | ◐ **frames recovered, credential not yet mapped (C194)** | ✗ | ✗ | ✓ |
+| **AWID** | ◐ **host-complete: frame + credential exact on 2 plaintexts (C194)**, not yet on device | ✗ | ✗ | ✓ |
 | FDX-A | ✗ | ✗ | ✗ | ✓ |
 | FDX-B | ✗ | ✗ | ✗ | ✓ |
 | Paradox | ✗ | ✗ | ✗ | ✓ |

@@ -72,6 +72,27 @@ def awid_frames(bits):
     return found
 
 
+def awid_payload(frame):
+    """The 66 payload bits an AWID frame carries, left-aligned into 9 bytes.
+
+    ⭐ EACH NIBBLE IS THREE DATA BITS PLUS AN ODD-PARITY LSB — that is `protocol_awid_encode`
+    read forwards: it takes 3 bits of the decoded data at a time, shifts left one, and fills
+    the vacated bit with odd parity. 22 nibbles x 3 = 66 bits, so the last 6 bits of the
+    9-byte buffer are NOT carried on the wire and cannot be recovered.
+
+    ⛔ The preamble is NOT part of the payload. Including those 8 bits shifted every
+    subsequent bit and made the payload unrecoverable — a search over 512 strip alignments
+    found nothing, because the answer was not an alignment at all (C194)."""
+    bits = [int(c) for c in frame] if isinstance(frame, str) else frame
+    data = []
+    for i in range(22):
+        data.extend(bits[8 + i * 4: 11 + i * 4])
+    v = 0
+    for b in data:
+        v = (v << 1) | b
+    return f"{v << (72 - 66):018x}"
+
+
 if __name__ == "__main__":
     for path in sys.argv[1:]:
         b = bits_from(load16(path))
@@ -80,6 +101,7 @@ if __name__ == "__main__":
         name = path.split("/")[-1]
         if hits:
             i, f = hits[0]
-            print(f"  {name:24} {len(b):5d} bits  AWID at {i:3d}: {int(f,2):024x}   ({len(hits)} frames)")
+            print(f"  {name:24} {len(b):5d} bits  AWID at {i:3d}: {int(f,2):024x}\n"
+                  f"  {'':24} payload {awid_payload(f)}   ({len(hits)} frames)")
         else:
             print(f"  {name:24} {len(b):5d} bits  ones {100*ones//max(len(b),1):3d}%  no AWID frame")
