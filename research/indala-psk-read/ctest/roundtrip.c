@@ -397,6 +397,99 @@ static int trial_awid_duty(void) {
     return bad;
 }
 
+
+/* ⭐⭐⭐ THE ERROR-DETECTION SWEEP — how each frame gate behaves when the frame is WRONG.
+ *
+ * ⛔ WHY THIS EXISTS. C251 measured a real reader handing an operator a confident credential
+ * of a protocol the tag was not: a burst flipped a few bits, HID's parity correctly rejected
+ * the frame, and `unpack()` walked on to a format whose checks were weaker and accepted it.
+ * Every arm above asks "does a CORRECT frame survive the round trip". None of them asks the
+ * question that defect is about: what does the decoder do with a frame that is wrong?
+ *
+ * Each arm below flips exactly one frame bit, re-emits, re-decodes, and sorts the outcome:
+ *
+ *   rejected   the gate caught it — no frame returned
+ *   silent     accepted, and the id came back IDENTICAL to the truth. Not a pass: it means
+ *              that bit does not reach the returned id at all (padding, or a preamble bit the
+ *              decoder re-derives), so the flip was never testable in the first place
+ *   WRONG      accepted, id differs — a confident wrong credential, which is the C251 shape
+ *
+ * ⚠ WHAT A "WRONG" COUNT IS AND IS NOT. A high count is not automatically our bug. A protocol
+ * carrying no integrity field cannot reject anything, and that is the protocol's property, not
+ * the decoder's. The number is actionable only where the format HAS a checksum, CRC or parity
+ * and we are not enforcing it — which is exactly what this table makes visible.
+ *
+ * ⚠ AND THIS BYPASSES THE CAPTURE-LEVEL DEFENCE. The device readers require two agreeing
+ * stacks before they report anything, which would catch an error that does not repeat. These
+ * arms feed one perfect rendering of a corrupted frame, so they characterise the FRAME GATE
+ * alone. Both layers are real; only one of them is measured here. */
+typedef enum { FAM_PSK1, FAM_ASK, FAM_FSK, FAM_BIPHASE } family_t;
+
+typedef struct {
+    family_t fam;
+    const protocol *proto;
+    lf_psk1_phase_mode_t mode;
+    const lf_psk1_format_t *pfmt;
+    const lf_ask_format_t *afmt;
+    const lf_biphase_format_t *bfmt;
+    bool (*fdec)(int16_t *, size_t, lf_decode_result_t *);
+} arm_t;
+
+/* Emit `frame`, render it the way its family renders, decode. 1 if the decoder returned. */
+static int run_once(const arm_t *a, uint8_t *frame, size_t bits, lf_decode_result_t *r) {
+    static int16_t air[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
+    const size_t cap = sizeof(air) / sizeof(air[0]);
+    size_t n = 0;
+
+    if (a->fam == FAM_PSK1) {
+        const nrf_pwm_sequence_t *seq = lf_psk1_modulator(frame, bits, a->mode);
+        if (seq == NULL) return 0;
+        size_t want = INDALA_PSK_MIN_SAMPLES(bits) * 2;
+        if (want > cap) want = cap;
+        n = render(seq, air, want);
+        return lf_psk1_decode_fmt(air, n, a->pfmt, r) ? 1 : 0;
+    }
+
+    void *codec = a->proto->alloc();
+    const nrf_pwm_sequence_t *seq = a->proto->modulator(codec, frame);
+    if (seq == NULL) { a->proto->free(codec); return 0; }
+    n = (a->fam == FAM_BIPHASE) ? render_level(seq, air, cap) : render_ask(seq, air, cap);
+    a->proto->free(codec);
+
+    if (a->fam == FAM_ASK) return lf_ask_manchester_decode_fmt(air, n, a->afmt, r) ? 1 : 0;
+    if (a->fam == FAM_BIPHASE) return lf_ask_biphase_decode_fmt(air, n, a->bfmt, r) ? 1 : 0;
+    return a->fdec(air, n, r) ? 1 : 0;
+}
+
+/* ⛔ THE COUNTS ARE PINNED, not just printed. A gate that quietly weakens — an `accept` hook
+ * dropped, a preamble shortened — changes these numbers and nothing else about the harness
+ * would notice, because every round trip above would still be exact. */
+static int sweep(const char *name, const char *hex, const char *want, size_t bits,
+                 const arm_t *a, size_t exp_rejected, size_t exp_silent, size_t exp_wrong) {
+    uint8_t truth[LF_DECODE_MAX_FRAME_BYTES] = {0};
+    const size_t bytes = bits / 8u;
+    for (size_t i = 0; i < bytes; i++) {
+        unsigned v; sscanf(hex + 2 * i, "%2x", &v); truth[i] = (uint8_t)v;
+    }
+
+    size_t rejected = 0, silent = 0, wrong = 0;
+    for (size_t b = 0; b < bits; b++) {
+        uint8_t f[LF_DECODE_MAX_FRAME_BYTES];
+        memcpy(f, truth, sizeof(f));
+        f[b / 8u] ^= (uint8_t)(1u << (7u - (b % 8u)));
+
+        lf_decode_result_t r;
+        if (!run_once(a, f, bits, &r)) { rejected++; continue; }
+        if (hexeq(r.id, want, bytes)) silent++; else wrong++;
+    }
+    int ok = (rejected == exp_rejected && silent == exp_silent && wrong == exp_wrong);
+    printf("  %-28s %4zu bits   rejected %4zu   silent %4zu   WRONG %4zu   (%3zu%% caught) %s\n",
+           name, bits, rejected, silent, wrong,
+           bits ? (rejected * 100u) / bits : 0u,
+           ok ? "" : "\u26d4 MOVED");
+    return ok ? 0 : 1;
+}
+
 int main(void) {
     int bad = 0;
     puts("emitter -> air -> decoder, both halves the shipping firmware\n");
@@ -530,6 +623,38 @@ int main(void) {
                         securakey_t55xx_writer, want_sk, 4);
     bad += trial_writer("Noralsy  -> T5577 blocks", "bb0214ff0110002233070000", 12,
                         noralsy_t55xx_writer, want_nor, 4);
+
+
+    /* ⭐⭐⭐ THE ERROR-DETECTION SWEEP. One flipped bit per row of the frame, every bit, every
+     * protocol that has an emitter here. See the block comment above `sweep()` for what the
+     * three columns mean and, more importantly, what they do NOT mean. */
+    puts("\nONE FLIPPED FRAME BIT — what each gate does with a frame that is wrong\n");
+    {
+        const arm_t psk_ind    = {FAM_PSK1, NULL, LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_INDALA64, NULL, NULL, NULL};
+        const arm_t psk_idteck = {FAM_PSK1, NULL, LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_IDTECK,   NULL, NULL, NULL};
+        const arm_t psk_keri   = {FAM_PSK1, NULL, LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_KERI,     NULL, NULL, NULL};
+        const arm_t psk_nw     = {FAM_PSK1, NULL, LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_NEXWATCH, NULL, NULL, NULL};
+        const arm_t psk_224    = {FAM_PSK1, NULL, LF_PSK1_PHASE_DIFFERENTIAL, &LF_PSK1_FORMAT_INDALA224, NULL, NULL, NULL};
+        const arm_t ask_gal    = {FAM_ASK, &gallagher, 0, NULL, &LF_ASK_FORMAT_GALLAGHER, NULL, NULL};
+        const arm_t ask_sk     = {FAM_ASK, &securakey, 0, NULL, &LF_ASK_FORMAT_SECURAKEY, NULL, NULL};
+        const arm_t ask_nor    = {FAM_ASK, &noralsy,   0, NULL, &LF_ASK_FORMAT_NORALSY,   NULL, NULL};
+        const arm_t fsk_awid   = {FAM_FSK, &awid,      0, NULL, NULL, NULL, awid_fsk_decode};
+        const arm_t bi_gpii    = {FAM_BIPHASE, &gproxii, 0, NULL, NULL, &LF_BIPHASE_FORMAT_GPROXII, NULL};
+
+        bad += sweep("Indala26  PSK1",  "a0000000e6bd0e92", "a0000000e6bd0e92", 64, &psk_ind, 33, 0, 31);
+        bad += sweep("IDTECK    PSK1",  "4944544b55667788", "4944544b55667788", 64, &psk_idteck, 32, 0, 32);
+        /* ⛔ Keri emits the block form and decodes to the frame view — the sweep flips bits in
+         * what goes ON THE WIRE and compares against what comes BACK, same as its round trip. */
+        bad += sweep("Keri      PSK1",  "00000004000181cf", "e000000080003039", 64, &psk_keri, 33, 0, 31);
+        bad += sweep("NexWatch  PSK1",  "5600000000436455121e6000", "5600000000436455121e6000", 96, &psk_nw, 80, 0, 16);
+        bad += sweep("Indala224 PSK2",  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e4",
+                                 "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e4", 224, &psk_224, 28, 0, 196);
+        bad += sweep("Gallagher ASK",   "7feaa31e76d86c6d868cc249", "7feaa31e76d86c6d868cc249", 96, &ask_gal, 88, 0, 8);
+        bad += sweep("Securakey ASK",   "7fcb400001adea5344300000", "7fcb400001adea5344300000", 96, &ask_sk, 19, 0, 77);
+        bad += sweep("Noralsy   ASK",   "bb0214ff0112402233670000", "bb0214ff0112402233670000", 96, &ask_nor, 80, 0, 16);
+        bad += sweep("AWID      FSK2a", "011db218271bd81111111111", "011db218271bd81111111111", 96, &fsk_awid, 96, 0, 0);
+        bad += sweep("GProxII   biphase", "f84602a46119d4a114211046", "f84602a46119d4a114211046", 96, &bi_gpii, 36, 0, 60);
+    }
 
     printf("\n%s\n", bad ? "⛔ FAILURES" : "✓ all round trips exact");
     return bad ? 1 : 0;
