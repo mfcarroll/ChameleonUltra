@@ -8,6 +8,11 @@ spent days on measurements that turned out to describe a broken instrument rathe
 thing under test. ⇒ Phases 1 and 2 are closed on that basis; new protocols start now, and
 **by modulation family** so each one lands on a path that something has already proven.
 
+⭐ **An unattended run is driven by `AUTOPILOT.md`**, not by this file: it carries the
+ordered unit queue, the rules of engagement and the resume procedure, with `autopilot.sh`
+for the heartbeat and the pre-commit secret gate. ⚠ If the two ever disagree, THIS file
+wins and the autopilot contract is the one that gets corrected.
+
 ⛔ Method rules live in `METHOD.md`. Evidence lives in `FINDINGS.md` (what is believed now)
 and `LOG.md` (what was believed when). This file is a PLAN — finished sections collapse to
 one line. The bench layout, the device ports and the git conventions are in `README.md`
