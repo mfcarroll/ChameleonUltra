@@ -379,10 +379,14 @@ and a reviewer should be told that in those terms.
 ⭐⭐ **AND THE DEFENCE THAT DOES CLOSE MOST OF IT IS NOT A GATE (C267).** A tag holding the
 CORRECT credential, captured at marginal field through the reader's own path, produced a WRONG
 credential in 4 of the 14 frames it yielded — more often than the deliberately broken tag did.
-**All four were distinct**, so the reader's two-agreeing-stacks rule would have rejected every
-one. ⇒ The agreement rule is carrying this reader, not the frame gates, and `ctest`'s sweep
-cannot see that at all — it feeds one perfect rendering per trial. A reviewer weighing whether
-to keep the two-stack rule should be shown these numbers rather than the sweep's.
+**All four were distinct.** ⭐⭐ **And C268 settled that properly rather than leaving it an
+inference**: across 92 marginal captures the reader's path produced 33 frames, 12 of them not
+the true raw, and **all 12 were unique** — while the true frame repeated 13 times in the same
+set, which is the positive control that says a repeat CAN happen. A marginal capture's error
+does not reproduce, so two-agreeing-stacks rejects it. ⇒ The agreement rule is carrying this
+reader, not the frame gates, and `ctest`'s sweep cannot see that at all — it feeds one perfect
+rendering per trial. A reviewer weighing whether to keep the two-stack rule should be shown
+these numbers rather than the sweep's.
 
 **What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
 each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,
