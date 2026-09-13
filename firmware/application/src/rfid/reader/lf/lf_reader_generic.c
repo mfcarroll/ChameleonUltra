@@ -146,6 +146,21 @@ static void capture_end(lf_capture_ctx_t *ctx) {
     }
 }
 
+/* ⭐⭐ HOW MANY SAMPLES THE LAST CAPTURE LOST, and it exists because losing them was SILENT.
+ *
+ * The ADC ring is 2560 samples; a full ASK or biphase capture is 14336. If the drain loop ever
+ * falls behind, `cb_push_back` drops and the buffer handed to the decoder is SPLICED — two
+ * pieces of the waveform with an unknown gap between them. `capture_end` has always logged a
+ * warning about it, but a warning goes to the RTT log that nothing on this bench reads, and
+ * `raw_read_samples` returns `*outlen == count`, which a spliced capture satisfies perfectly.
+ *
+ * ⛔ A decoder handed a spliced capture does not fail. It resynchronises after the gap and
+ * returns a frame whose tail is wrong — which is the shape of GProxII's persistent bit-93
+ * error, and exactly the confident-wrong-answer this project keeps paying for. */
+uint32_t lf_capture_dropped(void) {
+    return m_cb_dropped;
+}
+
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
                         bool raw16, uint16_t settle_ms) {
     *outlen = 0;

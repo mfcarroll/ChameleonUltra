@@ -198,6 +198,17 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
                                   INDALA_CAPTURE_TIMEOUT_MS(capture_samples), &got, 0)) {
                 continue;
             }
+            /* ⛔⛔ DISCARD A SPLICED CAPTURE. `raw_read_samples` returns true for one: it
+             * checks only that it filled the buffer, and a capture that dropped samples from
+             * the ring fills it just as completely — out of two pieces of waveform with an
+             * unknown gap between them. A decoder does not fail on that; it resynchronises
+             * after the gap and returns a frame whose tail is wrong.
+             *
+             * ⚠ This costs nothing when drops do not happen and is the safe direction when
+             * they do: a discarded capture is retried, a spliced one is believed. */
+            if (lf_capture_dropped() != 0) {
+                continue;
+            }
 
             /* ⚠ IN PLACE: this consumes m_samples. Nothing needs the raw capture again. */
             bool decoded = decode(m_samples, got, &res);

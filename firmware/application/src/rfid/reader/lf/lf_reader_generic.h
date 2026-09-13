@@ -81,5 +81,9 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
  * @param settle_ms  field-on time before the window opens, 0 = the historical 2ms.
  * @return           true only if exactly `count` samples were captured.
  */
+/** Samples the LAST capture dropped. Non-zero means the buffer is SPLICED, not merely short —
+ *  see the note in lf_reader_generic.c. Valid after raw_read_samples/raw_read_to_buffer. */
+uint32_t lf_capture_dropped(void);
+
 bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
                       uint16_t settle_ms);

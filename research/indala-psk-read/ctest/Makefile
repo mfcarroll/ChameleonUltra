@@ -8,7 +8,12 @@ CAP := ../caps/phasebits
 
 CFLAGS := -std=c11 -O2 -Wall -Wextra -Wconversion -I$(FW)
 
-cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c
+# ⛔ THE HEADERS ARE DEPENDENCIES TOO, and leaving them out is the SAME false-pass bug the
+# `check` target's clean-first rule was added for. Every capture length, frame size and
+# preamble in this decoder family lives in a .h; editing one and re-running `make` left the
+# old binary in place and printed a PASS for code that no longer existed. Caught 2026-09-13
+# while chasing a GProxII mismatch that turned out NOT to be this — but the gap was real.
+cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_ask_manchester.h $(FW)/lf_fsk2a.c $(FW)/lf_fsk2a.h $(FW)/lf_slicer.c $(FW)/lf_slicer.h $(FW)/lf_ask_biphase.c $(FW)/lf_ask_biphase.h
 	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c
 
 # ⭐ THE ASK ARMS COMPILE THE SHIPPING EMITTERS TOO — gallagher.c, securakey.c, noralsy.c —
@@ -16,7 +21,7 @@ cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchest
 PROTO := ../../../firmware/application/src/rfid/nfctag/lf/protocols
 TAGS  := ../../../firmware/application/src/rfid/nfctag
 
-roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(EMU)/psk1.c $(EMU)/psk1.h \
+roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_ask_manchester.h $(FW)/lf_fsk2a.c $(FW)/lf_fsk2a.h $(FW)/lf_slicer.c $(EMU)/psk1.c $(EMU)/psk1.h \
            $(PROTO)/gallagher.c $(PROTO)/securakey.c $(PROTO)/noralsy.c $(PROTO)/fsk2a_t55xx.c
 	$(CC) $(CFLAGS) -I$(EMU) -I$(PROTO) -I$(TAGS) -Ishim -o $@ roundtrip.c \
 	  $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(EMU)/psk1.c \
