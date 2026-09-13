@@ -64,11 +64,13 @@ four. A stronger gate narrows the window; it does not close it.
 ⇒ **Candidates next, all no-hands unless marked:**
 - ✅ **DONE (C257)** — Indala26's two zero bits. ⚠ It made us STRICTER THAN THE PROXMARK, which
   reads the rejected frame perfectly; the disagreement is recorded rather than smoothed over.
-- ✅ **DONE (C258)** — measured, Keri took it, Indala26 was refused it. ⇒ **Next: C259, a DISPLAY
-  defect our read arms cannot see** — `lf keri read` prints the raw id field under the label
-  `Internal ID` where the Proxmark prints 12345, and our MS card number disagrees too and is
-  unexplained. Every read arm in this campaign scores the RAW FRAME, so the whole display layer
-  is unverified — check the others while fixing this one.
+- ✅ **DONE (C258, C259, C260)** — Keri took the repeat check, Indala26 was refused it, Keri's
+  `Internal ID` was printing the raw field and is fixed, and ALL TEN displays are now audited
+  against the Proxmark: eight clean, one fixed, one gap.
+  ⇒ **Next: Securakey's missing display.** It is the only protocol printing no derived fields at
+  all; the Proxmark prints `len: 26 FC: 0x35 Card: 64169` and `Wiegand: 006BF553 parity ( ok )`.
+  ⭐ REPORT the Wiegand parity, do NOT gate on it — that is the middle path C253 passed over when
+  it chose between enforcing those bits and ignoring them.
 - The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
@@ -196,7 +198,8 @@ the two Chameleons face each other.
   trailing moving average lags where the firmware's block means do not. ⇒ Any tool reasoning
   about a decoder must SHARE its front end, not resemble it.
 - ⭐ **Chameleon #2 carries `f536b44`** (Securakey gate, confirmed by `hw version`); ⚠ **the T5577
-  now holds KERI `-t i --cn 12345` (raw `e000000080003039`); before that Indala `A0000000E6BD0E92`; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
+  now holds SECURAKEY `7FCB400001ADEA5344300000` again — C260's audit cycled it through ten
+  credentials in one session; before that Keri, Indala, GProxII; earlier today it held Securakey `7FCB400001ADEA5344300000`, not the Pyramid credential §1 used to name.**
 - ⭐ **(superseded) #2 carried `a049bc6`** (guard restored, confirmed by `hw version`); #1 was not
   reflashed today and still carries the pre-probe build. ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
@@ -384,6 +387,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 13:55 | **C259/C260 — the display layer** | 11 → 11 | Keri's `Internal ID` fixed (it printed the raw field under the reference's label); the other half of C259 retracted as my own comparison error. Then all ten displays audited: 8 clean, 1 fixed, 1 gap — Securakey prints nothing derived | Each protocol cloned by the Proxmark with a credential WE chose, read by both tools in the same minute |
 | 2026-09-14 12:35 | **C258/C259 — Keri's repeat check** | 11 → 11 | `57aa2f9` flashed to #2. Keri `require_repeat` on (3/4 either way on captures), Indala26 refused it (51→43 true frames). ⚠ C259 found: our Keri reader's `Internal ID` and MS card number disagree with the Proxmark's on an identical raw frame | Hardware 8/8 with the Proxmark reading the same tag 3/3, raw byte-identical; the control is Indala26 under the same flag, and it moves |
 | 2026-09-14 11:40 | **C257 — Indala26's two zero bits** | 11 → 11 | `9bd111d` flashed to #2. Corpus 68→64 frames, 51 true kept, 4 wrong dropped; `compare.py` mirrored because the harness caught the one-sided gate | Hardware A/B/A: valid 8/8, bit 61 set 0/4 **while the Proxmark reads that tag perfectly**, restored 6/6 |
 | 2026-09-14 10:45 | **C255/C256 — gate audit, GProxII closed** | 8 → 11 | `3f46af2` flashed to #2. GProxII gains the reference's Wiegand parity check (sweep 36→64 rejected); every other format audited against its reference — IDTECK, InstaFob and Indala224 MATCH, Indala26 and Keri have open gaps | Hardware A/B/A: valid 8/8, one named bit broken 0 exact/3 silent/**1 self-consistent false frame**, restored 8/8 |
