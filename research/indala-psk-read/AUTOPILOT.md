@@ -38,6 +38,32 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ✅ 2026-09-14 09:50 — WHERE THE READER WORK STANDS
+
+⭐⭐ **C45 is closed and the session's thread ran out of it.** The HID intermittency was a BLE
+advertising burst (C250); the guard fixes it. The guard-off build then became an instrument —
+it produces frame corruption on demand — and with it C251 found that a corrupted HID frame is
+reported as **Indala 26-bit** six times out of seven, because `unpack()` walks to the next
+26-bit format when H10301's parity refuses. That is upstream's, written up as `NEXT.md` §9f.
+
+⭐⭐ **Generalised with no device: C252's sweep asks every decoder we ship what it does with a
+WRONG frame** — one flipped bit, 1,024 corrupted frames, counts PINNED in `ctest`. It found one
+gap that was ours: Securakey had no `accept` hook at all. C253 closed it and proved it on a real
+tag by flipping one named spacer bit (8/8 valid, 0/4 broken, 4/4 restored).
+
+⛔ **C254 is the limit of that table and it is stated rather than hidden**: the sweep cannot
+reach `require_repeat`, and the obvious instrument fails its own control. Low numbers are a
+FLOOR for repeat-gated formats.
+
+⇒ **Candidates next, all no-hands:**
+- ⚠ `LF_ASK_FORMAT_INSTAFOB.accept` is now the ONLY `NULL` hook left. Its 32-bit preamble is
+  strong and InstaFob ships read-only, so check the reference before touching it — this is
+  exactly where C253's mistake would repeat if the reference turns out to check nothing.
+- GProxII 36/60 and the three PSK1 formats at ~50% — audit each against its reference and
+  record "matches" or "here is the missing check". Indala26's parity is ALREADY a decided
+  non-gate (C19); do not re-open it.
+- The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
+
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
 Every protocol Momentum carries READS and WRITES here except FDX-A and InstaFob, which nothing
