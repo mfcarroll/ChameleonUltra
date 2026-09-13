@@ -79,8 +79,15 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   ⭐⭐ **THE T5577 GOES BACK INTO RIG B (the Proxmark sandwich) for the day, 2026-09-13.**
   ✅ **The tag is back and the READ upgrade is DONE (C201)** — AWID, Paradox and Pyramid all
   read real tags byte-exactly. ⛔ FDX-A could not be upgraded: pm3 has no FDX-A clone.
-  ⇒ **Next: the FSK WRITE arms.** AWID, Paradox and Pyramid are verifiable (pm3 reads them
-  back); FDX-A's is not, so do NOT ship an FDX-A writer — that is InstaFob's situation (C185).
+  ✅✅ **THE FSK WRITE ARMS ARE DONE AND VERIFIED THE STRONG WAY (C202, C203).** We write the
+  T5577 from Chameleon #2, the **Proxmark** reads it: AWID 5/5, Paradox 4/4, Pyramid 4/4, every
+  block dump identical to the Proxmark's own clone of the same credential, every credential
+  changed from C201's, every tag wiped first with the null confirmed. ⭐ `ctest/roundtrip.c`
+  also pins the three block vectors — the first host coverage any T5577 writer here has had.
+  ⛔ **There is no FDX-A writer and there must not be one**: `lf fdx` is FDX-B, so nothing on
+  this bench can read an FDX-A tag we wrote. That is a refusal, like InstaFob's (C185).
+  ⇒ **Next: see §2's EXECUTION ORDER box.** The FSK family is complete on both read and write
+  for everything verifiable, so the queue moves on.
   ⚠ With the tag IN, the Proxmark can no longer read our emulation — but that sweep is
   COMPLETE (C190) and the four FSK protocols have no emulator, so nothing is lost.
   ✅ **FDX-A reads on device 4/4 (C199). All four FSK protocols read on hardware.**
