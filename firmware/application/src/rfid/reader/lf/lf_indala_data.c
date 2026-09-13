@@ -157,16 +157,16 @@ static const uint8_t PHASE_ROTATION[] = {
  * and still a third of what the stacked 64-bit reader used to cost. The capture LENGTH is a
  * parameter because it is real time on the wire: 4096 samples is 33ms and 14336 is 114ms, so
  * a 64-bit read that captured the whole buffer would be 3.5x slower for nothing. */
-static int16_t m_samples[LF_PSK1_MAX_CAPTURE_SAMPLES];
+static int16_t m_samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
-bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
-                  lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
-    if (capture_samples > LF_PSK1_MAX_CAPTURE_SAMPLES) {
-        capture_samples = LF_PSK1_MAX_CAPTURE_SAMPLES;
+bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
+                  lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+    if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
+        capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
     bool ok = false;
     uint8_t winner_phase = 0;
-    indala_psk_result_t winner_res;
+    lf_decode_result_t winner_res;
     uint8_t winner_tries = 0;
     /* ⚠ The LOUDEST capture, not the last one. A read spends up to eight captures per sample
      * phase across several phases; a source that is present for only part of that budget
@@ -185,7 +185,7 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
          * that two reads of the SAME configuration landed on the same word. */
         bool have_prev = false;
         uint8_t prev_word[8] = { 0 };
-        indala_psk_result_t res;
+        lf_decode_result_t res;
 
         for (uint8_t k = 0; k < INDALA_TRIES_PER_PHASE && !ok; k++) {
             if (!NO_TIMEOUT_1MS(p_at, timeout_ms)) {
@@ -256,12 +256,12 @@ bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
 }
 
 bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
-    if (!lf_psk1_read(indala_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+    lf_sampled_read_t r;
+    if (!lf_sampled_read(indala_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }
-    const indala_psk_result_t *res = &r.res;
+    const lf_decode_result_t *res = &r.res;
     uint8_t winner_phase = r.phase;
 
     memcpy(&data[0], res->id, 8);
@@ -295,12 +295,12 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * which is what the Proxmark prints for the bench tag and what `idteck.c` describes on the
  * emulation side. */
 bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
-    if (!lf_psk1_read(idteck_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
+    lf_sampled_read_t r;
+    if (!lf_sampled_read(idteck_psk1_decode, INDALA_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }
-    const indala_psk_result_t *res = &r.res;
+    const lf_decode_result_t *res = &r.res;
 
     memcpy(&data[0], res->id, 8);
     data[8]  = res->id[4];                      /* checksum byte */
@@ -355,15 +355,15 @@ static void keri_descramble(uint32_t internal_id, uint32_t *fc, uint32_t *cn) {
  * IDTECK, because it is the same air layer (C157). Only the preamble and the payload
  * interpretation differ, which is the whole argument for `lf_psk1_format_t`. */
 bool keri_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
+    lf_sampled_read_t r;
     /* ⛔ NOT INDALA_PSK_CAPTURE_SAMPLES — see KERI_PSK_CAPTURE_SAMPLES. At 4096 this reader
      * returned 0x43 on a real Keri tag six times running while the host decoded the same
      * captures 3 of 4. */
-    if (!lf_psk1_read(keri_psk1_decode, KERI_PSK_CAPTURE_SAMPLES,
+    if (!lf_sampled_read(keri_psk1_decode, KERI_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }
-    const indala_psk_result_t *res = &r.res;
+    const lf_decode_result_t *res = &r.res;
 
     /* Bits 32..63 of the frame are the internal id; its top bit is also the last bit of
      * the preamble and is therefore always 1. */
@@ -438,12 +438,12 @@ static uint8_t nexwatch_checksum(uint8_t magic, uint32_t id, uint8_t parity) {
  * passed a 44-bit gate — and reports magic 0x00 rather than failing. Refusing it would
  * refuse a vendor we have not met. */
 bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
-    if (!lf_psk1_read(nexwatch_psk1_decode, NEXWATCH_PSK_CAPTURE_SAMPLES,
+    lf_sampled_read_t r;
+    if (!lf_sampled_read(nexwatch_psk1_decode, NEXWATCH_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }
-    const indala_psk_result_t *res = &r.res;
+    const lf_decode_result_t *res = &r.res;
 
     /* bits 40..71 are the scrambled card number; 72..75 the mode; 76..79 the parity;
      * 80..87 the checksum. The frame is byte-aligned throughout, so these are whole bytes. */
@@ -482,11 +482,11 @@ bool nexwatch_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 
 /* Forward declaration: the ASK field-strength sweep is defined with the Noralsy reader, where
  * the measurement that forced it is written up. ⚠ All three ASK readers go through it. */
-static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
-                        lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
+static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
+                        lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
 
 /* ⭐ GALLAGHER — the first protocol of the ASK/biphase family, and it goes through the SAME
- * capture engine as every PSK protocol here. `lf_psk1_read` is modulation-agnostic despite
+ * capture engine as every PSK protocol here. `lf_sampled_read` is modulation-agnostic despite
  * its name: it rotates the sample phase, suspends BLE advertising (C47) and requires two
  * independent captures to agree before returning, and none of that is PSK-specific. Only the
  * decoder handed to it changes.
@@ -494,7 +494,7 @@ static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
  * ⚠ The capture is 14336 samples — 114ms, against 33ms for the 64-bit PSK formats — because
  * the threshold was MEASURED at 10240 and the guess of 6144 decoded 0 of 4 (C172). */
 bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
+    lf_sampled_read_t r;
     if (!lf_ask_read(gallagher_ask_decode, GALLAGHER_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
@@ -511,7 +511,7 @@ bool gallagher_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 /* ⭐ SECURAKEY — the same capture engine and the same decoder as Gallagher, with a different
  * `lf_ask_format_t`. The only protocol-specific thing here is the capture length. */
 bool securakey_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
+    lf_sampled_read_t r;
     if (!lf_ask_read(securakey_ask_decode, SECURAKEY_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
@@ -551,12 +551,12 @@ static const uint8_t LF_ASK_DRIVE_STEPS[] = { 4, 7, 6, 2 };
 /* A 96-bit frame at RF/32 is 24.6ms and the capture engine wants several tries per step. */
 #define LF_ASK_DRIVE_MIN_STEP_MS (250)
 
-/* ⭐ One capture engine, one acceptance rule, one extra loop. `lf_psk1_read` already rotates
+/* ⭐ One capture engine, one acceptance rule, one extra loop. `lf_sampled_read` already rotates
  * the sample phase and requires two independent captures to agree; this wraps it in the field
  * strength sweep the ASK family needs, and divides the caller's budget between the steps
  * rather than multiplying it — the same discipline `pac_read` uses, and for the same reason. */
-static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
-                        lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
+static bool lf_ask_read(lf_sampled_decode_fn decode, size_t capture_samples,
+                        lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out) {
     uint32_t steps = timeout_ms / LF_ASK_DRIVE_MIN_STEP_MS;
     if (steps < 1) {
         steps = 1;
@@ -570,7 +570,7 @@ static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
     for (uint32_t i = 0; i < steps && !ok; i++) {
         lf_125khz_radio_drive_set(LF_ASK_DRIVE_STEPS[i]);
         int32_t e = 0;
-        ok = lf_psk1_read(decode, capture_samples, out, step_ms, &e);
+        ok = lf_sampled_read(decode, capture_samples, out, step_ms, &e);
         if (e > loudest) {
             loudest = e;
         }
@@ -589,7 +589,7 @@ static bool lf_ask_read(lf_psk1_decode_fn decode, size_t capture_samples,
  * against Gallagher's and Securakey's 14336, because its frame sits near the start of the
  * stream rather than a hundred bits in (C181). */
 bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
+    lf_sampled_read_t r;
     if (!lf_ask_read(noralsy_ask_decode, NORALSY_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
@@ -608,7 +608,7 @@ bool noralsy_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
  * inside for 99.1% of start offsets rather than the 100% every other format here enjoys
  * (C185). ⚠ That is why this one uses the buffer maximum and has no margin to give. */
 bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
-    lf_psk1_read_t r;
+    lf_sampled_read_t r;
     if (!lf_ask_read(instafob_ask_decode, INSTAFOB_ASK_CAPTURE_SAMPLES,
                      &r, timeout_ms, energy_out)) {
         return false;
@@ -656,14 +656,14 @@ bool indala224_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
 #if !INDALA224_READER_TRUSTED
     /* Still report energy, so `lf indala read --224` says "a subcarrier is present but no
      * frame could be decoded" rather than pretending the antenna is empty. */
-    lf_psk1_read_t probe;
-    (void)lf_psk1_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
+    lf_sampled_read_t probe;
+    (void)lf_sampled_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
                        &probe, timeout_ms, energy_out);
     (void)data;
     return false;
 #else
-    lf_psk1_read_t r;
-    if (!lf_psk1_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
+    lf_sampled_read_t r;
+    if (!lf_sampled_read(indala224_psk1_decode, INDALA224_PSK_CAPTURE_SAMPLES,
                       &r, timeout_ms, energy_out)) {
         return false;
     }

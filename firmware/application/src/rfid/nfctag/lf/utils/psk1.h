@@ -25,7 +25,7 @@
 // ⭐ Indala224 is the same air layer with a 224-bit frame, so it shares this buffer
 // rather than carrying its own. See the sizing note below for why that matters.
 //
-// ⚠ NAMED _EMU_ BECAUSE THE DECODER OWNS `LF_PSK1_MAX_FRAME_BITS` with the same value.
+// ⚠ NAMED _EMU_ BECAUSE THE DECODER OWNS `LF_DECODE_MAX_FRAME_BITS` with the same value.
 // They are the same number for the same reason and must stay equal, but they belong to
 // opposite halves of the stack — reader and tag emulation — and the reader's header is not
 // includable here. Host-compiling this file beside the decoder is what surfaced the clash

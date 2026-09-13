@@ -25,7 +25,7 @@ static const char TRUTH[] = "a0000000e6bd0e92";
 
 int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
-    static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
+    static int16_t buf[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
     int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0;
     size_t trunc = 0;
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "cannot open %s\n", argv[i]);
             return 2;
         }
-        static unsigned char raw[LF_PSK1_MAX_CAPTURE_SAMPLES * 2];
+        static unsigned char raw[LF_SAMPLED_MAX_CAPTURE_SAMPLES * 2];
         size_t got = fread(raw, 1, sizeof(raw), f);
         fclose(f);
         files++;
@@ -109,9 +109,9 @@ int main(int argc, char **argv) {
          * that the Indala preamble falsely matches can be RECOGNISED as IDTECK from the same
          * samples — if so, decoding IDTECK is the rejection test. Needs its own copy of the
          * buffer because the decoder works in place. */
-        static int16_t buf2[LF_PSK1_MAX_CAPTURE_SAMPLES];
+        static int16_t buf2[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
         memcpy(buf2, buf, n * sizeof(buf[0]));
-        indala_psk_result_t ri;
+        lf_decode_result_t ri;
         int idteck = lf_psk1_decode_fmt(buf2, n, &LF_PSK1_FORMAT_IDTECK, &ri);
         char ihex[17] = "-";
         if (idteck) {
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
         }
 
         if (modeif) {
-            indala_psk_result_t ri2;
+            lf_decode_result_t ri2;
             if (!instafob_ask_decode(buf, n, &ri2)) {
                 printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
                        argv[i], n, (long)ri2.energy);
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
         }
 
         if (modenor) {
-            indala_psk_result_t rn2;
+            lf_decode_result_t rn2;
             if (!noralsy_ask_decode(buf, n, &rn2)) {
                 printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
                        argv[i], n, (long)rn2.energy);
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
         }
 
         if (modesk) {
-            indala_psk_result_t rs;
+            lf_decode_result_t rs;
             if (!securakey_ask_decode(buf, n, &rs)) {
                 printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
                        argv[i], n, (long)rs.energy);
@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
             /* ⭐ THE SHIPPING ASK DECODER, host-compiled — the same .c the device runs.
              * askdemod.py proved the air layer; this proves the FIRMWARE reproduces it,
              * which is a different claim and the one that ships. */
-            indala_psk_result_t rg;
+            lf_decode_result_t rg;
             if (!gallagher_ask_decode(buf, n, &rg)) {
                 printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
                        argv[i], n, (long)rg.energy);
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
         if (modenw) {
             /* ⚠ Prints the WHOLE 96-bit frame, preamble included, for the same reason the
              * Keri arm does: the fixed bits are half of what is under test. */
-            indala_psk_result_t rn;
+            lf_decode_result_t rn;
             lf_psk1_format_t fmt = LF_PSK1_FORMAT_NEXWATCH;
             if (nogate) {
                 fmt.accept = NULL;
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
             /* ⚠ Prints the whole 64-bit frame, not just the internal id: the preamble is
              * half of what is being tested, and hiding it would make a wrong-preamble
              * match look like a correct one. */
-            indala_psk_result_t rk;
+            lf_decode_result_t rk;
             if (!keri_psk1_decode(buf, n, &rk)) {
                 printf(" %-44s %5zu samples  -                 energy %7ld\n",
                        argv[i], n, (long)rk.energy);
@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
         }
 
         if (mode224) {
-            indala_psk_result_t r2;
+            lf_decode_result_t r2;
             if (!indala224_psk1_decode(buf, n, &r2)) {
                 printf(" %-44s %5zu samples  -            energy %7ld\n",
                        argv[i], n, (long)r2.energy);
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        indala_psk_result_t r;
+        lf_decode_result_t r;
         if (!indala_psk1_decode(buf, n, &r)) {
             if (!quiet) printf(" %-40s %5zu samples  -   IDTECK %s\n", argv[i], n, ihex);
             continue;

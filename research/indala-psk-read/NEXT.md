@@ -262,7 +262,7 @@ project exists downstream of (C185).
 
 | | |
 |---|---|
-| ⛔ **Naming** | `lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Rename before proposing, not after |
+| ✅ ~~**Naming**~~ **DONE (C192)** | ~~`lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Renamed 2026-09-13: shared things are `lf_sampled_*` / `lf_decode_*`, genuinely-PSK things keep `psk1`.~~ |
 | ⛔ **Shared-struct sizing** | `LF_PSK1_MAX_FRAME_BITS` is 240, raised from Indala224's 224 because InstaFob's frame is 225 bits and would have overflowed `id[]` and `word_bits[]` by one bit's worth (C186). It costs 16 bytes in a struct there is one of, and it is load-bearing |
 | ⛔ **Command-id allocation** | 32 new ids in the 3000/5000 blocks. Needs coordinating with upstream rather than asserted |
 | ⚠ **Instrumentation** | the table below, unchanged and still correct |

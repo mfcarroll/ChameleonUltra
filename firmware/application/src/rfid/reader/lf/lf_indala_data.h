@@ -50,10 +50,10 @@ bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
 /** What one successful PSK1 read produced, before any protocol puts it in a payload. */
 typedef struct {
-    indala_psk_result_t res;
+    lf_decode_result_t res;
     uint8_t phase;    /**< the sample phase that won, in 62.5ns ticks */
     uint8_t tries;    /**< captures taken at the winning phase to reach it */
-} lf_psk1_read_t;
+} lf_sampled_read_t;
 
 /**
  * ⭐ The shared PSK1 capture engine: sample-phase rotation, two independent accumulators and
@@ -62,8 +62,21 @@ typedef struct {
  * ⛔ `decode` must carry its own veto if it needs one. Indala does (C90/C91); IDTECK must
  * not.
  */
-bool lf_psk1_read(lf_psk1_decode_fn decode, size_t capture_samples,
-                  lf_psk1_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
+/* ⭐⭐ THE NAMING RULE, AND IT IS THE ONE §9 NAMED AS BLOCKER #1 FOR UPSTREAMING.
+ *
+ * Anything SHARED by the PSK and ASK families carries a modulation-neutral name:
+ * `lf_sampled_read`, `lf_sampled_read_t`, `lf_sampled_decode_fn`, `lf_decode_result_t`,
+ * `LF_SAMPLED_MAX_CAPTURE_SAMPLES`, `LF_DECODE_MAX_FRAME_BITS`. Anything genuinely specific
+ * to phase-shift keying keeps `psk1`: `lf_psk1_format_t`, `lf_psk1_decode_fmt`,
+ * `LF_PSK1_FORMAT_*`, `lf_psk1_modulator`.
+ *
+ * ⛔ This engine was called `lf_psk1_read` while `lf_ask_manchester.c` called it, which reads
+ * as a bug to anyone who has not been told otherwise. It is NOT PSK-specific: it rotates the
+ * sample phase, suspends BLE advertising (C47) and requires two independent captures to
+ * agree, none of which depends on how the bits are carried. Only the decoder handed to it
+ * does. */
+bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
+                  lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out);
 
 /** IDTECK, same engine, same timeout, same energy reporting. */
 bool idteck_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);

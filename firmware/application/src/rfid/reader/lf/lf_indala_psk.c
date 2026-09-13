@@ -299,7 +299,7 @@ static uint8_t preamble_err(const uint8_t *bits, size_t i, bool inverted,
 
 /* De-scramble format 26 and check its Wiegand parity. Advisory only — see the note in
  * indala_psk1_decode(). */
-static void descramble26(const uint8_t *w, indala_psk_result_t *out) {
+static void descramble26(const uint8_t *w, lf_decode_result_t *out) {
     uint32_t fc = 0, csn = 0;
     for (uint8_t k = 0; k < 8; k++) {
         fc = (fc << 1) | w[FC_BITS[k]];
@@ -322,10 +322,10 @@ static void descramble26(const uint8_t *w, indala_psk_result_t *out) {
 }
 
 bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
-                        const lf_psk1_format_t *fmt, indala_psk_result_t *out) {
+                        const lf_psk1_format_t *fmt, lf_decode_result_t *out) {
     if (samples == NULL || out == NULL || fmt == NULL || fmt->preamble == NULL ||
             fmt->preamble_bits == 0 || fmt->preamble_bits > LF_PSK1_MAX_PREAMBLE_BITS ||
-            fmt->frame_bits == 0 || fmt->frame_bits > LF_PSK1_MAX_FRAME_BITS ||
+            fmt->frame_bits == 0 || fmt->frame_bits > LF_DECODE_MAX_FRAME_BITS ||
             n < INDALA_PSK_MIN_SAMPLES(fmt->frame_bits)) {
         return false;
     }
@@ -342,8 +342,8 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
      * format captures" were the same number for months, so one name served both; the moment
      * they diverged, every use had to be re-read to see which meaning it had, and this one was
      * missed. */
-    if (n > LF_PSK1_MAX_CAPTURE_SAMPLES) {
-        n = LF_PSK1_MAX_CAPTURE_SAMPLES;
+    if (n > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
+        n = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
     out->energy = 0;
     baseband_in_place(samples, n);
@@ -359,7 +359,7 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
     int32_t  best_min = 0;
     size_t   best_agree = 0;
     uint8_t  best_err = 0xFF;
-    uint8_t  best_word[LF_PSK1_MAX_FRAME_BITS];
+    uint8_t  best_word[LF_DECODE_MAX_FRAME_BITS];
     uint8_t  best_off = 0, best_pos = 0;
     bool     best_inv = false;
     bool     found = false;
@@ -490,7 +490,7 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
                  * the whole point: it lets a candidate that fails the parity be passed over
                  * so a correct one at a different sample offset can still win. */
                 if (fmt->accept != NULL) {
-                    uint8_t cand[LF_PSK1_MAX_FRAME_BITS];
+                    uint8_t cand[LF_DECODE_MAX_FRAME_BITS];
                     for (size_t k = 0; k < FB; k++) {
                         uint8_t b = stream[i + k];
                         cand[k] = (inv != 0) ? (uint8_t)(1u - b) : b;
@@ -622,23 +622,23 @@ bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
 /* ⛔ NO REJECT PREAMBLE HERE, and that asymmetry is deliberate — see lf_psk1_decode_ex.
  * Indala's preamble matches a loud IDTECK tag, so Indala must veto on IDTECK; the reverse
  * never happened in 480 captures, so vetoing here would only throw away genuine reads. */
-bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool idteck_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_IDTECK, out);
 }
 
-bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool keri_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_KERI, out);
 }
 
-bool nexwatch_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool nexwatch_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_NEXWATCH, out);
 }
 
-bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool indala224_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_INDALA224, out);
 }
 
-bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool indala_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     if (!lf_psk1_decode_fmt(samples, n, &LF_PSK1_FORMAT_INDALA64, out)) {
         return false;
     }

@@ -66,8 +66,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   requested. ⛔ With the tag out, U8 and any read/write work are impossible — do the emulation
   sweep and the compute units instead.
 - ⭐ **IF THE TAG IS STILL IN, the order is: compute units FIRST, U8 LAST.** The compute queue
-  is better work than FSK and needs no bench: (1) the `lf_psk1_read` rename, which is §9's
-  blocker #1 for upstreaming; (2) ~~roundtrip arms for the ASK protocols~~ **DONE (C191)** — three arms added, sensitivity
+  is better work than FSK and needs no bench: (1) ~~the `lf_psk1_read` rename~~ **DONE (C192)**; (2) ~~roundtrip arms for the ASK protocols~~ **DONE (C191)** — three arms added, sensitivity
   proven by a deliberate break, and `make check` now rebuilds from scratch after a false-pass
   bug was found in it; (3) InstaFob's emitter rebuilt from Momentum's
   six-state terminator machine rather than from an approximate capture (C188).
@@ -267,6 +266,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 14:05 | emulate sweep on rig B | 9 → 13 | C189; §5 upgraded to a measured decision | ASK 16/16, PSK 1/13 to the Proxmark — a clean modulation split |
 | 2026-09-13 14:40 | sweep extended to n=7 | 10 → 12 | C190; C189 corrected | ASK 16/16, PSK2 14/16, PSK1 3/21 — the line is absolute phase, not modulation family |
 | 2026-09-13 15:15 | ASK roundtrip arms | 11 → 13 | 3 arms on the shipping emitters; `make check` false-pass fixed | 10/10 arms exact; deliberate break fails the suite |
+| 2026-09-13 15:50 | §9 blocker #1 | 11 → 14 | shared engine renamed off `psk1` (~120 refs) | builds; 10/10 arms; 320 captures; reader 4/4 on hardware, null clean |
 
 ---
 

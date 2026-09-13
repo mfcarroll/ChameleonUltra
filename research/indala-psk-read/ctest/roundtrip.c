@@ -101,7 +101,7 @@ static int trial(const char *name, const char *hex, size_t bits,
 
 static int trial2(const char *name, const char *hex, const char *want, size_t bits,
                   lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt) {
-    uint8_t frame[LF_PSK1_MAX_FRAME_BYTES] = {0};
+    uint8_t frame[LF_DECODE_MAX_FRAME_BYTES] = {0};
     size_t bytes = bits / 8;
     for (size_t i = 0; i < bytes; i++) {
         unsigned v;
@@ -124,12 +124,12 @@ static int trial2(const char *name, const char *hex, const char *want, size_t bi
     size_t want_entries = (mode == LF_PSK1_PHASE_DIFFERENTIAL && (popcount & 1u)) ? bits * 2 : bits;
     size_t got_entries = (size_t)seq->length / 4u;
 
-    static int16_t samples[LF_PSK1_MAX_CAPTURE_SAMPLES];
+    static int16_t samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
     size_t want_samples = INDALA_PSK_MIN_SAMPLES(bits) * 2;
-    if (want_samples > LF_PSK1_MAX_CAPTURE_SAMPLES) want_samples = LF_PSK1_MAX_CAPTURE_SAMPLES;
+    if (want_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) want_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     size_t n = render(seq, samples, want_samples);
 
-    indala_psk_result_t r;
+    lf_decode_result_t r;
     int ok = lf_psk1_decode_fmt(samples, n, fmt, &r) && hexeq(r.id, want, bytes);
     int shape_ok = (got_entries == want_entries);
 
@@ -155,11 +155,11 @@ static int trial_ask(const char *name, const char *hex, size_t bits,
         return 1;
     }
     const size_t entries = (size_t)seq->length / 4u;
-    static int16_t air[LF_PSK1_MAX_CAPTURE_SAMPLES];
+    static int16_t air[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
     size_t n = render_ask(seq, air, sizeof(air) / sizeof(air[0]));
     proto->free(codec);
 
-    indala_psk_result_t r;
+    lf_decode_result_t r;
     int ok = lf_ask_manchester_decode_fmt(air, n, fmt, &r);
     int exact = ok && hexeq(r.id, hex, bits / 8u);
     printf("  %-28s %s  entries %4zu (want %4zu)  %s\n", name,

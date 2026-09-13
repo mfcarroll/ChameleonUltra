@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "lf_indala_psk.h"   /* indala_psk_result_t, and the shared capture engine's types */
+#include "lf_indala_psk.h"   /* lf_decode_result_t, and the shared capture engine's types */
 
 /*
  * ASK / Manchester demodulator at RF/32 — the biphase family's decoder.
@@ -43,7 +43,7 @@
 /** Longest frame any ASK format here uses. Gallagher, Securakey and Noralsy are 96 bits;
  *  ⛔ InstaFob is 225, because the tag transmits its whole T5577 page 0. */
 #define LF_ASK_MAX_FRAME_BITS  240
-_Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_PSK1_MAX_FRAME_BITS,
+_Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_DECODE_MAX_FRAME_BITS,
                "the shared result buffer must hold the longest ASK frame too");
 /** ⛔ 19 is Securakey's, and all 19 must be the preamble: the first 10 are a constant run
  *  and the next 9 are the format selector, so truncating to 16 would keep the run and throw
@@ -131,7 +131,7 @@ _Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_PSK1_MAX_FRAME_BITS,
  * 4, flat to 14336, against Gallagher's 10240 measured in frames rather than samples (2.4
  * frames here, 3.3 there). ⚠ 14336 is the shipped value and also the buffer maximum, so this
  * format has NO headroom left: a variant needing a longer capture could not be added without
- * growing LF_PSK1_MAX_CAPTURE_SAMPLES. Worth knowing before the next RF/40 protocol. */
+ * growing LF_SAMPLED_MAX_CAPTURE_SAMPLES. Worth knowing before the next RF/40 protocol. */
 #define SECURAKEY_ASK_CAPTURE_SAMPLES 14336
 
 /* ⛔ MEASURED by truncation like the rest, and this one is the CHEAPEST in the family:
@@ -154,7 +154,7 @@ _Static_assert(LF_ASK_MAX_FRAME_BITS <= LF_PSK1_MAX_FRAME_BITS,
  * other format here enjoys. A cost rather than a wall, and the reason this format has no
  * margin left to give (C185). */
 #define INSTAFOB_ASK_CAPTURE_SAMPLES 14336
-_Static_assert(INSTAFOB_ASK_CAPTURE_SAMPLES <= LF_PSK1_MAX_CAPTURE_SAMPLES,
+_Static_assert(INSTAFOB_ASK_CAPTURE_SAMPLES <= LF_SAMPLED_MAX_CAPTURE_SAMPLES,
                "InstaFob's capture must fit the shared sample buffer");
 
 extern const uint8_t LF_ASK_PREAMBLE_GALLAGHER[GALLAGHER_ASK_PREAMBLE_BITS];
@@ -190,16 +190,16 @@ extern const lf_ask_format_t LF_ASK_FORMAT_INSTAFOB;
  *             after a false return.
  */
 bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
-                                  const lf_ask_format_t *fmt, indala_psk_result_t *out);
+                                  const lf_ask_format_t *fmt, lf_decode_result_t *out);
 
 /** Gallagher's decode, in the shape the shared capture engine wants. */
-bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool gallagher_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** Securakey's decode. ⚠ Its gate is the 19-bit preamble alone — see the note above. */
-bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool securakey_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** Noralsy's decode — 12-bit preamble plus TWO computed nibble checksums. */
-bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool noralsy_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** InstaFob's decode. ⚠ Returns a 225-bit frame ROTATED 7 bits from Momentum's numbering. */
-bool instafob_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool instafob_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out);

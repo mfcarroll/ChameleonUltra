@@ -157,7 +157,7 @@ const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY = {
  * samples, or 8 bit periods, while the drift this corrects is far slower. */
 #define DC_BLOCK_SHIFT 8
 #define DC_BLOCK       (1u << DC_BLOCK_SHIFT)
-#define DC_MAX_BLOCKS  ((LF_PSK1_MAX_CAPTURE_SAMPLES / DC_BLOCK) + 1)
+#define DC_MAX_BLOCKS  ((LF_SAMPLED_MAX_CAPTURE_SAMPLES / DC_BLOCK) + 1)
 
 static int32_t m_dc[DC_MAX_BLOCKS];
 
@@ -207,7 +207,7 @@ static int preamble_err(const uint8_t *bits, size_t at, bool inv,
 }
 
 bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
-                                  const lf_ask_format_t *fmt, indala_psk_result_t *out) {
+                                  const lf_ask_format_t *fmt, lf_decode_result_t *out) {
     memset(out, 0, sizeof(*out));
     const uint16_t FB = fmt->frame_bits;
     const uint8_t SPB = fmt->bit_samples;
@@ -218,7 +218,7 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
         return false;
     }
 
-    static uint8_t bits[LF_PSK1_MAX_CAPTURE_SAMPLES / LF_ASK_MIN_BIT_SAMPLES];
+    static uint8_t bits[LF_SAMPLED_MAX_CAPTURE_SAMPLES / LF_ASK_MIN_BIT_SAMPLES];
     int32_t best_energy = 0;
 
     for (uint8_t lp = 1; lp <= 3; lp += 2) {
@@ -295,18 +295,18 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
     return false;
 }
 
-bool gallagher_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool gallagher_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_GALLAGHER, out);
 }
 
-bool securakey_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool securakey_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_SECURAKEY, out);
 }
 
-bool noralsy_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool noralsy_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_NORALSY, out);
 }
 
-bool instafob_ask_decode(int16_t *samples, size_t n, indala_psk_result_t *out) {
+bool instafob_ask_decode(int16_t *samples, size_t n, lf_decode_result_t *out) {
     return lf_ask_manchester_decode_fmt(samples, n, &LF_ASK_FORMAT_INSTAFOB, out);
 }

@@ -42,7 +42,7 @@
 #define INDALA224_PSK_FRAME_BITS 224
 
 /* ⛔⛔ THE LONGEST FRAME ANY FORMAT USES — PSK *OR* ASK — AND IT IS NO LONGER INDALA224's.
- * `indala_psk_result_t` is shared by both decoder families, so this bound is what stops one
+ * `lf_decode_result_t` is shared by both decoder families, so this bound is what stops one
  * of them writing past the other's buffers. InstaFob's frame is **225 bits**, one more than
  * Indala224's 224, which would have overflowed BOTH `id[]` (28 bytes, needs 29) and
  * `word_bits[]` (224, needs 225) by exactly one bit's worth.
@@ -51,9 +51,9 @@
  * off-by-one into a struct field is the kind of fault that corrupts a neighbouring member
  * and surfaces as a wrong credential somewhere unrelated. 240 leaves headroom and costs 16
  * bytes of RAM in a struct there is one of. */
-#define LF_PSK1_MAX_FRAME_BITS  (240)
-#define LF_PSK1_MAX_FRAME_BYTES (LF_PSK1_MAX_FRAME_BITS / 8)
-_Static_assert(LF_PSK1_MAX_FRAME_BITS >= INDALA224_PSK_FRAME_BITS,
+#define LF_DECODE_MAX_FRAME_BITS  (240)
+#define LF_DECODE_MAX_FRAME_BYTES (LF_DECODE_MAX_FRAME_BITS / 8)
+_Static_assert(LF_DECODE_MAX_FRAME_BITS >= INDALA224_PSK_FRAME_BITS,
                "the shared result buffer must hold the longest PSK frame");
 
 /** Bits in the fixed preamble (cmdlfindala.c:50) — and the first 33 bits of every ID. */
@@ -179,7 +179,7 @@ extern const uint8_t LF_PSK1_PREAMBLE_NEXWATCH[NEXWATCH_PSK_PREAMBLE_BITS];
 #define NEXWATCH_PSK_CAPTURE_SAMPLES 6144
 
 #define INDALA224_PSK_CAPTURE_SAMPLES 14336
-#define LF_PSK1_MAX_CAPTURE_SAMPLES   INDALA224_PSK_CAPTURE_SAMPLES
+#define LF_SAMPLED_MAX_CAPTURE_SAMPLES   INDALA224_PSK_CAPTURE_SAMPLES
 
 /* ⛔ THE STRADDLE GATE. A frame is rejected when it is BOTH loud and ragged — see the long
  * note at the gate itself in lf_indala_psk.c. Both conditions are required: shape alone
@@ -198,7 +198,7 @@ extern const uint8_t LF_PSK1_PREAMBLE_NEXWATCH[NEXWATCH_PSK_PREAMBLE_BITS];
                                            front-side true frames 0.36-0.62. */
 
 /** Upper bound on bits recoverable from one capture, for the stack-allocated workspace. */
-#define INDALA_PSK_MAX_BITS (LF_PSK1_MAX_CAPTURE_SAMPLES / INDALA_PSK_BIT_SAMPLES)
+#define INDALA_PSK_MAX_BITS (LF_SAMPLED_MAX_CAPTURE_SAMPLES / INDALA_PSK_BIT_SAMPLES)
 
 /** Shortest capture that can hold a preamble plus a whole word plus slack. */
 #define INDALA_PSK_MIN_SAMPLES(frame_bits) (INDALA_PSK_BIT_SAMPLES * ((frame_bits) + 4))
@@ -280,7 +280,7 @@ extern const lf_psk1_format_t LF_PSK1_FORMAT_KERI;
 extern const lf_psk1_format_t LF_PSK1_FORMAT_NEXWATCH;
 
 typedef struct {
-    uint8_t  id[LF_PSK1_MAX_FRAME_BYTES]; /**< the frame, big-endian: id[0] is the first bit.
+    uint8_t  id[LF_DECODE_MAX_FRAME_BYTES]; /**< the frame, big-endian: id[0] is the first bit.
                                   Only the first frame_bits/8 bytes are meaningful. */
     uint16_t frame_bits;   /**< bits actually recovered, so a caller knows how much of id. */
     uint8_t  fc;           /**< format-26 facility code, de-scrambled. */
@@ -296,7 +296,7 @@ typedef struct {
                                 relative to its average is an integrator sitting across bit
                                 boundaries, which decodes to a repeatable WRONG word. See
                                 the gate in lf_indala_psk.c. */
-    uint8_t  word_bits[LF_PSK1_MAX_FRAME_BITS]; /**< the frame as one byte per bit, which is
+    uint8_t  word_bits[LF_DECODE_MAX_FRAME_BITS]; /**< the frame as one byte per bit, which is
                                 what a format de-scramble wants. `id` is the same 64 bits
                                 packed. */
     int32_t  energy;       /**< ⭐ SET EVEN WHEN NO FRAME DECODES — this is the one field
@@ -306,7 +306,7 @@ typedef struct {
                                 offsets: same units as `amp`, and computed from integrators
                                 the offset loop already builds, so it costs one abs and one
                                 add per bit. See INDALA_PSK_ENERGY_PRESENT. */
-} indala_psk_result_t;
+} lf_decode_result_t;
 
 /* ⭐ "A SUBCARRIER IS THERE BUT I COULD NOT READ IT" — the level above which `energy`
  * means a real source rather than an empty antenna.
@@ -352,7 +352,7 @@ typedef struct {
  *                 the only field that may be read after a false return.
  * @return         true if a frame was recovered.
  */
-bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool indala_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /**
  * The same demodulation, searching for an arbitrary preamble.
@@ -365,18 +365,18 @@ bool indala_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
  * @param preamble_bits  length, at most LF_PSK1_MAX_PREAMBLE_BITS.
  */
 bool lf_psk1_decode_fmt(int16_t *samples, size_t n,
-                        const lf_psk1_format_t *fmt, indala_psk_result_t *out);
+                        const lf_psk1_format_t *fmt, lf_decode_result_t *out);
 
 /** IDTECK's decode: the same demodulation against the "IDTK" preamble, and no veto. */
-bool idteck_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool idteck_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** Indala224: the same demodulation against a 30-bit preamble, gated on the repeat. */
-bool indala224_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool indala224_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** Keri: the same demodulation against Keri's 33-bit preamble. The credential is the
  *  32-bit internal id, `out->id[4..7]`; its top bit is the preamble's last bit and is
  *  therefore always set. */
-bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool keri_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** NexWatch: 96-bit PSK1, gated on the 40-bit fixed preamble AND the computed 4-bit parity.
  *
@@ -387,8 +387,8 @@ bool keri_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
  * does. Rejecting a frame whose checksum matches no known magic would refuse a legitimate
  * tag from a vendor we have not seen. ⇒ The checksum is a FINGERPRINT, reported by
  * `nexwatch_read` alongside the credential; the parity is the gate. */
-bool nexwatch_psk1_decode(int16_t *samples, size_t n, indala_psk_result_t *out);
+bool nexwatch_psk1_decode(int16_t *samples, size_t n, lf_decode_result_t *out);
 
 /** What a reader hands the capture engine: one protocol's whole decode, preamble and any
  *  veto included, so the engine stays protocol-agnostic. */
-typedef bool (*lf_psk1_decode_fn)(int16_t *samples, size_t n, indala_psk_result_t *out);
+typedef bool (*lf_sampled_decode_fn)(int16_t *samples, size_t n, lf_decode_result_t *out);
