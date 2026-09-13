@@ -70,7 +70,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   proven by a deliberate break, and `make check` now rebuilds from scratch after a false-pass
   bug was found in it; (3) InstaFob's emitter rebuilt from Momentum's
   six-state terminator machine rather than from an approximate capture (C188).
-- **U8 (FSK)** — AWID, Paradox, Pyramid, FDX-A — needs the tag BACK in the sandwich.
+- ⭐⭐ **U8 (FSK) IS NOW THE NEXT UNIT, and its deferral reason is retracted (C193).** The
+  physical layer is confirmed at 99% on our sampler, and the read arms need NO tag — the
+  Flipper emulates AWID/Paradox/Pyramid into Chameleon #1 exactly as it did for InstaFob.
+  ⭐ Build an FSK decoder on `lf_sampled_read`: pair adjacent slicer runs into sub-periods,
+  classify 8 vs 10 samples, group into bits. Captures are committed under `caps/awid-flipper/`.
+  ⚠ Only the WRITE arms need the tag back in the sandwich.
+- **(superseded) U8 was deferred because it reused the HID machinery** — it no longer does.
   ⛔ Deliberately last regardless: it reuses the HID Prox/ioProx SAADC machinery and HID's
   15-20% intermittency (C45) is unexplained and lives in exactly that path. Do not start it
   without saying so in §4 first.
@@ -267,6 +273,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 14:40 | sweep extended to n=7 | 10 → 12 | C190; C189 corrected | ASK 16/16, PSK2 14/16, PSK1 3/21 — the line is absolute phase, not modulation family |
 | 2026-09-13 15:15 | ASK roundtrip arms | 11 → 13 | 3 arms on the shipping emitters; `make check` false-pass fixed | 10/10 arms exact; deliberate break fails the suite |
 | 2026-09-13 15:50 | §9 blocker #1 | 11 → 14 | shared engine renamed off `psk1` (~120 refs) | builds; 10/10 arms; 320 captures; reader 4/4 on hardware, null clean |
+| 2026-09-13 16:25 | FSK feasibility | 12 → 14 | C193; 2 committed captures; §10's FSK row rewritten | 1650/1655 sub-periods exactly RF/8 or RF/10; null has no structure |
 
 ---
 
