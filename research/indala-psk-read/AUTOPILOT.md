@@ -38,17 +38,6 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔ 2026-09-14 05:00 — CHAMELEON #2 IS ON A PROBE BUILD WITH THE ADVERTISING GUARD OFF
-
-`LF_ADV_GUARD_ENABLED` is **0** in `lf_reader_data.c` and that build is FLASHED TO
-`/dev/tty.usbmodemF429364E46961`. It is the OFF arm of C47's paired test — C248 has the
-ON arm at 48/48 on the rig-B T5577 and this measures the same tag without the guard.
-⛔ **Every LF reader on that unit is degraded while this is true.** Do not take any other
-reader measurement from #2, and do not believe a rate taken from it, until the restore
-commit is flashed and `hw version` shows its hash. ⇒ **If you are resuming and this
-paragraph is still here, the restore was lost: set the switch back to 1, rebuild, flash
-#2, and delete this paragraph.**
-
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
 Every protocol Momentum carries READS and WRITES here except FDX-A and InstaFob, which nothing
