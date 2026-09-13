@@ -38,20 +38,25 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔ 2026-09-13 19:45 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
+### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
-Every protocol Momentum carries now READS and WRITES here except FDX-A and InstaFob, which
-nothing on this bench can verify. **Emulation is the open front and it is blocked on one
-instrument.** Two new emitters — AWID (FSK2a) and GProxII (biphase) — are silent to the
-Flipper, 0 of 6, with a Gallagher control at 6 of 6 on the same slot every time. Five
-explanations are dead by measurement: counter_top magnitude, entries per bit, AC coupling,
-duty shape, and the design itself — that last one settled by running Momentum's OWN
-demodulator over AWID's ideal output (C220) and by reading Momentum's OWN encoder for GProxII
-(C229). Both Flipper emissions decode for us, so our readers and the capture path are sound.
+Every protocol Momentum carries READS and WRITES here except FDX-A and InstaFob, which nothing
+on this bench can verify. All ten write arms and every read arm that CAN face a real tag now
+do. Five emulate arms work and were re-verified on the current build (C241).
+**Two emulators are silent, and one of them is now explained.**
+
+✅ **GProxII: SOLVED, and it is not fixable as designed.** A held-level PWM entry emits
+NOTHING — proved by making two of em410x's 64 entries held, watching a 4/4 arm go to 0/4, and
+restoring it (C242). A biphase 0 IS a held level, so half the frame is silence.
+⇒ biphase emulation needs a different mechanism entirely, not a better emitter.
+
+⛔ **AWID: STILL OPEN.** Every one of its entries is a 50% square, so C242 does not touch it.
+Eight explanations are dead by measurement: counter_top magnitude, entries per bit, AC
+coupling, duty shape, the design itself (checked against Momentum's own demodulator AND its
+own encoder), the buffer plumbing, the emulation engine, and now held levels.
 ⇒ **The only reader that can hear rig A's emission is the Flipper, and it is the thing under
 test.** Either the T5577 comes out of the sandwich so the Proxmark can hear Chameleon #2, or
-the two Chameleons face each other. Until then no emulator can be graded and writing more of
-them only compounds an unexplained defect.
+the two Chameleons face each other.
 
  — updated 2026-09-13 01:30
 
@@ -195,9 +200,12 @@ them only compounds an unexplained defect.
 > WRITES here except the two that cannot be verified on this bench (FDX-A and InstaFob).
 > ⛔ **The queue does not end there either, and the grid says why: SIX protocols read and
 > write but do not EMULATE** — AWID, Paradox, Pyramid, FDX-A, GProxII, FDX-B.
-> ⇒ **U11 → U12 → U13.** U11 and U12 are one family each, so U11 finishes before U12 starts.
-> ⭐ Emulation is verifiable WITHOUT HANDS: Chameleon #1 emulates on rig A and the Flipper
-> reads it, which is how Keri, NexWatch, Gallagher, Securakey and Noralsy were all graded.
+> ⛔ **U11 AND U12 ARE BLOCKED, NOT PENDING, AND FOR DIFFERENT REASONS.** U12 (biphase
+> emitters) is CLOSED: a held level does not transmit, so GProxII cannot be emulated this way
+> at all (C242) — do not write another biphase emitter. U11 (FSK2a emitters) is open but
+> unobservable: AWID's emitter is correct by every check available and silent anyway, and the
+> only reader that can hear rig A is the Flipper, which is under test.
+> ✅ **U13 is DONE.** ⭐ Everything else finished this session is in §4 and the grid.
 > **(historical) U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8.**
 > ⛔ §10 of `NEXT.md` is organised **by modulation family**, and a family's FIRST protocol
 > must be finished completely — read, write, emulate, all verified on hardware — before its
