@@ -78,7 +78,11 @@ four. A stronger gate narrows the window; it does not close it.
   the GProxII parameter overrides are judgement calls for a maintainer. ⇒ **Everything left in
   §2 needs HANDS** (see §5 and NEXT.md's Needs hands table). The next device unit is the
   emulate-arm re-grade, and it cannot start until the tag comes out of the sandwich.
-- The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
+- ⛔ **The `require_repeat` instrument has now failed TWICE (C254, C264)** — the second attempt
+  was built to C254's own written design and still did not reach the flag, proved by toggling
+  it on the format under test. ⇒ **Do not build a third without a new idea about WHY the
+  synthetic buffer misses what real captures hit.** The flag is not inert; C258 measured it
+  moving real captures. The question costs more than it is worth until something reopens it.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
@@ -394,6 +398,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 17:05 | **C264 — the `require_repeat` instrument, second attempt** | 12 → 14 | Built to C254's design with a sanity check and a control, and BACKED OUT: toggling the flag on the format under test moved nothing. Two instruments, two failures, both recorded | The disproof is a flag toggle plus a forced clean rebuild, not an argument about why it should have worked |
 | 2026-09-14 16:20 | **C263 — the instrumentation split, as a checklist** | 12 → 12 | §9h: four items, every call site grepped. Nothing shippable depends on any of them — the probe has one caller, the debug handlers none beyond their dispatch rows, and GProxII's is two lines because `scan_gproxii()` was already in the tree | Pure compute; the "nothing depends on them" claim is a caller count, and deliberately NOT executed — it would break this branch's own tooling |
 | 2026-09-14 15:45 | **C262 — §9 refresh** | 12 → 12 | Command ids recounted from a `data_cmd.h` diff: 48 new, 41 shippable. Three stale rows fixed — HID Prox's "intermittent 15-20%", §9a's grid omitting six protocols, and a blocker arguing from an unread reference. New §9g carries the gate and display audits | Pure compute: every correction is contradicted by a claim already in the ledger, and the count is a `comm` between two checked-out headers |
 | 2026-09-14 14:40 | **C261 — Securakey's display** | 11 → 12 | `_securakey_fields()` in the CLI: length, FC, card and the Wiegand word, matching the Proxmark field for field. The parity is REPORTED, not gated — the third option C253 did not list | A/B/A on the tag: valid fields 4/4 matching pm3, bit 38 flipped read 4/4 with `PARITY FAILS` flagged (the gate cannot be what changed), restored 4/4 |
