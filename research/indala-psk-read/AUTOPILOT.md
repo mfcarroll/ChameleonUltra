@@ -67,10 +67,10 @@ four. A stronger gate narrows the window; it does not close it.
 - ✅ **DONE (C258, C259, C260)** — Keri took the repeat check, Indala26 was refused it, Keri's
   `Internal ID` was printing the raw field and is fixed, and ALL TEN displays are now audited
   against the Proxmark: eight clean, one fixed, one gap.
-  ⇒ **Next: Securakey's missing display.** It is the only protocol printing no derived fields at
-  all; the Proxmark prints `len: 26 FC: 0x35 Card: 64169` and `Wiegand: 006BF553 parity ( ok )`.
-  ⭐ REPORT the Wiegand parity, do NOT gate on it — that is the middle path C253 passed over when
-  it chose between enforcing those bits and ignoring them.
+  ✅ **AND Securakey's display is built (C261)** — length, FC, card and the wiegand word, the
+  parity reported and not gated. ⇒ **The display layer is now complete and verified in all ten
+  protocols.** Next: back to §2's queue — everything left there needs hands or upstream
+  coordination, so the honest next step is §9's upstreaming prep rather than more protocol work.
 - The `require_repeat` instrument, if it is wanted, needs the design C254 writes down.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
@@ -387,6 +387,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 14:40 | **C261 — Securakey's display** | 11 → 12 | `_securakey_fields()` in the CLI: length, FC, card and the Wiegand word, matching the Proxmark field for field. The parity is REPORTED, not gated — the third option C253 did not list | A/B/A on the tag: valid fields 4/4 matching pm3, bit 38 flipped read 4/4 with `PARITY FAILS` flagged (the gate cannot be what changed), restored 4/4 |
 | 2026-09-14 13:55 | **C259/C260 — the display layer** | 11 → 11 | Keri's `Internal ID` fixed (it printed the raw field under the reference's label); the other half of C259 retracted as my own comparison error. Then all ten displays audited: 8 clean, 1 fixed, 1 gap — Securakey prints nothing derived | Each protocol cloned by the Proxmark with a credential WE chose, read by both tools in the same minute |
 | 2026-09-14 12:35 | **C258/C259 — Keri's repeat check** | 11 → 11 | `57aa2f9` flashed to #2. Keri `require_repeat` on (3/4 either way on captures), Indala26 refused it (51→43 true frames). ⚠ C259 found: our Keri reader's `Internal ID` and MS card number disagree with the Proxmark's on an identical raw frame | Hardware 8/8 with the Proxmark reading the same tag 3/3, raw byte-identical; the control is Indala26 under the same flag, and it moves |
 | 2026-09-14 11:40 | **C257 — Indala26's two zero bits** | 11 → 11 | `9bd111d` flashed to #2. Corpus 68→64 frames, 51 true kept, 4 wrong dropped; `compare.py` mirrored because the harness caught the one-sided gate | Hardware A/B/A: valid 8/8, bit 61 set 0/4 **while the Proxmark reads that tag perfectly**, restored 6/6 |

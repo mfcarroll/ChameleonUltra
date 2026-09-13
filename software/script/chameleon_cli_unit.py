@@ -7243,6 +7243,47 @@ class LFGallagherEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
 # own reader says the same thing in as many words. ⇒ Do not add a plausible-looking field
 # extraction without a reference to check it against — that is how idteck.c shipped a format
 # nobody had verified.
+# ⭐⭐ SECURAKEY'S FIELDS, HOST SIDE — the one display C260 found MISSING rather than wrong.
+# Every other protocol here prints what the Proxmark prints; this one printed the raw frame and
+# nothing else, so an operator had no card number at all.
+#
+# ⭐ Transcribed from `protocol_securakey_decode` (26-bit branch) and checked against the
+# Proxmark's own output on the bench credential BEFORE it shipped: `7fcb400001adea5344300000`
+# gives length 26, FC 0x35, card 64169 and wiegand word 006BF553 — every one of which
+# `lf securakey reader` prints for the same tag, the last of them byte-identical.
+#
+# ⚠ THE SPACERS ARE WHY THE OFFSETS LOOK ARBITRARY. The frame is 9-bit groups of one zero
+# spacer then eight data bits (the structure `securakey_accept` now gates on, C253), so a field
+# that is contiguous in the credential is split across them: the facility code is bit 36 plus
+# bits 38-44, and the card number is bit 45 plus 47-54 plus 56-62.
+def _securakey_fields(raw: bytes):
+    """(bitlen, fc, cn, wiegand, parity_ok) out of a 96-bit Securakey frame."""
+    b = [(raw[i // 8] >> (7 - (i % 8))) & 1 for i in range(96)]
+
+    def g(start, n):
+        v = 0
+        for i in range(n):
+            v = (v << 1) | b[start + i]
+        return v
+
+    bitlen = g(13, 6)
+    if bitlen != 26:
+        # Our reader gates on the 26-bit format's 19-bit preamble, so this should be
+        # unreachable — say so rather than printing fields from the wrong layout.
+        return bitlen, None, None, None, None
+    fc = (g(36, 1) << 7) | g(38, 7)
+    cn = (g(45, 1) << 15) | (g(47, 8) << 7) | g(56, 7)
+    ep, op = b[35], b[63]
+    cred = (fc << 16) | cn
+    # ⛔ REPORTED, NOT GATED — and that is the point. C253 weighed enforcing these two bits
+    # against ignoring them and chose to ignore, because being stricter than both references
+    # is how a reader starts refusing real tags. The reference does neither: it PRINTS the
+    # parity. That hands the operator the signal at no risk, which is the option C253 missed.
+    ok = (bin(cred >> 12).count("1") & 1) == ep and \
+         ((bin(cred & 0xFFF).count("1") + 1) & 1) == op
+    return bitlen, fc, cn, (ep << 25) | (cred << 1) | op, ok
+
+
 @lf_securakey.command("read")
 class LFSecurakeyRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -7255,6 +7296,17 @@ class LFSecurakeyRead(ReaderRequiredUnit):
         raw, phase, offset, tries = self.cmd.securakey_scan()
         print("Securakey ASK/Manchester")
         print(f"   Raw: {color_string((CY, raw.hex()))}")
+        bitlen, fc, cn, wiegand, parity_ok = _securakey_fields(raw)
+        if fc is None:
+            print(f"   {color_string((CR, f'Unexpected format length {bitlen}'))} — this reader "
+                  f"only knows the 26-bit layout, so no fields are shown.")
+        else:
+            print(f"   Length: {color_string((CG, bitlen))}  "
+                  f"FC: {color_string((CG, f'0x{fc:02X} ({fc})'))}  "
+                  f"Card: {color_string((CY, cn))}")
+            print(f"   Wiegand: {color_string((CY, f'{wiegand:08X}'))}  "
+                  + (f"parity {color_string((CG, 'ok'))}" if parity_ok
+                     else f"{color_string((CR, 'PARITY FAILS'))} — reported, not gated (C253)"))
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 
