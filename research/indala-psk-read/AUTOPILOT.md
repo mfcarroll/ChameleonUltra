@@ -353,6 +353,26 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ## 5. BLOCKED — needs a person
 
+### ⛔ 2026-09-13 11:30 — THE FLIPPER DROPPED OFF USB during `rfid raw_analyze`
+
+3 of 4 devices enumerate; `/dev/cu.usbmodemflip_Matthew1` is gone and the port errors with
+"Device not configured". ⚠ **Probable cause is ours**: `rfid raw_analyze` on a 14336-sample
+capture printed **72,518 lines** over the CDC link, and the CLI stopped answering immediately
+afterwards — two further commands returned zero lines before the port vanished entirely.
+
+⇒ **Needs a person to unplug and replug the Flipper.** Until then rig A is unavailable: no
+emulation verification, which is exactly what U11 and U12 need.
+
+⭐ **The one datum the successful run DID give, stated at its real strength:** the first ~24
+pulse/period pairs of our AWID emission were ALL 62-64 units with no second value anywhere
+among them. A real FSK2a emission alternates between two periods in a 10:8 ratio. That is a
+LEAD, not a measurement — 24 pairs of 72,518 — but it is the first evidence about what the
+peripheral actually emits, and it points at a single tone rather than two.
+
+⚠ **Next time use `raw_read` and pull the FILE**, not `raw_analyze`. The analyze command is
+built for a human watching a few screens of output, and 72,518 lines through a CLI is an abuse
+of it. The file route also gives samples our own decoder can read.
+
 ⚠ Mirror anything added here into `NEXT.md`'s **Needs hands** table, and move on.
 
 | | why |
