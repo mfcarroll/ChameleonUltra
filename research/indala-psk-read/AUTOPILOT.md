@@ -36,7 +36,24 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ---
 
-## 1. STATE — updated 2026-09-13 01:30
+## 1. STATE
+
+### ⛔⛔ 2026-09-13 19:45 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
+
+Every protocol Momentum carries now READS and WRITES here except FDX-A and InstaFob, which
+nothing on this bench can verify. **Emulation is the open front and it is blocked on one
+instrument.** Two new emitters — AWID (FSK2a) and GProxII (biphase) — are silent to the
+Flipper, 0 of 6, with a Gallagher control at 6 of 6 on the same slot every time. Five
+explanations are dead by measurement: counter_top magnitude, entries per bit, AC coupling,
+duty shape, and the design itself — that last one settled by running Momentum's OWN
+demodulator over AWID's ideal output (C220) and by reading Momentum's OWN encoder for GProxII
+(C229). Both Flipper emissions decode for us, so our readers and the capture path are sound.
+⇒ **The only reader that can hear rig A's emission is the Flipper, and it is the thing under
+test.** Either the T5577 comes out of the sandwich so the Proxmark can hear Chameleon #2, or
+the two Chameleons face each other. Until then no emulator can be graded and writing more of
+them only compounds an unexplained defect.
+
+ — updated 2026-09-13 01:30
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
