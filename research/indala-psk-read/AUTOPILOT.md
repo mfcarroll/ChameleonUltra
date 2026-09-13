@@ -129,11 +129,21 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   ONLY while the REPL is idle, so it cannot double-drive a turn that is still working —
   which is why it is both the driver and the watchdog. ⚠ It is session-only: it dies if the
   session is closed, and auto-expires after 7 days. Re-seed from §6.
-- **Bench:** all four devices enumerate. T5577 holds **our own** Gallagher write —
-  region 3 / facility 1111 / card 2222 / issue 5, raw `7FEAA35473ADEB0D1A8DB562`,
-  ASK, block 0 `00088060`. ⚠ Rig A (Chameleon #1) is in EMULATION mode holding a Gallagher
-  slot; `hw mode -r` before using it as a reader.
-- **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
+- **Bench, RE-CHECKED 2026-09-13 09:17 and every pairing confirmed live:** all four devices
+  enumerate; both Chameleons answer `hw version` and are in **Tag Reader** mode (no `hw mode -r`
+  needed today); the Proxmark reads the tag and so does Chameleon #2, byte-identically.
+  T5577 holds C201's last write — **Pyramid FC 123 card 11223**, raw
+  `00010101010101010101016eb35e5da4`, FSK2a, block 0 `00107080`.
+  ⭐⭐ **THE OPERATOR IS AWAY FOR THE DAY AND THE SANDWICH STAYS — this is the RIGHT
+  geometry for the queued unit and no adjustment was asked for.** The FSK write arms need
+  exactly it: Chameleon #2 writes the tag, the Proxmark reads it back, and those are the two
+  faces of the sandwich. ⛔ Do NOT record "lift the tag" as a blocker today — the lift buys
+  only the emulate-arm re-grade, C190 already answered that at the modulation level, and the
+  four FSK protocols have no emitter for it to grade.
+- ⭐ **T5577 config words, read from pm3's own source (`client/src/cmdlft55xx.h:58-60`),
+  NOT guessed:** AWID and Paradox `0x00107060` (FSK2a, RF/50, **3** data blocks), Pyramid
+  `0x00107080` (same, **4** blocks). Matches the frame sizes: 96, 96, 128 bits.
+- **Usage at handover:** `util5=7.0 util7=7.0 mins7=9524`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
 
