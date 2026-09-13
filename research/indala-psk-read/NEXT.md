@@ -268,23 +268,42 @@ project exists downstream of (C185).
 |---|---|
 | ✅ ~~**Naming**~~ **DONE (C192)** | ~~`lf_psk1_read()` is the shared capture engine for BOTH families — it rotates sample phase, suspends BLE advertising and enforces two-agreeing-stacks, none of it PSK-specific — and the ASK readers call it. `indala_psk_result_t` is likewise shared. A reviewer will read `lf_ask_manchester.c` calling `lf_psk1_read` as a mistake. ⇒ Renamed 2026-09-13: shared things are `lf_sampled_*` / `lf_decode_*`, genuinely-PSK things keep `psk1`.~~ |
 | ⛔ **Shared-struct sizing** | `LF_PSK1_MAX_FRAME_BITS` is 240, raised from Indala224's 224 because InstaFob's frame is 225 bits and would have overflowed `id[]` and `word_bits[]` by one bit's worth (C186). It costs 16 bytes in a struct there is one of, and it is load-bearing |
-| ⛔ **Command-id allocation** | 32 new ids in the 3000/5000 blocks. Needs coordinating with upstream rather than asserted |
-| ⚠ **Instrumentation** | the table below, unchanged and still correct |
+| ⛔ **Command-id allocation** | ⚠ **46 new ids**, not the 32 this row said before it was recounted 2026-09-13 — 3033-3062 and 5016-5029. Needs coordinating with upstream rather than asserted, and the number is now a `grep`, not a memory |
+| ⛔ **Instrumentation has GROWN and the table below is no longer complete** | Three things were added chasing the GProxII read and none of them ship: **`DATA_CMD_LF_READER_CAPTURE` (3060)** with `lf_reader_capture_probe()`, which runs the reader's own capture and returns the samples undecoded; **the GProxII scan's failure-energy payload**, which returns 4 bytes on a FAILED read where every other scan returns none; and **`rdrcap.py`**. ⭐ They earned their place — the probe is what cracked C211 after six hypotheses had been refuted — but a reviewer must not be handed them as if they were features. ⇒ Strip all three, or land them in a separate "LF diagnostics" change with their own justification |
+| ⚠ **A protocol now overrides the shared reader's parameters** | `lf_sampled_read_phases()` takes a phase list, a try count, a drive and an inter-capture gap, and GProxII passes its own for all four. ⚠ That is four new degrees of freedom on a function every LF reader calls, added for ONE protocol — and FDX-B, the second in the same family, needs none of them (C215). A reviewer will ask whether the shape is right; the honest answer is that the gap is a real hardware fix and the rest is tuning |
 | ⚠ **Two formats have no payload check** | Securakey's gate is 19 preamble bits and InstaFob's is the T5577 config word; neither validates the card data, so a bit error inside it is undetectable. Gallagher (CRC-8) and Noralsy (two nibble checksums) do. ⇒ Document, do not "fix" — both references are the same |
 | ⚠ **ASK reads sweep field strength** | `lf_ask_read` divides the caller's timeout across drive steps {4,7,6,2}. Noralsy decodes at drive 7 and NO other setting (C182), so it is required; but it changes the latency profile of every ASK read and a reviewer should be told why rather than discovering it |
 
 ### 9c. ⭐ Recommended shape — three PRs, not one
 
-⭐ **7,500 lines in one PR will not be reviewed; it will be declined.** The branch splits along
-its own dependency order:
+⭐ **10,242 lines of CODE will not be reviewed in one PR; it will be declined.** ⚠ The figure
+was "7,500" until it was recounted 2026-09-13. The branch as a whole is 204,959 insertions
+across 1,654 files, and saying that without splitting it would be misleading in the other
+direction: **36,012 of those lines are committed CAPTURES** under `caps/` (1,409 files) and
+**4,560 are the research notes**. The reviewable surface is 59 files of firmware and host code,
+29 of them new.
+
+The branch splits along its own dependency order:
 
 1. **The shared capture engine, renamed** — `lf_psk1_read` → a modulation-neutral name, the
    result struct with it, and the sizing constants. No new protocols. Reviewable in isolation
    and everything else depends on it.
 2. **The PSK1 family** — `lf_psk1_format_t` plus Keri and NexWatch. Indala and IDTECK already
    exist upstream, so this is the descriptor refactor plus two formats.
-3. **The ASK/biphase family** — `lf_ask_manchester.c`, the drive sweep, and Gallagher,
+3. **The ASK/Manchester family** — `lf_ask_manchester.c`, the drive sweep, and Gallagher,
    Securakey, Noralsy. ⚠ InstaFob stays out until its write arm can be verified.
+4. **The FSK2a family** — `lf_fsk2a.c` plus AWID, Paradox, Pyramid and FDX-A, and the three
+   writers that go with them. ⚠ FDX-A ships READ ONLY and the PR must say why: nothing on any
+   bench here can read an FDX-A tag back, so a writer would certify itself (C185).
+5. **The ASK/biphase family** — `lf_ask_biphase.c` plus GProxII and FDX-B. ⭐ This one carries
+   the 50ms inter-capture gap (C213), which is a HARDWARE finding rather than a protocol
+   feature and is the part of this branch most worth a reviewer's attention: a capture taken
+   too soon after another clips at both rails, and every decoder that thresholds on amplitude
+   is exposed to it. ⚠ No emitter ships with it — see the grid.
+
+⚠ That is FIVE PRs now, not three. The split grew because the branch did; keeping the old
+number would have meant either a dishonest count or two families smuggled into someone else's
+review.
 
 ⚠ **`idteck.c` upstream ships a PSK1 emulation nobody verified end to end** (§6). Worth
 reporting independently of any of this.
