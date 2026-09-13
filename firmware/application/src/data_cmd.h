@@ -219,6 +219,11 @@
 /* ⭐ The first FSK2a protocol to EMULATE — the PSK1 and ASK families are both above. */
 #define DATA_CMD_AWID_SET_EMU_ID                (5028)
 #define DATA_CMD_AWID_GET_EMU_ID                (5029)
+/* ⭐ The biphase family's emulator. Its emitter uses counter_top 32 where AWID's uses 8 and
+ * 10, which is the whole point of having it: if this reads where AWID does not, the defect is
+ * the counter_top magnitude (C221). */
+#define DATA_CMD_GPROXII_SET_EMU_ID             (5030)
+#define DATA_CMD_GPROXII_GET_EMU_ID             (5031)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

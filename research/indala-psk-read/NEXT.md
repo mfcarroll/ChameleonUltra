@@ -79,7 +79,7 @@ registered `TAG_TYPE_*`.
 | **NexWatch** | ✓ **6/6 on device (C166)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **6/6 on device (C176)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | **Noralsy** | ✓ **6/6 on device (C181)** | ✓ **3/3 via Proxmark** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✗ | ✓ |
+| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ⛔ **emitter round-trips, SILENT to the Flipper 0/6, control 6/6 (C222)** | ✓ |
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path

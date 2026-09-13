@@ -7846,6 +7846,49 @@ class LFGProxIIRead(ReaderRequiredUnit):
               f"{tries} capture{'' if tries == 1 else 's'} taken{' (inverted)' if inv else ''}")
 
 
+@lf_gproxii.command("econfig")
+class LFGProxIIEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the GProxII frame emulated on a slot. Provide --raw "
+                              "to set; omit it to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>",
+                            help="the 96-bit frame, e.g. f84602a46119d4a114211046")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            frame = bytes.fromhex(hexs)
+            if lf_tag_type != TagSpecificType.GProxII:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not GProxII. "
+                      f"Set it with: hw slot type -s <n> -t GProxII")
+            self.cmd.gproxii_set_emu_id(frame)
+            xor_key, fmt_len, fc, card, ok = _gproxii_fields(frame)
+            if ok:
+                print(f" - GProxII emu set to length {fmt_len} FC {fc} card {card} "
+                      f"xor {xor_key}")
+            else:
+                # ⚠ A warning, not a refusal: a raw write is the escape hatch for testing
+                # exactly this. But no GProxII reader will accept it, so say so.
+                print(f" - GProxII emu set to {hexs}, but "
+                      f"{color_string((CY, 'its format length is not 26 or 36'))} — no "
+                      f"GProxII reader will accept it.")
+        else:
+            if lf_tag_type != TagSpecificType.GProxII:
+                print(f"{color_string((CR, 'Slot LF type is not GProxII'))}")
+                return
+            print(f" - GProxII emu: {color_string((CY, self.cmd.gproxii_get_emu_id().hex()))}")
+
+
 @lf_gproxii.command("write")
 class LFGProxIIWrite(_LFFskWrite):
     PROTOCOL = "GProxII"

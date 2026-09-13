@@ -51,6 +51,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/gallagher.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/fsk2a_t55xx.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/awid.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/gproxii.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/securakey.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/noralsy.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \

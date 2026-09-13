@@ -1167,6 +1167,28 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def gproxii_set_emu_id(self, id: bytes):
+        """Set the 96-bit GProxII frame emulated on the active slot.
+
+        ⚠ Biphase: the emitter holds ONE level per half-bit, two entries per bit, at
+        `counter_top` 32 — the magnitude the working ASK emitters use, against AWID's 8 and 10
+        (C221).
+
+        :param id: 12 bytes, MSB first on air, preamble included.
+        """
+        if len(id) != 12:
+            raise ValueError("The id bytes length must equal 12")
+        return self.device.send_cmd_sync(Command.GPROXII_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def gproxii_get_emu_id(self):
+        """Get the emulated GProxII 96-bit frame."""
+        resp = self.device.send_cmd_sync(Command.GPROXII_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def awid_set_emu_id(self, id: bytes):
         """Set the 96-bit AWID frame emulated on the active slot.
 

@@ -18,6 +18,7 @@
 #include "protocols/nexwatch.h"
 #include "protocols/gallagher.h"
 #include "protocols/awid.h"
+#include "protocols/gproxii.h"
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
 #include "protocols/pac.h"
@@ -459,6 +460,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_AWID_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_GPROXII && buffer->length >= LF_GPROXII_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = gproxii.alloc();
+        m_pwm_seq = gproxii.modulator(codec, buffer->buffer);
+        gproxii.free(codec);
+        NRF_LOG_INFO("load lf gproxii data finish.");
+        return LF_GPROXII_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_SECURAKEY && buffer->length >= LF_SECURAKEY_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = securakey.alloc();
@@ -804,6 +814,23 @@ bool lf_tag_awid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x01, 0x1D, 0xB2, 0x18,
         0x27, 0x1B, 0xD8, 0x11,
         0x11, 0x11, 0x11, 0x11,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief GProxII data save callback. */
+int lf_tag_gproxii_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_GPROXII ? LF_GPROXII_TAG_ID_SIZE : 0;
+}
+
+/** @brief GProxII default: FC 45 / card 6789 / xor 200 — the exact bytes a Proxmark
+ * `lf gproxii clone --xor 200 --fmt 26 --fc 45 --cn 6789` leaves in T5577 blocks 1-3, and the
+ * frame this bench's own reader read back off that tag 12 times of 12 (C213). */
+bool lf_tag_gproxii_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_GPROXII_TAG_ID_SIZE] = {
+        0xF8, 0x46, 0x02, 0xA4,
+        0x61, 0x19, 0xD4, 0xA1,
+        0x14, 0x21, 0x10, 0x46,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
