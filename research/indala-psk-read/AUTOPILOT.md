@@ -353,6 +353,16 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ## 5. BLOCKED — needs a person
 
+### ⛔⛔ 2026-09-13 11:40 — STOP USING `rfid raw_analyze`. IT HAS WEDGED THE FLIPPER TWICE.
+
+First time it dropped the port entirely; second time the CLI went silent while still
+enumerating, mid-way through taking a CONTROL that would have made the measurement usable.
+⚠ Bounding the output and sending ETX did not prevent it.
+
+⇒ If rig A's emission has to be measured again, the route is `rfid raw_read` to a FILE and
+`storage read` to fetch it — or better, two Chameleons facing each other so our own sampler
+can see it. Do not reach for `raw_analyze` a third time.
+
 ### ⛔ 2026-09-13 11:30 — THE FLIPPER DROPPED OFF USB during `rfid raw_analyze`
 
 3 of 4 devices enumerate; `/dev/cu.usbmodemflip_Matthew1` is gone and the port errors with
