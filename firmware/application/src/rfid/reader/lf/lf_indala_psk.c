@@ -178,7 +178,27 @@ const lf_psk1_format_t LF_PSK1_FORMAT_KERI = {
     .reject_preamble = LF_PSK1_PREAMBLE_INDALA,
     .reject_preamble_bits = INDALA_PSK_PREAMBLE_BITS,
     .differential_only = false,
-    .require_repeat = false,
+    /* ⭐⭐ THE ONLY INTEGRITY CHECK THIS FORMAT HAS, and the reference says so in as many
+     * words: Keri carries no parity and no checksum, so frame-to-frame agreement is all
+     * there is. `protocol_keri_can_be_decoded` demands the preamble at 0 AND at 64 AND that
+     * both copies carry the same 32-bit id.
+     *
+     * ⭐ AFFORDABLE HERE AND NOT FOR INDALA26, and the reason is C161 rather than the
+     * protocol: Keri's capture window is 8192 samples where Indala26's is 4096. Probed on
+     * real captures with the firmware's own rule — Keri 3 of 4 both with and without, the
+     * same credential and the same files, while INDALA26 lost 8 of its 51 true frames when
+     * the same flag was set on it. A 4096-sample window holds barely one frame plus a
+     * fragment; an 8192-sample one holds two.
+     *
+     * ⚠ THE BENEFIT IS ARGUED, NOT MEASURED, and that is worth stating: across 705 null
+     * captures Keri produced ZERO false frames both with this on and with it off, because
+     * C157's Indala veto had already taken that number to zero. What it is expected to catch
+     * is the C255 shape — a mis-slice that lands self-consistent — because a mis-slice will
+     * not reproduce at the next frame offset. That expectation is not tested here.
+     *
+     * ⚠ And the cost is measured on four captures, which is thin. The device arm is what
+     * carries it. */
+    .require_repeat = true,
 };
 
 /*
