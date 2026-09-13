@@ -388,6 +388,15 @@ reader, not the frame gates, and `ctest`'s sweep cannot see that at all — it f
 rendering per trial. A reviewer weighing whether to keep the two-stack rule should be shown
 these numbers rather than the sweep's.
 
+⛔ **AND THE RULE IS NOT SUFFICIENT EITHER, which C269 pins down.** Captured the same way,
+a tag whose frame is DELIBERATELY parity-broken gives 13 frames in 48 captures, **12 of 12
+distinct ones wrong credentials**, and — the part that matters — **one of them recurs at two
+different capture phases**. Two agreeing captures can therefore agree on a wrong frame. The
+difference from marginal field is the shape of the error population: a broken frame sits one
+bit from valid parity, so the nudges that restore it land in a few places and can repeat,
+while marginal-field errors scatter and cannot. ⇒ **Gates narrow it, agreement narrows it
+further, and neither closes it.** That is the honest thing to hand a reviewer.
+
 **What we PRINT, against the Proxmark, same tag, same minute (C260, C265):** thirteen protocols,
 each against a Proxmark clone of a credential we chose. HID Prox, ioProx, Indala26, NexWatch,
 Gallagher, Noralsy, PAC, GProxII, FDX-B and Jablotron agree field for field. **Three were not
