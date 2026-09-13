@@ -6033,35 +6033,34 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
                 # ⚠ Saying "this is corruption" would have been wrong, and was caught by writing
                 # a genuine ind26 credential to a tag and reading it back.
                 if format in NO_HID_AT_THIS_LENGTH:
-                    # ⭐ NOT A WARNING. There is no HID format at this bit length, so a foreign
-                    # layout is the only thing the reader could possibly have returned and
-                    # flagging it would be noise on every read (measured in ctest/ambig.c).
+                    # ⭐ NOT A WARNING. There is no HID format at this bit length at all, so a
+                    # foreign layout is the only thing the reader could possibly have returned
+                    # and flagging it would be noise on every read (measured in ctest/ambig.c,
+                    # C280). Falls through to the shared field printing below.
                     print(f"   {color_string((CY, 'note'))}: no HID format exists at this frame "
                           f"length — {color_string((CY, str(HIDFormat(format))))} is simply the "
                           f"layout that fits, and that is normal here.")
-                    print(f" FC: {color_string((CG, fc))}" if fc > 0 else "", end="")
-                    print()
-                    print(f" CN: {color_string((CG, cn))}")
-                    return
-                print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
-                      f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")
-                if format in FOREIGN_MEANS_CORRUPTION:
-                    # ⭐ AT 26 BITS THIS IS CORRUPTION, and that is measured rather than assumed:
-                    # H10301 accepts all 8,658 validly packed ind26 frames swept in ctest/ambig.c,
-                    # so a genuine Indala-26 credential on an HID Prox tag reports as H10301 and
-                    # never reaches here. Only a frame that BREAKS H10301's parity falls through
-                    # to ind26 — which is what a corrupted capture does (C277, C251).
-                    print(f"   {color_string((CR, 'At this frame length that means the capture was '
-                          'corrupted'))}: an HID format accepts every VALID frame of this foreign "
-                          f"layout, so a real one reports as HID and never lands here (C277, C280). "
+                elif format in FOREIGN_MEANS_CORRUPTION:
+                    # ⭐ MEASURED, not assumed: at 26, 32 and 37 bits an HID format accepts EVERY
+                    # valid frame of these foreign layouts — all 8,658 ind26 frames swept, and
+                    # likewise at the other two lengths — so a genuine foreign tag reports as HID
+                    # and never reaches here. Only a frame that BREAKS the HID format's checks
+                    # falls through, which is what a corrupted capture does (C277, C280, C251).
+                    print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
+                          f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")
+                    print(f"   {color_string((CR, 'At this frame length that means the capture was corrupted'))}"
+                          f": an HID format accepts every VALID frame of this layout, so a real "
+                          f"one reports as HID and never lands here (C280). "
                           f"{color_string((CY, 'The numbers below are fiction'))} — re-read.")
                 else:
-                    # ⚠ At other lengths an HID format need not accept a valid non-HID credential,
-                    # so this can be a genuine tag of another vendor's layout. Not measured.
+                    # ⚠ 34 bits, where HID formats take 307 of 484 foreign frames (C280): both
+                    # explanations are live and this reader cannot tell them apart.
+                    print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
+                          f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")
                     print(f"   Either the tag really carries that layout or the capture was "
                           f"corrupted, and {color_string((CY, 'at this length the reader cannot tell'))}"
                           f" — a corrupted frame reappears under another name rather than failing "
-                          f"(C277). Re-read before trusting the numbers below.")
+                          f"(C280). Re-read before trusting the numbers below.")
         if fc > 0:
             print(f" FC: {color_string((CG, fc))}")
         if il > 0:
