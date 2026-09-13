@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "lf_indala_psk.h"
+#include "lf_ask_manchester.h"
 
 static const char TRUTH[] = "a0000000e6bd0e92";
 
@@ -26,7 +27,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_PSK1_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -49,6 +50,10 @@ int main(int argc, char **argv) {
          * REMOVED, leaving the 40 fixed bits alone — which is what the format would be if
          * someone "simplified" the accept hook away. Without this arm the claim that the
          * parity earns its keep is an assertion; with it, it is a measurement. */
+        if (!strcmp(argv[i], "--gallagher")) {
+            modegal = 1;
+            continue;
+        }
         if (!strcmp(argv[i], "--nogate")) {
             modenw = 1;
             nogate = 1;
@@ -99,6 +104,24 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modegal) {
+            /* ⭐ THE SHIPPING ASK DECODER, host-compiled — the same .c the device runs.
+             * askdemod.py proved the air layer; this proves the FIRMWARE reproduces it,
+             * which is a different claim and the one that ships. */
+            indala_psk_result_t rg;
+            if (!gallagher_ask_decode(buf, n, &rg)) {
+                printf(" %-44s %5zu samples  -                          clean %3ld%%\n",
+                       argv[i], n, (long)rg.energy);
+                continue;
+            }
+            decoded++;
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 12; k++) printf("%02x", rg.id[k]);
+            printf("  ph %2u pos %3u %s\n", rg.offset, rg.bit_pos,
+                   rg.inverted ? "inv" : "");
+            continue;
         }
 
         if (modenw) {

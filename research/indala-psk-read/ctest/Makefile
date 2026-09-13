@@ -8,8 +8,8 @@ CAP := ../caps/phasebits
 
 CFLAGS := -std=c11 -O2 -Wall -Wextra -Wconversion -I$(FW)
 
-cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h
-	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c
+cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c
+	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c
 
 roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(EMU)/psk1.c $(EMU)/psk1.h
 	$(CC) $(CFLAGS) -I$(EMU) -Ishim -o $@ roundtrip.c $(FW)/lf_indala_psk.c $(EMU)/psk1.c

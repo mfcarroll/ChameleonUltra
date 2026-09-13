@@ -40,10 +40,11 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **U5 (Gallagher) — the READ air layer is proven on the host (C171), the
-  firmware is not written.** Next: a `lf_ask_manchester` reader on the device, then write
-  (`T5577_GALLAGHER_CONFIG 0x00088060`, 3 blocks, transcribe — NOT rotate), then emulate.
-  ⭐ **Use the bit-centre decoder, not edges** — edges scored 0 of 4 at 32 settings (C171).
+- **In flight:** **U5 (Gallagher) — the DECODER is written and host-verified 4/4 with 17
+  nulls clean (C172); it is NOT yet wired to the device.** Next, in order: `gallagher_read`
+  in `lf_indala_data.c` + `scan_gallagher` + `DATA_CMD_GALLAGHER_SCAN` + CLI, flash, verify
+  on device; then write (`T5577_GALLAGHER_CONFIG 0x00088060`, 3 blocks, **transcribe, not
+  rotate**); then emulate (ASK/Manchester emitter — the PSK modulator will NOT carry it).
   ⚠ Drive does NOT need sweeping for Manchester; C169's implication was withdrawn.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
@@ -192,6 +193,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 03:20 | U4 | 27 → 30 | C162 re-tested at n=70; C168 added, C162 corrected in place | 23/70 PSK2 block reads wrong at bit 31, 0/2170 elsewhere; PSK1 control 40/40 exact |
 | 2026-09-13 04:05 | U5 (part) | 28 → 31 | Gallagher characterised, `askdemod.py`, 8 captures | saturation found at every drive but 7 (C169); decode still open (C170) |
 | 2026-09-13 04:35 | U5 (part) | 30 → 32 | bit-centre decoder; C171 added, C169 corrected and its design rule withdrawn | 4/4 exact against the pm3 raw, 17 nulls clean, edge decoder 0/4 |
+| 2026-09-13 05:05 | U5 (part) | 32 → 34 | `lf_ask_manchester.c/h` shipping decoder, ctest arm, CRC and capture length both corrected | 4/4 host-compiled exact, 17 nulls clean; CRC 0x07/0x2C verified, capture threshold 10240 measured |
 
 ---
 
