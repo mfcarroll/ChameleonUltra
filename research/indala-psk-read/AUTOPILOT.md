@@ -40,12 +40,12 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 - **Last landed:** U1-U4 done. **NexWatch complete**, PSK1 family closed (C164-C167), and
   C162 re-tested at n=70 with half of it retracted (C168).
-- **In flight:** **U5 (Gallagher) — READ and WRITE both verified on device (C173). Only
-  EMULATE remains.** ⛔ That needs a real ASK/Manchester emitter: the shared PSK1 modulator
-  emits a phase-modulated fc/2 subcarrier and ASK needs the field amplitude keyed, so
-  `lf_psk1_modulator` will NOT carry it and must not be bent into doing so. Look at how
-  em410x/Viking emulate (they are ASK already) before writing anything new.
-  ⚠ Drive does NOT need sweeping for Manchester; C169's implication was withdrawn.
+- **In flight:** nothing. **U5 is COMPLETE** — Gallagher reads, writes and emulates, all
+  verified on hardware (C171-C174). **U6 is next**: Securakey, then Noralsy, then InstaFob,
+  one at a time. ⭐ They should be cheap now — `lf_ask_format_t` + the bit-centre decoder
+  carry a new ASK protocol, and the emitter is two numbers (`counter_top` and frame length).
+  ⚠ Check each one's bit rate: Gallagher and em410x are RF/32 and RF/64 respectively, so
+  `counter_top` is NOT a constant across the family.
 - ⭐ **Both Chameleons carry the current build.** Rig A (#1) is in emulation mode holding a
   NexWatch slot; put it back to `hw mode -r` before using it as a reader.
 - **Driver:** session cron job `9530f401`, every 5 minutes at off-minutes. ⭐ Cron fires
@@ -54,7 +54,8 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   session is closed, and auto-expires after 7 days. Re-seed from §6.
 - **Bench:** all four devices enumerate. T5577 holds **our own** Gallagher write —
   region 3 / facility 1111 / card 2222 / issue 5, raw `7FEAA35473ADEB0D1A8DB562`,
-  ASK, block 0 `00088060`.
+  ASK, block 0 `00088060`. ⚠ Rig A (Chameleon #1) is in EMULATION mode holding a Gallagher
+  slot; `hw mode -r` before using it as a reader.
 - **Usage at handover:** `util5=24.0 util7=2.0 mins7=9991`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
@@ -195,6 +196,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 04:35 | U5 (part) | 30 → 32 | bit-centre decoder; C171 added, C169 corrected and its design rule withdrawn | 4/4 exact against the pm3 raw, 17 nulls clean, edge decoder 0/4 |
 | 2026-09-13 05:05 | U5 (part) | 32 → 34 | `lf_ask_manchester.c/h` shipping decoder, ctest arm, CRC and capture length both corrected | 4/4 host-compiled exact, 17 nulls clean; CRC 0x07/0x2C verified, capture threshold 10240 measured |
 | 2026-09-13 05:45 | U5 (read+write) | 33 → 36 | Gallagher device read + write, config `00088060`, CLI with host descramble | read 6/6 on device; write read back 3/3 by the Proxmark from a wiped tag, all four fields changed |
+| 2026-09-13 06:20 | U5 (emulate) — DONE | 34 → 37 | Gallagher ASK emitter, `TAG_TYPE_GALLAGHER`, econfig | Flipper 6/6, null 0/4, return leg 4/4 with a CHANGED credential it tracked |
 
 ---
 

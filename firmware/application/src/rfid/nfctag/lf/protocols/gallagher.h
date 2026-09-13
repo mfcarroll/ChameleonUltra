@@ -7,5 +7,11 @@
 #define GALLAGHER_DATA_SIZE  (12)
 #define GALLAGHER_BIT_COUNT  (96)
 
+typedef struct {
+    uint8_t data[GALLAGHER_DATA_SIZE];
+} gallagher_codec;
+
+extern const protocol gallagher;
+
 /** @brief T5577 blocks for a 96-bit Gallagher frame: config + 3 data words. Writes 4. */
 uint8_t gallagher_t55xx_writer(uint8_t *frame12, uint32_t *blks);

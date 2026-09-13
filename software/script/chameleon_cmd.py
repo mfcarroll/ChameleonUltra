@@ -896,6 +896,24 @@ class ChameleonCMD:
             resp.parsed = resp.data[:8]
         return resp
 
+    @expect_response(Status.SUCCESS)
+    def gallagher_set_emu_id(self, id: bytes):
+        """Set the 96-bit Gallagher frame emulated on the active slot.
+
+        :param id: 12 bytes, MSB first on air. A valid frame starts 0x7FEA.
+        """
+        if len(id) != 12:
+            raise ValueError("The id bytes length must equal 12")
+        return self.device.send_cmd_sync(Command.GALLAGHER_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def gallagher_get_emu_id(self):
+        """Get the emulated Gallagher 96-bit frame."""
+        resp = self.device.send_cmd_sync(Command.GALLAGHER_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:12]
+        return resp
+
     @expect_response(Status.LF_TAG_OK)
     def gallagher_scan(self):
         """

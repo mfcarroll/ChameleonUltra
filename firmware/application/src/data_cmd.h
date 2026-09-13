@@ -210,6 +210,8 @@
 #define DATA_CMD_KERI_GET_EMU_ID                (5019)
 #define DATA_CMD_NEXWATCH_SET_EMU_ID            (5020)
 #define DATA_CMD_NEXWATCH_GET_EMU_ID            (5021)
+#define DATA_CMD_GALLAGHER_SET_EMU_ID           (5022)
+#define DATA_CMD_GALLAGHER_GET_EMU_ID           (5023)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

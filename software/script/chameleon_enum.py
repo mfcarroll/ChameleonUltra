@@ -184,6 +184,8 @@ class Command(enum.IntEnum):
     KERI_GET_EMU_ID = 5019
     NEXWATCH_SET_EMU_ID = 5020
     NEXWATCH_GET_EMU_ID = 5021
+    GALLAGHER_SET_EMU_ID = 5022
+    GALLAGHER_GET_EMU_ID = 5023
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
@@ -366,6 +368,7 @@ class TagSpecificType(enum.IntEnum):
     Indala224 = 301
     Keri = 302
     NexWatch = 303
+    Gallagher = 304
     IDTECK = 310
 
     # Reader-Talk-First       400
@@ -462,6 +465,8 @@ class TagSpecificType(enum.IntEnum):
             return "Keri"
         elif self == TagSpecificType.NexWatch:
             return "NexWatch"
+        elif self == TagSpecificType.Gallagher:
+            return "Gallagher"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

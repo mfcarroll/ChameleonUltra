@@ -16,6 +16,7 @@
 #include "protocols/jablotron.h"
 #include "protocols/keri.h"
 #include "protocols/nexwatch.h"
+#include "protocols/gallagher.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
@@ -437,6 +438,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_NEXWATCH_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_GALLAGHER && buffer->length >= LF_GALLAGHER_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = gallagher.alloc();
+        m_pwm_seq = gallagher.modulator(codec, buffer->buffer);
+        gallagher.free(codec);
+        NRF_LOG_INFO("load lf gallagher data finish.");
+        return LF_GALLAGHER_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
 }
@@ -694,6 +704,23 @@ bool lf_tag_indala224_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 /** @brief Keri data save callback. */
 int lf_tag_keri_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     return m_tag_type == TAG_TYPE_KERI ? LF_KERI_TAG_ID_SIZE : 0;
+}
+
+/** @brief Gallagher data save callback. */
+int lf_tag_gallagher_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_GALLAGHER ? LF_GALLAGHER_TAG_ID_SIZE : 0;
+}
+
+/** @brief Gallagher default: region 1 / facility 4321 / card 6789 / issue 2 — the exact bytes
+ * a Proxmark `lf gallagher clone --rc 1 --fc 4321 --cn 6789 --il 2` leaves in T5577 blocks
+ * 1-3. ⭐ No rotation: the frame's `0x7FEA` preamble IS the top of block 1 (C171). */
+bool lf_tag_gallagher_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_GALLAGHER_TAG_ID_SIZE] = {
+        0x7F, 0xEA, 0xA3, 0x1E,
+        0x76, 0xD8, 0x6C, 0x6D,
+        0x86, 0x8C, 0xC2, 0x49,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
 
 /** @brief NexWatch data save callback. */

@@ -7167,6 +7167,58 @@ class LFGallagherWrite(ReaderRequiredUnit):
             return None
 
 
+@lf_gallagher.command("econfig")
+class LFGallagherEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the Gallagher frame emulated on a slot. Provide "
+                              "--raw to set; omit it to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<24 hex>",
+                            help="the 96-bit frame, e.g. 7feaa31e76d86c6d868cc249")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 24 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 24 hex digits (96 bits)'))}")
+                return
+            frame = bytes.fromhex(hexs)
+            if lf_tag_type != TagSpecificType.Gallagher:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not Gallagher. "
+                      f"Set it with: hw slot type -s <n> -t Gallagher")
+            # ⭐ NO ROTATION: Gallagher's frame begins at a T5577 block boundary, so the block
+            # form and the air frame are the same bytes (C171). ⛔ Keri's are not, and sending
+            # its frame view instead of its block form gave a wrong credential 6 of 6 (C160).
+            self.cmd.gallagher_set_emu_id(frame)
+            region, facility, card, issue, crc_ok = _gallagher_fields(frame)
+            print(f" - Gallagher emu set to region {region} facility {facility} "
+                  f"card {card} issue {issue}" + ("" if crc_ok else
+                  f"  {color_string((CR, '(CRC does not check out)'))}"))
+            return
+
+        if lf_tag_type != TagSpecificType.Gallagher:
+            print(f"{color_string((CR, 'Slot ' + str(selected) + ' LF type is '))}"
+                  f"{color_string((CR, str(lf_tag_type)))}"
+                  f"{color_string((CR, ', not Gallagher.'))}")
+            print(f"   Either pick the slot: {color_string((CG, 'lf gallagher econfig -s <n>'))}")
+            print(f"   or set this one:     "
+                  f"{color_string((CG, 'hw slot type -s ' + str(selected) + ' -t Gallagher'))}")
+            return
+        response = self.cmd.gallagher_get_emu_id()
+        region, facility, card, issue, crc_ok = _gallagher_fields(response)
+        print(f" - Gallagher emu frame: {response.hex().upper()}")
+        print(f"   Region: {region}  Facility: {facility}  Card: {card}  Issue: {issue}"
+              + ("" if crc_ok else f"  {color_string((CR, '(CRC does not check out)'))}"))
+        print(f"   Decode it with {color_string((CG, 'lf gallagher read'))} against the "
+              f"emulated slot on a second device.")
+
+
 @lf_idteck.command("read")
 class LFIdteckRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
