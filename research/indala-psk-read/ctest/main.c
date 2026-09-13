@@ -20,6 +20,7 @@
 
 #include "lf_indala_psk.h"
 #include "lf_ask_manchester.h"
+#include "lf_fsk2a.h"
 
 static const char TRUTH[] = "a0000000e6bd0e92";
 
@@ -27,7 +28,7 @@ int main(int argc, char **argv) {
     int quiet = 0, hits = 0, decoded = 0, files = 0;
     static int16_t buf[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
 
-    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0;
+    int mode224 = 0, modekeri = 0, modenw = 0, nogate = 0, modegal = 0, modesk = 0, modenor = 0, modeif = 0, modeawid = 0;
     size_t trunc = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-q")) {
@@ -64,6 +65,10 @@ int main(int argc, char **argv) {
         }
         if (!strcmp(argv[i], "--instafob")) {
             modeif = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--awid")) {
+            modeawid = 1;
             continue;
         }
         if (!strcmp(argv[i], "--nogate")) {
@@ -116,6 +121,24 @@ int main(int argc, char **argv) {
         char ihex[17] = "-";
         if (idteck) {
             for (int k = 0; k < 8; k++) sprintf(ihex + 2 * k, "%02x", ri.id[k]);
+        }
+
+        if (modeawid) {
+            lf_decode_result_t ra;
+            if (!awid_fsk_decode(buf, n, &ra)) {
+                printf(" %-44s %5zu samples  -                          bits %4ld\n",
+                       argv[i], n, (long)ra.energy);
+                continue;
+            }
+            decoded++;
+            uint8_t pay[9];
+            awid_fsk_payload(ra.word_bits, pay);
+            printf(" %-44s %5zu samples  ", argv[i], n);
+            for (int k = 0; k < 12; k++) printf("%02x", ra.id[k]);
+            printf("  payload ");
+            for (int k = 0; k < 9; k++) printf("%02x", pay[k]);
+            printf("\n");
+            continue;
         }
 
         if (modeif) {

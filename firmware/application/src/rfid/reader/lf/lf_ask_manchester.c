@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "lf_ask_manchester.h"
+#include "lf_slicer.h"
 
 /* Gallagher's preamble: 0x7FEA = 0111111111101010 (C171, and Momentum's own
  * GALLAGHER_PREAMBLE check uses the same 16 bits). */
@@ -150,47 +151,6 @@ const lf_ask_format_t LF_ASK_FORMAT_SECURAKEY = {
     .accept = NULL,
 };
 
-/* ⭐ THE LOCAL DC, AS BLOCK MEANS RATHER THAN A PREFIX SUM. A single global threshold is
- * wrong on a capture that drifts, and a per-sample running mean would need a second buffer
- * the size of the capture — 28KB on a part that already holds one. 56 block means over a
- * 14336-sample capture is 224 bytes and follows the drift closely enough: the block is 256
- * samples, or 8 bit periods, while the drift this corrects is far slower. */
-#define DC_BLOCK_SHIFT 8
-#define DC_BLOCK       (1u << DC_BLOCK_SHIFT)
-#define DC_MAX_BLOCKS  ((LF_SAMPLED_MAX_CAPTURE_SAMPLES / DC_BLOCK) + 1)
-
-static int32_t m_dc[DC_MAX_BLOCKS];
-
-static void build_dc(const int16_t *s, size_t n) {
-    size_t nb = (n + DC_BLOCK - 1) / DC_BLOCK;
-    for (size_t b = 0; b < nb; b++) {
-        size_t from = b * DC_BLOCK;
-        size_t to = from + DC_BLOCK;
-        if (to > n) {
-            to = n;
-        }
-        int32_t acc = 0;
-        for (size_t i = from; i < to; i++) {
-            acc += s[i];
-        }
-        m_dc[b] = acc / (int32_t)(to - from);
-    }
-}
-
-/* Smoothed sample: lp==1 is the raw value. ⚠ lp==1 is what the clean captures wanted —
- * the level path needs no low-pass at all, which is the opposite of the edge route's
- * requirement (C171). lp==3 is kept because the CLIPPED captures preferred it. */
-static inline int32_t smp(const int16_t *s, size_t n, size_t i, uint8_t lp) {
-    if (lp <= 1 || i == 0 || i + 1 >= n) {
-        return s[i];
-    }
-    return ((int32_t)s[i - 1] + s[i] + s[i + 1]) / 3;
-}
-
-static inline bool level_at(const int16_t *s, size_t n, size_t i, uint8_t lp) {
-    return smp(s, n, i, lp) > m_dc[i >> DC_BLOCK_SHIFT];
-}
-
 static int preamble_err(const uint8_t *bits, size_t at, bool inv,
                         const uint8_t *pre, uint8_t pre_bits) {
     int err = 0;
@@ -222,7 +182,7 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
     int32_t best_energy = 0;
 
     for (uint8_t lp = 1; lp <= 3; lp += 2) {
-        build_dc(samples, n);
+        lf_slicer_build_dc(samples, n);
         for (uint8_t phase = 0; phase < SPB; phase++) {
             size_t nb = 0;
             int32_t viol = 0;
@@ -230,8 +190,8 @@ bool lf_ask_manchester_decode_fmt(int16_t *samples, size_t n,
                 /* ⭐ The two half-bit centres. Manchester's bit is the transition between
                  * them; a MATCHED pair is an encoding violation, marked 2 so the preamble
                  * search can never match it rather than being silently guessed. */
-                bool a = level_at(samples, n, i + SPB / 4u, lp);
-                bool b = level_at(samples, n, i + (3u * SPB) / 4u, lp);
+                bool a = lf_slicer_level(samples, n, i + SPB / 4u, lp);
+                bool b = lf_slicer_level(samples, n, i + (3u * SPB) / 4u, lp);
                 if (a == b) {
                     bits[nb++] = 2;
                     viol++;

@@ -8,18 +8,18 @@ CAP := ../caps/phasebits
 
 CFLAGS := -std=c11 -O2 -Wall -Wextra -Wconversion -I$(FW)
 
-cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c
-	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c
+cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c
+	$(CC) $(CFLAGS) -o $@ main.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c
 
 # ⭐ THE ASK ARMS COMPILE THE SHIPPING EMITTERS TOO — gallagher.c, securakey.c, noralsy.c —
 # not copies of them. That is the whole point of this harness (C156).
 PROTO := ../../../firmware/application/src/rfid/nfctag/lf/protocols
 TAGS  := ../../../firmware/application/src/rfid/nfctag
 
-roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(EMU)/psk1.c $(EMU)/psk1.h \
+roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(EMU)/psk1.c $(EMU)/psk1.h \
            $(PROTO)/gallagher.c $(PROTO)/securakey.c $(PROTO)/noralsy.c
 	$(CC) $(CFLAGS) -I$(EMU) -I$(PROTO) -I$(TAGS) -Ishim -o $@ roundtrip.c \
-	  $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(EMU)/psk1.c \
+	  $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(EMU)/psk1.c \
 	  $(PROTO)/gallagher.c $(PROTO)/securakey.c $(PROTO)/noralsy.c
 
 # ⭐ The cross-check that matters: C integer decoder vs numpy decoder, same 320 captures.
