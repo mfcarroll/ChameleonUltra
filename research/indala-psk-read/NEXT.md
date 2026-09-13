@@ -275,6 +275,29 @@ project exists downstream of (C185).
 | ⚠ **Two formats have no payload check** | Securakey's gate is 19 preamble bits and InstaFob's is the T5577 config word; neither validates the card data, so a bit error inside it is undetectable. Gallagher (CRC-8) and Noralsy (two nibble checksums) do. ⇒ Document, do not "fix" — both references are the same |
 | ⚠ **ASK reads sweep field strength** | `lf_ask_read` divides the caller's timeout across drive steps {4,7,6,2}. Noralsy decodes at drive 7 and NO other setting (C182), so it is required; but it changes the latency profile of every ASK read and a reviewer should be told why rather than discovering it |
 
+### 9e. ⛔ A PRE-EXISTING DEFECT THIS BRANCH FOUND AND DID NOT CAUSE
+
+**FSK2a emulation does not work on this device, and two of the three broken emitters are
+upstream's.** `hidprox.c` and `ioprox.c` ship in this firmware; both use `counter_top` 8 and 10
+with duty `top/2` and several entries per bit; both read **0 of 6** on a Flipper that reads
+Gallagher **4 of 4** on the same slot seconds later (C245, C246).
+
+⚠ **A reviewer needs this stated plainly for two reasons.** First, the AWID emitter this
+branch adds sits on that broken path — which is why §9d marks it DO NOT SHIP, and why shipping
+it would look like our bug. Second, upstream's own feature table claims HID Prox and ioProx
+emulate; on this hardware they do not, and this branch's grid is the only place that has ever
+been measured rather than inherited.
+
+✅ **Ten hypotheses were eliminated by measurement before this was found** — counter_top
+magnitude, entries per bit, AC coupling, duty shape, the emitter design (checked against
+Momentum's own demodulator AND its own encoder), the buffer plumbing, the emulation engine,
+held levels, the tone value, and varying counter_top per entry. The eleventh test was to try a
+shipped emitter, and it should have been the first.
+
+⚠ **What is NOT established**: no real HID or ioProx tag can be presented to the Flipper from
+this bench, so its read path for those protocols is not independently confirmed. Three FSK2a
+emitters failing while six non-FSK2a ones succeed is strong, and it is not proof.
+
 ### 9c. ⭐ Recommended shape — three PRs, not one
 
 ⭐ **10,242 lines of CODE will not be reviewed in one PR; it will be declined.** ⚠ The figure
