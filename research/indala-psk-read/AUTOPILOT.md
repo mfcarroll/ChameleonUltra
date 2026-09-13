@@ -140,9 +140,24 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
   faces of the sandwich. ⛔ Do NOT record "lift the tag" as a blocker today — the lift buys
   only the emulate-arm re-grade, C190 already answered that at the modulation level, and the
   four FSK protocols have no emitter for it to grade.
-- ⭐ **T5577 config words, read from pm3's own source (`client/src/cmdlft55xx.h:58-60`),
-  NOT guessed:** AWID and Paradox `0x00107060` (FSK2a, RF/50, **3** data blocks), Pyramid
-  `0x00107080` (same, **4** blocks). Matches the frame sizes: 96, 96, 128 bits.
+- ⭐⭐ **THE FSK WRITERS' TWO CONSTANTS ARE NOW BOTH MEASURED, from real clones' own block
+  dumps (2026-09-13 09:2x) — not read off a header and not assumed from a neighbour.**
+
+  | | block 0 | blocks 1..n | our reader's raw |
+  |---|---|---|---|
+  | AWID | `00107060` | `011D8171 1DD11811 11111111` | `011d81711dd1181111111111` |
+  | Paradox | `00107060` | `0F555556 95596A6A 9999A59A` | `0f55555695596a6a9999a59a` |
+  | Pyramid | `00107080` | `00010101 01010101 0101016E B35E5DA4` | `00010101010101010101016eb35e5da4` |
+
+  ⭐ **All three block forms are BYTE-IDENTICAL to the air frame our decoder reports** — so the
+  writer is a straight big-endian transcription, Gallagher's case (C171), NOT Keri's. ⛔ Keri's
+  block form is `(id << 3) | 7`, three bits out of phase with its air frame, and emitting the
+  wrong one of the two gave a stable WRONG credential 6 of 6 (C160). ⇒ This table is why that
+  cannot happen here: the question was MEASURED for each protocol separately.
+  ⚠ Each block 0 also read back from `lf t55xx detect` as FSK2a / RF/50, and agrees with pm3's
+  `client/src/cmdlft55xx.h:58-60` — two independent sources for the same word.
+  ⚠ AWID and Paradox share `00107060` exactly; only Pyramid differs, and only in the block
+  count field (4 blocks, its frame being 128 bits rather than 96).
 - **Usage at handover:** `util5=7.0 util7=7.0 mins7=9524`.
 - ⚠ **Coupling watch, not a blocker:** the tag has twice stopped answering mid-session
   (C159, C163), cleared both times without diagnosis. See §3 rule 3.
