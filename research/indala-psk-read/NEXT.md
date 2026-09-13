@@ -337,6 +337,12 @@ itself is untouched.
 ioProx has a fixed XSF layout; Indala prints its own 26-bit interpretation without the table.
 ⇒ Upstream is being asked about one reader, not a shared foundation.
 
+⚠ **A reviewer will also notice 42 declared formats against 31 implemented** (C281):
+`card_format_t` names AVIG56, BC40, BQT38, C1K48S, CASI40, DEFCON32, H800002, IR56, ISCS,
+P10001 and PW39 with no `formats[]` row, so they can never be packed or unpacked. Harmless —
+the host enum has 31 and mirrors the table, so the CLI refuses them — but it is upstream's
+header and it looks like a gap until someone checks.
+
 ⛔ **Both halves are on `main`.** The walking `unpack()` is upstream's, and so is
 `LFHIDProxRead` passing `format = 0` when `-f` is absent. This branch did not introduce either
 and **must not "fix" it here**: the format walk is load-bearing for every reader that guesses a

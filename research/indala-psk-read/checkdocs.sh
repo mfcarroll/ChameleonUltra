@@ -14,7 +14,10 @@ fail=0
 note() { echo "  ⛔ $*"; fail=1; }
 
 ids() { grep -oE "^\| $1[0-9]+" "$2" 2>/dev/null | tr -d '| '; }
-refs() { grep -ohE "\b$1[0-9]+" "${@:2}" 2>/dev/null; }
+# ⚠ THE TRAILING \b IS LOAD-BEARING. Without it `C1K48S` — a real Wiegand format name, and
+# now cited in NEXT.md — is read as a reference to claim C1 and reported missing. Same trap
+# waits for C1K35S and anything else shaped like <letter><digits><letters> (C281).
+refs() { grep -ohE "\b$1[0-9]+\b" "${@:2}" 2>/dev/null; }
 
 echo "cross-references"
 LOGIDS=$(ids L LOG.md)
