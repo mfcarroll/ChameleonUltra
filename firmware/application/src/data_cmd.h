@@ -239,5 +239,7 @@
 #define DATA_CMD_NORALSY_WRITE_TO_T55XX         (3049)
 /* ⚠ Scan only — no InstaFob writer ships; see lf_indala_data.h for why. */
 #define DATA_CMD_INSTAFOB_SCAN                  (3050)
+/* ⚠ Scan only for now — the AWID writer is deferred until the tag is back in the sandwich. */
+#define DATA_CMD_AWID_SCAN                      (3051)
 
 #endif

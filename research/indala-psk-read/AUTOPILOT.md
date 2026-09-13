@@ -73,11 +73,12 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 - ⭐⭐ **U8 (FSK) IS NOW THE NEXT UNIT, and its deferral reason is retracted (C193).** The
   physical layer is confirmed at 99% on our sampler, and the read arms need NO tag — the
   Flipper emulates AWID/Paradox/Pyramid into Chameleon #1 exactly as it did for InstaFob.
-  ⭐⭐ **`lf_fsk2a.c` IS WRITTEN and reproduces the host result exactly (C195)** — 22 nulls
-  clean, 10/10 round-trip arms, 320 captures unchanged, firmware builds. **Next: the device
-  arm** — `awid_read` + `scan_awid` + `DATA_CMD_AWID_SCAN` + CLI, then verify against the
-  Flipper emulating AWID into Chameleon #1 (no tag needed).
-  ⭐ Paradox and Pyramid then cost a format entry each: same tones, same pulse counts.
+  ⭐⭐ **AWID READS ON DEVICE — 5/5, null 0/3, 4/4 on a changed payload (C196).** The FSK
+  family is open and was the CHEAPEST of the three attempted, not the most expensive.
+  **Next: Paradox and Pyramid** — same tones, same pulse counts, so each should cost one
+  `lf_fsk2a_format_t` entry plus its preamble and gate. Verify each the same way: Flipper
+  emulates into Chameleon #1, changed payload on the return leg, explicit stop for the null.
+  ⚠ AWID's WRITER is deferred until the tag is back — the Proxmark can verify it then.
   ⚠ Paradox and Pyramid share the tones and the pulse counts — only preamble and payload
   layout differ, so they should be format entries rather than new decoders.
   ⚠ Only the WRITE arms need the tag back in the sandwich.
@@ -282,6 +283,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 | 2026-09-13 17:00 | AWID frames | 12 → 15 | `fskdemod.py`; C194; 3 committed captures | 2 payloads → 2 distinct gated frames; null returns 0 bits; field mapping unsolved |
 | 2026-09-13 17:30 | AWID payload | 13 → 15 | payload decode added; C194 amended | both payloads exact; the earlier failure was my own preamble-shift bug |
 | 2026-09-13 18:05 | FSK in firmware | 13 → 16 | `lf_fsk2a.c/h`, `lf_slicer.c/h` shared, ctest arm | shipping decoder matches host byte for byte; 22 nulls; ASK unregressed |
+| 2026-09-13 18:40 | AWID on device | 14 → 17 | `awid_read`, `scan_awid`, `DATA_CMD_AWID_SCAN`, CLI | 5/5 on device, null 0/3, 4/4 on a changed payload |
 
 ---
 

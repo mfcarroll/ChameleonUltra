@@ -1002,6 +1002,7 @@ lf_gallagher = lf.subgroup("gallagher", "Gallagher commands")
 lf_securakey = lf.subgroup("securakey", "Securakey commands")
 lf_noralsy = lf.subgroup("noralsy", "Noralsy commands")
 lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
+lf_awid = lf.subgroup("awid", "AWID commands (read only for now)")
 
 
 @root.command("clear")
@@ -7478,6 +7479,28 @@ class LFInstaFobRead(ReaderRequiredUnit):
         print(f"   ⚠ This frame is a 7-bit rotation of Momentum's numbering — do not compare "
               f"it byte-for-byte against a Flipper dump.")
         print(f"   Read at sample phase {phase} ticks, bit offset {offset}, "
+              f"{tries} capture{'' if tries == 1 else 's'} taken")
+
+
+@lf_awid.command("read")
+class LFAwidRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Scan an AWID credential (FSK2a, RF/8 and RF/10 tones). Read "
+                              "only for now — the writer is deferred until the T5577 is back "
+                              "in the sandwich and a Proxmark can verify it.")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        raw, pay, phase, tries = self.cmd.awid_scan()
+        print("AWID FSK2a")
+        print(f"   Raw (96 bits): {color_string((CY, raw.hex()))}")
+        print(f"   Payload:       {color_string((CY, pay.hex()))}")
+        # ⚠ Said plainly rather than left for someone to discover: AWID carries 66 bits, so
+        # the tail of the 9-byte credential is structurally absent, not lost in the read.
+        print(f"   ⚠ AWID carries only 66 payload bits — the last 6 bits of those 9 bytes "
+              f"are not on the wire and read back zero.")
+        print(f"   Read at sample phase {phase} ticks, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 
 

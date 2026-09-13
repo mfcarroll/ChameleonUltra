@@ -5,6 +5,7 @@
 #include "lf_indala_data.h"
 #include "lf_indala_psk.h"
 #include "lf_ask_manchester.h"
+#include "lf_fsk2a.h"
 #include "lf_reader_generic.h"
 
 #define NRF_LOG_MODULE_NAME lf_indala
@@ -618,6 +619,25 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
     data[30] = r.res.offset;
     data[31] = r.tries;
     NRF_LOG_INFO("instafob phase %u offset %u tries %u", r.phase, r.res.offset, r.tries);
+    return true;
+}
+
+/* ⭐ AWID — the FSK2a family's first protocol, and it goes through the SAME capture engine as
+ * every PSK and ASK protocol here. ⛔ It does NOT touch `lf_hidprox_data.c`'s per-protocol
+ * SAADC reader, which is the family C47 found missing the BLE-advertising guard and where
+ * HID's unexplained intermittency lives (C45). ⇒ §10 ranked this family last on the
+ * assumption that it must reuse that path; it does not (C193). */
+bool awid_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
+    lf_sampled_read_t r;
+    if (!lf_ask_read(awid_fsk_decode, AWID_FSK_CAPTURE_SAMPLES, &r, timeout_ms, energy_out)) {
+        return false;
+    }
+    memcpy(&data[0], r.res.id, 12);
+    awid_fsk_payload(r.res.word_bits, &data[12]);
+    data[21] = r.phase;
+    data[22] = r.tries;
+    data[23] = 0;
+    NRF_LOG_INFO("awid phase %u tries %u", r.phase, r.tries);
     return true;
 }
 

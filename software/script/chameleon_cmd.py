@@ -897,6 +897,25 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def awid_scan(self):
+        """Read an AWID credential (FSK2a, RF/8 and RF/10 tones, 96-bit frame).
+
+        ⭐ The first FSK protocol here, and it goes through the SAME capture engine as the PSK
+        and ASK families — NOT the HID/ioProx per-protocol SAADC reader where HID's
+        unexplained intermittency lives (C193).
+
+        ⚠ AWID carries only 66 payload bits, so the last 6 bits of the 9-byte credential are
+        not on the wire and come back zero. That is the format, not a truncation here.
+
+        Returns (raw12, payload9, phase, tries).
+        """
+        resp = self.device.send_cmd_sync(Command.AWID_SCAN, timeout=10)
+        if resp.status == Status.LF_TAG_OK:
+            raw, pay, phase, tries = struct.unpack(">12s9sBB1x", resp.data[:24])
+            resp.parsed = (raw, pay, phase, tries)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def instafob_scan(self):
         """Read an InstaFob credential (ASK/Manchester, RF/32, 225-bit frame).
 

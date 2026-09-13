@@ -211,6 +211,7 @@ class Command(enum.IntEnum):
     NORALSY_SCAN = 3048
     NORALSY_WRITE_TO_T55XX = 3049
     INSTAFOB_SCAN = 3050
+    AWID_SCAN = 3051
 
 @enum.unique
 class Status(enum.IntEnum):

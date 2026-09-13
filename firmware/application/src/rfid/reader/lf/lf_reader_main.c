@@ -20,6 +20,7 @@
 #include "protocols/gallagher.h"
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
+#include "lf_fsk2a.h"
 #include "protocols/pac.h"
 #include "protocols/viking.h"
 
@@ -151,6 +152,14 @@ uint8_t scan_gallagher(uint8_t *data) {
      * integrator amplitude, against INDALA_PSK_ENERGY_PRESENT. The ASK decoder reports a
      * Manchester-violation percentage instead, a different quantity on a different scale, and
      * passing it to that mapping would produce a confident and meaningless hint. */
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t scan_awid(uint8_t *data) {
+    int32_t energy = 0;
+    if (awid_read(data, INDALA_READ_TIMEOUT_MS, &energy)) {
+        return STATUS_LF_TAG_OK;
+    }
     return STATUS_LF_TAG_NO_FOUND;
 }
 
