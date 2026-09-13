@@ -38,6 +38,13 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔ 2026-09-15 — CHAMELEON #2 IS ON PROBE BUILD #3, ADVERTISING GUARD OFF
+
+`LF_ADV_GUARD_ENABLED` is **0** and flashed to `/dev/tty.usbmodemF429364E46961`, to make frame
+corruption reproducible so C278's relabelling message can be seen to render. ⛔ **If you are
+resuming and this paragraph is still here, the restore was lost: set it back to 1, rebuild,
+flash #2, delete this.**
+
 ### ✅ 2026-09-14 09:50 — WHERE THE READER WORK STANDS
 
 ⭐⭐ **C45 is closed and the session's thread ran out of it.** The HID intermittency was a BLE
