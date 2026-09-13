@@ -56,8 +56,7 @@ tag in one session. ⛔ **The finding that outlives it is that an unguarded read
 CREDENTIALS as successes — past a parity check that was working.** `unpack_h10301()` checks both
 bits and the reader does reach it; my first write-up said otherwise and was wrong. ⭐⭐ **SEPARATED (C251): it is mostly the relabelling.** Six of seven wrong reads came back as
 `Indala 26-bit` hugging this tag's own ind26 reading; `-f H10301` cuts it 7/48 → 1/48. Both halves
-are on `main`, so it is UPSTREAM'S defect to report, not ours to patch quietly. ⇒ **Next unit: say so
-in §9's upstreaming notes, then back to the queue.** ⛔ Do not "fix" `unpack()` on this branch — the
+are on `main`, so it is UPSTREAM'S defect to report, not ours to patch quietly. ✅ **Written up as `NEXT.md` §9f.** ⇒ **Next: back to the queue.** ⛔ Do not "fix" `unpack()` on this branch — the
 format walk is load-bearing for every reader that guesses a format, and changing it is a decision
 for upstream, not a side effect of an LF research branch.
 

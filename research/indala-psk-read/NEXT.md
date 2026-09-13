@@ -298,6 +298,39 @@ shipped emitter, and it should have been the first.
 this bench, so its read path for those protocols is not independently confirmed. Three FSK2a
 emitters failing while six non-FSK2a ones succeed is strong, and it is not proof.
 
+### 9f. ⛔ A SECOND PRE-EXISTING DEFECT — a corrupted HID frame is reported as Indala
+
+**`lf hid prox read` will hand the operator a confident credential of a protocol the tag is
+not.** Measured on a deliberately degraded build (`235dfa3`, the BLE advertising guard off) so
+that frame corruption could be produced on demand, one tag, two arms of 48 (C251):
+
+| arm | exact | wrong | null |
+|---|---|---|---|
+| `format_hint = 0` — what the CLI sends by default | 40 | **7** | 1 |
+| `-f H10301` — format pinned | 46 | **1** | 1 |
+
+Six of the seven came back labelled **`Indala 26-bit`**, FC 1953-1977 / CN 471, hugging FC 1969
+/ CN 471 — the ind26 reading of this tag's own **uncorrupted** frame.
+
+⭐ **H10301's parity is not the weak link; it works.** It rejects the mangled frame, and then
+`unpack()` (`wiegand.c`) walks on to the next format of the same bit length. `unpack_ind26`
+checks less, accepts what H10301 refused, and `card->format` is quietly set to ind26. The CLI
+prints whatever format comes back, so there is no signal that a fallback happened at all.
+
+⛔ **Both halves are on `main`.** The walking `unpack()` is upstream's, and so is
+`LFHIDProxRead` passing `format = 0` when `-f` is absent. This branch did not introduce either
+and **must not "fix" it here**: the format walk is load-bearing for every reader that guesses a
+format, and narrowing it is upstream's call.
+
+⇒ **What to report, not to patch.** The smallest honest fix is at the reporting layer — when
+the returned format differs from the one asked for, or when no format was asked for at all, say
+so — but even that is a change to shared behaviour and belongs in its own upstream discussion.
+
+⚠ **What is NOT established**: the guard is on in every shipping build, and with it on the same
+tag reads 96/96 and 48/48 exact with zero wrong. So this is reachable only when something else
+is already perturbing the capture — a BLE burst over a live link, where `lf_adv_suspend` cannot
+fire by design, is the configuration to worry about, and it has not been measured here.
+
 ### 9c. ⭐ Recommended shape — three PRs, not one
 
 ⭐ **10,242 lines of CODE will not be reviewed in one PR; it will be declined.** ⚠ The figure
