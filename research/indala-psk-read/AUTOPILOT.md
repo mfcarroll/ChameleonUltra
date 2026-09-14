@@ -87,7 +87,24 @@ for free. ⚠ **Cost is entries**: ~25 per bit against today's 5-6, so a 96-bit 
 entries (~19 KB)** where the array is sized **576**. PSK1's 3,584-entry path is precedent that the machinery
 copes, but **the RAM must be budgeted on paper first**, and ioProx's long tone is **11**, so `gcd(8, 11) = 1`
 and it needs `counter_top` 1 or a corrected tone.
-⛔ **Do not start writing the emitter before that budget exists.**
+✅ **THE BUDGET IS NOW ON PAPER (C384), TAKEN OFF `objects/application.map`, AND U11 IS UNBLOCKED TO WRITE.**
+RAM region **218,392 B**, `.data + .bss` **126,644 B**, **91,748 B free**. The three FSK buffers are **4,608 B
+each (13,824 B total)**.
+
+| option | RAM | net | share of free |
+|---|---|---|---|
+| three private buffers (ioProx tone 11) | 72,192 B | **+58,368 B** | **64% — REFUSED** |
+| **one shared buffer** (ioProx tone 11) | 33,792 B | +19,968 B | 21.8% |
+| **one shared buffer** (ioProx tone 10) | 19,200 B | **+5,376 B** | **5.9%** |
+
+⇒ **ONE SHARED FSK BUFFER IS THE DESIGN.** It is safe because `lf_tag_data_loadcb_inner()` sets exactly one
+`m_tag_type` and one `m_pwm_seq`, so the three can never be live together. **F5 is the precedent** — it fixed
+this exact shape, two 28 KB capture buffers resident at once.
+⚠ **ioProx's long tone of 11 is a question worth measuring, not assuming** (the Proxmark uses fc/10, and
+6 x 11 = 66 against a 64-cycle bit). The shared buffer works either way, so it does not block the emitter.
+⇒ **NEXT: write the shared constant-`counter_top` FSK emitter**, HID first, with a `ctest/roundtrip.c` arm
+that pins the DUTY PATTERN and not just the decode — C380 is the proof that a decode-only arm cannot see a
+shape defect.
 
 ⛔ **WHY NO HOST TEST COULD EVER HAVE FOUND THIS**: `ctest` decodes the SEQUENCE ARRAY, where the two tones
 differ correctly. Only capturing the EMISSION separates what we intend from what we transmit — and this is
