@@ -38,7 +38,19 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ✅ 2026-09-15 12:30 — WHERE THE READER WORK STANDS
+### ✅ 2026-09-14 02:45 — THE WRITE COLUMN IS MEASURED; THE ASK/BIPHASE FAMILY IS NEXT
+
+⭐ **U15 IS CLOSED (C330).** Every write arm re-graded against an unlocked tag with `./regrade.sh`: AWID, Keri, Indala26, NexWatch, Gallagher, Securakey, Noralsy and GProxII, **4 of 4 each — 32 writes, 32 independent Proxmark reads, 0 failures**, every raw frame byte-identical to what was sent. ⛔ **Nothing was ever wrong with the write arms**: C305's *0 of 9* was measuring the password lock our own HID writer had set (C325), and the password defect is fixed (F1, C326). `NEXT.md`'s grid write column is rebuilt from this run.
+
+⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
+
+⛔ **EMULATION IS OFF THE TABLE while #2 is on the Proxmark.** It needs the Flipper as reader, and the Flipper faces #1 (deliberately un-reflashed, holds the NexWatch slot). The Proxmark cannot hear our PWM emulation — the dead-end note at the top of `NEXT.md`.
+
+⚠ **Open, needs hands, not for an unattended run:** Indala emu slot 1 holds a bad frame (*not the Indala preamble*); EM410X emulation hit BOTH `flipper.py` arms, unexplained; the Flipper crash-rebooted at an unknown time.
+
+---
+
+### (historical) 2026-09-15 12:30 — WHERE THE READER WORK STANDS
 
 ⭐ **Rewritten today.** The paragraph this replaces was the 09:50 one, written 45 claims ago and
 accurate then. `LOG.md` keeps the history; §1 is what a fresh context inherits, so it states
@@ -393,7 +405,7 @@ the two Chameleons face each other.
 | **U11** | **FSK2a EMITTERS** — AWID first, then Paradox, Pyramid, FDX-A, one at a time. ⭐ The shape is known: the ASK emitters put one PWM entry per bit with `counter_top` set to the carrier cycles that bit occupies, and FSK2a only needs `counter_top` 8 or 10 per tone period instead. ⚠ A `ctest/roundtrip.c` arm per protocol, which is where three wrong encodings were caught before (C156) | device (rig A only — no tag needed) | the Flipper reads our emulation as the right credential, ≥5 of 5, with a control either side |
 | **U12** | **BIPHASE EMITTERS** — GProxII then FDX-B, only after U11 is completely done. ⚠ GProxII is BIPHASE and FDX-B is DIPHASE and INVERTED; they are one bit apart in the T5577 config and must not be assumed to share an emitter until one has been through end to end | device (rig A only) | same bar as U11 |
 | **U13** | **§9 REFRESH** — pure compute. The instrumentation list is stale: `DATA_CMD_LF_READER_CAPTURE`, the GProxII failure-energy reporting and `rdrcap.py` have all been added since it was written, and the command-id count is no longer 32. ⚠ The three-PR split also predates the biphase family | compute | §9 and §9b match the branch again |
-| **U15** | ⭐⭐ **RE-GRADE EVERY WRITE ARM AGAINST AN UNLOCKED TAG.** GProxII, AWID, Keri, Indala, NexWatch, Gallagher, Securakey and Noralsy were all scored while the tag was password-locked by our own writer, so every "write fails" result from 2026-09-15 onward is void (C325). ⭐ Pure unattended work: write, verify with pm3, restore. The grid's write column needs rebuilding from it | device (sandwich) | each protocol written and read back by an INDEPENDENT tool, 4 of 4, and the grid updated |
+| **U15** | ✅ **DONE 2026-09-14 (C330) — every write arm re-graded against an unlocked tag: all eight 4 of 4, 32 writes, 0 failures, every raw byte-identical.** The old failures were the password lock (C325), not the writers. `./regrade.sh <protocol> [rounds]` reruns any row. ⛔ Indala224 and IDTECK were NOT re-graded — only Indala26 | device (sandwich) | ✅ met |
 | **U14** | ⭐ **HOW THE REFERENCES GET ACCURACY — audit every Flipper variant and the Proxmark for their scan / repeat-read discipline.** Operator-requested 2026-09-15. Today's C268/C269 found that our two-agreeing-stacks rule, not the frame gates, is what carries this reader — so what the references do about the same problem is directly load-bearing and has never been compared side by side. ⚠ **Include the variants, not just Momentum**: `flipperzero-firmware`, `Momentum-Firmware`, `Momentum-Firmware-slix`, `unleashed-firmware`, `roguemaster` and `proxmark3` are all on disk, so this needs no fetching. Questions: how many reads before reporting; whether agreement is on the PROTOCOL or on the DECODED DATA; per-protocol counts and why they differ; what happens when several protocols match; and what is GATED versus merely reported | compute | a side-by-side table in `NEXT.md` with each claim traced to the file and line that implements it, and our own rule placed against them |
 
 ⛔ **Not yours to decide** — leave these alone and do not "make progress" on them:
@@ -506,6 +518,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 02:45 | **C330 — U15 CLOSED: all eight write arms 4 of 4 against an unlocked tag** | 36 → 37 | 32 writes, 32 independent pm3 reads, 0 failures; the grid's write column rebuilt; `regrade.sh` added so any row reruns | Proxmark as the independent judge, fresh write every round, raw compared byte-for-byte, bench restored |
 | 2026-09-14 08:15 | **C329 — GProxII write lands; sandwich rebuilt** | 35 → 36 | The password fix restores block-0 writes AND pm3's detect/reads together. U15 now 1 of 8 | Pre-registered criterion in `benchab.sh`, same script and rig as the pre-fix run |
 | 2026-09-14 08:00 | **C328 — emulate arms re-graded, §5 item closed** | 34 → 35 | IDTECK 4/4, EM410X 4/4 on the fixed firmware, with the Flipper as reader. Indala slot 1's null is bad slot data (`not the Indala preamble`), not code | Positive control and null both run first; EM410X's both-arms hit left explicitly unexplained |
 | 2026-09-14 07:50 | **§1 and §5 rewritten for the password defect** | 34 → 34 | §5's "bench cannot change tag protocol" blocker CLEARED — it was the password, not the bench. §1 now names what C325 retires so a fresh context cannot build on C299/C305/C306/C324 | #2 reflashed clean at `v2.2.0-592-g9d39c15`; notes consistent |

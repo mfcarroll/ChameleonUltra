@@ -300,19 +300,26 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 
 | protocol | read | write | emulate |
 |---|---|---|---|
-| Indala26 / Indala224 / IDTECK | **A** | **A** (pm3 reads our tag) | **B** |
-| Keri | **A** 6/6 | **A** 3/3 | **B** 6/6 |
-| NexWatch | **A** 6/6 | **A** 3/3 | **B** 10/10 |
-| Gallagher | **A** 6/6 | **A** 3/3 | **B** 10/10 |
-| Securakey | **A** 6/6 | **A** 3/3 | **B** 10/10 |
-| Noralsy | **A** 6/6 | **A** 3/3 | **B** 10/10 |
+| Indala26 / Indala224 / IDTECK | **A** | **A** — Indala26 **4/4** re-graded (C330); 224 and IDTECK still on the older evidence | **B** |
+| Keri | **A** 6/6 | **A** **4/4** (C330) | **B** 6/6 |
+| NexWatch | **A** 6/6 | **A** **4/4** (C330) — judged on `lf nexwatch read`, not `lf search` | **B** 10/10 |
+| Gallagher | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
+| Securakey | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
+| Noralsy | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
 | InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
-| AWID | **A** 5/5 real tag (C201) | **A** pm3 reads our write (C203) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
+| AWID | **A** 5/5 real tag (C201) | **A** **4/4** re-graded (C330) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
 | Paradox | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
 | Pyramid | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
 | FDX-A | **B** 4/4 — ⚠ against a Flipper EMULATION, pm3 has no FDX-A (C201) | ⛔ **refused** (C185) | ⛔ **not built** |
-| GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** pm3 reads our write (C207) | ⛔ **impossible as designed (C242)** |
+| GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | ⛔ **impossible as designed (C242)** |
 | FDX-B | **A** 6/6, nulls 0/386 (C214) | **A** 4/4 (C215) | ⛔ **not built** |
+
+⭐ **The write column was re-measured wholesale on 2026-09-14 (C330), and the numbers above are that
+measurement.** Every write arm had been scored while our own HID writer had the tag password-locked
+(C325), so the failures recorded against them said nothing about the writers. `./regrade.sh <protocol>`
+reruns any row: four fresh writes, each read back by the Proxmark, plaintext controlled and the raw
+compared byte-for-byte. ⛔ **Indala224 and IDTECK are NOT re-graded** — that row's `A` covers three
+protocols and only Indala26 has been through the new battery.
 
 ⚠ **These six were missing from this grid entirely** until 2026-09-14 — it was written before the
 FSK and biphase families existed and nobody widened it. A reviewer handed a grid that silently
