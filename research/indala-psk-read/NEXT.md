@@ -339,6 +339,13 @@ Check Point card 8389632; `-f KASTLE` returns fc 1 / cn 1 exactly, so the tags a
 the walk is what loses it. ⇒ Any proposal about `unpack()` should lead with that measurement
 rather than with C251's single corrupted-frame anecdote.
 
+⛔⛔ **AND THE WALK CANNOT BE NARROWED INTO CORRECTNESS (C285).** 13 of the 32 `unpack_*`
+functions have no rejection path at all — a format with no parity or checksum has nothing to
+check — and that list predicts C284's relabel map exactly. The first check-less format at a
+given length swallows every other format's frames there. ⇒ The only correct behaviours are
+the Proxmark's, which prints EVERY candidate with its parity verdict, or pinning with `-f`.
+Neither is a tweak to the walk, and a proposal that offers one should say so.
+
 ⭐ **And this row overstated the risk of changing it.** It said narrowing `unpack()` touches
 "every reader that guesses a format". A whole-tree grep finds **one caller: `hidprox.c:134`.**
 ioProx has a fixed XSF layout; Indala prints its own 26-bit interpretation without the table.
