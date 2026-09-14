@@ -56,7 +56,7 @@ for f in $(grep -ohE '`[A-Za-z0-9_./-]+\.(md|py|sh)`' README.md FINDINGS.md NEXT
     # ⚠ `usage_check.sh` and `context_check.sh` live in utility-scripts/claude, outside this
     # repo, and are referenced by name. They are real and executable; `./autopilot.sh status`
     # runs both every tick, which is a far better liveness check than this one could be.
-    case "$b" in t5577_campaign.py|usage_check.sh|context_check.sh) continue;; esac
+    case "$b" in t5577_campaign.py|usage_check.sh|context_check.sh|compact_request.sh) continue;; esac
     note "referenced but missing: $f"
 done
 

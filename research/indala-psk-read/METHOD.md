@@ -473,3 +473,19 @@ the summary is far smaller than what it replaces, which is the point (C369).
 local, needs no credential and costs no tokens. **≥80%: compact at the end of the tick. ≥60%: consider it.**
 ⚠ Carrying more context can still be the right call — mid-investigation, with state that would be expensive to
 rebuild. Make it a decision, not a drift.
+
+**M48 — THE SESSION COMPACTS ITSELF BY MOVING THE THRESHOLD, BECAUSE NOTHING CAN TYPE `/compact` FOR IT.**
+Cron fires, peer messages and the messaging socket all enqueue with `skipSlashCommands` on; the control protocol
+has no compact verb; `Pre`/`PostCompact` hooks only observe and block. The only lever is `autoCompactWindow`
+(settings key, live-watched, 100k–1M).
+```sh
+UTIL=/Users/Shared/code/personal/utility-scripts/claude
+sh "$UTIL/compact_request.sh" status --project "$REPO"     # every tick — this is also the disarm
+sh "$UTIL/compact_request.sh" arm --project "$REPO" --require-clean --reason 'tick end 84%'
+```
+⭐ `arm` sets the window to `0.8 x` the measured context, so **auto-compact trips on the NEXT turn** — the turn
+that arms must therefore end compact-safe: commit, push, leave nothing important only in context.
+⛔ `--require-clean` refuses while the tree is dirty. A compact keeps only what is on disk; committing first is
+what makes it free.
+⚠ A setting is not per-session. `arm` refuses when another live session shares the project directory rather than
+quietly changing the threshold under it (C371).

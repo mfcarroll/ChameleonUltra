@@ -77,6 +77,18 @@ needs NO bench change** — #1 already faces the Flipper. ⚠ `./emugrade.sh` ta
 **does not yet produce a result**: slot 1 EM410X reads as a positive control, Indala on slot 8 is 0 of 6 with
 the cause unreached after three script bugs of mine were fixed. Not a firmware finding — an unfinished test.
 
+#### The loop can now compact itself
+
+⭐ **`./autopilot.sh status` prints a `compact` line, and that line is also the disarm.** Nothing can type
+`/compact` — cron fires and peer messages both hardcode `skipSlashCommands`, the control protocol has no
+compact verb, and `Pre`/`PostCompact` hooks only block (C371). The one lever is the auto-compact **threshold**,
+so `utility-scripts/claude/compact_request.sh arm` drops `autoCompactWindow` to `0.8 x` the measured context and
+the **next turn** trips auto-compact by itself.
+⛔ **The turn that arms must end compact-safe** — commit, push, leave nothing important only in context. Use
+`--require-clean` and it will refuse to arm over a dirty tree.
+⚠ A setting is not per-session: `arm` refuses when another live session shares this repo directory. A missed
+disarm cannot loop — see M48.
+
 #### Do not re-do these
 
 ⛔ **RETIRED — C299, C305, C306, C324** were all one password-locked tag (C325), and C329 confirmed it by
