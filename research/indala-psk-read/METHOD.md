@@ -348,3 +348,48 @@ chatter as data.
 "did we ever fix that decoder?". A claim can be internally consistent, cross-referenced and
 still rest on a capability nobody ever built.
 
+
+**M36. ⭐⭐ ENTAILMENT BEATS CAPTURES — if the code can only return X, no number of measurements
+adds to that.** C269 watched a wrong frame recur at two different sample phases and concluded
+that was "the shape that passes two-agreeing-stacks". C293 read the implementation and found the
+comparison RESETS across phases, so cross-phase recurrence can never pass — the inference was
+void. C294 then found the whole question was settled by one line: `winner_res` is assigned in
+exactly one place, inside the agreement match, so every frame the reader has EVER returned
+matched its predecessor at the same phase, by construction.
+⇒ Three claims to reach what reading one function would have given immediately. When a question
+is about what a program can do, read the program first and measure second. Measurement is for
+what the world does, not for what the code permits.
+
+**M37. ⛔ A HOST CAPTURE LOOP DOES NOT STAND IN FOR THE DEVICE'S LOOP UNLESS THE TIMING MATCHES.**
+48 captures taken as separate `rdrcap.py` invocations, each re-initialising the capture path with
+a 50ms gap, showed no within-phase recurrence — and were read as evidence that the device's
+agreement rule could not be defeated that way. The device takes its tries BACK TO BACK inside one
+read. Different timing regime, and the two were compared as though they were one measurement.
+⇒ Name the regime when the tool is not the thing under test. "Captured with the same hardware"
+is not "captured the same way".
+
+**M38. ⚠ A DOCUMENT THAT IS ONLY EVER APPENDED TO PUTS ITS OLDEST LAYER WHERE THE READER
+FINISHES.** `NEXT.md` §9f grew across ten claims, each understanding added below the last. Its
+TAIL still said the defect was "reachable only when something else is already perturbing the
+capture" — disproved on perfectly good tags four claims earlier. A reviewer reading to the end
+would have taken the weakest and oldest reading as the conclusion. The same session found two
+warnings in one firmware file describing decoders that no longer existed (C292, C293).
+⇒ Rewrite the conclusion, do not append to it. And when a warning is superseded, DATE it rather
+than delete it — the reason it was written is often still load-bearing, as with a dead band that
+is still excluded from a rotation.
+
+**M39. ⭐ RE-RUNNING ARMS WHOSE CODE CANNOT HAVE CHANGED PROVES THE BENCH WORKS, NOT THE BUILD.**
+After a day of gate changes the obvious companion to a read-arm regression pass was re-running
+the emulate arms — which meant flashing the one unit untouched all session, holding a live slot,
+with a known targeting hazard. A per-file `git log` over the seven files those arms depend on
+showed 0 commits in range.
+⇒ Ask whether the change can reach the thing before spending risk on testing it. A regression run
+with no causal path is ritual.
+
+**M40. ⛔ VERIFY THE FAILING BRANCH OF A DISPLAY FIX, NOT ONLY THE PASSING ONE.** Three times this
+session a user-facing message was added and only its happy path seen: the Securakey parity line,
+the IDTECK checksum verdict, and the HID relabelling warning. Each needed a deliberately
+constructed input — a flipped spacer bit, a synthetic checksum, a guard-off build — before the
+other branch had ever rendered. One of them, once reached, turned out to drop two fields.
+⇒ A branch nobody has seen print is a branch nobody has tested, and rare branches are exactly
+where a wrong f-string survives for years.
