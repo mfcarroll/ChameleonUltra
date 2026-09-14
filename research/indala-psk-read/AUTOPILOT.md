@@ -91,10 +91,48 @@ in 92 captures (C267) — all distinct, so agreement caught them all (C268). A t
 broken produced 12, and one recurred (C269). ⇒ Quote that to a reviewer rather than any single
 number.
 
-⇒ **NEXT, and it is short**: everything left in §2 needs HANDS. The only blocker is the
-sandwich — lift the T5577, or face the two Chameleons — for the emulate-arm re-grade. ⭐ **Both former "do not touch" items were RELEASED by the operator 2026-09-15.** `unpack()` is
-fixed in place (C302). The instrumentation is now **compile-gated, not stripped** (C303):
-one macro, default off, costing a shipping image nothing and an upstream PR one deleted line.
+### ✅ 2026-09-15 20:45 — WHAT CHANGED SINCE THE 12:30 PARAGRAPH ABOVE
+
+⭐ **BOTH FORMER "DO NOT TOUCH" ITEMS WERE RELEASED BY THE OPERATOR and are DONE.**
+
+**`unpack()` IS FIXED IN PLACE (C302), NOT SUPPLEMENTED.** The walk makes two passes and
+prefers a format that can VALIDATE; the card it returns carries `matches`, `verified` and
+`others`, and `wiegand_other_matches()` is deleted so the count cannot drift from the winner.
+⭐ The key was already in the table — `fields.has_parity`, which C300 proved accurate by
+measurement: the 12 rows flagged 0 are exactly the 12 that accept 100% of random frames. ⇒
+Never-reads-back-as-itself went **14 → 12**, and **KASTLE — C284's headline failure — now reads
+back as itself 4 of 4 on hardware** (C304). ⛔ Not a cure: where nothing validates there is
+nothing to prefer.
+
+**THE INSTRUMENTATION IS COMPILE-GATED, NOT STRIPPED (C303).** `LF_RESEARCH_CMDS_ENABLED`,
+default **0** in `data_cmd.h`, set to 1 by one `application/Makefile` line that an upstream PR
+deletes. Cost measured both ways: **1,088 B flash + 4,008 B RAM**, the RAM attributed to the
+byte by `nm`. ⚠ The GProxII failure-energy payload needed `#else` rather than a plain gate —
+it changes a failure reply's WIRE SHAPE.
+
+**THE HARNESS GREW TWO ARMS** — `ambig` now measures per-format selectivity through the
+shipping `unpack()`, and new `gates.c` measures every reader acceptance gate in bits (C301).
+⚠ **C301 found 4 of 11 formats carry no gate**, and INSTAFOB and IDTECK carry no
+`require_repeat` either — 32 preamble bits and nothing else.
+
+⛔⛔ **THE BENCH HAS A NEW AND SERIOUS CONSTRAINT (C305): IT CANNOT CHANGE THE TAG'S PROTOCOL.**
+A write lands **iff the config word it writes already matches the tag's**. `lf hid prox write`
+5 of 5 (it writes the config already there); GProxII, AWID, Keri and Indala **0 of 9**. After
+all nine failures pm3 read the credential bit-identical. ⇒ **Any unit needing a non-HID
+credential on the T5577 is blocked.** ⛔ The mechanism is NOT established — it is a rule fitted
+to 14 observations. The leading candidate is block 0 being locked *if* a rejected write also
+aborts the session; `blk_count == 0` is dead (all writers return `LF_TAG_OK`, never `PAR_ERR`).
+
+⭐ **pm3'S DOWNLINK IS BROKEN WHILE ITS LISTENING IS INTACT (C306)** — `lf search` is perfect on
+every attempt, but `lf t55xx detect` fails and `lf t55xx read` returns ONE IDENTICAL WORD for
+every block, which cannot be real data. A second, independent symptom class for C297/C299.
+
+⇒ **NEXT.** Two things need HANDS and neither has moved: **power down Chameleon #2 and retry
+`lf hid clone`** (one action, no disassembly — settles C299), then **lift the T5577** for the
+emulate-arm re-grade. ⭐ The one compute unit that would unblock C305 is a **T5577 block READ**:
+the firmware has none, but `t55xx_send_cmd()` already expresses a direct read — its own comment
+documents `2op(1+bck) 1(0) 3addr`, which is `data = NULL`. Reading block 0 would settle the lock
+question outright.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
