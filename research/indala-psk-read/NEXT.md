@@ -293,6 +293,44 @@ wrong frame there is; 6 would remove nothing. ⛔ It also dates our own source: 
 those 21 are now 0 — it predates C48's straddle gate and C257's zero-bit gate. ⚠ One tag, one
 unit: sufficient HERE is not the same as 6 being wrong for a Flipper on unseen tags.
 
+### ⭐⭐ Three things the first pass missed — audited 2026-09-14 against the source, not the summary
+
+**1. The Flipper's counts are one lower than they read.** `validate_count` is not the number of
+agreeing decodes; it is the number required *after* the first. `lfrfid_worker_modes.c:240-250`
+sets `last_read_count = 0` on the first sighting of a protocol+data pair, increments on each
+agreeing decode, and fires at `last_read_count >= validation_count`. So the real bar is:
+
+| | agreeing decodes actually required |
+|---|---|
+| Flipper, non-PSK (`validate_count` 3) | **4** |
+| Flipper, PSK1 and `hid_generic` (6) | **7** |
+| **Here** (`lf_indala_data.c:480`) | **2** |
+
+⇒ The gap is wider than §11 said. Not 2 against 3 and 6 — **2 against 4 and 7**, so the
+reference demands two to three and a half times the corroboration we do. C292's bootstrap still
+says 2 suffices *on our corpus and our tag*; it does not make 7 excessive on unseen ones.
+
+**2. The Proxmark's cascade is ORDERED and stops at the first match.** `CmdLFfind()`
+(`cmdlf.c:1916`) takes ONE capture — `lf_read(false, 30000)` — then runs 26 demodulators in a
+fixed sequence, returning at the first success unless `-c` is passed:
+
+> EM410x → Destron → Gallagher → Noralsy → Presco → Securakey → Viking → Visa2k → FDX-B →
+> Jablotron → Guard → Nedap → PAC → HID → AWID → IOProx → Pyramid → Paradox → Idteck → Keri →
+> NexWatch → Indala → TI → Fermax → Trovan → COTAG
+
+⇒ That answers *what happens when several protocols match*: by default **you are not told**. The
+earliest matching demodulator wins and the rest are never run, so a false positive early in the
+list silently shadows the true protocol later in it. Every PSK1 format sits in the last third,
+behind all 18 ASK and FSK formats. ⭐ Our cross-protocol null battery is testing precisely the
+failure this ordering hides, which is why a preamble-only match was never acceptable here.
+
+**3. Our own rule did not do what this section claimed, until today.** §11 described it as
+*"byte-identical"*. It compared `memcmp(prev_word, res.id, 8)` — the whole frame only for the
+three 64-bit formats, and 8 of 28 bytes for Indala224. Fixed today (C332), and registered in `FIXES.md` as its own upstream-scoped entry; the comparison is now
+the full `frame_bits` and the length with it. ⚠ Every agreement-based claim in this section that
+predates 2026-09-14 was measured on a 64-bit-deep comparison, which for Indala26, IDTECK and
+Keri — the formats C292's bootstrap actually used — is the whole frame and therefore unaffected.
+
 ## 9. Upstreamable? — assessed 2026-09-13
 
 ⚠ **This section was written when the branch was Indala-only. It is now 49 files and ~7,500
