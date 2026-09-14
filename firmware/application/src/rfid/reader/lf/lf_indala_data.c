@@ -91,6 +91,21 @@ static const uint8_t PHASE_ROTATION[] = {
  * the 60-92 dead band, and keeping that band out of the rotation is what makes this rule
  * safe — the rule does not make itself safe.
  *
+ * ⭐⭐ RE-MEASURED 2026-09-15, AND THE PARAGRAPH ABOVE NOW DESCRIBES A DECODER THAT NO LONGER
+ * EXISTS. It predates the straddle gate (C48) and Indala's zero-bit gate (C257). On the SAME
+ * 160 front captures with today's gates: **110 frames and 0 wrong** — the 21 are gone, so
+ * there is nothing left to repeat within a phase. On the phasebits corpus, which does still
+ * produce wrong frames, there are **13 and every one is DISTINCT**, so agreement at 2 removes
+ * all of them and a higher count would remove nothing (C292).
+ *
+ * ⇒ KEEP THE COUNT AT 2 — and keep the paragraph above, which is history rather than a live
+ * hazard and is labelled so rather than deleted. The 60-92 dead band is still out of
+ * PHASE_ROTATION, and if that rotation is ever widened the warning becomes live again.
+ *
+ * ⚠ The Flipper family uses 6 for every PSK1 protocol and 3 for everything else (C291). On
+ * this data 6 would buy nothing over 2. No tree explains its choice, so that is a difference
+ * in evidence rather than a disagreement about the protocol.
+ *
  * ⚠ What that does NOT establish is a rate below ~1/50000; it is resampling 160 real
  * captures, so it cannot see a failure mode absent from them. The defensible claim is the
  * one the data supports: within the phases this reader actually uses, no wrong word ever

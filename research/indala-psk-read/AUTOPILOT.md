@@ -406,6 +406,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 10:55 | **C292 — is our agree count of 2 enough?** | 15 → 15 | Yes: front 0 wrong in 160 captures, phasebits 13 wrong and all distinct. The `INDALA_AGREE_COUNT` note predates two gates and is now labelled history | The front corpus is the control and has no wrong frames left to count; "all distinct" is a uniqueness check, not an inference |
 | 2026-09-15 10:20 | **U14 / C291 — the reference scan-accuracy audit** | 14 → 15 | Six trees audited, `NEXT.md` §11 written. Three models; the Flipper family doubles its repeat count for the whole PSK1 family and for `hid_generic` alone besides | Every claim cites the implementing line; the four worker loops md5-compared before calling their rule identical |
 | 2026-09-15 09:40 | **C290 — the new API pinned in ctest** | 14 → 14 | `wiegand_other_matches()` cross-checked against an independent enumeration: 1,519 frames, 0 disagreements | Break test moved it to 1,519 of 1,519 and failed `make check`; binary deleted before rebuilding |
 | 2026-09-15 09:05 | **C289 — emulate arms provably untouched** | 14 → 14 | Seven firmware files changed since C241's build; the seven the working arms depend on have 0 commits between them. No flash of #1 taken | Per-file `git log` rather than a diff summary; the caveat that this reasons at file level is recorded |

@@ -272,6 +272,14 @@ rule was applied deliberately by whoever added the protocol, not inherited by ac
 measurement, and none of the five carries a test for it. Our own `INDALA_AGREE_COUNT` of 2 has a
 bootstrap behind it (50,000 trials over 160 real captures); theirs may have none.
 
+⭐⭐ **SO THE ANSWERABLE HALF WAS ASKED OF OUR OWN DATA INSTEAD (C292).** Current decoder over
+both committed corpora: the front placement gives **110 frames and 0 wrong** in 160 captures,
+and phasebits gives 13 wrong of which **every one is distinct**. ⇒ Agreement at 2 removes every
+wrong frame there is; 6 would remove nothing. ⛔ It also dates our own source: the note above
+`INDALA_AGREE_COUNT` warns about 3-of-21 front-side wrong frames repeating within a phase, and
+those 21 are now 0 — it predates C48's straddle gate and C257's zero-bit gate. ⚠ One tag, one
+unit: sufficient HERE is not the same as 6 being wrong for a Flipper on unseen tags.
+
 ## 9. Upstreamable? — assessed 2026-09-13
 
 ⚠ **This section was written when the branch was Indala-only. It is now 49 files and ~7,500
