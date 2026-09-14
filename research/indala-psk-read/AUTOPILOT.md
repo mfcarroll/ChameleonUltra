@@ -462,6 +462,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-16 02:45 | **C315 — PR 1 does not build as specified** | 30 → 31 | Missing `ble_main.c/.h` and an `app_cmd.c` hunk. The hunk-split (+827 −8 across all five PRs) is the blocking task for the whole sequence. PR 0 unaffected | 3 builds, isolating one dependency class at a time so the remaining gap is bounded, not guessed |
 | 2026-09-16 02:05 | **C314 — PR 0b is 5 files, not 4 lines** | 29 → 30 | Compiling on `main` exposed a two-step dependency chain: call site → guard → BLE connection state. PR 0 unchanged | 4 builds, 3 failing in sequence; each compile error named the next dependency |
 | 2026-09-16 01:30 | **C313 — PR 0 separability proven by construction** | 28 → 29 | Patch applies to clean `main` and builds there: +248 B flash, no new BSS. `formats[]` byte-identical. One 4-line dependency (BLE guard) named as PR 0b | Unpatched control built first so +248 B is a measurement, not a cross-tree subtraction |
 | 2026-09-16 00:55 | **C312 — U7 refresh; `unpack()` fix is separable today** | 27 → 28 | 3 files, +102 −16, no new includes or externs, all three already upstream. Reviewable surface recounted at 64 files / +11,327 | Separability measured via the header's include/extern lines, not eyeballed; the honest recount went UP and is quoted that way |

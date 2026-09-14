@@ -692,6 +692,14 @@ review.
 
 ### 9d. ⭐ The split at FILE level — so it can be executed rather than re-derived
 
+⛔⛔ **TESTED 2026-09-16 AND PR 1 DOES NOT BUILD AS LISTED (C315).** The table below was derived
+by reading, and it is missing two things PR 1 cannot compile without: **`ble_main.c/.h`** (it
+supplies `lf_adc_set_acq_fast` and `g_is_ble_connected`) and **a hunk of `app_cmd.c`** (PR 1
+changes `raw_read_to_buffer`'s signature and renames `LF_SNIFF_MAX_SAMPLES`; `app_cmd.c` calls
+both). ⇒ **The `app_cmd.c` hunk-split is the blocking task for the whole sequence** — the note
+below says it "must be split by hunk" and it never has been, and that diff is +827 −8 across all
+five PRs. ⭐ PR 0 (§9i) is unaffected: it builds alone.
+
 61 files change. Listing them by PR is the difference between a plan and an intention, and the
 shared files are the part that actually needs thought: `app_cmd.c`, `data_cmd.h`,
 `lf_reader_main.c/.h`, `lf_indala_data.c/.h`, `tag_base_type.h`, `tag_emulation.c`, the
