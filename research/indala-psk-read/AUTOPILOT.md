@@ -526,6 +526,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 10:45 | **C345 — read reliability re-measured after F5/F7: 250 reads, 0 failures, HID 100/100** | 51 → 52 | C250's 96/96 predated the capture-engine rework and had never been re-taken. `readsoak.sh` added | tag written once per protocol, then only read, so a miss isolates the read path |
 | 2026-09-14 10:15 | **C344 — the blank-chip null, live for the first time: 105 reads, 21 readers, 0 false positives** | 50 → 51 | Every previous empty null was a recorded capture; a wiped T5577 still modulates the field. `nullmatrix.sh blank` added | pm3 wipes and confirms blank before each of five runs |
 | 2026-09-14 09:50 | **C343 extended — the six UPSTREAM protocols too; 76 of 76 across nineteen** | 50 → 50 | HID Prox, ioProx, EM410x, Viking, Jablotron and PAC verified against pm3-written tags: a regression check on the capture engine this branch rewired under them | 6 protocols x 4 reads, expectations observed not guessed |
 | 2026-09-14 09:20 | **C343 — read arms verified against PROXMARK-WRITTEN tags, 52 of 52; the loop closes both ways** | 49 → 50 | Closes the self-certification hole my own instruments had: every other test writes the tag with OUR writer. `pm3written.sh` added | 13 protocols x 4 reads; 8 of 13 driven by fields, not a raw frame |

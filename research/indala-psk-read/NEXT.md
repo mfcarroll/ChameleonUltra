@@ -368,6 +368,11 @@ reruns any row: four fresh writes, each read back by the Proxmark, plaintext con
 compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Indala26, Indala224 and IDTECK, 4 of 4 each (C331),
 along with every other write arm in the tree.
 
+⭐⭐ **AND THE ENGINE REWORK COST NO RELIABILITY (C345).** 250 reads, 0 failures, across all four modulation
+families; **HID Prox 100 of 100**, against C250's 96/96 taken before F5 merged the capture buffers and F7 widened
+the corroboration comparison. ⚠ 0 in 250 is a **1.2%** pooled bound and HID alone **3.0%** — it cannot see a
+1-in-500 failure, and the grid's per-arm n = 4-6 figures are correctness, not reliability.
+
 ⭐⭐ **AND NO READER INVENTS A CREDENTIAL FROM A BLANK CHIP (C344)** — 105 reads across 21 readers on a wiped
 T5577, 0 false positives, the blank state confirmed by the Proxmark before each of the five runs. This is the
 failure a reviewer should fear most, because there is no credential anywhere to misread, and it is distinct from
