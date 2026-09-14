@@ -267,7 +267,8 @@ the two Chameleons face each other.
 > at all (C242) — do not write another biphase emitter. U11 (FSK2a emitters) is open but
 > unobservable: AWID's emitter is correct by every check available and silent anyway, and the
 > only reader that can hear rig A is the Flipper, which is under test.
-> ⭐ **U14 IS OPEN AND OPERATOR-REQUESTED (2026-09-15): audit the references' scan / repeat-read
+> ✅ **U14 IS LARGELY DONE — `NEXT.md` §11 (C291).** What remains is the per-protocol
+> *reasoning*, which no tree documents. ⭐ **(historical) U14 IS OPEN AND OPERATOR-REQUESTED (2026-09-15): audit the references' scan / repeat-read
 > discipline**, Flipper variants included. It is a COMPUTE unit — every tree is already on
 > disk — and it is the natural companion to C268/C269, which found the agreement rule rather
 > than the gates is what makes this reader safe.
@@ -405,6 +406,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 10:20 | **U14 / C291 — the reference scan-accuracy audit** | 14 → 15 | Six trees audited, `NEXT.md` §11 written. Three models; the Flipper family doubles its repeat count for the whole PSK1 family and for `hid_generic` alone besides | Every claim cites the implementing line; the four worker loops md5-compared before calling their rule identical |
 | 2026-09-15 09:40 | **C290 — the new API pinned in ctest** | 14 → 14 | `wiegand_other_matches()` cross-checked against an independent enumeration: 1,519 frames, 0 disagreements | Break test moved it to 1,519 of 1,519 and failed `make check`; binary deleted before rebuilding |
 | 2026-09-15 09:05 | **C289 — emulate arms provably untouched** | 14 → 14 | Seven firmware files changed since C241's build; the seven the working arms depend on have 0 commits between them. No flash of #1 taken | Per-file `git log` rather than a diff summary; the caveat that this reasons at file level is recorded |
 | 2026-09-15 08:35 | **C288 — regression pass, 12 read arms** | 14 → 14 | All 4/4 on `5a5fdf7c` after four gate changes and a payload extension. HID re-rated 24/24 against C248's 48/48 | Every credential Proxmark-written from arguments we chose; the one change with a plausible cost measured against its own pre-change number |

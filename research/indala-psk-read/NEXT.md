@@ -226,6 +226,52 @@ is a new transport behind the existing command layer. ⚠ A live BLE connection 
 is itself uncharacterised, and C47 has advertising bursts collapsing the field — measure with
 and without before trusting it.
 
+## 11. ⭐ HOW THE REFERENCES GET ACCURACY — the scan / repeat-read audit (U14)
+
+⭐ **Why this is here.** C268 and C269 found that our two-agreeing-stacks rule, not the frame
+gates, is what makes this reader safe: marginal-field errors scatter and agreement catches all
+of them, while a broken frame concentrates them and agreement sometimes cannot. So what the
+references do about the same problem is load-bearing. All six trees are on disk; nothing was
+fetched.
+
+| | how accuracy is obtained | where |
+|---|---|---|
+| **Proxmark3** | **Structural only.** One capture, demodulate, and print **every** matching format with its parity or CRC verdict beside it. `-@` repeats the whole read and prints each result independently — there is **no agreement requirement between reads**. The operator is the filter. | `client/src/cmdlfhid.c:285-287` (the `do { lf_read(); demodHID(); } while (cm)`), `client/src/wiegand_formats.c:1708` `HIDTryUnpack`, `:1732` "found N matching M-bit formats", `client/src/cmdlf.c:1956` "Note: False Positives ARE possible" |
+| **Flipper family** — official, Unleashed, RogueMaster, Momentum, Momentum-slix | **Repetition only.** N **consecutive** reads whose decoded data is **byte-identical**; any change resets the count. Reports one protocol and no alternatives. ⭐ **All four worker files differ from each other, and this rule is identical in every one.** | `lib/lfrfid/lfrfid_worker_modes.c` — official `:241`, unleashed `:263`, roguemaster `:258`, Momentum `:252`, each `protocol == last_protocol && memcmp(last_data, protocol_data, size) == 0` |
+| **Here** | **Both, and a third thing.** Two agreeing stacks over whole captures at rotating sample phases, plus per-format `accept` hooks (C253, C255, C257, C258), plus naming the other layouts that fit (C287). | `lf_indala_data.c` `INDALA_AGREE_COUNT`, `PHASE_ROTATION`; `wiegand_other_matches()` |
+
+### ⭐⭐ The number that matters: the Flipper family doubles its count for PSK1, and only for PSK1
+
+`validate_count` is 3 for almost every protocol and **6** for exactly six of them:
+
+| at 6 | modulation |
+|---|---|
+| `indala26`, `indala224`, `keri`, `nexwatch`, `idteck` | **PSK1 — the entire PSK family** |
+| `hid_generic` | FSK2a, but the **format-agnostic** HID reader |
+
+Everything else — em4100, awid, paradox, pyramid, h10301, io_prox_xsf, fdx_a, fdx_b, gallagher,
+securakey, noralsy, jablotron, viking, pac_stanley, gproxii, electra, insta_fob, hid_ex_generic
+— sits at 3.
+
+⇒ **Two independent projects reached the same conclusion about the same family.** This branch
+found PSK1 the fragile one from the other end: C190 measured our PSK1 emulation read **3 of 21**
+by a Proxmark where ASK read 16/16 and PSK2 14/16, because only absolute-phase encoding pays for
+a free-running clock. The Flipper authors never emulated anything — they hard-coded twice the
+repeats on the read side for the same five protocols.
+
+⇒ **And `hid_generic` is C284/C285 restated by someone else.** It is the HID reader that does not
+know the layout, and it is the only non-PSK protocol given 6. When the format cannot be
+validated, the reference buys confidence with repetition instead — which is exactly the gap
+C284 measured at 15 of 29 formats and C287 answered by naming the alternatives.
+
+⚠ **What the fork history shows.** Official has **no `indala224` at all**; Unleashed, RogueMaster
+and Momentum all add it *and* give it 6, matching its PSK1 siblings rather than the default. The
+rule was applied deliberately by whoever added the protocol, not inherited by accident.
+
+⚠ **What is NOT established.** Why 3 and 6 specifically — no comment in any tree gives a
+measurement, and none of the five carries a test for it. Our own `INDALA_AGREE_COUNT` of 2 has a
+bootstrap behind it (50,000 trials over 160 real captures); theirs may have none.
+
 ## 9. Upstreamable? — assessed 2026-09-13
 
 ⚠ **This section was written when the branch was Indala-only. It is now 49 files and ~7,500
