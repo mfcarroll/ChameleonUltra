@@ -359,9 +359,9 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Indala26 / Indala224 / IDTECK | **A** | **A** — all three **4/4** re-graded (C330, C331) | **B** |
 | Keri | **A** 6/6 | **A** **4/4** (C330) | **B** 6/6 |
 | NexWatch | **A** 6/6 | **A** **4/4** (C330) — judged on `lf nexwatch read`, not `lf search` | **B** 10/10 |
-| Gallagher | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
-| Securakey | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
-| Noralsy | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
+| Gallagher | **A** 6/6 | **A** **4/4** (C330) | ⛔ **0/6 on current firmware — candidate regression (C366)**; was B 10/10 |
+| Securakey | **A** 6/6 | **A** **4/4** (C330) | ⛔ **0/6 on current firmware (C366)**; was B 10/10 |
+| Noralsy | **A** 6/6 | **A** **4/4** (C330) | ⛔ **0/6 on current firmware (C366)**; was B 10/10 |
 | InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
 | AWID | **A** 5/5 real tag (C201) | **A** **4/4** re-graded (C330) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
 | Paradox | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
