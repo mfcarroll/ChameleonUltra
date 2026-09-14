@@ -41,7 +41,38 @@ CH2="$EMU"
 SLOT="${SLOT:-8}"          # a scratch slot, so nothing anyone curated is overwritten
 ATTEMPTS="${ATTEMPTS:-6}"
 cu () { "$PY" "$CU" "hw connect -p $CH2" "$@" 2>&1 }
-fread () { "$PY" "$HERE/flipper.py" read --mode both --attempts "$ATTEMPTS" 2>&1 }
+
+# ⛔⛔⛔ THE READER MUST BE PROVEN ALIVE BEFORE ANY ARM IS SCORED (C374, and C373 is what it cost).
+# `flipper.py` aborts when the Flipper refuses to load its `rfid` plugin — but this script used to
+# capture its output with `$(fread)` and grep for `psk N/N`, which discards both the exit status and
+# the abort message. The result looked EXACTLY like a good experiment: `✓ null before clean`, every
+# arm `psk -  ask -`, `✓ null after clean`. Eleven arms of that were read as *the emulator is
+# silent* when the truth was *the reader was never listening*, and it stood as a firmware unit
+# (U18) until `hw emudebug` contradicted it.
+# ⇒ fread now RETURNS non-zero when the instrument is dead, and every caller aborts the run. A
+# clean fread is itself the positive control that rig A is up — there is no other one available,
+# because a silent reader and a silent emulator produce the same numbers.
+fread () {
+  local out rc
+  out="$("$PY" "$HERE/flipper.py" read --mode both --attempts "$ATTEMPTS" 2>&1)"; rc=$?
+  print -r -- "$out"
+  if (( rc != 0 )) || print -r -- "$out" | grep -q "the Flipper REJECTED"; then
+    return 3
+  fi
+  return 0
+}
+
+reader_dead () {
+  print -r -- ""
+  print -r -- "  ⛔⛔ THE READER IS NOT RUNNING — nothing below this line would mean anything."
+  print -r -- "     \`flipper.py\` refused to score, so rig A cannot measure. The usual cause is"
+  print -r -- "     that the Flipper's \`rfid\` plugin will not load: /ext/apps/RFID/lfrfid.fap"
+  print -r -- "     must match the running firmware's API (AUTOPILOT.md §5)."
+  print -r -- "  ⇒ A silent reader and a silent emulator produce IDENTICAL numbers. Fix the"
+  print -r -- "     instrument, then re-run — do not read the arms above as a result (C373)."
+  cu "hw mode -r" >/dev/null
+  exit 1
+}
 
 # protocol -> econfig args | expected modulation arm
 typeset -A E MOD TYPE
@@ -74,7 +105,8 @@ if (( $# )); then protos=("$@"); else protos=($allp); fi
 
 null_check () {
   cu "hw mode -r" >/dev/null
-  local o=$(fread)
+  local o
+  o=$(fread) || reader_dead
   if print -r -- "$o" | grep -qiE "psk [1-9]|ask [1-9]"; then
     print -r -- "  ⛔ NULL $1 FAILED — the Flipper read something with #2 emulating nothing:"
     print -r -- "$o" | sed 's/^/       /' | head -4
@@ -112,7 +144,7 @@ for p in $protos; do
   cu "hw slot change -s $SLOT" >/dev/null
   cu "hw mode -e" >/dev/null
   sleep 1
-  o=$(fread)
+  o=$(fread) || reader_dead
   psk=$(print -r -- "$o" | grep -oiE "psk [0-9]+/[0-9]+" | head -1)
   ask=$(print -r -- "$o" | grep -oiE "ask [0-9]+/[0-9]+" | head -1)
   printf "  %-10s expected %-3s   %-12s %-12s\n" "$p" "${MOD[$p]}" "${psk:-psk -}" "${ask:-ask -}"

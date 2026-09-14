@@ -69,6 +69,12 @@ no upstream defect, no `FIXES.md` entry, and no power cycle needed between emula
 ⇒ **THE STANDING LESSON, NOW NINE DEEP.** `hw lfdebug` was the wrong instrument and `hw emudebug` — which
 answers the question directly and had existed all along — was never asked. Suspect the instrument first.
 
+⛔ **AND THE FIX HAD TO BE MADE TWICE (C376).** Guarding `flipper.py` did not protect `emugrade.sh`, which
+captured the abort as `o=$(fread)` and grepped for `psk N/N` — discarding the status and the message, and
+printing a clean `✓ null before` / `psk - ask -` / `✓ null after` against the reader I had just proven dead.
+✅ Both layers now abort, verified against the same dead bench. ⭐ **A clean `./flipper.py read` is rig A's
+only positive control**, because a silent reader and a silent emulator produce identical numbers.
+
 ---
 
 ### ✅ 2026-09-14 08:05 — READ AND WRITE ARE FINISHED AND VERIFIED BOTH WAYS. EMULATE IS THE ONLY GAP.
