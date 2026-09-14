@@ -71,7 +71,29 @@ status)
     # session's fixed overhead and reports **4%** while the real figure is 90%. A check that
     # reports green when it should be red is worse than no check (C370).
     # ⇒ cd to $REPO, and treat `msgs=0` as "that is not our session" rather than as a number.
-    ctx=$(cd "$REPO" && sh "$UTIL/context_check.sh" "${CLAUDE_SESSION_ID:--c}" 2>/dev/null | tail -1)
+    #
+    # ⛔⛔⛔ AND THAT GUARD WAS NOT ENOUGH — IT COST A WHOLE RUN (C406). `msgs=0` catches the check
+    # measuring a FRESH session. It cannot catch the check measuring SOMEBODY ELSE'S: with
+    # CLAUDE_SESSION_ID unset in an agent's shell, `-c` resolved to a real, populated session
+    # (`pct=8 msgs=30886`) and every tick reported **8% while the true figure was 70%**. The ≥40%
+    # stop rule — the only safety rule this loop has — was silently disabled for the entire run,
+    # and only the operator running this same command from their own terminal could see it.
+    #
+    # ⇒ NEVER FALL BACK TO `-c`. `-c` means "the most recent session in $PWD", which is a
+    # different question depending on who asks and from where. The session must be named.
+    # ⭐ An agent always has its own id: it is the UUID in its scratchpad path,
+    #    /private/tmp/claude-*/<repo-slug>/<THIS-UUID>/scratchpad — verified to return pct=71
+    #    against an operator-observed 70%.
+    # ⚠ An ABSENT number stops the loop; a WRONG one does not. So refuse, loudly, rather than guess.
+    if [ -z "${CLAUDE_SESSION_ID:-}" ]; then
+        echo "⛔ context   UNREADABLE — CLAUDE_SESSION_ID is unset, and this check will NOT guess (C406)."
+        echo "            Export it first: it is the UUID in your scratchpad path,"
+        echo "            /private/tmp/claude-*/<repo-slug>/<UUID>/scratchpad"
+        echo "            Treat as OVER THE LINE until it reads a real number."
+        ctx=""
+    else
+        ctx=$(cd "$REPO" && sh "$UTIL/context_check.sh" "$CLAUDE_SESSION_ID" 2>/dev/null | tail -1)
+    fi
     case "$ctx" in
         *msgs=0*) echo "⛔ context   UNREADABLE — msgs=0 means it measured a fresh session, not ours. Do not trust it."
                   ctx="" ;;
@@ -88,6 +110,32 @@ status)
                    echo "⚠ context    ${pct}% — finish the current unit and leave the tree committed."
                else
                    echo "context     ${pct}% used"
+               fi
+               # ⭐⭐ THE STALENESS GUARD — the operator's, and it is the belt to the braces above.
+               # Context CHANGES every tick: a tick appends turns, so it climbs, and a compaction
+               # makes it fall sharply. What it does not do is sit on the SAME number tick after
+               # tick — which is exactly what a wrong-session reading does, because that session
+               # is not the one doing the work. Eight percent, unchanged, for a whole run (C406).
+               # ⚠ DELIBERATELY "UNCHANGED", NOT "DID NOT INCREASE". A compact makes the number
+               # DROP, and a guard demanding an increase would cry wolf on the very next tick
+               # after every compaction — which is how a check gets worked around instead of
+               # fixed. A drop is movement, and movement is all this asks for.
+               # ⚠ Three consecutive identical readings, not two: a quiet tick can legitimately
+               # round to the same percent once.
+               # ⚠ TRACK THE RAW TOTAL, NOT THE ROUNDED PERCENT. A percent is ~10,000 tokens at
+               # this window size, so two real ticks can legitimately round to the same number and
+               # a pct-based guard would cry wolf. `total=` moves on EVERY turn, so an identical
+               # total is not "quiet", it is "not this session".
+               tot=$(printf '%s' "$ctx" | sed -nE 's/.*total=([0-9]+).*/\1/p')
+               prev_f=/tmp/indala_autopilot.ctxtotal
+               prev=$(cat "$prev_f" 2>/dev/null | head -1)
+               same=$(cat "$prev_f" 2>/dev/null | tail -1)
+               [ -n "$tot" ] && [ "$prev" = "$tot" ] && same=$((${same:-1} + 1)) || same=1
+               printf '%s\n%s\n' "$tot" "$same" > "$prev_f"
+               if [ "${same:-1}" -ge 3 ]; then
+                   echo "⛔ context   total $tot UNCHANGED for $same ticks — that is not this session (C406)."
+                   echo "            Context moves every tick: work adds to it, a compact drops it."
+                   echo "            A number that never moves is measuring somebody else. Check CLAUDE_SESSION_ID."
                fi ;;
         esac
     fi
