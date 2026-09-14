@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""Histogram the TONE PERIODS in a reader capture — the measurement U11 turns on.
+"""⛔⛔⛔ DO NOT TRUST THIS TOOL — IT MEASURES NOISE, NOT TONES (C401). RETAINED AS EVIDENCE ONLY.
+
+It reports `ZERO long tones — this is U11's signature` on an EM410X emission that the receiving
+device DECODES CORRECTLY in the same minute. Every histogram it produces decays monotonically from
+the 6-sample floor instead of peaking at the tone lengths, so its "bands" are bins of a noise curve.
+The cause is the threshold below: a 64-sample moving mean smears an EM410X half-bit (32 samples)
+flat, and the AC-coupled baseline (~27-sample time constant, C204) finishes the job.
+
+⚠ C391 claimed this was validated against a known-good reference. It was not — the reference output
+had the same decaying shape and I read it as two bands, because I never said in advance what a PASS
+would look like. That is M50 followed in form and failed in substance.
+
+⇒ Rebuild any tone analysis on the project's PROVEN demodulators (askdemod.py, ctest/cdemod), which
+are validated against real captures. Do not extend this file.
+
+Histogram the TONE PERIODS in a reader capture — the measurement U11 turns on.
 
     ./tonehist.py /tmp/cap.bin [--expect 8,10]
 

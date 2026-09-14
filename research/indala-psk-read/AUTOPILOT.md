@@ -933,7 +933,17 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ## 5. BLOCKED
 
-### ⚠ 2026-09-14 13:35 — U11 ONLY: OUR OWN CAPTURE INSTRUMENT CANNOT HEAR OUR OWN EMITTER (C387, C388)
+### ✅ CLEARED 2026-09-14 16:10 — THE BENCH IS COUPLED. THE BLOCKER IS NOW MY ANALYSIS, NOT THE HARDWARE
+
+⭐ **The operator moved the two Chameleons to face each other, and it works**: #2 decodes #1's EM410X
+emulation (`EM410X/64: deadbeef88`), so `./fskcap.sh` takes real captures and no bench change is outstanding.
+⛔⛔ **But the measurement is still not taken, because `tonehist.py` measures noise (C401).** It prints
+`ZERO long tones — this is U11's signature` on that same known-good EM410X emission. The captures are sound;
+the histograms are not evidence, and today's `fskcap.sh` numbers are void.
+⇒ **NEXT: rebuild the tone analysis on the project's PROVEN demodulators** — `askdemod.py` and ctest's
+`cdemod`, which are validated against real captures — then re-run `./fskcap.sh`. **No hands needed.**
+
+### (superseded) 2026-09-14 13:35 — U11 ONLY: OUR OWN CAPTURE INSTRUMENT CANNOT HEAR OUR OWN EMITTER (C387, C388)
 
 ⛔ **Scope: this blocks U11 and nothing else.** Read, write and 8 of 11 emulate arms are finished and
 verified; the bench is otherwise healthy and every other unit can proceed.
