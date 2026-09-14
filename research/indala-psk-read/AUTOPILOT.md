@@ -38,53 +38,62 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ✅ 2026-09-14 09:50 — WHERE THE READER WORK STANDS
+### ✅ 2026-09-15 12:30 — WHERE THE READER WORK STANDS
 
-⭐⭐ **C45 is closed and the session's thread ran out of it.** The HID intermittency was a BLE
-advertising burst (C250); the guard fixes it. The guard-off build then became an instrument —
-it produces frame corruption on demand — and with it C251 found that a corrupted HID frame is
-reported as **Indala 26-bit** six times out of seven, because `unpack()` walks to the next
-26-bit format when H10301's parity refuses. That is upstream's, written up as `NEXT.md` §9f.
+⭐ **Rewritten today.** The paragraph this replaces was the 09:50 one, written 45 claims ago and
+accurate then. `LOG.md` keeps the history; §1 is what a fresh context inherits, so it states
+what is true now. Same discipline C286 applied to `NEXT.md` §9f.
 
-⭐⭐ **Generalised with no device: C252's sweep asks every decoder we ship what it does with a
-WRONG frame** — one flipped bit, 1,024 corrupted frames, counts PINNED in `ctest`. It found one
-gap that was ours: Securakey had no `accept` hook at all. C253 closed it and proved it on a real
-tag by flipping one named spacer bit (8/8 valid, 0/4 broken, 4/4 restored).
+**THE BENCH, verified 2026-09-15 12:30.** All four devices enumerate. **Chameleon #2 runs
+`96c9d1c` — a clean build of HEAD, `hw version` confirms it, no `-dirty`** — and reads the
+T5577 4 of 4 after the flash. **#1 is deliberately NOT reflashed**: C289 showed by per-file diff
+that nothing changed today can reach the five working emulate arms, so flashing it would have
+risked the unit holding the NexWatch slot for a check that could not fail. The tag holds **HID
+H10301 FC 123 / CN 4567**, `parity ( ok )` per the Proxmark. `make check` is green on all four
+arms — round trips, ambiguity counts, the `wiegand_other_matches` cross-check, and the
+320-capture decoder comparison.
 
-⛔ **C254 is the limit of that table and it is stated rather than hidden**: the sweep cannot
-reach `require_repeat`, and the obvious instrument fails its own control. Low numbers are a
-FLOOR for repeat-gated formats.
+**C45 IS CLOSED (C250).** The HID reader's old 15-20% intermittency was a BLE advertising burst
+collapsing the field mid-capture; `cf745fb`'s guard fixes it — 96/96 with, 71/80 without, on one
+tag in one session, p = 6.4e-4.
 
-✅ **The audit is DONE (C256) and GProxII's gap is closed (C255).** InstaFob's `NULL` hook turned
-out to be correct — the reference checks its 32-bit constant and nothing else — and IDTECK and
-Indala224 match too. ⛔ **One measured caution now sits over all of this**: with a corrupted tag
-in the field, GProxII returned a frame that passes EVERY check both references make, once in
-four. A stronger gate narrows the window; it does not close it.
+**FOUR ACCEPTANCE GATES WERE ADDED OR CORRECTED, each verified by breaking one named bit on a
+real tag**: Securakey's ten zero spacers (C253), GProxII's Wiegand parity over the descrambled
+credential (C255), Indala26's bits 60 and 61 (C257, which makes us *stricter than the Proxmark* —
+it reads frames we now refuse), and Keri's frame repeat (C258, affordable only because its
+capture window is 8192 where Indala26's is 4096). **C288 then re-verified all twelve read arms
+together — 4 of 4 each — and re-rated HID at 24/24, so the stricter gates cost nothing on real
+tags.**
 
-⇒ **Candidates next, all no-hands unless marked:**
-- ✅ **DONE (C257)** — Indala26's two zero bits. ⚠ It made us STRICTER THAN THE PROXMARK, which
-  reads the rejected frame perfectly; the disagreement is recorded rather than smoothed over.
-- ✅ **DONE (C258, C259, C260)** — Keri took the repeat check, Indala26 was refused it, Keri's
-  `Internal ID` was printing the raw field and is fixed, and ALL TEN displays are now audited
-  against the Proxmark: eight clean, one fixed, one gap.
-  ✅ **AND Securakey's display is built (C261)** — the display layer is complete and verified in
-  all ten protocols. ✅ **§9 refreshed (C262)**: 48 new command ids of which 41 are shippable,
-  three stale rows fixed, and §9g now carries the gate and display audits for a reviewer.
-  ✅ **AND the instrumentation split is now a checklist (C263, §9h)** — four items, every call
-  site, nothing shippable depending on any of them. Deliberately not executed: the cut belongs
-  in PR preparation, and doing it here would break the tooling this branch runs on.
-  ⇒ **§9 is now current in every part a reviewer reads.** What remains in §9b is genuinely not
-  ours to decide: the command-id allocation needs upstream, and the shared-struct sizing and
-  the GProxII parameter overrides are judgement calls for a maintainer. ⭐ **Operator directive 2026-09-15: the upstream `unpack()` relabelling is OURS to work on**,
-  not merely to report — see C276 for the mitigation shipped and NEXT.md §9f for the corrected
-  scope. ⇒ **Everything else left in
-  §2 needs HANDS** (see §5 and NEXT.md's Needs hands table). The next device unit is the
-  emulate-arm re-grade, and it cannot start until the tag comes out of the sandwich.
-- ⛔ **The `require_repeat` instrument has now failed TWICE (C254, C264)** — the second attempt
-  was built to C254's own written design and still did not reach the flag, proved by toggling
-  it on the format under test. ⇒ **Do not build a third without a new idea about WHY the
-  synthetic buffer misses what real captures hit.** The flag is not inert; C258 measured it
-  moving real captures. The question costs more than it is worth until something reopens it.
+**THE HID FORMAT WALK IS THE BIGGEST FINDING AND IT IS UPSTREAM'S.** `unpack()` returns the
+FIRST Wiegand layout that fits. On real tags **15 of 29 formats come back as a different format
+with a different credential** (C284) — a Kastle tag holding fc 1 / cn 1 reports as Check Point
+card 8389632 — because **13 of 32 unpackers have no rejection path at all** (C285). It cannot
+be narrowed into correctness; only enumerating or pinning works. ⇒ We now do **both**: the
+reader names the other layouts that fit (C287, `wiegand_other_matches()`, verified against the
+Proxmark's parity-passing candidate list 3 for 3) and warns when no format was pinned. All of
+that is `NEXT.md` §9f, rewritten strongest-first in C286.
+
+**U14 — THE OPERATOR-REQUESTED REFERENCE AUDIT — IS DONE (C291, `NEXT.md` §11).** Three models:
+the Proxmark validates structurally and never requires two reads to agree; the whole Flipper
+family validates only by repetition, N consecutive byte-identical reads; we do both. ⭐ The
+Flipper family uses **6 for every PSK1 protocol and 3 for everything else** — the same family
+C190 found fragile from the emulation side. **C292 then showed our own count of 2 is enough**
+(front corpus 0 wrong in 160 captures; phasebits 13 wrong and all distinct), and **C294 settled
+the mechanism by entailment**: the reader returns only frames that matched their predecessor at
+the same sample phase, so what defeats the rule is deterministic distortion, never coincidence.
+
+⛔ **THE STANDING CAUTION, measured three ways.** Gates narrow the window, agreement narrows it
+further, and **neither closes it**. A valid tag at marginal field produced 9 wrong credentials
+in 92 captures (C267) — all distinct, so agreement caught them all (C268). A tag whose frame is
+broken produced 12, and one recurred (C269). ⇒ Quote that to a reviewer rather than any single
+number.
+
+⇒ **NEXT, and it is short**: everything left in §2 needs HANDS. The only blocker is the
+sandwich — lift the T5577, or face the two Chameleons — for the emulate-arm re-grade. ⚠ Two
+things are deliberately NOT done and should stay that way without a decision: the instrumentation
+split (§9h has the checklist; executing it would break this branch's own tooling) and any change
+to `unpack()` itself.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
@@ -406,6 +415,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 12:30 | **§1 rewritten, #2 reflashed from a clean HEAD** | 15 → 15 | `hw version` now reads `96c9d1c` = HEAD with no `-dirty`, where it had been a mid-edit build matching no commit. §1 was 45 claims stale | Post-flash read check 4 of 4; every claim in the new §1 cites the claim that established it |
 | 2026-09-15 12:10 | **C294 — C266's survivors were never unexplained** | 15 → 15 | Entailed: the reader returns only frames that matched their predecessor at the same phase, so those 3 recurred within a phase by construction. C207 confirmed | One assignment site and one return path; the host-vs-device timing trap named |
 | 2026-09-15 11:35 | **C293 — C269 corrected, and a second stale warning** | 15 → 15 | Our agreement needs two CONSECUTIVE decodes at the SAME phase and resets across phases, so C269's cross-phase explanation is void. `gproxii_read` still said NOT VERIFIED after C213 fixed it | Read the implementation rather than describing it; the right mechanism was already in our own C207 comment |
 | 2026-09-15 10:55 | **C292 — is our agree count of 2 enough?** | 15 → 15 | Yes: front 0 wrong in 160 captures, phasebits 13 wrong and all distinct. The `INDALA_AGREE_COUNT` note predates two gates and is now labelled history | The front corpus is the control and has no wrong frames left to count; "all distinct" is a uniqueness check, not an inference |
