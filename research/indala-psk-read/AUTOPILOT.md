@@ -45,7 +45,8 @@ accurate then. `LOG.md` keeps the history; §1 is what a fresh context inherits,
 what is true now. Same discipline C286 applied to `NEXT.md` §9f.
 
 **THE BENCH, verified 2026-09-15 12:30.** All four devices enumerate. **Chameleon #2 runs
-`96c9d1c` — a clean build of HEAD, `hw version` confirms it, no `-dirty`** — and reads the
+`3f40bc5` — a clean build of HEAD (`v2.2.0-534`), reflashed 2026-09-15 18:00 and confirmed by
+`hw version` plus a 195-id capability query** — and reads the
 T5577 4 of 4 after the flash. **#1 is deliberately NOT reflashed**: C289 showed by per-file diff
 that nothing changed today can reach the five working emulate arms, so flashing it would have
 risked the unit holding the NexWatch slot for a check that could not fail. The tag holds **HID
@@ -415,6 +416,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 18:05 | **C304 — C302/C303 verified on hardware** | 20 → 21 | Flashed #2 to HEAD. KASTLE now reads back as itself 4/4 (was C284's headline failure). ⛔ The read also caught the corruption message lying about correct numbers — fixed, 32 bits moved to "cannot tell" | Bench restored and re-verified; pm3 corroborates `matches = 2`; the harness's own example named the same credential |
 | 2026-09-15 17:20 | **C303 — instrumentation compile-gated** | 19 → 20 | `LF_RESEARCH_CMDS_ENABLED`, default 0; one Makefile line enables it. Cost measured both ways: 1,088 B flash + 4,008 B RAM | Two builds per configuration; `nm` attributes the RAM to the byte and confirms an existing source comment; capability query verified on #2 |
 | 2026-09-15 16:45 | **C302 — `unpack()` fixed in place** | 19 → 19 | Two-pass walk preferring a format that can validate; ambiguity reported on the card; `wiegand_other_matches()` deleted. KASTLE repaired, never-self 14 → 12 | 1,519-frame cross-check 0 disagree; `has_parity` agrees with C300's behavioural sweep on all 31 rows; firmware links; `make check` green |
 | 2026-09-15 16:10 | **C301 — every reader gate measured in bits** | 18 → 19 | 200,000 random frames per format through the exported descriptors. 4 of 11 have no gate; INSTAFOB and IDTECK have no repeat requirement either. My GProxII prediction was wrong, the code was right | Predictions written before the run and pinned; the two zero-rate gates decomposed so they cannot be confused with always-false |

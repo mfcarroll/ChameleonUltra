@@ -5975,8 +5975,17 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
 #
 # ⚠ Lengths above 37 are NOT measured — `ambig`'s credential grid produces no valid frames
 # there — so they fall through to the cautious "either" wording.
-FOREIGN_MEANS_CORRUPTION = frozenset({          # 26, 32 and 37-bit foreign formats
-    HIDFormat.IND26, HIDFormat.KASTLE, HIDFormat.KANTECH, HIDFormat.WIE32, HIDFormat.MDI37,
+# ⛔ 32-BIT FORMATS LEFT THIS SET WHEN C302 CHANGED THE WALK, AND THE OLD MEMBERSHIP WAS
+# ACTIVELY LYING. The premise here is "an HID format accepts every valid frame of this layout,
+# so a genuine foreign tag never reaches this branch" — which held only because the old walk
+# returned the first row in TABLE order and the check-less HID rows sat first at 32 bits. Now
+# the walk prefers a format that can VALIDATE, so KASTLE (which has parity) legitimately beats
+# HCP32 (which has none). Caught on hardware: a tag written KASTLE fc 1 / cn 1 read back
+# correctly 4 of 4 while this branch told the operator "the numbers below are fiction" (C304).
+# ⇒ They now fall through to the honest "cannot tell" branch. ctest/ambig.c pins the per-length
+# verdict by asking the REAL walk, so this cannot drift back silently.
+FOREIGN_MEANS_CORRUPTION = frozenset({          # 26 and 37-bit foreign formats
+    HIDFormat.IND26, HIDFormat.MDI37,
 })
 NO_HID_AT_THIS_LENGTH = frozenset({             # 27, 28, 29 and 30-bit formats
     HIDFormat.IND27, HIDFormat.INDASC27, HIDFormat.TECOM27,
@@ -6051,7 +6060,7 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
                           f"length — {color_string((CY, str(HIDFormat(format))))} is simply the "
                           f"layout that fits, and that is normal here.")
                 elif format in FOREIGN_MEANS_CORRUPTION:
-                    # ⭐ MEASURED, not assumed: at 26, 32 and 37 bits an HID format accepts EVERY
+                    # ⭐ MEASURED, not assumed: at 26 and 37 bits an HID format WINS for EVERY
                     # valid frame of these foreign layouts — all 8,658 ind26 frames swept, and
                     # likewise at the other two lengths — so a genuine foreign tag reports as HID
                     # and never reaches here. Only a frame that BREAKS the HID format's checks
@@ -6063,7 +6072,8 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
                           f"one reports as HID and never lands here (C280). "
                           f"{color_string((CY, 'The numbers below are fiction'))} — re-read.")
                 else:
-                    # ⚠ 34 bits, where HID formats take 307 of 484 foreign frames (C280): both
+                    # ⚠ 32 and 34 bits, where HID formats win 242 of 363 and 307 of 484 foreign
+                    # frames respectively (C280, recounted by C304 against the real walk): both
                     # explanations are live and this reader cannot tell them apart.
                     print(f"   {color_string((CR, '⛔ no HID layout fits this frame'))} — it fits "
                           f"{color_string((CY, str(HIDFormat(format))))}, another vendor's layout.")

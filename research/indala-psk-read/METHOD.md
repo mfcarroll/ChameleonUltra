@@ -368,6 +368,18 @@ read. Different timing regime, and the two were compared as though they were one
 ⇒ Name the regime when the tool is not the thing under test. "Captured with the same hardware"
 is not "captured the same way".
 
+**M42. ⛔ A FIX THAT CHANGES WHICH CANDIDATE WINS INVALIDATES EVERY MESSAGE JUSTIFIED BY THE
+OLD ORDERING — AND THE HARNESS THAT GRADED IT.**
+C302 taught `unpack()` to prefer a format that can validate. Three things downstream had been
+reasoned from the OLD ordering and silently became false: the CLI's corruption message ("a
+genuine foreign tag never lands here"), the harness arm that justified it (which asked who
+ACCEPTS rather than who WINS), and the write-side warning lists. ⚠ **Two of the three were
+caught only by reading a real tag** — the harness agreed with itself because it was grading the
+algorithm it had been written against. ⇒ **After changing a selection rule, grep for every
+message and every test that asserts something about what the OLD rule returned**, and re-derive
+each from the new one rather than re-running it and seeing green. A test that passes because it
+encodes the old semantics is worse than no test.
+
 **M41. ⚠ THE FIRMWARE BUILD NEEDS AN EXPLICIT TOOLCHAIN ROOT ON THIS MACHINE.**
 `firmware/build.sh` is `#!/usr/bin/env`-broken (run it with `bash`), and the SDK's
 `Makefile.posix` hardcodes `GNU_INSTALL_ROOT ?= /usr/bin/` where Homebrew puts
@@ -375,6 +387,12 @@ is not "captured the same way".
 compiles and links; only the final `nrfutil` packaging step fails, which a compile check does not
 need. ⛔ A shipping-code change that was never compiled is not verified, and the host `ctest`
 harness compiles only SOME of the files a change touches — `hidprox.c` is in none of its arms.
+
+⛔ **AND `nrfutil` IS NOT ON `PATH` EITHER — it is `.tools/bin/nrfutil`.** C200 recorded this and
+it still cost time on 2026-09-15, where `command not found` read as "no flashing possible" and
+very nearly became a §5 blocker. ⚠ The DFU trigger also needs `flush()` and a short settle
+before `close()`; without them it returns cleanly and the device never resets, which looks
+exactly like a device that refuses DFU.
 
 **M38. ⚠ A DOCUMENT THAT IS ONLY EVER APPENDED TO PUTS ITS OLDEST LAYER WHERE THE READER
 FINISHES.** `NEXT.md` §9f grew across ten claims, each understanding added below the last. Its

@@ -160,10 +160,21 @@ int main(void) {
                         if (self == NULL) { continue; }   /* not this format's length */
                         free(self);
                         foreign++;
+                        /* ⛔ THE QUESTION IS WHO WINS, NOT WHO ACCEPTS. This used to ask
+                         * whether ANY HID format accepted the frame, which was the same thing
+                         * only because the old walk took the first row in TABLE order and the
+                         * HID formats sat first at these lengths. Since C302 the walk prefers a
+                         * format that can VALIDATE, so a check-less HID row no longer beats a
+                         * validating foreign one — and `lf hid prox read`'s corruption message
+                         * branches on exactly this verdict. Asking the real unpinned walk is the
+                         * only way the message stays true. */
                         int hid_takes = 0;
-                        for (size_t k = 0; k < sizeof(HIDF)/sizeof(HIDF[0]); k++) {
-                            wiegand_card_t *h = unpack((uint8_t)HIDF[k], len, 0, w);
-                            if (h != NULL) { hid_takes = 1; free(h); break; }
+                        wiegand_card_t *win = unpack(0, len, 0, w);
+                        if (win != NULL) {
+                            for (size_t k = 0; k < sizeof(HIDF)/sizeof(HIDF[0]); k++) {
+                                if (HIDF[k] == (card_format_t)win->format) { hid_takes = 1; break; }
+                            }
+                            free(win);
                         }
                         if (hid_takes) { covered++; } else {
                             /* ⭐ Remember one so the branch can be exercised on a real tag
@@ -190,7 +201,12 @@ int main(void) {
             /* ⛔ PINNED PER LENGTH, because `lf hid prox read`'s message now BRANCHES on this.
              * The counts themselves depend on the credential grid and are not pinned; the
              * VERDICT is the claim the CLI relies on. */
-            int expect_total_cover = (len == 26 || len == 32 || len == 37);
+            /* ⛔ 32 LEFT THIS LIST IN C304. Under the old table-order walk a check-less HID
+             * row won every 32-bit frame; under C302's validating-first walk KASTLE wins its
+             * own, so 121 of 363 foreign 32-bit frames now surface as foreign. The CLI's
+             * corruption message branched on this and was telling operators that correct
+             * numbers were fiction. */
+            int expect_total_cover = (len == 26 || len == 37);
             if (expect_total_cover != (uncovered == 0)) {
                 printf("    ⛔ MOVED: the CLI's per-length wording assumes otherwise\n");
                 verdict_moved = 1;
