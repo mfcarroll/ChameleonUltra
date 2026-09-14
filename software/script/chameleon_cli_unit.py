@@ -9368,14 +9368,26 @@ class HWLfRadioDebug(DeviceRequiredUnit):
         print(f"   PWM0 DECODER load: {load}   (reader expects INDIVIDUAL)")
         print(f"   PWM0 ENABLE      : {d['enable']}")
         print(f"   PWM0 SEQ[0].CNT  : {d['seq0_cnt']}   (reader expects 4)")
+        # ⛔⛔ THIS LINE COST A WHOLE UNIT AND THE WORDING IS WHY (C373/U18).
+        # `own` here is the READER's array. `lf_tag_em.c` drives the SAME peripheral, PWM0,
+        # with its own sequence — so while the device is emulating, "not ours" is the CORRECT
+        # and expected state, not a fault. The old banner said ⛔ PWM0 IS NOT READING OUR
+        # SEQUENCE unconditionally, and it was read as evidence that the EMULATOR was broken:
+        # U18 spent a whole unit on "the emulator never sets m_pwm_seq" when `hw emudebug`
+        # said `have pwm seq: True` all along and had never been asked.
+        # ⇒ Say whose array is meant, and only alarm when the READER is the one that should
+        # own the peripheral. For the emulation path, name the command that actually answers.
         ok = bool(d["ptr_is_ours"])
-        print(f"   SEQ[0].PTR ours  : {ok}   0x{d['seq0_ptr']:08X}"
-              + ("" if ok else "   ⛔ PWM0 IS NOT READING OUR SEQUENCE"))
+        reader = bool(d["reader_inited"])
+        print(f"   SEQ[0].PTR reader: {ok}   0x{d['seq0_ptr']:08X}"
+              + ("" if ok else
+                 "   ⛔ PWM0 IS NOT READING THE READER'S SEQUENCE" if reader else
+                 "   (expected while emulating — PWM0 belongs to the tag path; ask hw emudebug)"))
         # ⭐ The fields that actually answer C148. A readback after a capture always shows the
         # stock drive, because the capture path restores it on the way out — so what matters is
         # what the PWM was handed when playback STARTED.
         print(f"   at last start    : drive {d['drive_at_start']}, "
-              f"seq ptr ours {bool(d['ptr_ours_at_start'])}, "
+              f"seq ptr reader {bool(d['ptr_ours_at_start'])}, "
               f"{d['starts']} starts")
 
 
