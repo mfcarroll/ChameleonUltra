@@ -21,7 +21,7 @@ EMULATION fixes needing the Flipper as reader, and the script reports them NOT C
 | F5 | Two 28 KB capture buffers resident at once — 22% of RAM | `lf_reader_generic.c/.h`, `lf_indala_data.c`, `app_cmd.c` | yes |
 | F6 | `lf hid prox write` reported success without reading back | `chameleon_cli_unit.py` | yes — **fixed** |
 | F7 | The repeat-read corroboration rule compares only the first 64 bits of any frame | `lf_indala_data.c` | ours — **fixed** |
-| F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | `lf_reader_data.c/.h`, `lf_reader_generic.c`, `lf_hidprox_data.c`, `lf_ioprox_data.c` | yes — **fixed** |
+| F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | `ble_main.h`, `lf_reader_data.c/.h`, `lf_hidprox_data.c`, `lf_ioprox_data.c`, `lf_pac_data.c` | yes — **fixed**, PR built |
 | F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed** |
 | F10 | Changing a slot's LF type silently disarms emulation until a reboot | `lf_tag_em.c/.h`, `tag_emulation.c`, `app_cmd.c` | yes — **fixed** |
 | F11 | The emulation burst is a FRAME COUNT, so long-window readers fail at the boundary | `lf_tag_em.c` | yes — **fixed** |
@@ -211,6 +211,14 @@ shared read engine that the protocol work happened to walk into.
 ---
 
 ## F8 — a BLE advertising burst collapses the field mid-capture ✅ FIXED
+
+⭐⭐ **PR 1 IS WRITTEN AND BUILD-TESTED: `pr1-f8.patch`, 6 files, +51 −0, builds on `main` (C361).**
+⛔ **The file list above was wrong in two ways and the extraction found both.** It omitted **`ble_main.h`** — `g_is_ble_connected` lives in `ble_main.c` on `main` and is not declared in the header, so the guard cannot see it
+without a one-line `extern`. And it listed **`lf_reader_generic.c`, which the PR does NOT need**: the three
+readers each declare their own `lf_adv_guard_t` locally, so **F8 does not depend on F5's capture-buffer merge**.
+⚠ It gained `lf_pac_data.c`, which F9 also touches — the two fix-PRs overlap in one file and must be ordered.
+⚠ The research switch `LF_ADV_GUARD_ENABLED` is deliberately NOT in the PR: upstream does not need a compile-time
+way to turn a fix off. It exists here so the paired measurement could be re-run.
 
 **Symptom.** `lf hid prox read` fails 15-20% of the time on a strong tag, with no amplitude
 difference between the successes and the failures. ioProx shares the path and the problem.
