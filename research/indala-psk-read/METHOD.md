@@ -440,3 +440,13 @@ a phantom writer defect.
   • when the expected answer is NOTHING (a blank-tag null), a miss is a false PASS — require the
     negative answer twice, or the row passes for free.
 ⇒ Neither retry costs anything. Both are in `regrade.sh` and `nullmatrix.sh`.
+
+**M45 — ASK THE HARDWARE WHAT IT IS RUNNING, NOT THE REPOSITORY.**
+A clean tree, a green gate and passing notes-checks all describe the SOURCE. None of them knows what is
+flashed. Firmware was changed, committed and left unflashed for a whole tick (C358) — #2 sat several
+commits behind while every check reported clean, because every check looked at the repository.
+⛔ A measurement taken against a stale build is unattributable and looks exactly like a good one, which is
+the dangerous case: nothing fails, the numbers are plausible, and they belong to code that is not the code.
+⇒ `./autopilot.sh status` now prints the device's own `get_git_version()` against HEAD every tick, and says
+which of three things is true: matches HEAD, built from a dirty tree so it matches no commit, or behind the
+source. ⚠ *Semantically identical, so it cannot matter* is a prediction. Flash it and run the battery.

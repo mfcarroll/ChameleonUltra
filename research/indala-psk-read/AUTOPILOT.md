@@ -536,6 +536,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 17:25 | **C358 — device re-synced to source; `status` now reports firmware drift every tick** | 64 → 65 | C357's edit to `write_t55xx()` was built and never flashed; #2 sat several commits behind while every check reported clean. Verified 9/9 + 30 writes on a clean HEAD build; M45 added | the device's own `get_git_version()` against HEAD, three-way verdict, sensitivity tested |
 | 2026-09-14 16:55 | **C357 — the Nordic-only files measured; the branch's whole warning debt was 2 lines, fixed** | 63 → 64 | Closes C356's stated gap. None of the new LF files warn at all; `lf_reader_main.c` 3 → 1, the survivor upstream's | full firmware build at `-Wconversion`, `git blame` per hit to separate ours from inherited |
 | 2026-09-14 16:25 | **C356 — warning audit: 13 of 14 strict-built firmware files clean, all ours; upstream's `wiegand.c` improved 37 → 35** | 62 → 63 | The branch adds no warnings and removes two — a reviewer sees warnings before logic | `main` compiled the same way as the control; a zsh word-splitting bug nearly produced a false all-clear |
 | 2026-09-14 15:55 | **C355 — the Flipper crash time-boxed to 00:29:36; cause unrecoverable** | 61 → 62 | `uptime` answers what the notes called unknown. All three *needs hands* items now closed or bounded, none needed hands | read-only: 1 uptime, 2 storage listings; a 00:29 commit co-timing recorded as NOT a cause |

@@ -58,6 +58,35 @@ status)
         || echo "usage       unavailable — pace blindly, commit every 20 min"
     echo "devices     $(ls /dev/cu.usbmodem* 2>/dev/null | wc -l | tr -d ' ') of 4 enumerated"
     ls /dev/cu.usbmodem* 2>/dev/null | sed 's/^/            /'
+    # ⛔⛔ ASK THE HARDWARE WHAT IT IS RUNNING. Firmware was changed, committed and left
+    # unflashed for a whole tick (C358): #2 sat several commits behind while the notes and the
+    # gate both reported everything clean, because both check the REPOSITORY and neither asks
+    # the device. A result taken against a stale build is unattributable and looks exactly like
+    # a good one. ⚠ Best-effort: a missing venv, a busy port or a device in DFU must not fail
+    # `status`, which callers chain with `&&`.
+    if [ -x "$REPO/software/script/.venv/bin/python" ] && [ -e /dev/tty.usbmodemF429364E46961 ]; then
+        fw=$("$REPO/software/script/.venv/bin/python" - <<'PYEOF' 2>/dev/null
+import sys
+sys.path.insert(0, "/Users/Shared/code/personal/rfid/ChameleonUltra/software/script")
+try:
+    import chameleon_com, chameleon_cmd
+    d = chameleon_com.ChameleonCom(); d.open("/dev/tty.usbmodemF429364E46961")
+    print(chameleon_cmd.ChameleonCMD(d).get_git_version()); d.close()
+except Exception:
+    pass
+PYEOF
+)
+        head8=$(git -C "$REPO" rev-parse --short=7 HEAD)
+        if [ -z "$fw" ]; then
+            echo "firmware    #2 did not answer (busy, DFU, or reader mode) — check before device work"
+        elif printf '%s' "$fw" | grep -q -- "-dirty"; then
+            echo "⛔ firmware  #2 runs $fw — built from a DIRTY tree, so it matches no commit"
+        elif printf '%s' "$fw" | grep -q -- "$head8"; then
+            echo "firmware    #2 runs $fw — matches HEAD"
+        else
+            echo "⛔ firmware  #2 runs $fw but HEAD is $head8 — THE DEVICE IS BEHIND THE SOURCE (C358)"
+        fi
+    fi
     # ⚠ A held port means another session is driving that device. Skip device work.
     holders=$(lsof /dev/cu.usbmodem* 2>/dev/null | tail -n +2)
     if [ -n "$holders" ]; then
