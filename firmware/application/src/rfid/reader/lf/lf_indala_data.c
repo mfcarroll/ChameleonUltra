@@ -257,7 +257,9 @@ bool lf_sampled_read(lf_sampled_decode_fn decode, size_t capture_samples,
  * so a host must fetch all the chunks before scanning again — the same contract `lf sniff`
  * already has with its own static buffer.
  *
- * ⚠ Instrumentation. Remove with the rest before upstreaming (§9b). */
+ * ⭐ Instrumentation, COMPILE-GATED rather than removed (LF_RESEARCH_CMDS_ENABLED, data_cmd.h):
+ * default off costs a shipping image nothing, and the tool survives for the next question. */
+#if LF_RESEARCH_CMDS_ENABLED
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
                              uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got) {
@@ -292,6 +294,7 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
     *out = m_samples;
     return ok;
 }
+#endif /* LF_RESEARCH_CMDS_ENABLED */
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,

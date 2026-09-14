@@ -527,13 +527,42 @@ the whole branch.
 
 ### 9h. ⭐ THE INSTRUMENTATION SPLIT, AS A CHECKLIST RATHER THAN AN INTENTION
 
-§9b has said "strip all three, or land them separately" since it was written, which is a
-decision and not a plan. This is the plan — every site, found by `grep` on 2026-09-14, so the
-split is a mechanical operation instead of an archaeology exercise.
+✅ **DONE 2026-09-15 (C303), AND NOT THE WAY THIS SECTION ORIGINALLY PLANNED IT.** §9b said
+"strip all three", and the operator pushed back: stripping useful tooling is counter-intuitive,
+so what is the industry-standard way of handling this? ⇒ **Compile-time gating, not deletion** —
+and the tree was already doing it. `app_cmd.c` gates whole handlers AND their dispatch rows
+behind `#if defined(PROJECT_CHAMELEON_ULTRA)` for the Ultra/Lite split, and this branch had
+already added `#if !INDALA224_READER_TRUSTED`.
 
-⛔ **Deliberately NOT executed on this branch.** Removing these would break the research tooling
-the branch exists to use, and `research/` ships in no PR anyway. The checklist is the
-deliverable; the cut belongs in the PR preparation.
+⭐ **One macro, `LF_RESEARCH_CMDS_ENABLED`, defined `0` in `data_cmd.h`.** A plain build is
+therefore the SHIPPING build; `application/Makefile` sets it to `1`, and **that single line is
+what an upstream PR deletes** rather than a hunt through five files.
+
+⭐ **The cost is measured, both ways, not asserted:**
+
+| build | text | bss |
+|---|---|---|
+| gated **off** (default) | 333,300 | 164,744 |
+| gated **on** (this branch) | 334,388 | 168,752 |
+
+⇒ **1,088 bytes of flash and 4,008 of RAM**, and the gated-ON image is the same size as the
+pre-gating one, so the gate is transparent when enabled. The RAM is attributed to the byte by an
+`nm` symbol diff — `out.0` (4,000) + `buf.1` (4) + `nsamp.2` (4), all static locals of the
+capture command's handler. ⭐ That **confirms** the source comment claiming the probe itself
+costs no RAM: `m_samples` (0x7000) is present identically in BOTH builds, so the 4 KB is the
+command's chunk staging buffer, which is a different thing.
+
+⭐ **The host needs no gating at all, and that is verified on hardware.** `GET_DEVICE_CAPABILITIES`
+(1035) makes the device declare which command ids it implements — #2 returns **195**, including
+3037, 3038 and 3060 — and `chameleon_cmd.py` already prints a clear message for a command the
+device does not understand. A gated-off build simply stops listing them.
+
+⚠ **One of the four is not a separate command and had to be gated differently.** The GProxII
+failure-energy payload changes the WIRE SHAPE of a failure reply, so gating it uses `#else` to
+call `scan_gproxii()`, the plain sibling already in the tree. It must not ship on by default: a
+host expecting an empty failure payload would misread four bytes of energy.
+
+The sites, found by `grep` on 2026-09-14 and now the gated ones:
 
 | | firmware | host |
 |---|---|---|
@@ -552,10 +581,12 @@ sibling, delete the failure branch. **The split is subtraction, not surgery.**
 ⭐ `rdrcap.py` needs nothing done to it. It hardcodes `CMD = 3060` and never imports the enum,
 and it lives under `research/`, which is in no PR.
 
-⚠ **What is lost is worth naming rather than quietly binning.** The capture probe is what
-cracked C211 after six hypotheses had been refuted by measurement, and the failure-energy
-payload is what separates "the capture was wrong" from "the decode was wrong" on a silent read —
-the distinction C206 turned on. A diagnostics change should carry them with that justification.
+⭐ **Nothing is lost, which was the point of the pushback.** The capture probe is what cracked
+C211 after six hypotheses had been refuted by measurement, and the failure-energy payload is what
+separates "the capture was wrong" from "the decode was wrong" on a silent read — the distinction
+C206 turned on. Under the original "strip it" plan both would have been deleted to ship. They now
+survive in the tree at zero cost to a shipping image, and re-opening either question is one `-D`
+away instead of a git-archaeology exercise.
 
 ### 9c. ⭐ Recommended shape — three PRs, not one
 

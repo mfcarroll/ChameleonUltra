@@ -230,10 +230,34 @@
 #define DATA_CMD_LF_SNIFF                       (3031)
 #define DATA_CMD_INDALA_SCAN                    (3033)
 #define DATA_CMD_INDALA_WRITE_TO_T55XX          (3034)
+
+/* ⭐⭐ RESEARCH INSTRUMENTATION — COMPILE-GATED, NOT DELETED.
+ *
+ * Three commands and one reader probe exist only to measure this firmware's own LF path, and
+ * they earned their keep: `LF_READER_CAPTURE` is what cracked C211 after six hypotheses had
+ * been refuted by measurement, and the GProxII failure-energy payload is what separates "the
+ * capture was wrong" from "the decode was wrong" on a silent read — the distinction C206
+ * turned on. Deleting them to ship would throw away the only tools that can re-open those
+ * questions later.
+ *
+ * ⛔ They must still cost a shipping image NOTHING, so they are gated rather than removed.
+ * This is the tree's own idiom: `app_cmd.c` already gates whole handlers and their dispatch
+ * rows behind `#if defined(PROJECT_CHAMELEON_ULTRA)` for the Ultra/Lite split, and this branch
+ * added `#if !INDALA224_READER_TRUSTED` in `lf_indala_data.c`.
+ *
+ * ⭐ DEFAULT OFF, so a plain build is the shipping build and the upstream diff is one deleted
+ * `-D` rather than a hunt through five files. This branch's `application/Makefile` sets it to
+ * 1, which is the single line an upstream PR drops. */
+#ifndef LF_RESEARCH_CMDS_ENABLED
+#define LF_RESEARCH_CMDS_ENABLED 0
+#endif
+
 #define DATA_CMD_IDTECK_SCAN                    (3035)
 #define DATA_CMD_INDALA224_SCAN                 (3036)
+#if LF_RESEARCH_CMDS_ENABLED
 #define DATA_CMD_LF_EMU_DEBUG                   (3037)
 #define DATA_CMD_LF_RADIO_DEBUG                 (3038)
+#endif
 #define DATA_CMD_INDALA224_WRITE_TO_T55XX       (3039)
 #define DATA_CMD_KERI_SCAN                      (3040)
 #define DATA_CMD_KERI_WRITE_TO_T55XX            (3041)
@@ -261,7 +285,9 @@
 #define DATA_CMD_GPROXII_WRITE_TO_T55XX         (3059)
 /* ⚠ INSTRUMENTATION for C209 — run the READER's capture and return the samples undecoded.
  * `lf sniff` is the OTHER path, which is precisely why it cannot answer the question. */
+#if LF_RESEARCH_CMDS_ENABLED
 #define DATA_CMD_LF_READER_CAPTURE              (3060)
+#endif
 #define DATA_CMD_FDXB_SCAN                      (3061)
 #define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)
 

@@ -92,9 +92,8 @@ number.
 
 ⇒ **NEXT, and it is short**: everything left in §2 needs HANDS. The only blocker is the
 sandwich — lift the T5577, or face the two Chameleons — for the emulate-arm re-grade. ⭐ **Both former "do not touch" items were RELEASED by the operator 2026-09-15.** `unpack()` is
-fixed in place (C302). The instrumentation is to be **compile-gated, not stripped** — the tree
-already uses `#if defined(PROJECT_CHAMELEON_ULTRA)` for exactly this in `app_cmd.c`, and this
-branch added `#if !INDALA224_READER_TRUSTED`; §9h is being rewritten to match.
+fixed in place (C302). The instrumentation is now **compile-gated, not stripped** (C303):
+one macro, default off, costing a shipping image nothing and an upstream PR one deleted line.
 
 ### ✅ 2026-09-14 01:30 — WHERE THE EMULATOR WORK STANDS, IN ONE PARAGRAPH
 
@@ -416,6 +415,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 17:20 | **C303 — instrumentation compile-gated** | 19 → 20 | `LF_RESEARCH_CMDS_ENABLED`, default 0; one Makefile line enables it. Cost measured both ways: 1,088 B flash + 4,008 B RAM | Two builds per configuration; `nm` attributes the RAM to the byte and confirms an existing source comment; capability query verified on #2 |
 | 2026-09-15 16:45 | **C302 — `unpack()` fixed in place** | 19 → 19 | Two-pass walk preferring a format that can validate; ambiguity reported on the card; `wiegand_other_matches()` deleted. KASTLE repaired, never-self 14 → 12 | 1,519-frame cross-check 0 disagree; `has_parity` agrees with C300's behavioural sweep on all 31 rows; firmware links; `make check` green |
 | 2026-09-15 16:10 | **C301 — every reader gate measured in bits** | 18 → 19 | 200,000 random frames per format through the exported descriptors. 4 of 11 have no gate; INSTAFOB and IDTECK have no repeat requirement either. My GProxII prediction was wrong, the code was right | Predictions written before the run and pinned; the two zero-rate gates decomposed so they cannot be confused with always-false |
 | 2026-09-15 15:40 | **C300 — the check-less formats measured, not read** | 17 → 18 | 4096 random frames per format through the shipping `unpack()`: 12 accept 100%, 19 reject some. `unpack()` cannot be repaired by implementing the missing checks — there are none. Corrects C285 to 12 of 31 | Null printed and pinned: H10301's two parity bits admit 26%, so the sweep reaches the checks; the 12 reproduce C285's list name for name |

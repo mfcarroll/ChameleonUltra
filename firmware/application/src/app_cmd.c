@@ -758,6 +758,7 @@ static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
+#if LF_RESEARCH_CMDS_ENABLED
 static data_frame_tx_t *cmd_processor_lf_emu_debug(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t buf[LF_TAG_EM_DEBUG_SIZE] = { 0x00 };
     lf_tag_em_debug_get(buf);
@@ -772,6 +773,7 @@ static data_frame_tx_t *cmd_processor_lf_radio_debug(uint16_t cmd, uint16_t stat
     lf_125khz_radio_debug_get(buf);
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(buf), buf);
 }
+#endif /* LF_RESEARCH_CMDS_ENABLED */
 
 static data_frame_tx_t *cmd_processor_indala224_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[INDALA224_READ_DATA_SIZE] = { 0x00 };
@@ -849,6 +851,7 @@ static data_frame_tx_t *cmd_processor_pyramid_scan(uint16_t cmd, uint16_t status
  * Chunk 0 captures; later chunks slice the SAME buffer, so the host reassembles one
  * acquisition rather than stitching several — the mistake the sniff command's note calls out.
  * ⚠ The buffer is the reader's own `m_samples`, so any scan between chunks destroys it. */
+#if LF_RESEARCH_CMDS_ENABLED
 static data_frame_tx_t *cmd_processor_lf_reader_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static const int16_t *buf = NULL;
     static size_t nsamp = 0;
@@ -888,6 +891,7 @@ static data_frame_tx_t *cmd_processor_lf_reader_capture(uint16_t cmd, uint16_t s
     }
     return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)(n * 2u), out);
 }
+#endif /* LF_RESEARCH_CMDS_ENABLED */
 
 static data_frame_tx_t *cmd_processor_fdxb_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[FDXB_READ_DATA_SIZE] = { 0x00 };
@@ -920,6 +924,12 @@ static data_frame_tx_t *cmd_processor_fdxb_write_to_t55xx(uint16_t cmd, uint16_t
 
 static data_frame_tx_t *cmd_processor_gproxii_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[GPROXII_READ_DATA_SIZE] = { 0x00 };
+#if LF_RESEARCH_CMDS_ENABLED
+    /* ⭐ INSTRUMENTATION: on a FAILED scan, return the signal energy instead of an empty
+     * payload. That is what separates "the capture was wrong" from "the decode was wrong" on a
+     * silent read — the distinction C206 turned on — and it is why this is gated rather than
+     * deleted. ⛔ It changes the WIRE SHAPE of a failure reply, so it must not ship on by
+     * default: a host expecting an empty failure payload would misread four bytes of energy. */
     int32_t energy = 0;
     status = scan_gproxii_energy(card_data, &energy);
     if (status != STATUS_LF_TAG_OK) {
@@ -929,6 +939,13 @@ static data_frame_tx_t *cmd_processor_gproxii_scan(uint16_t cmd, uint16_t status
         };
         return data_frame_make(cmd, status, sizeof(e), e);
     }
+#else
+    /* The plain sibling, which already exists in the tree and discards the energy. */
+    status = scan_gproxii(card_data);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+#endif
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_data), card_data);
 }
 
@@ -3850,11 +3867,15 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_PYRAMID_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_pyramid_write_to_t55xx,        NULL                   },
     {    DATA_CMD_GPROXII_SCAN,                 before_reader_run,           cmd_processor_gproxii_scan,                  NULL                   },
     {    DATA_CMD_GPROXII_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_gproxii_write_to_t55xx,        NULL                   },
+#if LF_RESEARCH_CMDS_ENABLED
     {    DATA_CMD_LF_READER_CAPTURE,            before_reader_run,           cmd_processor_lf_reader_capture,             NULL                   },
+#endif
     {    DATA_CMD_FDXB_SCAN,                    before_reader_run,           cmd_processor_fdxb_scan,                     NULL                   },
     {    DATA_CMD_FDXB_WRITE_TO_T55XX,          before_reader_run,           cmd_processor_fdxb_write_to_t55xx,           NULL                   },
+#if LF_RESEARCH_CMDS_ENABLED
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
+#endif
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
     {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },

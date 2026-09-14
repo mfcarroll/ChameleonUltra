@@ -154,10 +154,14 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
 /** ⚠ INSTRUMENTATION — run the READER's capture path and return its samples undecoded.
  *  The one measurement `lf sniff` cannot make, because sniff is the other path. See C209 and
- *  the long note in lf_indala_data.c. Remove with the rest of the instrumentation. */
+ *  the long note in lf_indala_data.c. ⭐ Compile-gated by LF_RESEARCH_CMDS_ENABLED (see
+ *  data_cmd.h) rather than deleted — it costs a shipping image nothing and it is the only way
+ *  back into the questions C209/C211 needed it for. */
+#if LF_RESEARCH_CMDS_ENABLED
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
                              uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got);
+#endif
 
 /** Bytes written by fdxb_read(): the 16-byte frame, then phase, bit position, tries and the
  *  inversion flag. ⚠ The frame and nothing else — country code, national code and the flags
