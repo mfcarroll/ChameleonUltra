@@ -80,10 +80,17 @@ histogram peak moving 63 → **79 us**. ⇒ The peripheral plays exactly the per
 sequence at ONE period** — so the defect is specifically that a per-entry `counter_top` which VARIES within a
 sequence is not applied.
 
-⭐⭐ **THE FIX, AND WHY IT IS NOT WRITTEN YET.** `gcd(8, 10) = 2`, so both tones fit a CONSTANT `counter_top`
-of 2 carrier cycles with the frequency carried in the DUTY pattern: RF/8 = `on, on, off, off` (mark 4, gap 4)
-and RF/10 = `on, on, off, off, off` (mark 4, gap 6) — which preserves C226/C380's measured fixed 4-cycle mark
-for free. ⚠ **Cost is entries**: ~25 per bit against today's 5-6, so a 96-bit HID frame needs **~2,400
+⛔⛔ **THE `counter_top = 2` FIX WAS ILLEGAL AND IS CORRECTED (C385).** COUNTERTOP in WaveForm mode has a
+**minimum valid value of 3** (Nordic PS, recorded in `psk1.h`), so `gcd(8, 10) = 2` cannot be used.
+⭐ **The repair is the BASE CLOCK.** At the FSK types' current **125 kHz** one tick is one carrier cycle and
+the tones are 8 and 10 ticks. At **1 MHz** — what every PSK1 type already uses — a carrier cycle is 8 ticks
+and the tones are **64 and 80 ticks, `gcd = 16`**. ⇒ **Constant `counter_top` 16**: RF/8 = 4 entries
+(2 on, 2 off), RF/10 = 5 entries (2 on, 3 off), which reproduces C226/C380's measured **4-carrier-cycle mark
+= 32 us = exactly 2 entries** for free. ⭐ ioProx's tone of 11 is legal too (64 and 88 ticks, `gcd = 8`), so
+that question stays open rather than blocking.
+⚠ **THE NEW COST IS A CLOCK GENERALISATION**: `IS_PSK1_TYPE` gates the 1 MHz choice in **three** places —
+`pwm_init()`, `pwm_reinit_if_clock_changed()` and `recompute_frames_per_burst()`'s `hz`. All three must move
+to one *what clock does this type need* helper; **miss the third and frames-per-burst is 8x wrong.** ⚠ **Cost is entries**: ~25 per bit against today's 5-6, so a 96-bit HID frame needs **~2,400
 entries (~19 KB)** where the array is sized **576**. PSK1's 3,584-entry path is precedent that the machinery
 copes, but **the RAM must be budgeted on paper first**, and ioProx's long tone is **11**, so `gcd(8, 11) = 1`
 and it needs `counter_top` 1 or a corrected tone.
