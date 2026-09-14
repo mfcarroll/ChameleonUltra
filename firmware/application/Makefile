@@ -427,8 +427,6 @@ CFLAGS += $(OPT)
 # a plain build is the SHIPPING build and they cost the image nothing; this branch turns them
 # on because they are the tools the branch exists to use.
 # ⛔ THIS ONE LINE IS WHAT AN UPSTREAM PR DELETES — not a hunt through five files.
-# ⚠ TEMPORARY EXPERIMENT BUILD — see t55xx.h. Remove before any normal use.
-CFLAGS += -DLF_T55XX_SET_PASSWORD=0
 CFLAGS += -DLF_RESEARCH_CMDS_ENABLED=1
 CFLAGS += -DAPP_TIMER_V2
 CFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
