@@ -506,6 +506,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 08:15 | **C329 — GProxII write lands; sandwich rebuilt** | 35 → 36 | The password fix restores block-0 writes AND pm3's detect/reads together. U15 now 1 of 8 | Pre-registered criterion in `benchab.sh`, same script and rig as the pre-fix run |
 | 2026-09-14 08:00 | **C328 — emulate arms re-graded, §5 item closed** | 34 → 35 | IDTECK 4/4, EM410X 4/4 on the fixed firmware, with the Flipper as reader. Indala slot 1's null is bad slot data (`not the Indala preamble`), not code | Positive control and null both run first; EM410X's both-arms hit left explicitly unexplained |
 | 2026-09-14 07:50 | **§1 and §5 rewritten for the password defect** | 34 → 34 | §5's "bench cannot change tag protocol" blocker CLEARED — it was the password, not the bench. §1 now names what C325 retires so a fresh context cannot build on C299/C305/C306/C324 | #2 reflashed clean at `v2.2.0-592-g9d39c15`; notes consistent |
 | 2026-09-16 04:30 | **C318 — capture buffers shared, 28,672 B returned** | 33 → 34 | BSS 172,760 → 144,088; one 0x7000 symbol where there were two. Removes PR 1's RAM objection | Predicted then measured to the byte; three hardware paths + 4-arm harness |
