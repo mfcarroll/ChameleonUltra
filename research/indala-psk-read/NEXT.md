@@ -849,6 +849,23 @@ will. ⇒ The old note that the hunk-split is the blocking task — the note
 below says it "must be split by hunk" and it never has been, and that diff is +827 −8 across all
 five PRs. ⭐ PR 0 (§9i) is unaffected: it builds alone.
 
+⭐⭐ **COMPLETENESS AUDITED 2026-09-14 (C349), AND IT FOUND TWO UNREGISTERED UPSTREAM FIXES.** Every file changed
+against `main` was checked against the table below: **63 changed, 10 named by no PR.** Two were fixes to UPSTREAM
+readers that had no `FIXES.md` entry — **F8, the BLE advertising guard** (the real cause of C45's 15-20% HID
+intermittency) and **F9, the PAC drive sweep** (0 of 10 → 10 of 10). Both are now registered and both go with the
+fix-PRs, not the protocol PRs. The other eight are assigned below.
+⛔ **Build-tested is not the same as complete.** PR 1 was proven to compile (C315-C317) and the table still had ten
+orphans, because compiling proves the files you listed are sufficient — never that they are all of them.
+
+| orphan | belongs to |
+|---|---|
+| `lf_hidprox_data.c`, `lf_ioprox_data.c` | **F8** — the BLE advertising guard |
+| `lf_pac_data.c` | **F9** — the PAC drive sweep |
+| `wiegand.c/.h`, `hidprox.c` | **F4** — the `unpack()` relabelling |
+| `lf_t55xx_data.c` | **F1** — the T5577 password defect |
+| `app_status.h` | **PR 1** — it adds `STATUS_LF_SIGNAL_NOT_DECODED`, used by the shared PSK1 failure path |
+| `chameleon_cli_unit.py`, `chameleon_enum.py` | every PR, by hunk — covered by the note below but never named |
+
 61 files change. Listing them by PR is the difference between a plan and an intention, and the
 shared files are the part that actually needs thought: `app_cmd.c`, `data_cmd.h`,
 `lf_reader_main.c/.h`, `lf_indala_data.c/.h`, `tag_base_type.h`, `tag_emulation.c`, the

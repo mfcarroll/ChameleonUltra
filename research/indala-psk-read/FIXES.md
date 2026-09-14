@@ -16,6 +16,8 @@ that is about something else.
 | F5 | Two 28 KB capture buffers resident at once — 22% of RAM | `lf_reader_generic.c/.h`, `lf_indala_data.c`, `app_cmd.c` | yes |
 | F6 | `lf hid prox write` reported success without reading back | `chameleon_cli_unit.py` | yes — **fixed** |
 | F7 | The repeat-read corroboration rule compares only the first 64 bits of any frame | `lf_indala_data.c` | ours — **fixed** |
+| F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | `lf_reader_data.c/.h`, `lf_reader_generic.c`, `lf_hidprox_data.c`, `lf_ioprox_data.c` | yes — **fixed** |
+| F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed** |
 
 ---
 
@@ -176,3 +178,48 @@ said on the day, not because the fix is responsible for it.
 ⚠ **This one is OURS, not upstream.** `lf_sampled_read_phases()` is this branch's code. It is
 listed here anyway because it is not part of the LF-protocol work either — it is a defect in the
 shared read engine that the protocol work happened to walk into.
+
+---
+
+## F8 — a BLE advertising burst collapses the field mid-capture ✅ FIXED
+
+**Symptom.** `lf hid prox read` fails 15-20% of the time on a strong tag, with no amplitude
+difference between the successes and the failures. ioProx shares the path and the problem.
+
+**Root cause.** The BLE radio advertises while an LF capture is running. The burst is a **1.6 ms
+hole** in the field — shorter than the capture, longer than a bit — and no amplitude median
+taken around it can show it, which is why C45 chased the decoder for months and concluded "the
+intermittency is the DECODER". It was not.
+
+**Fix.** `lf_adv_suspend()` / `lf_adv_resume()` around the capture, in `lf_reader_data.c/.h` and
+`lf_reader_generic.c`, called from `lf_hidprox_data.c` and `lf_ioprox_data.c`.
+
+**Verified on hardware:** **96 of 96 with the guard, 71 of 80 without**, one tag, one session,
+p = 6.4e-4 (C250). Re-measured 2026-09-14 after the capture engine was reworked: **HID 100 of
+100** (C345).
+
+⚠ **Why this is here rather than in the protocol work.** It is an upstream defect in an upstream
+reader, it depends on none of the new protocols, and it is the single most user-visible bug this
+branch fixed — a reader that silently fails one read in six. ⛔ It was found by a completeness
+audit of the PR split (C349), not by anyone remembering it: it had no `FIXES.md` entry for the
+whole session despite being fixed long before.
+
+---
+
+## F9 — `lf pac read` returns nothing: the reader's own field saturates its amplifier ✅ FIXED
+
+**Symptom.** `lf pac read` returns 0 of 10 on a tag the Proxmark reads perfectly.
+
+**Root cause.** Not the decoder. The amplifier saturates on a *well-coupled* tag, so the signal
+into it is clipped and the frame is unrecoverable. The cure is counter-intuitive: drive the
+field **more weakly**, which is the only way to reduce the signal without moving the tag.
+
+**Fix.** `PAC_DRIVE_STEPS[] = { 4, 6, 2, 7 }` in `lf_pac_data.c` — sweep the drive rather than
+assume the stock one works.
+
+**Verified on hardware:** **0 of 10 → 10 of 10**. Scored as bit errors against a known 128-bit
+frame rather than pass/fail: drive 2 → 6 errors, drive 4 (stock) → 6, **drive 6 → 0**, drive 7 →
+1, with the rail fraction tracking it — 34.0%, 36.4%, 26.0%, 0.0% (C144).
+
+⚠ Same reasoning as F8: an upstream defect in an upstream reader, independent of the protocol
+work, and it had no entry until the PR-split audit went looking for unassigned files.

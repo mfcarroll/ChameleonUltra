@@ -532,6 +532,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 12:55 | **C349 — PR-split completeness audit: 10 of 63 files owned by no PR, two are unregistered UPSTREAM fixes** | 55 → 56 | F8 (the BLE guard behind C45's HID intermittency) and F9 (the PAC drive sweep) added to `FIXES.md`; the other eight assigned in §9d | files enumerated from git rather than from the notes |
 | 2026-09-14 12:25 | **C348 — the control: pm3 reads its OWN FDX-B clone at the same rate as ours (35/40 vs 32/40, p = 0.55)** | 54 → 55 | Separates a weak writer from a weak reader by varying who WROTE the tag; retires any suspicion of our FDX-B writer | 40 asks of pm3's own clone against 110 of ours; block-dump difference explained as the animal bit |
 | 2026-09-14 11:55 | **C347 — the other 19 judges are clean (285 asks, 0 misses); FDX-B's is uniquely weak at 86%** | 53 → 54 | Validates the write column's single-ask verdicts for 19 of 20 protocols. `judgerel.sh` added | write once then only ask, so a miss cannot be the write; per-judge limit stated, pooled bound 1.05% |
 | 2026-09-14 11:20 | **C346 — the judge blinks: pm3 misses 12% of FDX-B asks; every single-ask verdict inherited it** | 52 → 53 | A write soak's lone failure in 150 cycles was the READER, not the writer. `regrade.sh` and `nullmatrix.sh` fixed in opposite directions; M44 added | 40-round probe with a second reader + 4 protocols x 20 pm3 asks |
