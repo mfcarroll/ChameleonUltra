@@ -368,6 +368,14 @@ reruns any row: four fresh writes, each read back by the Proxmark, plaintext con
 compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Indala26, Indala224 and IDTECK, 4 of 4 each (C331),
 along with every other write arm in the tree.
 
+⭐⭐⭐ **AND THE LOOP IS CLOSED IN BOTH DIRECTIONS (C343).** *We write, pm3 reads* — 18 arms, 72 writes, 0 failures
+(C330, C331, C340). *pm3 writes, we read* — 13 arms, 52 reads, 52 matches (`pm3written.sh`). ⛔ This is the answer to
+the sharpest question a reviewer can ask of a protocol branch: **how do you know your reader and your writer are not
+wrong together?** Each direction is judged by the other project's code, so a shared convention error cannot pass
+either. ⭐ Eight of the thirteen go further and cross the field/frame boundary — pm3 was given `--fc`/`--cn`/`--uid`
+and our reader returned the frame we predicted, so two independently written field encoders agree too.
+⚠ It does NOT cover the emulate arms, which still rest on a single reader.
+
 ⭐⭐ **EVERY READ ARM HAS NOW BEEN NULLED AGAINST THIRTEEN REAL FOREIGN TAGS (C342).** `nullmatrix.sh` writes each
 protocol to the T5577 and asks EVERY `lf * read` the CLI has — 20 of them, the GPIO/comparator family
 included: **280 cross-protocol reads, 0 false positives, and all 14
