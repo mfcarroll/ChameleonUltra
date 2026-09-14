@@ -40,6 +40,40 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐ 2026-09-14 17:35 — THE MIXED-FRAME FAILURE IS DETERMINISTIC. F12 IS NOW A BOX (C416)
+
+⭐ **Five repeats of the identical mixed frame**: 0.6%, 0.3%, 0.1%, 0.5%, 0.6% RF/10 — all under 1%, a spread of
+half a point. **Three repeats of a pure frame** as the stability control: 73.6%, 74.7%, 71.9%, CV **0.02**.
+⇒ A signal marginal enough to lose its long tones would sometimes half-succeed. Five of five do not. **The
+emitter destroys tone diversity reproducibly**, which retires *is it just weak?* — live again since C401
+invalidated the instrument C387/C388 used to eliminate depth.
+
+⚠ **A criterion of mine was the wrong statistic and its number is not quoted.** I pre-registered *CV above 0.4
+means marginal*; the mixed arm returns 0.47, and that is meaningless when CV divides by a mean of 0.4. The
+absolute spread carries the result. ⇒ Do not pre-register a RATIO against a quantity that may be ~0.
+
+⭐⭐ **F12 AS A BOX, EVERY SIDE MEASURED:**
+
+| | |
+|---|---|
+| the sequence reaches the peripheral intact, at the right length | C414 (`SEQ[0].CNT` exact for 4 frames) |
+| every encoding fails alike — not the encoding | C415 (ioProx's old encoding vs the new builder, both 0/6) |
+| pure frames of EITHER tone are correct; every mixed frame collapses, flat with rate | C411 |
+| the collapse is deterministic, not marginal | C416 (here) |
+| the receiver is fine — it reads a real tag at 44.4% | C413 |
+
+⛔⛔ **WHAT THIS BENCH CANNOT SETTLE.** The Flipper's raw reader returns **EDGES, not amplitude**, so *the long
+tones are absent* and *the long tones are present but too shallow to cross the detector's threshold* are
+**indistinguishable** to it. Everything above is consistent with either.
+
+⇒ **THE NEXT MEASUREMENT NEEDS AMPLITUDE, AND ONLY OUR OWN SAADC PATH RETURNS IT** — `rdrcap.py` +
+`DATA_CMD_LF_READER_CAPTURE`, which needs **the two Chameleons facing**. See §5. ⚠ **This is not C408 repeating
+itself.** C408 was right that facing them served no open unit: it was wanted then for a DECODE, which the
+phase-locked path cannot do from an emulation (M52). This asks for **raw samples**, which that path CAN return
+and no other instrument here can.
+
+---
+
 ### ⛔⭐ 2026-09-14 17:20 — THE ENCODING IS NOT THE DEFECT. TWO ENCODINGS FAIL IDENTICALLY (C415)
 
 ⭐⭐ **THE FACT, AND IT WAS ALREADY IN THE TREE**: `protocols/ioprox.c` **still runs the OLD encoding** — one entry
@@ -1217,6 +1251,28 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 ---
 
 ## 5. BLOCKED
+
+### ⛔ 2026-09-14 17:35 — F12'S NEXT STEP NEEDS AMPLITUDE, WHICH MEANS THE TWO CHAMELEONS FACING (C416)
+
+⛔ **Scope: this blocks F12's last question and nothing else.** Everything else — read, write, the other eight
+emulate arms, C400 — is done or reachable on the bench as it stands.
+
+⭐ **Why the current bench cannot answer it.** The Flipper's raw reader returns pulse/duration EDGES. *The long
+tone is absent* and *the long tone is there but too shallow to cross the threshold* produce the identical edge
+stream, and F12's box (C411/C413/C414/C415/C416) is consistent with both. Only **amplitude samples** separate
+them, and the only instrument here that returns amplitude is **our own SAADC capture path**.
+
+⇒ **THE ASK, IF AND WHEN IT IS WANTED**: #1 and #2 facing each other, nothing else on either pad. #1 emulates
+AWID, #2 captures raw through `rdrcap.py`, and the samples go to the PROVEN demodulators — `askdemod.py` and
+ctest's `cdemod` — never `tonehist.py` (C401). Then straight back to the two-rig bench.
+
+⚠ **NOT A REPEAT OF C408'S MISTAKE, and the difference is the point.** C408 said facing them served no open
+unit, and that was correct: it was wanted then for a **decode**, which the phase-locked SAADC path cannot do
+against an emulation (M52). **Raw sample capture is legal on that path** — M52 forbids reading a CREDENTIAL from
+an emulation, not sampling the coil. ⭐ And C401 invalidated the ANALYSIS of those captures, not the captures:
+*"The captures are sound; the histograms are not evidence."*
+
+⚠ Cost: one bench change and back. ⭐ **Nothing else waits on it**, so it is worth doing only when convenient.
 
 ### ✅ CLEARED 2026-09-14 16:55 — THE TAG MOVE WAS DONE AND IT CONVICTED THE EMITTER (C413)
 

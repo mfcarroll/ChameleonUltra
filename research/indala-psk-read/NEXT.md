@@ -26,6 +26,20 @@ under **The bench** and **Working conventions**.
 
 ## ⚠ Needs hands — what is still queued
 
+⚠ **ONE OPTIONAL BENCH CHANGE, AND NOTHING WAITS ON IT (C416).** #1 and #2 facing each other, nothing else on
+either pad, then straight back to the two-rig bench.
+
+⭐ **Why**: F12's box is closed on every side the Flipper can measure — sequence intact, encoding-independent,
+pure-vs-mixed cliff, deterministic, receiver exonerated — but the Flipper returns **edges, not amplitude**, so
+*the long tone is absent* and *it is there but too shallow to cross the threshold* are indistinguishable to it.
+Only our own SAADC capture path returns amplitude. #1 emulates AWID, #2 captures via `rdrcap.py`, and the samples
+go to `askdemod.py` and ctest's `cdemod` — never `tonehist.py` (C401).
+
+⚠ **Not C408 repeating itself**: that arrangement was wanted for a DECODE, which the phase-locked path cannot do
+against an emulation (M52). Raw sampling of the coil is legal on that path; M52 forbids reading a credential.
+
+⭐ Everything else is done or reachable on the bench as it stands, so this is worth doing only when convenient.
+
 ✅ **DONE AND CLEARED — nothing here needs hands (C413).** The swap was made, the real tag read **44.4%** RF/10 against our emulation's **7.0%** on the same chain, and F12 is convicted as a firmware defect. The request that follows is kept for its reasoning only.
 
 ⛔ ~~**ONE TAG MOVE, AND IT IS THE LAST STEP OF U11/F12 (C411).**~~ Write HID Prox to the T5577 with the Proxmark
