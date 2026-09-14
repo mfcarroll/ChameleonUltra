@@ -416,6 +416,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 19:55 | **C305 — writes land iff the config already matches** | 21 → 21 | 5 of 5 with the tag's own config, 0 of 9 with any other, across four protocols. Block-0-locked and blk_count==0 both refuted | pm3 read the credential bit-identical after all nine failures; direct status queries returned LF_TAG_OK not PAR_ERR |
 | 2026-09-15 19:15 | **C305 — only the HID writer lands** | 21 → 21 | GProxII, AWID, Keri and a raw single-block write all fail on a tag provably taking HID writes. Block count, time-ordering, password, preceding-read and silent-no-op all refuted | 10 attempts across 5 paths, every before/after read by pm3; two candidates survive and neither fits all ten results |
 | 2026-09-15 18:05 | **C304 — C302/C303 verified on hardware** | 20 → 21 | Flashed #2 to HEAD. KASTLE now reads back as itself 4/4 (was C284's headline failure). ⛔ The read also caught the corruption message lying about correct numbers — fixed, 32 bits moved to "cannot tell" | Bench restored and re-verified; pm3 corroborates `matches = 2`; the harness's own example named the same credential |
 | 2026-09-15 17:20 | **C303 — instrumentation compile-gated** | 19 → 20 | `LF_RESEARCH_CMDS_ENABLED`, default 0; one Makefile line enables it. Cost measured both ways: 1,088 B flash + 4,008 B RAM | Two builds per configuration; `nm` attributes the RAM to the byte and confirms an existing source comment; capability query verified on #2 |
@@ -502,7 +503,13 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ---
 
-## 5. BLOCKED — needs a person
+## 5. BLOCKED
+
+⛔⛔ **THE BENCH CANNOT CHANGE THE TAG'S PROTOCOL RIGHT NOW (C305, 2026-09-15).** Only
+`lf hid prox write` lands, because it writes the config word already on the tag; every writer
+that changes the config fails, 0 of 9 across four protocols. ⇒ **Any future unit that needs a
+non-HID credential on the T5577 is blocked until this is understood**, and that includes the
+write-and-read-back arms for GProxII, AWID, Keri and Indala. The mechanism is NOT established. — needs a person
 
 ### ⚠ 2026-09-15 13:55 — THE PROXMARK CANNOT WRITE THE T5577 ANY MORE. OURS CAN.
 
