@@ -40,6 +40,46 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ✅⭐⭐ 2026-09-14 16:55 — F12 CONVICTED AGAINST A REAL TAG, AND C400 CLOSED AS NOT REPRODUCIBLE
+
+⭐⭐⭐ **F12 IS A FIRMWARE DEFECT, NOT AN INSTRUMENT ARTEFACT (C413).** A Proxmark-written HID Prox H10301
+carrying **the same credential our emulator was arming** was put on the Flipper's pad — a genuine mixed-tone
+FSK2a source, so the ideal tone composition is identical and the only variable is emitter versus tag:
+
+| source — same credential, same receiver, same pad | ASK chain | PSK chain |
+|---|---|---|
+| **real pm3-written tag** | **44.4%** RF/10 | 16.7% |
+| **our emulation** | **7.0%** RF/10 | — |
+| expected | ~45% | ~45% |
+
+⭐ **The real tag shows TWO CLEAN PEAKS of near-equal height** — 76 us: 20,218 and 60 us: 19,417 — which is what
+FSK2a should look like. Ours shows **one** peak at 60-64 plus spurious short durations (32, 36, 20 us) the real
+tag never produces. ⇒ **The ASK chain is exonerated and calibrated** (44.4% against ~45% expected), so C409's
+direction was right all along. ⛔ **It is the PSK chain that is the bad tone meter** — 16.7% on the tag ASK reads
+at 44.4% — so every PSK number in C411, including the 2-3x that prompted its correction, is an artefact.
+⚠ C409's *"absent"* stays too strong: ours is 7.0%, not zero.
+
+⇒ **NEXT, and it needs no hands**: the cause is bounded to a sequence MIXING 4-entry and 5-entry tones (C411's
+cliff — pure frames are correct in both directions, every mixed frame collapses, flat across alternation rates).
+`recompute_frames_per_burst()` is already cleared. The spurious 20-36 us durations that only OUR emission
+produces are the next thread: they are shorter than one tone period, so something is cutting entries short.
+
+✅ **C400 IS CLOSED AS NOT REPRODUCIBLE (C412) — 18 of 18.** Gallagher 6/6, Securakey 6/6, Noralsy 6/6 on real
+pm3-written tags with the judge reading back **every** write first. ⭐ **It was never code**: zero commits have
+touched `firmware/application/src/rfid/reader/lf/` since the entry that recorded the failure, so the proposed
+bisect would have found nothing. ⛔⛔ **Its controls were both on the WRONG ENGINE** — EM410X and HID Prox are
+both GPIO (`lf_reader_data.h`, no swept read); Gallagher, Securakey and Noralsy are all SAADC
+(`lf_drive_swept_read` in `lf_indala_data.c`). The SAADC engine had no passing arm, so *neither capture engine
+is down* was never established. **M53** is the rule; §2 U5's stale claim is where the error came from and is
+fixed.
+
+⭐ `pm3written.sh` now asks pm3 to read back its own write before scoring our reader, and calls the arm **VOID**
+rather than printing a reader result (M33). ⚠ **Bench during this measurement**: #1 alone and off the pad, #2 on the pm3 pad with no tag, the T5577 on the
+Flipper. Restoration to the standard two-rig bench (C408) was requested at 16:58 — ⛔ **run `./autopilot.sh bench`
+before trusting either rig again rather than assuming it is back** (C408's whole point).
+
+---
+
 ### ⛔⭐ 2026-09-14 16:35 — THE CLIFF IS REAL, THE MAGNITUDE WAS PARTLY MY INSTRUMENT (C411, correcting C409)
 
 ⭐⭐ **READ THIS BEFORE THE SECTION BELOW IT.** C409 said the emitter puts ONE tone on the coil and RF/10 is
@@ -841,7 +881,7 @@ the two Chameleons face each other.
 | **U2** | **NexWatch EMULATE.** `protocols/nexwatch.c` (PSK1 → `lf_psk1_modulator`, 96 bits, `LF_PSK1_PHASE_DIRECT`), `TAG_TYPE_NEXWATCH` (303), econfig get/set, `Makefile` row, **and a `ctest/roundtrip.c` arm** | device | Flipper or Proxmark reads our emulation as the right credential, ≥5 of 5, with a control either side |
 | **U3** | **NexWatch on-device READ.** Flash, `lf nexwatch read` against the real tag | device | 6 of 6 on device + the cross-protocol nulls re-run on the shipping build |
 | **U4** | **Re-test C162** — the PSK2 `lf t55xx dump` bit-31 artefact. n=1 today. Write the Indala224 credential, dump, compare; PSK1 control from the same writer | device | either a second confirming dump (n=2) or a retraction in FINDINGS.md |
-| **U5** | **Gallagher** — opens family 2 (ASK/biphase). ⭐ Reuses the **GPIO/comparator** path (`register_rio_callback`, 128-entry ring, no SAADC) that em410x/Viking/Jablotron use — **not** the PSK capture path. Start as NexWatch started: `lf gallagher clone` on the Proxmark, capture, decode on the host before writing firmware | device | read + write + emulate, all verified, nulls clean |
+| **U5** | **Gallagher** — opens family 2 (ASK/biphase). ⛔ **THIS ROW USED TO SAY Gallagher reuses the GPIO/comparator path rather than the SAADC one. THAT IS FALSE AND IT COST A DAY (C412/M53)** — `gallagher_read` lives in `lf_indala_data.c` and goes through `lf_drive_swept_read`, the SAADC whole-capture path, as do Securakey and Noralsy. The plan-era guess was believed instead of checked, and C400 built two controls on it that could not have detected the failure they were bracketing. Start as NexWatch started: `lf gallagher clone` on the Proxmark, capture, decode on the host before writing firmware | device | read + write + emulate, all verified, nulls clean |
 | **U6** | **Securakey, then Noralsy, then InstaFob** — the rest of family 2, one at a time, only after U5 is completely done | device | same bar as U5, each |
 | **U7** | ✅ **DONE 2026-09-14 — `NEXT.md` §9j.** Recounted against `main`: reviewable code 10,242 → **11,584** lines, 59 → **63** files, 29 → **31** new; the branch total's growth is notes and tooling, which no PR carries. ⛔ PR 4's FDX-A read-only caveat was FALSE and is corrected at both sites — it ships read AND write now (C340). ⭐ `FIXES.md`'s seven entries are named as the PRs that go FIRST, F1 leading, since six are defects on `main` and none depends on the protocol work. §9h's gating checklist gains the new scan counters | compute | ✅ met |
 | **U8** | **FSK family** (AWID, Paradox, Pyramid, FDX-A). ⛔ **LAST, deliberately.** It reuses the HID Prox/ioProx SAADC machinery, and HID's 15–20% intermittency (C45) is unexplained and lives in exactly that path. Adding four protocols on top of an unexplained defect is what Phase 2 existed to prevent | device | do not start without saying so in §4 |
@@ -1112,7 +1152,13 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ## 5. BLOCKED
 
-### ⛔ 2026-09-14 16:35 — ONE TAG MOVE WOULD CALIBRATE BOTH RECEIVERS (C411)
+### ✅ CLEARED 2026-09-14 16:55 — THE TAG MOVE WAS DONE AND IT CONVICTED THE EMITTER (C413)
+
+✅ **The operator made the swap within minutes of it being asked for, and it settled the question**: the real tag
+reads **44.4%** RF/10 on the ASK chain where our emulation reads **7.0%**. The instrument is calibrated, the
+emitter is convicted, and nothing here needs hands again. Original request follows.
+
+### (answered) 2026-09-14 16:35 — ONE TAG MOVE WOULD CALIBRATE BOTH RECEIVERS (C411)
 
 ⛔ **Scope: this blocks the last step of U11/F12 and nothing else.** The cliff is measured and the emitter is
 implicated; what cannot be measured on this bench is **how much of the shortfall is ours and how much is the

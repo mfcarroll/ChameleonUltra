@@ -26,7 +26,9 @@ under **The bench** and **Working conventions**.
 
 ## ⚠ Needs hands — what is still queued
 
-⛔ **ONE TAG MOVE, AND IT IS THE LAST STEP OF U11/F12 (C411).** Write HID Prox to the T5577 with the Proxmark
+✅ **DONE AND CLEARED — nothing here needs hands (C413).** The swap was made, the real tag read **44.4%** RF/10 against our emulation's **7.0%** on the same chain, and F12 is convicted as a firmware defect. The request that follows is kept for its reasoning only.
+
+⛔ ~~**ONE TAG MOVE, AND IT IS THE LAST STEP OF U11/F12 (C411).**~~ Write HID Prox to the T5577 with the Proxmark
 (rig B, nothing to move for that), then put **that tag on the FLIPPER's pad**, leaving rig A otherwise as it is.
 
 ⭐ **Why**: the FSK2a cliff is measured — pure frames emit either tone correctly, every mixed frame collapses —

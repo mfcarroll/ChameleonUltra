@@ -51,6 +51,23 @@ CLONE[viking]="lf viking clone --cn 1A337F9C";              READ[viking]="lf vik
 CLONE[jablotron]="lf jablotron clone --cn 1234567890";      READ[jablotron]="lf jablotron read";  WANT[jablotron]="1234567890"
 CLONE[pac]="lf pac clone -r FF2049906D8541C9511C1B06C1B46551"; READ[pac]="lf pac read";           WANT[pac]="CARD0001"
 
+# ⛔⛔ THE JUDGE MUST BE ASKED WHETHER THE TAG WAS ACTUALLY WRITTEN (M33). A T5577 gives NO
+# acknowledgement, so a silently failed clone and a blind reader produce the SAME 0/N here —
+# and this script used to print that 0/N as a READER result with nothing standing behind the
+# write. That hole is not hypothetical: C400 stood for a day as "two ASK read arms are down"
+# and did not reproduce at all (C412).
+# ⇒ After the clone, pm3 is asked to READ ITS OWN WRITE. Silence means the arm is VOID — the
+# tag is not carrying the credential — which is a different statement from "our reader failed".
+# ⚠ EMPTY MEANS UNVERIFIED, AND IS SKIPPED RATHER THAN GUESSED. Every entry below was observed
+# on this bench; the blanks are protocols whose pm3 reader command has not been run here yet.
+# Filling one in with a plausible-looking command is exactly the guess this file warns against
+# three lines above — add it when you have SEEN it print.
+typeset -A VERIFY
+VERIFY[gallagher]="lf gallagher reader"
+VERIFY[securakey]="lf securakey reader"
+VERIFY[noralsy]="lf noralsy reader"
+VERIFY[hidprox]="lf hid reader"
+
 all=(indala idteck keri nexwatch gallagher securakey noralsy awid paradox pyramid gproxii fdxa fdxb
      hidprox ioprox em410x viking jablotron pac)
 if (( $# )); then protos=("$@"); else protos=($all); fi
@@ -62,6 +79,15 @@ print -r -- "  our READER against a tag the PROXMARK wrote — two independent e
 print -r -- "  --------------------------------------------------------------------"
 for p in $protos; do
   $PM3 -p $PM3PORT -c "${CLONE[$p]}" >/dev/null 2>&1
+  # ⭐ Ask the judge whether its own write landed, before scoring our reader against it.
+  if [[ -n "${VERIFY[$p]:-}" ]]; then
+    jw=$($PM3 -p $PM3PORT -c "${VERIFY[$p]}" 2>&1 | grep -ciE '^\[\+\].*(Raw|Card|FC|Region|Serial)')
+    if (( jw == 0 )); then
+      printf "  %-11s ⛔ VOID — pm3 cannot read back its OWN write, so the tag is not carrying it.\n" "$p"
+      printf "  %-11s    This is NOT a reader result (M33). Re-seat the tag and re-run.\n" ""
+      continue
+    fi
+  fi
   ok=0
   for i in $(seq 1 $READS); do
     out=$("$PY" "$CU" "hw connect -p $CH2" "${READ[$p]}" 2>&1)

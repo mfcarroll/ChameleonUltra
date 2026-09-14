@@ -548,3 +548,27 @@ and a firmware build flashed to "exonerate" a session, before `lf indala read` p
 (C404).
 ⇒ **Pick the control from the family under test.** EM410X passing proved nothing about Gallagher, because
 EM410X could not have failed. A control that cannot fail is not a control.
+
+**M53 — A CONTROL MUST EXERCISE THE SAME CAPTURE ENGINE AS THE ARM UNDER TEST, AND YOU NAME THE
+ENGINE FROM THE SOURCE, NOT FROM MEMORY.**
+
+⛔ C400 stood for a day as *two ASK read arms are down* on the strength of two passing controls,
+EM410X and HID Prox, described as covering *both* capture engines. They do not. `lf_em410x_data.c`
+and `lf_hidprox_data.c` both include `lf_reader_data.h` and neither calls `lf_drive_swept_read`;
+`gallagher_read`, `securakey_read` and `noralsy_read` all live in `lf_indala_data.c` and all go
+through it. **Both controls were the GPIO engine. Both failing arms were the SAADC engine.** The
+SAADC path had no passing arm at all, so *neither capture engine is down* — the one thing the
+controls existed to license — was never established, and the claim did not reproduce: 18 of 18 on
+re-test (C412).
+
+⭐ This is the same failure as M52 seen from the other side. There the trap was a control that
+**could not fail**; here it is a control that **could not have detected the failure**. Both come
+from naming a control by PROTOCOL rather than by the machinery it drives.
+
+⇒ **Before a control is allowed to bracket anything, open the file and check which capture path it
+enters.** One `grep` for the include and the swept-read call answers it, and it costs a minute
+against the day C400 cost. ⚠ The stale claim that produced it was sitting in `AUTOPILOT.md` §2 U5
+(*Gallagher reuses the GPIO/comparator path — not the SAADC capture path*), which is why it was
+believed rather than checked: **a plan-era note is not a source of fact about shipped code (M45's
+rule, applied to our own notes instead of to the hardware).**
+
