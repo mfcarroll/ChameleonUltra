@@ -45,8 +45,8 @@ accurate then. `LOG.md` keeps the history; §1 is what a fresh context inherits,
 what is true now. Same discipline C286 applied to `NEXT.md` §9f.
 
 **THE BENCH, verified 2026-09-15 12:30.** All four devices enumerate. **Chameleon #2 runs
-`3f40bc5` — a clean build of HEAD (`v2.2.0-534`), reflashed 2026-09-15 18:00 and confirmed by
-`hw version` plus a 195-id capability query** — and reads the
+`59933d8` — a clean build of HEAD (`v2.2.0-547`, no `-dirty`), reflashed 2026-09-15 21:15 and
+confirmed by `hw version`; the HID read arm verifies 4 of 4 on it** — and reads the
 T5577 4 of 4 after the flash. **#1 is deliberately NOT reflashed**: C289 showed by per-file diff
 that nothing changed today can reach the five working emulate arms, so flashing it would have
 risked the unit holding the NexWatch slot for a check that could not fail. The tag holds **HID
