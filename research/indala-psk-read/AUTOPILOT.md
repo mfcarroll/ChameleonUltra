@@ -416,6 +416,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 14:55 | **C299 — five causes eliminated for C297** | 16 → 17 | Password, all four downlink modes, pm3's antenna, the tag and the field all ruled out by direct test. The hands-needed test is now one action: power down #2 and retry | Destructive block-2 writes so "no change" cannot be a false negative; `hw tune` for the antenna |
 | 2026-09-15 14:25 | **C298 — C297 is not a password** | 16 → 16 | Tested the obvious hypothesis and refuted it; C297's downlink account stands. Side finding: every write here sets the card's password `51243648`, previously undocumented | The test is destructive by design — block 2 would have wrecked the credential, so "air unchanged" cannot be a false negative |
 | 2026-09-15 13:55 | **C297 — pm3 cannot write the T5577 any more** | 16 → 16 | 4 pm3 writes reported `Done!` and none landed; `lf t55xx detect` fails. Our writer recovered the bench first time. Recorded in §5 as a bench condition, not a blocker | Field measured healthy (13908 p-p, 3778 drops) to separate "tag gone" from "cannot write"; our writer on the same tag in the same minute is the control |
 | 2026-09-15 13:25 | **C296 — M36-M40 added to METHOD.md** | 16 → 16 | Five transferable lessons lifted out of the claims: entailment over captures, host-vs-device timing, append-only documents, ritual regression runs, failing branches of display fixes | Each traced to the specific failure that produced it; the caveat that method has no experimental test is stated |
@@ -513,11 +514,15 @@ readers: `lf hid prox write -f H10301 --fc 123 --cn 4567`. Every protocol here h
 the air unchanged. ⭐ Worth knowing regardless: **every write this project performs sets the
 card's password**, which was undocumented.
 
-⚠ The tag and the field are healthy — `lf sniff` peak-to-peak 13908 with 3778 real field
-drops — so this is not a coupling failure of the tag. Whether it is the Proxmark's antenna,
-its tuning, or the sandwich geometry for the downlink specifically is NOT established, and
-needs someone who can move things. ⇒ **If a Proxmark write is genuinely needed, that is a
-second reason to take the sandwich apart.**
+⭐⭐ **FIVE CAUSES ELIMINATED (C299), and the test is now ONE ACTION rather than a disassembly.**
+Not the password, not any of pm3's four downlink modes, not pm3's antenna (`hw tune`: 21.05 V at
+125 kHz, *LF antenna ok*), not the tag, not the field. ⇒ What fits every observation is the
+second antenna smearing pm3's transmit gaps while leaving the tag's uplink untouched — pm3 hears
+perfectly and cannot talk — which also explains why OUR writer, the near antenna, still works.
+
+⛔ **THE TEST: power down Chameleon #2 and retry `lf hid clone`.** No disassembly. If it lands,
+the sandwich is the cause and neither tool is faulty. ⚠ That account is a hypothesis that fits, not
+a measurement.
 
 ### ⛔⛔ 2026-09-13 11:40 — STOP USING `rfid raw_analyze`. IT HAS WEDGED THE FLIPPER TWICE.
 
