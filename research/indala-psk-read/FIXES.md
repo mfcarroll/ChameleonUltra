@@ -7,6 +7,11 @@ that is about something else.
 
 ⛔ **Everything here is present on `main`.** Where a defect is ours, it says so.
 
+⭐⭐ **RUN `./fixcheck.sh` BEFORE TRUSTING THIS FILE.** Every entry says *fixed and hardware-verified*, and some
+were verified months ago on firmware that has since been rewritten underneath them. The script re-tests each one
+against the build actually flashed: **9 of 11 pass, 0 regressed** as of 2026-09-14 (C351). ⛔ F10 and F11 are
+EMULATION fixes needing the Flipper as reader, and the script reports them NOT CHECKED rather than skipping them.
+
 | # | what | files | present on `main`? |
 |---|---|---|---|
 | F1 | T5577 writes silently password-protect the tag, with a key that differs by protocol | `t55xx.h`, `lf_reader_main.c`, `lf_t55xx_data.c`, `chameleon_cmd.py` | yes |
