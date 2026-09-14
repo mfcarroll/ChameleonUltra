@@ -38,6 +38,30 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔ 2026-09-14 15:45 — A READ ARM IS DOWN: `lf securakey read` FINDS NOTHING ON A VALID TAG (C399)
+
+⛔ **This contradicts a headline claim and is the first thing to read.** `lf securakey read` is recorded as
+returning `7fcb400001adea5344300000` **6 of 6**, and Securakey is one of C343's nineteen arms at **76 of 76**.
+It now returns **`LF tag not found`** — 3 of 3 on a tag our own writer made, and **2 of 2 on one the
+PROXMARK'S OWN ENCODER made**.
+
+⭐ **pm3 reads both**: `Securakey - len: 26 FC: 0x35 Card: 64169, Raw: 7FCB400001ADEA5344300000`, and
+`lf t55xx detect` says the tag is correct — **ASK, RF/40**, block 0 `000C8060`, blocks 1-3 exactly the raw.
+⭐⭐ **The rig is exonerated in the same minute**: the same device, the same tag position, reads **HID FC 123 /
+CN 4567** immediately afterwards. So this is protocol-specific, not coupling.
+⭐ **Securakey EMULATION still scores 6/6** this session, so the frame and encoder are fine — it is the READ
+path.
+
+⚠ **NOT YET ATTRIBUTED, and the instrument-first rule says do not call it a regression until it is.** Nothing
+changed this session touches the Securakey read path. Two live candidates: a field/drive marginality specific
+to **RF/40**, the slowest bit rate any read arm uses and a variable that has decided arms before (C210); or an
+older regression unnoticed because the arm was never re-run against a real tag after the capture engine was
+rewired.
+⇒ **NEXT TICK: sweep drive on `lf securakey read` against the reference tag, then bisect the read path.**
+⛔ Until then, treat *19 read arms, 76 of 76* as **carrying one known exception**.
+
+---
+
 ### ⭐⭐⭐⭐ 2026-09-14 12:15 — THE EMULATE COLUMN IS MEASURED: 8 OF 11 AT 6/6. THE GAP IS FSK2a.
 
 ⭐ **Read this first; it replaces an 11:35 heading that said the column was unmeasured and rig A needed
@@ -640,7 +664,7 @@ the two Chameleons face each other.
 | **U13** | ✅ **DONE 2026-09-14 (C390).** §9h re-verified against the branch: the substance was right, both its NUMBERS were wrong. The gate now measures **1,560 bytes of flash and 8,016 of RAM** against the 1,088 / 4,008 it claimed — the RAM cost **exactly doubled**. Every line number in the site table had drifted and is refreshed, the table now says the line numbers are a convenience and the contract is the `#if` blocks plus one `-D`, and the gate's own site (`application/Makefile:431`) was missing and is added. ⚠ The row that stood here — *the instrumentation list is stale, the command-id count is no longer 32* — was ITSELF stale: §9h had already covered all four sites and `rdrcap.py` since C303 | compute | ✅ met |
 | **U15** | ✅ **DONE 2026-09-14 (C330) — every write arm re-graded against an unlocked tag: all eight 4 of 4, 32 writes, 0 failures, every raw byte-identical.** The old failures were the password lock (C325), not the writers. `./regrade.sh <protocol> [rounds]` reruns any row. ⛔ Indala224 and IDTECK were NOT re-graded — only Indala26 | device (sandwich) | ✅ met |
 | **U18** | ⛔⛔⛔ **RETRACTED — THERE WAS NEVER A FIRMWARE DEFECT HERE (C373).** `hw emudebug` reports **`have pwm seq : True`** and `frames per burst : 21` with Gallagher loaded: the loader ran and took its branch, so *the emulator never sets `m_pwm_seq`* is false and `lf_tag_data_loadcb_inner()` needs no instrumentation. What is 0 is **`playbacks started`**, and playback starts only from `lpcomp_event_handler(UP)`, which needs a reader's field. ⛔ **The Flipper's `rfid` command was not running** — `failed to load external command`, an API mismatch between `lfrfid.fap` and the firmware on it — so every arm was scored against a reader that was never listening, and `flipper.py` reported that as a clean `0/N` (C374, now fixed to abort). ⭐ Indala PSK1, the arm §1 recorded as 6/6, scores 0/4 in the same session: not protocol-specific, and never was. ⇒ **The emulate column is UNMEASURED, not failing.** It reopens as U19 the moment the Flipper reads again | — | ✅ closed as retracted |
-| **U19** | ✅ **DONE 2026-09-14 (C378) — the emulate column is measured: 8 of 11 at 6/6.** PSK1 (Indala, IDTECK, Keri, NexWatch) and ASK/biphase (Gallagher, Securakey, Noralsy, GProxII) all 6/6 with wrong-modulation controls at 0/6, credentials verified byte-exact, nulls clean either side. FSK (HID Prox, ioProx, AWID) 0/6, bracketed by positives so the silence is real. ⛔ **U12/C242 refuted** — GProxII emulates exactly. ⇒ The remaining gap is one family and it is **U11** | device (rig A) | ✅ met |
+| **U19** | ✅ **DONE 2026-09-14 (C378) — the emulate column is measured: 8 of 11 at 6/6.** PSK1 (Indala, IDTECK, Keri, NexWatch) and ASK/biphase (Gallagher, Securakey, Noralsy, GProxII) all 6/6 with wrong-modulation controls at 0/6 and clean nulls, and **every one of the eight has had its CREDENTIAL read back and checked** (C398) — three byte-identical, three field-exact, Securakey settled by the Proxmark as a third party. ⚠ This row used to say *credentials verified byte-exact* when only TWO had been. FSK (HID Prox, ioProx, AWID) 0/6, bracketed by positives so the silence is real. ⛔ **U12/C242 refuted** — GProxII emulates exactly. ⇒ The remaining gap is one family and it is **U11** | device (rig A) | ✅ met |
 | **U16** | ⛔ **CLOSED AS NOT REPRODUCIBLE (C337), NOT AS SOLVED.** FDX-B reads **15 of 15** — 6/6 CLI, 3/3 raw, 9/9 across an A/B/A — so the `0 of 4` that opened this unit is not a standing defect. ⚠ **It was real once**: the gated scan counters caught it at 17 captures kept, 8 phases, ZERO decodes, so the failure mode is a silent DECODER, not a failed agreement. Trigger unknown; drive inheritance refuted. ⇒ **If it returns**, the instrument is already in place — call `FDXB_SCAN` raw and read the 12-byte failure payload (attempts / kept / decodes / capture_failed / spliced / phases / last_phase). Do not theorise before re-running the baseline | device | ✅ closed; reopen only on a reproduction |
 | **U17** | ✅ **DONE 2026-09-14 — FDX-A reads AND writes, both grade A (C338, C340).** Read 10 of 10 on a real Proxmark-written tag across two credentials; write 4 of 4 from a confirmed-blank tag with the credential alternating every round, and the stored blocks are **byte-identical to `lf destron clone`'s own**. Config `00105060` — FSK2, not the family's FSK2a. ⇒ C185's *refused, not deferred* is fully retired: it rested on looking for FDX-A under `lf fdx` instead of `lf destron` | device (sandwich) | ✅ met |
 | **U14** | ✅ **DONE 2026-09-14 — `NEXT.md` §11 is complete.** The three questions the first pass left open are answered against the source: the Flipper's `validate_count` is the bar AFTER the first sighting, so the real requirement is 4 non-PSK / 7 PSK against our 2; the Proxmark takes ONE capture and stops at the first of 26 demodulators to match, so by default a shadowed protocol is never reported; and our own rule compared 8 bytes rather than the frame until C332 fixed it | compute | ✅ met |
