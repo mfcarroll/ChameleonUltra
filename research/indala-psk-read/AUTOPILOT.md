@@ -66,6 +66,12 @@ Captured our own emission with the Flipper's `rfid raw_read` and histogrammed th
 | **AWID** | **3620** | **2** | `Protocol: not found` |
 | **Gallagher** (control) | RF/32 half-bits at 131 and 253 us | — | `Protocol: Gallagher [12 00 10 E1 00 00 1A 85]` |
 
+✅ **AND THE EIGHT WORKING ARMS ARE RE-VERIFIED ON THE CURRENT BUILD (C394)** — PSK1 and ASK/biphase all
+**6/6** with their wrong-modulation arms at 0/6 and clean nulls, AFTER the clock macro moved to
+`IS_1MHZ_PWM_TYPE` and HID/AWID moved to a shared buffer. Shared infrastructure under working
+protocols, where a wrong base clock is silent rather than loud — so this was a measurement, not a
+formality.
+
 ⇒ **There is no frequency modulation on the air at all**, so an FSK decoder has nothing to find. The control
 pins the scale (one unit ~1 us, RF/32 = 128/256 us) and proves the capture pipeline decodes correctly.
 
