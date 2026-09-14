@@ -308,48 +308,53 @@ shipped emitter, and it should have been the first.
 this bench, so its read path for those protocols is not independently confirmed. Three FSK2a
 emitters failing while six non-FSK2a ones succeed is strong, and it is not proof.
 
-### 9f. ⛔ A SECOND PRE-EXISTING DEFECT — a corrupted HID frame is reported as Indala
+### 9f. ⛔ A PRE-EXISTING DEFECT — an unpinned HID read cannot identify half the format table
 
-**`lf hid prox read` will hand the operator a confident credential of a protocol the tag is
-not.** Measured on a deliberately degraded build (`235dfa3`, the BLE advertising guard off) so
-that frame corruption could be produced on demand, one tag, two arms of 48 (C251):
+⭐ **Rewritten 2026-09-15.** This section had grown into a record of how I got here, and its
+tail still said the defect was "reachable only when something else is already perturbing the
+capture" — which C284 disproved on perfectly good tags. The history is in `LOG.md`; this is
+what is true now.
 
-| arm | exact | wrong | null |
-|---|---|---|---|
-| `format_hint = 0` — what the CLI sends by default | 40 | **7** | 1 |
-| `-f H10301` — format pinned | 46 | **1** | 1 |
+**`lf hid prox read` returns the FIRST Wiegand layout that fits and prints it as the answer.**
+`unpack()` in `wiegand.c` walks `formats[]` in table order; `LFHIDProxRead` passes
+`format_hint = 0` whenever `-f` is absent. Both are on `main` — this branch introduced neither.
 
-Six of the seven came back labelled **`Indala 26-bit`**, FC 1953-1977 / CN 471, hugging FC 1969
-/ CN 471 — the ind26 reading of this tag's own **uncorrupted** frame.
+**The measurement to lead with (C284).** Every format the CLI accepts, cloned onto a real tag
+by `lf hid clone -w <fmt> --fc 1 --cn 1` and read back unpinned: **14 round-trip exactly, 15
+come back as a DIFFERENT format with a DIFFERENT credential.** A Kastle tag holding fc 1 / cn 1
+reports as HID Check Point card 8389632. ⭐ **`-f KASTLE` returns fc 1 / cn 1 exactly** (3 of 3
+spot-checked), so the tags are perfect and the walk is what loses the information. No
+corruption is involved anywhere in that result.
 
-⭐ **H10301's parity is not the weak link; it works.** It rejects the mangled frame, and then
-`unpack()` (`wiegand.c`) walks on to the next format of the same bit length. `unpack_ind26`
-checks less, accepts what H10301 refused, and `card->format` is quietly set to ind26. The CLI
-prints whatever format comes back, so there is no signal that a fallback happened at all.
+**Why, and why it cannot be tweaked away (C285).** 13 of the 32 `unpack_*` functions have no
+rejection path at all — `ind27`/`indasc27`/`tecom27` (one shared helper), `ind29`, `adt31`,
+`hcp32`, `hpp32`, `kantech`, `wie32`, `optus`, `smartpass`, `p10004`. That list predicts C284's
+relabel map exactly, and the two were derived independently. The walk lands on the first format
+at a given length that checks nothing. ⛔ Those 13 **cannot be hardened**: a format with no
+parity or checksum has nothing to check, and the Proxmark agrees — it prints a parity verdict
+beside H10306, N10002 and BQT34 and none beside HCP32 or Optus34.
 
-⭐⭐ **UPDATE 2026-09-15 — the operator has called this OURS to work on, and a mitigation has
-shipped (C276).** `lf hid prox read` now states that an unpinned read is the FIRST layout that
-fits rather than the only one, names the `-f` flag, and quotes the measured cost. The walk
-itself is untouched.
+⇒ **The only correct behaviours are the reference's or pinning.** `lf hid reader` prints EVERY
+candidate with its parity verdict — five for the Kastle tag — and lets the operator choose.
+`-f <fmt>` removes the ambiguity at the source. **Narrowing the walk is not one of the
+options**, and a proposal offering it should say why it is not.
 
-⛔⛔ **THE NUMBER TO PUT IN FRONT OF UPSTREAM (C284): 15 of the 29 formats that can be written
-to a real tag come back as a DIFFERENT format with a DIFFERENT credential on an unpinned
-read.** Not a corner case — half the table. A Kastle tag holding fc 1 / cn 1 reports as HID
-Check Point card 8389632; `-f KASTLE` returns fc 1 / cn 1 exactly, so the tags are fine and
-the walk is what loses it. ⇒ Any proposal about `unpack()` should lead with that measurement
-rather than with C251's single corrupted-frame anecdote.
+⭐ **Scope, corrected.** An earlier draft said the walk is load-bearing for "every reader that
+guesses a format". A whole-tree grep finds **one caller: `hidprox.c:134`** (C276). ioProx has a
+fixed XSF layout; Indala prints its own 26-bit interpretation without the table. Upstream is
+being asked about one reader.
 
-⛔⛔ **AND THE WALK CANNOT BE NARROWED INTO CORRECTNESS (C285).** 13 of the 32 `unpack_*`
-functions have no rejection path at all — a format with no parity or checksum has nothing to
-check — and that list predicts C284's relabel map exactly. The first check-less format at a
-given length swallows every other format's frames there. ⇒ The only correct behaviours are
-the Proxmark's, which prints EVERY candidate with its parity verdict, or pinning with `-f`.
-Neither is a tweak to the walk, and a proposal that offers one should say so.
+**What corruption adds (C251, C277, C279).** At 26 bits H10301 accepts all 8,658 validly packed
+ind26 frames swept, so a genuine Indala-layout tag reports as H10301 and a foreign winner there
+means the capture was corrupted. With the BLE guard deliberately off, an unpinned read was
+wrong 7 times in 48 against 1 in 48 pinned, and 6 of the 7 came back as `Indala 26-bit`.
 
-⭐ **And this row overstated the risk of changing it.** It said narrowing `unpack()` touches
-"every reader that guesses a format". A whole-tree grep finds **one caller: `hidprox.c:134`.**
-ioProx has a fixed XSF layout; Indala prints its own 26-bit interpretation without the table.
-⇒ Upstream is being asked about one reader, not a shared foundation.
+**What this branch shipped (C276, C280, C282, C283).** `lf hid prox read` now says an unpinned
+read is the first layout that fits, names the `-f` flag, and quotes the cost. The wording is
+per-length and measured: corruption at 26/32/37 bits where an HID format takes every valid
+foreign frame, "the reader cannot tell" at 34 where it takes 307 of 484, and a neutral note at
+27-30 bits **where no HID format exists at all** — without which the message would have fired
+on every such read. All four branches are exercised on hardware. `unpack()` is untouched.
 
 ⚠ **A reviewer will also notice 42 declared formats against 31 implemented** (C281):
 `card_format_t` names AVIG56, BC40, BQT38, C1K48S, CASI40, DEFCON32, H800002, IR56, ISCS,
@@ -357,19 +362,11 @@ P10001 and PW39 with no `formats[]` row, so they can never be packed or unpacked
 the host enum has 31 and mirrors the table, so the CLI refuses them — but it is upstream's
 header and it looks like a gap until someone checks.
 
-⛔ **Both halves are on `main`.** The walking `unpack()` is upstream's, and so is
-`LFHIDProxRead` passing `format = 0` when `-f` is absent. This branch did not introduce either
-and **must not "fix" it here**: the format walk is load-bearing for every reader that guesses a
-format, and narrowing it is upstream's call.
-
-⇒ **What to report, not to patch.** The smallest honest fix is at the reporting layer — when
-the returned format differs from the one asked for, or when no format was asked for at all, say
-so — but even that is a change to shared behaviour and belongs in its own upstream discussion.
-
-⚠ **What is NOT established**: the guard is on in every shipping build, and with it on the same
-tag reads 96/96 and 48/48 exact with zero wrong. So this is reachable only when something else
-is already perturbing the capture — a BLE burst over a live link, where `lf_adv_suspend` cannot
-fire by design, is the configuration to worry about, and it has not been measured here.
+⚠ **What is NOT established.** W2804 and ACTPHID are missing from C284's sweep because the
+Proxmark refused every credential shape tried — a writer limitation, not a reader finding. And
+the enumerate-every-candidate behaviour has not been implemented here: it needs the firmware to
+return a list rather than one format, and a host-side transcription of 31 unpackers would be
+exactly the "share the front end, do not resemble it" mistake this project refuses.
 
 ### 9g. ⭐ TWO AUDITS A REVIEWER CANNOT DO THEMSELVES — the frame gates, and what we PRINT
 
