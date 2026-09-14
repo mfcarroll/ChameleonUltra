@@ -114,6 +114,41 @@ static size_t render_level(const nrf_pwm_sequence_t *seq, int16_t *out, size_t o
     return n;
 }
 
+/* ⭐⭐⭐ THE FSK RENDERER, AND IT IS NEITHER OF THE TWO ABOVE. Two things changed under it
+ * (C382/C383/C385) and each breaks one of the existing renderers:
+ *
+ *  1. The tone is now carried by the DUTY across several entries — ON, ON, OFF, OFF for RF/8 —
+ *     not by one entry per tone with a varying counter_top. `render_ask()` hard-codes half the
+ *     period high and ignores duty entirely, so it renders every entry as a 16-tick square and
+ *     destroys the tone. That is a harness artefact, not an emitter defect, and it cost a
+ *     confident `NO DECODE` before it was spotted.
+ *  2. The FSK types now run at a 1MHz base clock, so ONE TICK IS 1us, not one carrier cycle.
+ *     Every other emitter here runs at 125kHz where the two coincide, which is why no renderer
+ *     needed this before. The decoder samples once per carrier cycle, so the tick stream must
+ *     be divided by 8 or it arrives 8x oversampled and decodes nothing.
+ *
+ * ⇒ Honour the duty AND divide. The result is exactly the measured reference shape (C226): a
+ * fixed 4-sample mark with the gap carrying the frequency, 4 for RF/8 and 6 for RF/10. */
+static size_t render_level_div(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len,
+                               size_t ticks_per_sample) {
+    const size_t entries = (size_t)seq->length / 4u;
+    size_t n = 0, tick = 0;
+    for (size_t i = 0; n < out_len; i++) {
+        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i % entries];
+        const size_t top = e->counter_top;
+        const size_t duty = e->channel_0 & 0x7FFFu;
+        const int polarity = (e->channel_0 & (1u << 15)) ? 1 : 0;
+        for (size_t s = 0; s < top && n < out_len; s++, tick++) {
+            if (tick % ticks_per_sample) {
+                continue;   /* one sample per carrier cycle, not per tick */
+            }
+            const int high = (s < duty) ^ polarity;
+            out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
+        }
+    }
+    return n;
+}
+
 /* ⚠ The biphase decoder wants a STEP at each grid point, and a perfectly square rendering
  * gives it one — but its threshold is a fraction of the MEAN boundary step, so a capture in
  * which every boundary steps by the same amount is the easiest case it will ever see. This arm
@@ -259,7 +294,9 @@ static int trial_fsk(const char *name, const char *hex, size_t bits,
     }
     const size_t entries = (size_t)seq->length / 4u;
     static int16_t air[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
-    size_t n = render_ask(seq, air, sizeof(air) / sizeof(air[0]));
+    /* ⚠ 8 ticks per sample: the FSK types run at 1MHz and the decoder samples per carrier
+     * cycle. See render_level_div's note — render_ask() is wrong for this family now. */
+    size_t n = render_level_div(seq, air, sizeof(air) / sizeof(air[0]), 8);
     proto->free(codec);
 
     lf_decode_result_t r;
@@ -343,56 +380,76 @@ static int trial_t55xx(const char *name, const char *hex, uint8_t words, uint32_
 }
 
 /* ⭐⭐ PIN THE EMITTED WAVEFORM'S SHAPE, NOT JUST ITS MEANING. Every other arm in this file
- * asks "does what we emit decode back" — and for AWID the answer is yes while the Flipper
- * reads it 0 of 6, so that question is not sufficient on its own.
+ * asks "does what we emit decode back", and for AWID the answer was YES for a whole unit while
+ * the Flipper read it 0 of 6 — so that question is provably not sufficient on its own (C380).
  *
- * ⛔ WHAT THIS PINS AND WHY. A real AWID emission was captured on this bench from a Flipper
- * emulating the protocol, decoded byte-exact by our own reader, and measured: the HIGH run is
- * 4 samples on essentially every tone and only the LOW run varies, 4 for RF/8 and 6 for RF/10
- * (C226). Our emitter was emitting 5 and 5 for the long tone — the same PERIOD, which our own
- * decoder cannot tell apart because it only ever looks at the sum, and which no round trip in
- * this file would ever catch. It was corrected to match the measurement.
+ * ⛔ WHAT THIS PINS AND WHY. A real AWID emission was captured on this bench, decoded byte-exact
+ * by our own reader, and measured: the HIGH run is 4 CARRIER CYCLES on essentially every tone
+ * and only the LOW run varies — 4 for RF/8 and 6 for RF/10 (C226). The mark is the tag's
+ * load-modulation pulse, a property of the modulator rather than of the tone, so it does not
+ * scale with the period. A 50% duty at the longer period leaves the field loaded 25% longer
+ * than any real AWID tag would, and NO ROUND TRIP CAN SEE THAT — a demodulator only ever looks
+ * at the tone's PERIOD, which is identical either way.
  *
- * ⇒ Without this arm that correction can revert silently. `counter_top / 2` is the obvious
- * thing to write and it is what was there before. */
-static int trial_awid_duty(void) {
+ * ⚠ REWRITTEN FOR THE CONSTANT-`counter_top` ENCODING (C382/C383/C385). It used to assert
+ * `counter_top` of 8 or 10 with a mark of 4; the tone is now carried by the DUTY across several
+ * entries of a constant 16 ticks at a 1MHz clock, so the same physical shape is expressed
+ * differently. What is pinned is the SHAPE IN CARRIER CYCLES, which is the thing C226 measured
+ * and the thing that survives a change of representation:
+ *
+ *     every entry      counter_top 16 ticks = 2 carrier cycles, duty fully on or fully off
+ *     every mark run   2 entries = 4 carrier cycles      <- fixed, never scales
+ *     every gap run    2 or 3 entries = 4 or 6 cycles    <- carries the frequency
+ */
+static int trial_fsk_duty(void) {
     uint8_t frame[12] = {0x01, 0x1D, 0xB2, 0x18, 0x27, 0x1B, 0xD8, 0x11,
                          0x11, 0x11, 0x11, 0x11};
     void *codec = awid.alloc();
     const nrf_pwm_sequence_t *seq = awid.modulator(codec, frame);
+    if (seq == NULL) {
+        printf("  %-28s ⛔  modulator returned NULL\n", "AWID duty vs real emission");
+        awid.free(codec);
+        return 1;
+    }
     const size_t entries = (size_t)seq->length / 4u;
     int bad = 0;
-    size_t shorts = 0, longs = 0;
-    unsigned worst = 0;
-    for (size_t i = 0; i < entries; i++) {
-        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i];
-        const uint16_t top = e->counter_top;
-        const uint16_t duty = e->channel_0 & 0x7FFFu;
-        if (top == 8) {
-            shorts++;
-        } else if (top == 10) {
-            longs++;
-        } else {
-            bad = 1;
-        }
-        /* The mark is FIXED at 4 regardless of tone — that is the measured reference. */
-        if (duty != 4u) {
-            bad = 1;
-            if (duty > worst) {
-                worst = duty;
+    size_t marks = 0, gap4 = 0, gap6 = 0, run = 0;
+    int prev = -1;
+    unsigned worst_mark = 0, worst_gap = 0;
+    for (size_t i = 0; i <= entries; i++) {
+        int on = -1;
+        if (i < entries) {
+            const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i];
+            const uint16_t duty = e->channel_0 & 0x7FFFu;
+            if (e->counter_top != 16u || (duty != 0u && duty != e->counter_top)) {
+                bad = 1;   /* not a constant top, or an intermediate duty */
             }
+            on = (duty != 0u);
         }
+        if (on == prev) {
+            run++;
+            continue;
+        }
+        if (prev == 1) {            /* a mark run just ended: must be exactly 2 entries */
+            if (run != 2u) { bad = 1; if (run > worst_mark) worst_mark = (unsigned)run; }
+            marks++;
+        } else if (prev == 0) {     /* a gap run: 2 entries for RF/8, 3 for RF/10 */
+            if (run == 2u) { gap4++; } else if (run == 3u) { gap6++; }
+            else { bad = 1; if (run > worst_gap) worst_gap = (unsigned)run; }
+        }
+        prev = on;
+        run = 1;
     }
     awid.free(codec);
-    /* ⚠ Report the OFFENDING duty, not the wanted one. A failure line that still reads
-     * "mark fixed at 4" describes the test's intention rather than what it found, which
-     * is exactly the kind of message that makes a red result easy to skim past. */
+    /* ⚠ Report what it FOUND, not what it wanted. A failure line that still reads "mark fixed
+     * at 4" describes the test's intention rather than the defect, which is exactly the kind of
+     * message that makes a red result easy to skim past. */
     if (bad) {
-        printf("  %-28s ⛔  %zu short + %zu long entries, mark reaches %u, want 4\n",
-               "AWID duty vs real emission", shorts, longs, worst);
+        printf("  %-28s ⛔  %zu marks, gaps %zu short + %zu long; worst mark run %u, gap run %u\n",
+               "AWID duty vs real emission", marks, gap4, gap6, worst_mark, worst_gap);
     } else {
-        printf("  %-28s ✓  %zu short + %zu long entries, mark fixed at 4\n",
-               "AWID duty vs real emission", shorts, longs);
+        printf("  %-28s ✓  %zu tones, mark fixed at 4 cycles, gaps %zu x4 + %zu x6\n",
+               "AWID duty vs real emission", marks, gap4, gap6);
     }
     return bad;
 }
@@ -561,7 +618,7 @@ int main(void) {
      * count: a 0 costs six entries and a 1 costs five. */
     bad += trial_fsk("AWID     FSK2a RF/8-10", "011db218271bd81111111111", 96,
                      &awid, awid_fsk_decode);
-    bad += trial_awid_duty();
+    bad += trial_fsk_duty();
 
     /* ⭐⭐ THE FIRST BIPHASE EMITTER, on the credential the Proxmark wrote and our own reader
      * read back 12 of 12 exact (C213). ⚠ Its entry count is FIXED at two per bit where AWID's

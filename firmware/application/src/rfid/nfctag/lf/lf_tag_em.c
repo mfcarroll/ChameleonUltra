@@ -205,8 +205,8 @@ static void pwm_init(void) {
     // their hardcoded counter_top values (8-64 range) produce the correct
     // absolute timing. PSK1 protocols need finer resolution for the 16us
     // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
-    // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
-    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    // See tag_base_type.h IS_1MHZ_PWM_TYPE for the list of qualifying types.
+    cfg.base_clock = IS_1MHZ_PWM_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
     /* ⚠ DEBUG BOOKKEEPING for §3. Records what was actually applied rather than what the
      * current tag type would ask for now, which is the whole question. */
     m_dbg_pwm_clk = (uint8_t)cfg.base_clock;
@@ -319,7 +319,7 @@ static void pwm_reinit_if_clock_changed(void) {
     if (m_lf_sense_state != LF_SENSE_STATE_ENABLE) {
         return;   /* pwm_init has not run yet; sense-enable will pick the right clock */
     }
-    const uint8_t want = (uint8_t)(IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz
+    const uint8_t want = (uint8_t)(IS_1MHZ_PWM_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz
                                                             : NRF_PWM_CLK_125kHz);
     if (want == m_dbg_pwm_clk) {
         return;
@@ -515,7 +515,7 @@ static void recompute_frames_per_burst(void) {
      * it off the sequence keeps this generic: an ASK protocol storing one entry per symbol
      * leaves repeats at 0 and the arithmetic is unchanged. */
     ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
-    const uint32_t hz = IS_PSK1_TYPE(m_tag_type) ? 1000000u : 125000u;
+    const uint32_t hz = IS_1MHZ_PWM_TYPE(m_tag_type) ? 1000000u : 125000u;
     const uint64_t frame_us = (ticks * 1000000u) / hz;
     if (frame_us == 0) {
         return;

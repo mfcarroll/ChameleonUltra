@@ -142,6 +142,18 @@ typedef enum {
                         (t) == TAG_TYPE_INDALA224 || (t) == TAG_TYPE_KERI || \
                         (t) == TAG_TYPE_NEXWATCH)
 
+/* ⭐ FSK2a types that use the shared constant-`counter_top` emitter in lf/utils/fsk2a_mod.c.
+ * ⚠ ioProx is deliberately NOT here yet: its long tone is 11 rather than the family's 10, which
+ * has never been measured on this bench, so it stays on the old emitter until it is. */
+#define IS_FSK2A_1MHZ_TYPE(t) ((t) == TAG_TYPE_HID_PROX || (t) == TAG_TYPE_AWID)
+
+/* ⭐⭐ THE ONE PLACE THAT DECIDES THE PWM BASE CLOCK. Three call sites used to ask
+ * `IS_PSK1_TYPE` directly — `pwm_init()`, `pwm_reinit_if_clock_changed()` and
+ * `recompute_frames_per_burst()` — and the third converts ticks to microseconds, so missing it
+ * makes frames-per-burst eight times wrong while the air stays correct and nothing complains
+ * (C385). Adding a type to the 1MHz set must be ONE edit, not three. */
+#define IS_1MHZ_PWM_TYPE(t) (IS_PSK1_TYPE(t) || IS_FSK2A_1MHZ_TYPE(t))
+
 #define TAG_SPECIFIC_TYPE_HF_VALUES                                   \
     TAG_TYPE_MIFARE_Mini, TAG_TYPE_MIFARE_1024, TAG_TYPE_MIFARE_2048, \
         TAG_TYPE_MIFARE_4096, TAG_TYPE_NTAG_213, TAG_TYPE_NTAG_215,   \

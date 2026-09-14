@@ -21,10 +21,10 @@ cdemod: main.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchest
 PROTO := ../../../firmware/application/src/rfid/nfctag/lf/protocols
 TAGS  := ../../../firmware/application/src/rfid/nfctag
 
-roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_ask_manchester.h $(FW)/lf_fsk2a.c $(FW)/lf_fsk2a.h $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c $(EMU)/psk1.c $(EMU)/psk1.h \
+roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_manchester.c $(FW)/lf_ask_manchester.h $(FW)/lf_fsk2a.c $(FW)/lf_fsk2a.h $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c $(EMU)/psk1.c $(EMU)/psk1.h $(EMU)/fsk2a_mod.c $(EMU)/fsk2a_mod.h \
            $(PROTO)/gallagher.c $(PROTO)/securakey.c $(PROTO)/noralsy.c $(PROTO)/fsk2a_t55xx.c $(PROTO)/awid.c $(PROTO)/gproxii.c $(PROTO)/keri.c $(PROTO)/nexwatch.c
 	$(CC) $(CFLAGS) -I$(EMU) -I$(PROTO) -I$(TAGS) -I$(TAGS)/lf -Ishim -o $@ roundtrip.c \
-	  $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c $(EMU)/psk1.c \
+	  $(FW)/lf_indala_psk.c $(FW)/lf_ask_manchester.c $(FW)/lf_fsk2a.c $(FW)/lf_slicer.c $(FW)/lf_ask_biphase.c $(EMU)/psk1.c $(EMU)/fsk2a_mod.c \
 	  $(PROTO)/gallagher.c $(PROTO)/securakey.c $(PROTO)/noralsy.c $(PROTO)/fsk2a_t55xx.c $(PROTO)/awid.c $(PROTO)/gproxii.c $(PROTO)/keri.c $(PROTO)/nexwatch.c
 
 # ⭐ The cross-check that matters: C integer decoder vs numpy decoder, same 320 captures.

@@ -9,7 +9,6 @@
 /* ⛔ WORST-CASE PWM ENTRIES, AND THE WORST CASE IS ALL ZEROS. FSK2a spends SIX tone periods
  * on a 0 and only five on a 1, so a frame of 96 zeros needs 576 entries where a frame of 96
  * ones needs 480. Sizing this at 96x5 would overrun on the first all-zero field. */
-#define AWID_MAX_PWM_ENTRIES (AWID_BIT_COUNT * 6)
 
 typedef struct {
     uint8_t data[AWID_DATA_SIZE];

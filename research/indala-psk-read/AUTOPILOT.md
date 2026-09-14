@@ -88,6 +88,22 @@ and the tones are **64 and 80 ticks, `gcd = 16`**. ⇒ **Constant `counter_top` 
 (2 on, 2 off), RF/10 = 5 entries (2 on, 3 off), which reproduces C226/C380's measured **4-carrier-cycle mark
 = 32 us = exactly 2 entries** for free. ⭐ ioProx's tone of 11 is legal too (64 and 88 ticks, `gcd = 8`), so
 that question stays open rather than blocking.
+⛔⛔ **THE FIX IS BUILT AND IT DOES NOT WORK — READ THIS BEFORE TOUCHING U11 (C386).**
+`lf/utils/fsk2a_mod.c` ships the constant-`counter_top` emitter: one shared buffer, top 16 at a 1 MHz clock,
+the tone carried by the duty pattern, HID and AWID rewired, `IS_1MHZ_PWM_TYPE` added so the clock is one edit.
+✅ **Correct at every layer that can be checked**: RAM matches C384 to the byte (+9,984 B); the device reports
+**1 MHz**, sequence present, **2335 entries** (which requires 31 one-bits, so both tones ARE in it); ctest is
+green with the duty pin reporting **the same shape counts as the old encoding** (378 x4 + 165 x6, mark 4).
+⛔ **And the air is still one tone**: HID **1183** periods in the RF/8 band against **16** in RF/10, 0/6 on the
+Flipper with Gallagher 6/6 as the control in the same run. No regression anywhere.
+⇒ **C383'S MECHANISM IS NARROWER THAN IT WAS WRITTEN.** It is not simply *a varying `counter_top` is not
+applied* — a CONSTANT one whose tone lives in the duty is single-toned too. What both encodings share is that
+the long tone needs a **longer LOW period**, and that is exactly what never appears.
+⇒ **NEXT STEP NEEDS AN INSTRUMENT WE CONTROL.** The Flipper's raw reader is a black box we are inferring from;
+`rdrcap.py` + `DATA_CMD_LF_READER_CAPTURE` hand back our own undecoded samples. That needs **the two
+Chameleons facing each other** — the standing bench request in `NEXT.md`, which now has a concrete question.
+⛔ Do not write a third encoding before that capture exists.
+
 ⚠ **THE NEW COST IS A CLOCK GENERALISATION**: `IS_PSK1_TYPE` gates the 1 MHz choice in **three** places —
 `pwm_init()`, `pwm_reinit_if_clock_changed()` and `recompute_frames_per_burst()`'s `hz`. All three must move
 to one *what clock does this type need* helper; **miss the third and frames-per-burst is 8x wrong.** ⚠ **Cost is entries**: ~25 per bit against today's 5-6, so a 96-bit HID frame needs **~2,400

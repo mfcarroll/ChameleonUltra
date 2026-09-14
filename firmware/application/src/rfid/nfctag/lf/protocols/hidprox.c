@@ -1,4 +1,5 @@
 #include "hidprox.h"
+#include "fsk2a_mod.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,29 +24,12 @@
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (6)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
 
-/* ⭐⭐ A FIXED 4-CYCLE MARK, NOT 50% DUTY — THE SAME CORRECTION C226 MADE TO AWID (C380).
- *
- * A real FSK2a emission was captured on this bench and measured: the HIGH run is 4 carrier
- * cycles on essentially EVERY tone, and only the LOW run varies to carry the frequency — 4 for
- * RF/8, 6 for RF/10. The mark is the tag's load-modulation pulse, which is a property of the
- * modulator rather than of the protocol, so it does not scale with the tone.
- *
- * ⛔ `counter_top / 2` gives 4 for the short tone and 5 for the long one. It is the obvious
- * thing to write, it is what was here, and NO ROUND TRIP IN ctest CAN CATCH IT: our own
- * demodulator only ever looks at the tone's PERIOD, which is identical either way.
- * ⚠ AWID carries this correction and is still silent to the Flipper, so this is a shape defect
- * that is NOT known to be the cause of that — do not read it as the emulate fix.
- * ⇒ Pinned by `trial_fsk_duty()` in ctest/roundtrip.c so it cannot revert quietly. */
-#define LF_FSK2a_PWM_MARK_CYCLES (LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2)
+/* ⭐ THE FIXED 4-CYCLE MARK (C226/C380) NOW LIVES IN lf/utils/fsk2a_mod.c, which applies it to
+ * every FSK2a protocol from one constant. It used to be written here as `counter_top / 2`, which
+ * is 4 for the short tone but 5 for the long one — a shape defect no round trip can see, because
+ * a demodulator only ever looks at the tone's PERIOD. Keeping it in the shared builder is what
+ * stops it being rediscovered per protocol. */
 
-static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * 6] = {};
-
-nrf_pwm_sequence_t m_hidprox_pwm_seq = {
-    .values.p_wave_form = m_hidprox_pwm_seq_vals,
-    .length = NRF_PWM_VALUES_LENGTH(m_hidprox_pwm_seq_vals),
-    .repeats = 0,
-    .end_delay = 0,
-};
 
 void decoder_reset(hidprox_codec *d) {
     d->sof = 0;
@@ -216,32 +200,28 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
 
     uint32_t hi, mid, bot;
     hidprox_raw_data(&card, &hi, &mid, &bot);
-    int k = 0;
-    for (int i = 0; i < HIDPROX_RAW_SIZE; i++) {
-        bool bit = false;
-        if (i < 32) {
-            bit = (hi >> (31 - i)) & 1;
-        } else if (i < 64) {
-            bit = (mid >> (63 - i)) & 1;
-        } else {
-            bit = (bot >> (95 - i)) & 1;
-        }
-        if (!bit) {
-            for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_MARK_CYCLES;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
-                k++;
-            }
-        } else {
-            for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_MARK_CYCLES;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
-                k++;
-            }
-        }
+
+    /* ⭐ Pack the three words into the MSB-first frame the shared builder takes. The old loop
+     * walked the words directly; the builder needs bytes, and 96 bits is exactly 12 of them. */
+    uint8_t frame[HIDPROX_RAW_SIZE / 8];
+    const uint32_t words[3] = {hi, mid, bot};
+    for (int w = 0; w < 3; w++) {
+        frame[w * 4 + 0] = (uint8_t)(words[w] >> 24);
+        frame[w * 4 + 1] = (uint8_t)(words[w] >> 16);
+        frame[w * 4 + 2] = (uint8_t)(words[w] >> 8);
+        frame[w * 4 + 3] = (uint8_t)(words[w]);
     }
-    m_hidprox_pwm_seq.length = k * 4;
-    return &m_hidprox_pwm_seq;
+
+    /* ⚠ Tone periods 8 and 10 carrier cycles; at the 1MHz base clock that is 64 and 80 ticks,
+     * whose gcd is 16. TAG_TYPE_HID_PROX is in IS_FSK2A_1MHZ_TYPE for exactly that reason. */
+    static const lf_fsk2a_params_t params = {
+        .counter_top  = 16,
+        .short_cycles = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE,
+        .long_cycles  = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE,
+        .short_pulses = LF_FSK2a_PWM_HI_FREQ_LOOP,
+        .long_pulses  = LF_FSK2a_PWM_LO_FREQ_LOOP,
+    };
+    return lf_fsk2a_build(&params, frame, HIDPROX_RAW_SIZE);
 };
 
 const protocol hidprox = {
