@@ -75,7 +75,7 @@ fixed.
 
 ⭐ `pm3written.sh` now asks pm3 to read back its own write before scoring our reader, and calls the arm **VOID**
 rather than printing a reader result (M33). ⚠ **Bench during this measurement**: #1 alone and off the pad, #2 on the pm3 pad with no tag, the T5577 on the
-Flipper. Restoration to the standard two-rig bench (C408) was requested at 16:58 — ⛔ **run `./autopilot.sh bench`
+Flipper. ✅ **Restored at 17:00 and VERIFIED by `./autopilot.sh bench`** — both rigs LIVE, `#1 ↔ #2` DEAD as it should be. ⛔ Always **run `./autopilot.sh bench`
 before trusting either rig again rather than assuming it is back** (C408's whole point).
 
 ---
