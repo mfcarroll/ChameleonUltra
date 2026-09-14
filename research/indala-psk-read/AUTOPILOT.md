@@ -38,7 +38,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔ 2026-09-14 15:45 — A READ ARM IS DOWN: `lf securakey read` FINDS NOTHING ON A VALID TAG (C399)
+### ⛔⛔⛔ 2026-09-14 15:55 — TWO ASK READ ARMS ARE DOWN, BOUNDED TO RF/32 AND RF/40 (C399, C400)
 
 ⛔ **This contradicts a headline claim and is the first thing to read.** `lf securakey read` is recorded as
 returning `7fcb400001adea5344300000` **6 of 6**, and Securakey is one of C343's nineteen arms at **76 of 76**.
@@ -52,13 +52,22 @@ CN 4567** immediately afterwards. So this is protocol-specific, not coupling.
 ⭐ **Securakey EMULATION still scores 6/6** this session, so the frame and encoder are fine — it is the READ
 path.
 
-⚠ **NOT YET ATTRIBUTED, and the instrument-first rule says do not call it a regression until it is.** Nothing
-changed this session touches the Securakey read path. Two live candidates: a field/drive marginality specific
-to **RF/40**, the slowest bit rate any read arm uses and a variable that has decided arms before (C210); or an
-older regression unnoticed because the arm was never re-run against a real tag after the capture engine was
-rewired.
-⇒ **NEXT TICK: sweep drive on `lf securakey read` against the reference tag, then bisect the read path.**
-⛔ Until then, treat *19 read arms, 76 of 76* as **carrying one known exception**.
+⛔⛔ **IT IS NOT ONE ARM — IT IS TWO, AND THE FAULT IS BOUNDED (C400).** On the same tag position, the same
+device, minutes apart: **Gallagher (ASK RF/32) 0 of 6** and **Securakey (ASK RF/40) 0 of 5**, both on tags the
+Proxmark's own encoder wrote and both of which pm3 reads perfectly.
+
+⭐⭐ **AND THE CONTROLS PASS, WHICH IS WHAT BOUNDS IT.** **EM410X reads 2 of 2** — the SAME GPIO/comparator
+path the ASK family uses, so that engine is alive — and **HID Prox** reads on the SAADC path. Neither capture
+engine is down and neither is the bench. What fails is specifically **ASK at RF/32 and RF/40**, the two rates
+that go through the decoder this branch made BIT-RATE PARAMETERISED because the family does not share one.
+⚠ **The failure is TOTAL, not marginal — 0 of 11 across two protocols** — which argues against the obvious
+bench explanation that faster rates need more SNR than RF/64. A marginal field gives intermittent hits.
+
+⚠ **STILL NOT ATTRIBUTED.** Nothing changed this session touches the ASK read path, and the instrument-first
+rule says do not name a regression until it is measured.
+⇒ **NEXT TICK: Noralsy — a THIRD ASK RF/32 point — to confirm the boundary, then bisect the ASK decoder
+against the history to find when these arms last passed.**
+⛔ Until then, treat *19 read arms, 76 of 76* as **carrying two known exceptions**.
 
 ---
 
