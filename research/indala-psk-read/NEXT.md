@@ -392,8 +392,12 @@ both the foreign-tag nulls above and the recorded empty-field captures cited per
 **13 emit zero warnings and all 13 are this branch's own code.** The fourteenth is upstream's `wiegand.c`,
 and our changes REDUCED it — HEAD **35** against `main` **37**, identical flags, 0 errors both. A reviewer
 sees warnings before logic, so this is worth stating in the PR: the branch adds none and removes two.
-⚠ Bounded: `lf_reader_main.c`, `lf_indala_data.c` and `app_cmd.c` need the Nordic headers and are outside
-this measurement; the firmware build holds them at `-Wall -Werror`, a real but weaker bar.
+⭐ **That gap is now closed too (C357).** The real firmware built with `-Wconversion` puts **none of this branch's
+new LF files** in the warning list at all — `lf_indala_data.c` included. `lf_reader_main.c` had three and blame
+splits them: one is upstream's, two were ours from the password fix and now carry explicit casts (3 → 1 verified).
+⇒ **The branch's entire warning debt against the firmware was two lines, and they are fixed.**
+⛔ `-Wextra` is not usable here and a PR should not propose it: 180 `unused parameter 'conn_handle'`, 132
+`status`, 103 `length` — the command-dispatch signature every handler must take. An API shape, not defects.
 
 ⭐⭐⭐ **AND THE LOOP IS CLOSED IN BOTH DIRECTIONS (C343).** *We write, pm3 reads* — 18 arms, 72 writes, 0 failures
 (C330, C331, C340). *pm3 writes, we read* — 19 arms, 76 reads, 76 matches (`pm3written.sh`),

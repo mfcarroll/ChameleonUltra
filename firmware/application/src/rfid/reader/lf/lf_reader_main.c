@@ -356,7 +356,10 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
  *   2. the new password, only when one was actually supplied;
  *   3. an open write LAST, so an unprotected tag finishes correctly. */
 static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
-    const uint32_t passwd = bytes_to_num(new_passwd, 4);
+    /* ⚠ `bytes_to_num` returns uint64_t; at len 4 the value cannot exceed 32 bits, so the
+     * narrowing is provably safe. Cast explicitly to say so — it is the only -Wconversion
+     * warning this branch added to the firmware (C357). */
+    const uint32_t passwd = (uint32_t)bytes_to_num(new_passwd, 4);
     const bool set_pwd = (passwd != 0);
 
     if (set_pwd && blk_count > 0) {
@@ -367,7 +370,7 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
     bsp_delay_ms(1);  // Delays for a while after starting the field
 
     for (uint8_t k = 0; k < old_passwd_count; k++) {
-        const uint32_t old = bytes_to_num(old_passwds + k * 4, 4);
+        const uint32_t old = (uint32_t)bytes_to_num(old_passwds + k * 4, 4);
         if (old == 0) {
             continue;
         }
