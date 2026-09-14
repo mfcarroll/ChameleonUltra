@@ -40,7 +40,42 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⭐⭐ 2026-09-14 17:05 — F12 NARROWED TO THE WAVEFORM'S SHAPE. THE SEQUENCE REACHES THE PERIPHERAL INTACT (C414)
+### ⛔⭐ 2026-09-14 17:20 — THE ENCODING IS NOT THE DEFECT. TWO ENCODINGS FAIL IDENTICALLY (C415)
+
+⭐⭐ **THE FACT, AND IT WAS ALREADY IN THE TREE**: `protocols/ioprox.c` **still runs the OLD encoding** — one entry
+per tone, `counter_top` varying between `LF_FSK2a_PWM_HI_FREQ_TOP_VALUE` and `LO_FREQ_TOP_VALUE` — while `awid.c`
+and `hidprox.c` run the new shared builder with `counter_top` CONSTANT and the tone in the duty. **All three
+emulate 0 of 6.** ⇒ Two encodings differing in exactly the variable C382/C383 changed, producing the same
+failure, so **the defect is common to both and is not the encoding**.
+
+⛔⛔ **C414'S MECHANISM IS WITHDRAWN** (its eliminations and SEQ[0].CNT readings stand). *A real tag's mark tracks
+its tone* was an over-reading of 44 hand-scanned pairs. Measured over the whole capture:
+
+| source | mark on RF/8 periods | mark on RF/10 periods | ratio |
+|---|---|---|---|
+| **real tag** | 19 us (30% duty) | 50 us (63% duty) | **2.63** |
+| ours, pure RF/8 | 37 us | — | — |
+| ours, pure RF/10 | — | 53 us | — |
+
+No tag emits 30% duty on one tone and 63% on the other — a subcarrier is a square wave. ⇒ **The measured pulse
+width is the envelope detector's threshold, not the emitter's modulation**, so no emitter's duty can be inferred
+from it, ours included. ⭐ And a real tag swings the detector's apparent duty FURTHER than we do (30->63 against
+our 50->40) **and still decodes on that same receiver**, so *the DC average moves when the tone changes* cannot
+by itself be fatal.
+
+⚠ **A second assumption checked before it was written down, and also false**: PSK1 does **not** vary `counter_top`
+— `utils/psk1.c` sets a constant `LF_PSK1_SUBCARRIER_TOP` — so the 6/6 PSK1 arm is no evidence that per-entry
+`counter_top` reaches the air.
+
+⇒ **WHERE F12 STANDS.** The sequence reaches the peripheral intact (C414); pure frames of EITHER tone emit
+correctly and every mixed frame collapses regardless of rate (C411); the encoding is not the variable (here).
+What remains common to all three encodings is **the playback path in `lf_tag_em.c` and the analog side**.
+⛔⛔ **DO NOT REBUILD THE EMITTER AGAIN until those two are told apart.** Three encodings have now been written
+and the air has not changed — that is the pattern this entry exists to stop.
+
+---
+
+### (hypothesis withdrawn by C415; its eliminations stand) 2026-09-14 17:05 — F12 NARROWED (C414)
 
 ⭐ **Four eliminations, all measured:**
 1. **Truncated playback is refuted** — `ff00...` leads with eight 1-bits and still emits only 6.2% RF/10.
