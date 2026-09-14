@@ -388,6 +388,13 @@ failure a reviewer should fear most, because there is no credential anywhere to 
 both the foreign-tag nulls above and the recorded empty-field captures cited per protocol.
 ⚠ 0 in 105 is a **2.86%** pooled upper bound; at n = 5 per reader it measures the population, not any one arm.
 
+⭐⭐ **AND IT COMPILES CLEAN (C356).** `ctest` builds 14 firmware files at `-Wall -Wextra -Wconversion`:
+**13 emit zero warnings and all 13 are this branch's own code.** The fourteenth is upstream's `wiegand.c`,
+and our changes REDUCED it — HEAD **35** against `main` **37**, identical flags, 0 errors both. A reviewer
+sees warnings before logic, so this is worth stating in the PR: the branch adds none and removes two.
+⚠ Bounded: `lf_reader_main.c`, `lf_indala_data.c` and `app_cmd.c` need the Nordic headers and are outside
+this measurement; the firmware build holds them at `-Wall -Werror`, a real but weaker bar.
+
 ⭐⭐⭐ **AND THE LOOP IS CLOSED IN BOTH DIRECTIONS (C343).** *We write, pm3 reads* — 18 arms, 72 writes, 0 failures
 (C330, C331, C340). *pm3 writes, we read* — 19 arms, 76 reads, 76 matches (`pm3written.sh`),
 six of them protocols that already ship upstream, which makes it a regression check on the shared

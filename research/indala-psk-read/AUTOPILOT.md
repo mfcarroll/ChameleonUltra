@@ -536,6 +536,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 16:25 | **C356 — warning audit: 13 of 14 strict-built firmware files clean, all ours; upstream's `wiegand.c` improved 37 → 35** | 62 → 63 | The branch adds no warnings and removes two — a reviewer sees warnings before logic | `main` compiled the same way as the control; a zsh word-splitting bug nearly produced a false all-clear |
 | 2026-09-14 15:55 | **C355 — the Flipper crash time-boxed to 00:29:36; cause unrecoverable** | 61 → 62 | `uptime` answers what the notes called unknown. All three *needs hands* items now closed or bounded, none needed hands | read-only: 1 uptime, 2 storage listings; a 00:29 commit co-timing recorded as NOT a cause |
 | 2026-09-14 15:25 | **C354 — the 'bad Indala frame' is Gallagher's frame in the wrong slot; and #1 has no NexWatch slot** | 60 → 61 | Open item closed and repaired without hands. ⛔ The stated reason for never reflashing #1 is not supported by its own slot listing — reported, not acted on | 1 econfig read + repair on #2; read-only listing on #1 |
 | 2026-09-14 14:55 | **C353 — the EM410X 'both arms' anomaly explained and retired; NEXT.md's stale C305 banner closed** | 59 → 60 | `rfid read indala` is a front-end, not a protocol filter — an ASK credential hitting both arms is expected. Verdict logic fixed in `flipper.py` and `emugrade.sh` | 3 reads per arm on a live EM4100 emulation, one invocation |
