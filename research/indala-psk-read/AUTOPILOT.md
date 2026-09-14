@@ -456,6 +456,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 21:55 | **L274 — C305 narrowed to block 0's value** | 23 → 23 | Five successful writes carried five different payloads, so the data words are not the gate; block 0's value is the only variable left, and no simple mechanism explains it | Entailment from measurements already taken (M36), no new bench time |
 | 2026-09-15 21:40 | **L273 — corrected C305's block counts** | 23 → 23 | HID writes 4, not 3. Same count as GProxII, opposite outcome, so block count is refuted more cleanly and the two differ only in the values written | Counts read from the source constants for all five writers |
 | 2026-09-15 21:10 | **C307 — silent-success hole closed; `lf t55xx write` added** | 22 → 23 | 5 of 16 writers could report success having written nothing; all now return PAR_ERR. Raw block writer exposed as a CLI command for the C305 bench diagnosis | Audit covered all 16 writers, not the suspected ones; firmware rebuilt and flashed; HID arm re-verified |
 | 2026-09-15 20:30 | **C306 — pm3's downlink broken, listening intact** | 21 → 22 | `lf t55xx read` returns one identical word for every block while `lf search` is perfect. Second symptom class for C299. Also withdrew L270's over-strong refutation of *block 0 locked* | Identical-across-blocks is self-refuting as data; `lf search` is the null and passes throughout |
