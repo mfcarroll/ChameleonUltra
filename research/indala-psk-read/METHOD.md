@@ -490,3 +490,47 @@ untouched. `--scope user` is global and deliberate.
 asks for a manual `/compact` in one line — that is the exception to *never stop to ask*.
 ⚠ Every tick still ends compact-safe either way: commit, push, keep §1 current. Auto-compaction lands between
 turns and keeps only what is on disk.
+
+
+**M47 — AN INSTRUMENT SHARED BY TWO OWNERS MUST NAME WHICH OWNER IT IS REPORTING ON.**
+`hw lfdebug` printed `⛔ PWM0 IS NOT READING OUR SEQUENCE` whenever the sequence pointer did not match. But
+*ours* meant the READER's array, and `lf_tag_em.c` drives the same peripheral with its own sequence — so while
+the device was emulating, that banner was the CORRECT state. U18 read it as *the emulator never sets
+`m_pwm_seq`* and spent a whole unit there, while `hw emudebug` said `have pwm seq: True` and was never asked
+(C373). It caught me a second time months later, printing `ours: False` beside our own buffer's address (C389).
+⛔ **A ⛔ that fires in a normal state trains the reader to discount every ⛔**, which costs more than the one
+wrong line. ⇒ Name the owner in the label, and alarm only when the owner named is the one that should hold it.
+
+**M48 — SWEEP THE RATE, NOT THE ENCODING: TURN A BINARY FAILURE INTO A CURVE.**
+U11 read as *FSK emulation does not work* through four re-encodings, each a build, a flash and a capture, each
+answering only yes or no. Sweeping how OFTEN the tone changes — never, every four bits, every bit — gave
+**3031 / 261 / 0** long tones in one cycle and named the mechanism's family: the emitter produces either tone
+perfectly and degrades monotonically with the transition rate, which is a settling signature and not a digital
+one (C387). ⇒ When a thing fails, look for a parameter that can be varied CONTINUOUSLY and vary it. A curve
+says what kind of thing is wrong; a pass/fail only says that something is.
+
+**M49 — A GUARD AT THE BOTTOM OF A STACK PROTECTS NOTHING UNLESS EVERY CALLER PROPAGATES IT.**
+`flipper.py` was fixed to abort when its reader refused to start. `emugrade.sh` then captured that abort with
+`o=$(fread)` and grepped for a score — discarding the exit status AND the message — and printed a clean
+`✓ null before / psk - ask - / ✓ null after` against a reader proven dead minutes earlier (C376). The leaf was
+right and the stack was not. ⇒ **Test the WRAPPER against the still-broken state**, not just the leaf. Shell's
+`$(...)` silently drops exactly what a guard produces, which makes this the default outcome rather than a
+freak one.
+
+**M50 — VALIDATE AN ANALYZER ON A KNOWN-GOOD REFERENCE, AND EXERCISE THE ABORT PATH.**
+A new instrument's first output is the one most likely to be believed and least likely to be checked.
+`tonehist.py` was run against a reference known to be good — the Flipper's own mixed-tone emission through our
+reader, giving both bands — BEFORE it was pointed at the thing under test, and `fskcap.sh` was run against the
+uncoupled bench so its refusal path executed at least once (C391). ⛔ The abort path is the branch that runs
+when something is wrong, which is precisely when nobody is in a position to notice it is itself broken.
+⚠ And make the tool print its own noise floor: a histogram that hides its floor is how a null becomes a
+measurement.
+
+**M51 — RE-RUN THE ARMS YOU DID NOT CHANGE WHEN YOU CHANGE WHAT THEY STAND ON.**
+⚠ **This is the complement of M39, not a contradiction, and the difference is causal reach.** M39 refuses a
+regression run with no path from the change to the arm. Here there was a path and it was invisible: the PWM
+base-clock choice moved to a new macro at three sites, two protocols moved to a shared buffer, `.bss` changed
+by +9,984 B — all under protocols that were already working and none of them edited. ⛔ **A wrong base clock
+is SILENT on the air, not loud** (C130), so *semantically identical* would have been believed. All eight
+arms were re-graded and held at 6/6 (C394). ⇒ Ask what the arms DEPEND on, not what was edited; and note that
+a change with no visible effect anywhere is the shape of one that breaks something quietly.
