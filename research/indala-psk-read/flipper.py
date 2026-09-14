@@ -38,6 +38,7 @@ the requested seconds, then ETX.
 """
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -225,6 +226,80 @@ def cmd_emulate(a):
     return 0
 
 
+# ⛔⛔⛔ THE `rfid` PLUGIN DIES OF HEAP FRAGMENTATION, AND IT IS THE REASON U18 EXISTED (C377).
+#
+# `rfid` is a 66,304-byte .fap the loader must place in ONE contiguous block. Measured across a
+# session: 118,304 bytes largest-block at boot, 63,880 after ~12 minutes and six emulate arms —
+# with 107,464 bytes still FREE. So it is fragmentation, not exhaustion, and the plugin starts
+# refusing the moment the largest block falls below its own size, mid-session, with nothing
+# about the bench having changed.
+#
+# ⇒ That is why the reader looked healthy at one claim and dead at the next on the SAME boot,
+# and why every emulate arm this branch recorded was void. A reboot restores it in ~10 seconds.
+FAP_BYTES = 66304          # /ext/apps/RFID/lfrfid.fap — the block the loader must find
+FAP_HEADROOM = 12000       # refuse to start an arm this close to the cliff
+
+
+def heap_largest_block(port=PORT):
+    """Largest contiguous heap block in bytes, or None if the CLI would not say."""
+    s = serial.Serial(port, BAUD, timeout=0.3)
+    try:
+        time.sleep(0.4)
+        s.reset_input_buffer()
+        s.write(b"free\r\n")
+        time.sleep(1.5)
+        out = s.read(s.in_waiting or 1).decode("utf-8", "replace")
+    finally:
+        s.close()
+    m = re.search(r"Maximum heap block:\s*(\d+)", out)
+    return int(m.group(1)) if m else None
+
+
+def reboot(port=PORT, quiet=False):
+    """Power-cycle the Flipper over its own CLI and wait for the port to come back.
+
+    ⚠ `power reboot` drops USB mid-command, so the write is expected to be the last thing
+    that succeeds — anything read afterwards raises OSError and that is the SUCCESS path.
+    """
+    try:
+        s = serial.Serial(port, BAUD, timeout=0.3)
+        time.sleep(0.3)
+        s.write(b"power reboot\r\n")
+        time.sleep(0.5)
+        s.close()
+    except OSError:
+        pass
+    for _ in range(45):
+        time.sleep(2.0)
+        if os.path.exists(port):
+            break
+    else:
+        raise SystemExit("⛔ the Flipper never came back after `power reboot`: %s" % port)
+    time.sleep(5.0)   # CDC enumerates before the CLI is answering
+    blk = heap_largest_block(port)
+    if not quiet:
+        print("  ↻ Flipper rebooted — largest heap block %s bytes (.fap needs %d)"
+              % (blk, FAP_BYTES))
+    if blk is not None and blk < FAP_BYTES:
+        raise SystemExit("⛔ rebooted and the largest block is STILL %d < %d — not the heap."
+                         % (blk, FAP_BYTES))
+    return 0
+
+
+def cmd_reboot(a):
+    return reboot(a.port)
+
+
+def cmd_heap(a):
+    blk = heap_largest_block(a.port)
+    if blk is None:
+        raise SystemExit("⛔ the Flipper did not answer `free`.")
+    ok = blk >= FAP_BYTES + FAP_HEADROOM
+    print("  largest heap block %d, .fap needs %d (+%d headroom) -> %s"
+          % (blk, FAP_BYTES, FAP_HEADROOM, "OK" if ok else "REBOOT FIRST"))
+    return 0 if ok else 4
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--port", default=PORT)
@@ -236,6 +311,11 @@ def main():
     r.add_argument("--attempts", type=int, default=6)
     r.add_argument("--timeout", type=float, default=6.0, help="seconds before ETX")
     r.set_defaults(func=cmd_read)
+
+    sub.add_parser("reboot", help="power-cycle the Flipper (clears heap fragmentation)"
+                   ).set_defaults(func=cmd_reboot)
+    sub.add_parser("heap", help="is there room for the rfid .fap? exit 4 if not"
+                   ).set_defaults(func=cmd_heap)
 
     e = sub.add_parser("emulate", help="emulate a tag FROM the Flipper (rig A, backwards)")
     e.add_argument("protocol", help="e.g. Indala26 (4 bytes), Idteck (8 bytes)")

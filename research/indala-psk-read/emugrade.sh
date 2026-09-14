@@ -52,13 +52,37 @@ cu () { "$PY" "$CU" "hw connect -p $CH2" "$@" 2>&1 }
 # ⇒ fread now RETURNS non-zero when the instrument is dead, and every caller aborts the run. A
 # clean fread is itself the positive control that rig A is up — there is no other one available,
 # because a silent reader and a silent emulator produce the same numbers.
-fread () {
+fread_once () {
   local out rc
   out="$("$PY" "$HERE/flipper.py" read --mode both --attempts "$ATTEMPTS" 2>&1)"; rc=$?
   print -r -- "$out"
   if (( rc != 0 )) || print -r -- "$out" | grep -q "the Flipper REJECTED"; then
     return 3
   fi
+  return 0
+}
+
+# ⭐ One retry behind a reboot. A refused plugin load is recoverable and routine (C377), so it
+# must not end the run — but a SECOND refusal right after a clean reboot is something else, and
+# that one aborts rather than being retried forever.
+fread () {
+  local out
+  out="$(fread_once)" && { print -r -- "$out"; return 0 }
+  print -r -- "  ↻ reader refused mid-run — rebooting the Flipper and retrying once" >&2
+  "$PY" "$HERE/flipper.py" reboot >&2 || return 3
+  out="$(fread_once)" && { print -r -- "$out"; return 0 }
+  return 3
+}
+
+# ⛔⛔ THE READER DIES PARTWAY THROUGH A RUN, AND IT IS THE HEAP, NOT THE BENCH (C377).
+# `rfid` is a 66,304-byte .fap needing ONE contiguous block; the largest block decays with each
+# load — 118,304 at boot, 63,880 after six arms, with 107,464 still free. So a long run dies in
+# the MIDDLE, which before C376 looked like "the last five protocols do not emulate".
+# ⇒ Reboot BEFORE an arm that would not fit, and once more if one dies anyway. ~10s each.
+flipper_ready () {
+  "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1 && return 0
+  print -r -- "  ↻ Flipper heap too fragmented for the rfid plugin — rebooting"
+  "$PY" "$HERE/flipper.py" reboot || return 1
   return 0
 }
 
@@ -119,6 +143,7 @@ null_check () {
 print -r -- ""
 print -r -- "  emulate arms, Flipper as reader, scratch slot $SLOT"
 print -r -- "  --------------------------------------------------"
+flipper_ready || { print -r -- "  ⛔ could not get the Flipper into a state where rfid loads"; exit 1; }
 null_check "before" || { print -r -- "  ⇒ ABORTING: an ambient hit makes every arm below meaningless"; exit 1; }
 
 for p in $protos; do
