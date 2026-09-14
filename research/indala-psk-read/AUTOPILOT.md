@@ -57,6 +57,11 @@ dead reader. ⭐⭐ **Credentials verified, not just hit counts**: GProxII reads
 `GProxII FAC2A38C2B081AF0210B12C2` (FC 123 / Card 1337 / LEN 26), byte-identical to the raw written; Indala
 reads `Indala26 CD7A1D30`, FC 52 / Card 63612. Counting hits alone would have repeated C353's front-end trap.
 
+✅ **AND U11 IS ALREADY SCOPED (C379).** All three silent protocols LOAD a sequence — `have pwm seq : True`
+at the correct 125kHz, frames/burst **14 / 16 / 14**, distinct so three real waveforms were walked. ⇒ Not the
+loader and not the clock: the fault is FSK2a's **encoding**. The ASK emitters set `counter_top` to the carrier
+cycles per BIT; FSK2a needs 8 or 10 per TONE PERIOD. Start with a `ctest/roundtrip.c` arm per protocol (C156).
+
 ⛔⛔ **U12 / C242 IS REFUTED.** *A held level does not transmit, so GProxII cannot be emulated this way at
 all* is false — it emulates byte-exact, 6 of 6. ⇒ **The whole remaining emulate gap is one family, FSK2a,
 which is U11** — exactly where C217 left it, AWID silent with a Gallagher control at 6/6.
