@@ -198,8 +198,66 @@ PYEOF
     exit 0
     ;;
 
+bench)
+    # ⭐⭐ WHICH LINKS ARE ACTUALLY COUPLED — because "4 of 4 enumerated" says nothing about it.
+    #
+    # ⛔ This exists because §1 claimed "rig A is Flipper + Chameleon #1 ... and it WORKS" for a
+    # whole session after the pads had been rearranged, and a tick then read the resulting
+    # expected nulls as a four-arm regression (C402/C403, retracted by C404). Enumeration and
+    # coupling are different questions and only one of them was ever asked.
+    # ⚠ The probes use EM410X ON PURPOSE: it is the only protocol proven at BOTH ends on every
+    # link, and it is in the GPIO family, so it is legal to read from an emulation (M52). A
+    # SAADC-family probe would fail for a reason that has nothing to do with coupling.
+    HERE="$(cd "$(dirname "$0")" && pwd)"
+    PY="$HERE/../../software/script/.venv/bin/python"
+    CU="$HERE/../../software/script/cu.py"
+    P1=/dev/tty.usbmodemC3A1656543DE1
+    P2=/dev/tty.usbmodemF429364E46961
+    PM3=/Users/Shared/code/personal/rfid/proxmark3/pm3
+    cu1 () { "$PY" "$CU" "hw connect -p $P1" "$@" 2>&1; }
+    cu2 () { "$PY" "$CU" "hw connect -p $P2" "$@" 2>&1; }
+    emu () { # $1 = port
+        "$PY" "$CU" "hw connect -p $1" "hw slot type -s 8 -t EM410X" "hw slot enable -s 8 --lf" \
+            "lf em 410x econfig -s 8 --id DEADBEEF88" "hw slot change -s 8" "hw mode -e" >/dev/null 2>&1
+        sleep 1
+    }
+    echo "  bench links (EM410X probe — proven at both ends, GPIO family so legal from an emulation)"
+    cu2 "hw mode -r" >/dev/null 2>&1
+    emu "$P1"
+    flip=DEAD
+    "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1 || "$PY" "$HERE/flipper.py" reboot >/dev/null 2>&1
+    fo=$("$PY" "$HERE/flipper.py" read --mode ask --attempts 3 2>&1)
+    case "$fo" in *REJECTED*) flip="READER DOWN — plugin will not load (C377), not a coupling verdict" ;;
+                  *EM4100*|*[1-9]/3*) flip=LIVE ;; esac
+    c12=DEAD; cu2 "hw mode -r" "lf em 410x read" 2>&1 | grep -qi deadbeef88 && c12=LIVE
+    cu1 "hw mode -r" >/dev/null 2>&1
+    emu "$P2"
+    c21=DEAD; cu1 "hw mode -r" "lf em 410x read" 2>&1 | grep -qi deadbeef88 && c21=LIVE
+    cu2 "hw mode -r" >/dev/null 2>&1
+    tag=DEAD
+    { cu2 "hw mode -r" "lf hid prox read"; cu2 "lf em 410x read"; } 2>&1 | grep -qiE "FC:|EM410X/" && tag=LIVE
+    pm3tag=DEAD; "$PM3" -c "lf search" 2>&1 | grep -qiE "valid.*found|H10301|EM 410" && pm3tag=LIVE
+    printf "  %-28s %s\n" "Flipper <-> #1 (rig A)"      "$flip"
+    printf "  %-28s %s\n" "#1 <-> #2"                   "$c12 / $c21"
+    printf "  %-28s %s\n" "#2 <-> a tag on its pad"     "$tag"
+    printf "  %-28s %s\n" "pm3 <-> T5577 (separate)"    "$pm3tag"
+    echo ""
+    [ "$flip" = LIVE ] || echo "  ⛔ BLOCKED without rig A: the emulate column (8 of 11), and U11's FSK capture"
+    [ "$flip" = LIVE ] || echo "     via the Flipper's raw_read — the ONLY instrument that has ever resolved our"
+    [ "$flip" = LIVE ] || echo "     tone structure (C387's peaks). ⇒ ASK FOR: Flipper + #1 on one pad."
+    [ "$tag" = LIVE ]  || echo "  ⛔ BLOCKED without rig B: every real-tag READ arm, including C400's open"
+    [ "$tag" = LIVE ]  || echo "     Gallagher/Securakey failure. ⇒ ASK FOR: pm3 + T5577 + #2 sandwiched."
+    if [ "$flip" = LIVE ] && [ "$tag" = LIVE ]; then
+        echo "  ✅ Both rigs live — every open unit is reachable. This is the setup to keep."
+    else
+        echo "  ⭐ THE SETUP TO ASK FOR IS BOTH AT ONCE: Flipper + #1, and pm3 + T5577 + #2 as a"
+        echo "     separate sandwich. They do not conflict, and together they unblock everything."
+        echo "     ⚠ #1 <-> #2 is NOT needed by any open unit and costs both rigs (C405)."
+    fi
+    ;;
 *)
-    echo "usage: autopilot.sh {beat|gate|status}" >&2
+    echo "usage: autopilot.sh {beat|gate|status|bench}" >&2
     exit 2
     ;;
+
 esac

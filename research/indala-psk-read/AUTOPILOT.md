@@ -38,7 +38,26 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⭐⭐ 2026-09-14 17:10 — THE BENCH IS ONE LINK BY DESIGN: #1 ↔ #2. READ BEFORE PLANNING ANY ARM (C405)
+### ✅ 2026-09-14 17:55 — BOTH RIGS ARE LIVE AGAIN. RUN `./autopilot.sh bench` RATHER THAN ASSUMING (C408)
+
+✅ **Rig A (Flipper + #1) and rig B (pm3 + T5577 + #2) are both restored and confirmed**: the Flipper reads
+#1's Gallagher **3 of 3**, and #2 reads the tag **FC 123 / CN 4567**. Every open unit is reachable.
+
+⭐⭐ **THIS IS THE SETUP TO KEEP.** The two rigs do not conflict. Facing the Chameleons traded them for a
+single link that **no open unit needs** — asking for that was a mistake, and it cost C402/C403 (retracted).
+⚠ The Flipper is a VALIDATED instrument, not a black box: `raw_analyze` decodes our Gallagher emission
+byte-exact from a raw capture and produced the peaks C387's rate curve rests on.
+
+⛔ **NEVER ASSUME THE TOPOLOGY AGAIN — `4 of 4 enumerated` says nothing about coupling.** §1 claimed rig A
+worked for a whole session after the pads had changed, and a tick read the resulting expected nulls as a
+four-arm regression. ⇒ **`./autopilot.sh bench`** probes all four links with EM410X (the only protocol proven
+at both ends of every link, and GPIO-family so it is legal from an emulation, M52), and prints what each
+missing link BLOCKS and what to ask for. It also separates *not coupled* from *the Flipper's plugin will not
+load* (C377) — same null, different problems.
+
+---
+
+### (superseded) 2026-09-14 17:10 — THE BENCH WAS ONE LINK: #1 ↔ #2 (C405)
 
 ⭐ **THE TWO CHAMELEONS FACE EACH OTHER AND NOTHING ELSE IS ON THEIR PADS.** The T5577 sits on the
 **Proxmark's** pad, completely separate, and the Flipper is not in the arrangement.
