@@ -567,6 +567,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 19:25 | **C362 — F9 is not standalone (needs PR 1's drive API); `FIXES.md` claimed all eleven were** | 68 → 69 | Third extraction, first failure. A wrong PREMISE rather than a wrong description — undetectable by reading. Header rewritten; 8 entries still untested | 3 extractions, 2 built, 1 failed at the first symbol |
 | 2026-09-14 19:00 | **C361 — PR 1 (F8) built on `main`, 6 files +51; its file list was wrong two ways** | 67 → 68 | Omitted `ble_main.h`, listed `lf_reader_generic.c` it does not need — so F8 does NOT depend on F5. First inter-PR ordering constraint found (`lf_pac_data.c`, shared with F9) | 2 builds, one deliberate failure that pinpointed the missing extern |
 | 2026-09-14 18:35 | **C360 — PR 0 written and build-tested (3 files, +19 −12 on `main`), and it corrected F1's root cause** | 66 → 67 | No PR text existed. The implementing commit does not apply to `main`; half of F1's stated cause turns out to be ours, and upstream's half is worse than described | 1 extraction, 1 build, 1 apply-check |
 | 2026-09-14 18:10 | **C359 — §1 and §2 rewritten; both had drifted into saying the opposite of what is true** | 65 → 66 | The sections a fresh context inherits still announced ASK/biphase as next and FDX-A as unverifiable. Historical block fenced with its retired claims named | every heading checked against what C330-C358 established |

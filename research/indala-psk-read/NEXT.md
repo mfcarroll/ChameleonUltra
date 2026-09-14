@@ -818,6 +818,12 @@ apart — and none had reached the register that decides what gets upstreamed.
 | F10 | Changing a slot's LF type silently disarms emulation until a reboot | upstream |
 | F11 | The emulation burst is a frame count, so long-window readers fail at the boundary | upstream |
 
+⛔⛔ **AND THE ORDER IS CONSTRAINED, WHICH THIS SECTION DID NOT KNOW (C362).** Extraction against `main` has been
+run three times: **F1 builds alone**, **F8 builds alone**, **F9 does NOT** — it needs `lf_125khz_radio_drive_set()`,
+which PR 1 introduces. So F9 lands after PR 1, not among the free-standing fixes. F8 and F9 also share
+`lf_pac_data.c`, so they must be ordered relative to each other. **Eight entries remain untested — assume nothing
+about their scope until each is built against `main`.**
+
 ⇒ **The order is F1 first** — it is a data-loss defect that locks a user's tag out of every
 other tool, and it is the one a maintainer will care about most. F7 is ours and belongs with
 the shared capture engine (PR 1), not with the others.

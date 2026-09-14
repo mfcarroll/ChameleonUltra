@@ -1,6 +1,13 @@
 # Incidental fixes — defects found while doing something else
 
-⭐ **Each entry is scoped as its own upstream PR.** None of these is part of the LF-protocol work
+⛔⛔ **NOT EVERY ENTRY IS STANDALONE, AND THIS FILE USED TO CLAIM THEY ALL WERE (C362).** Extraction against
+`main` settles it per entry, and it has now been done three times: **F1 builds alone** (`pr0-f1.patch`, 3 files
++19 −12), **F8 builds alone** (`pr1-f8.patch`, 6 files +51), and **F9 does NOT** — it needs
+`lf_125khz_radio_drive_set()`, which does not exist on `main` and is introduced by PR 1, the shared engine.
+⇒ Scope is a claim to be tested, not a property to be asserted. Run the extraction before promising a
+maintainer a standalone PR.
+
+⭐ **Each entry is scoped as its own upstream PR** *where the extraction says so*. None of these is part of the LF-protocol work
 this branch exists for; they were found by tripping over them. Keeping them here means the main
 work can be split out cleanly later, and means none of them gets quietly bundled into a review
 that is about something else.
@@ -22,7 +29,7 @@ EMULATION fixes needing the Flipper as reader, and the script reports them NOT C
 | F6 | `lf hid prox write` reported success without reading back | `chameleon_cli_unit.py` | yes — **fixed** |
 | F7 | The repeat-read corroboration rule compares only the first 64 bits of any frame | `lf_indala_data.c` | ours — **fixed** |
 | F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | `ble_main.h`, `lf_reader_data.c/.h`, `lf_hidprox_data.c`, `lf_ioprox_data.c`, `lf_pac_data.c` | yes — **fixed**, PR built |
-| F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed** |
+| F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed**, ⛔ **NOT standalone: needs PR 1's drive API** |
 | F10 | Changing a slot's LF type silently disarms emulation until a reboot | `lf_tag_em.c/.h`, `tag_emulation.c`, `app_cmd.c` | yes — **fixed** |
 | F11 | The emulation burst is a FRAME COUNT, so long-window readers fail at the boundary | `lf_tag_em.c` | yes — **fixed** |
 
@@ -244,6 +251,14 @@ whole session despite being fixed long before.
 ---
 
 ## F9 — `lf pac read` returns nothing: the reader's own field saturates its amplifier ✅ FIXED
+
+⛔⛔ **THIS ONE IS NOT A STANDALONE PR, and the extraction is what proved it (C362).** The cure is to sweep the
+field drive, which needs **`lf_125khz_radio_drive_set()`** — a function this branch adds in
+`lf_125khz_radio.c/.h`. `main` has no drive-set API at all; its only mention of *drive* is a comment about
+`LF_ANT_DRIVER` for `lf_gap.c`. Building our `lf_pac_data.c` against `main` fails immediately with
+`implicit declaration of function 'lf_125khz_radio_drive_set'`.
+⇒ **F9 must land after PR 1 (the shared engine), which owns that file.** It is still a real upstream defect and
+still worth fixing; it is just not free-standing, and promising a maintainer otherwise would have been wrong.
 
 **Symptom.** `lf pac read` returns 0 of 10 on a tag the Proxmark reads perfectly.
 
