@@ -464,3 +464,12 @@ of chasing the protocol (C365).
 EM410X on the suspect slot failed too, which ruled out Indala and PSK in one step and pointed at the slot.
 ⚠ And read what the firmware prints: it said `WARNING: Slot LF type is not Indala` on the first attempt, and an
 error filter matching `error|invalid|Traceback` threw it away. Filter for `warning` too.
+
+**M47 — CONTEXT IS A RECURRING COST, SO COMPACT ON A THRESHOLD RATHER THAN ON INSTINCT.**
+Every turn re-sends the whole window. Carrying a large context pays for it again on every subsequent turn;
+compacting costs one summarisation pass and makes every later turn cheap. ⛔ *It just re-expands* is wrong —
+the summary is far smaller than what it replaces, which is the point (C369).
+⇒ `./autopilot.sh status` prints the figure every tick from `utility-scripts/claude/context_check.sh`, which is
+local, needs no credential and costs no tokens. **≥80%: compact at the end of the tick. ≥60%: consider it.**
+⚠ Carrying more context can still be the right call — mid-investigation, with state that would be expensive to
+rebuild. Make it a decision, not a drift.

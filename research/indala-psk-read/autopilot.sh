@@ -54,8 +54,31 @@ status)
     fi
     echo "last commit $(( (now - $(git -C "$REPO" log -1 --format=%ct)) / 60 )) min old   $(git -C "$REPO" log -1 --format='%h %s' | cut -c1-64)"
     echo "branch      $(git -C "$REPO" rev-parse --abbrev-ref HEAD)   $(git -C "$REPO" status --short | wc -l | tr -d ' ') dirty"
-    sh /Users/Shared/code/personal/rfid/Momentum-Firmware/T5577_block0_analysis_data/usage_check.sh 2>/dev/null \
+    # ⚠ BOTH LIVE IN utility-scripts/claude NOW. `usage_check.sh` moved there from the
+    # Momentum tree 2026-09-14; the old path silently produced "usage unavailable" and the
+    # loop paced blindly without ever saying why.
+    UTIL=/Users/Shared/code/personal/utility-scripts/claude
+    sh "$UTIL/usage_check.sh" 2>/dev/null \
         || echo "usage       unavailable — pace blindly, commit every 20 min"
+    # ⭐ CONTEXT IS A COST, NOT JUST A CAPACITY. Every turn re-sends the whole window, so a
+    # large context is paid again on every subsequent turn; compacting costs one summarisation
+    # and makes every later turn cheap. ⛔ This is the opposite of what this session believed
+    # until the operator corrected it (C369). The check is local, needs no credential and costs
+    # no tokens, so it is safe to run every tick.
+    ctx=$(sh "$UTIL/context_check.sh" "${CLAUDE_SESSION_ID:--c}" 2>/dev/null | tail -1)
+    if [ -n "$ctx" ]; then
+        pct=$(printf '%s' "$ctx" | sed -nE 's/.*pct=([0-9]+).*/\1/p')
+        case "${pct:-0}" in
+            ''|*[!0-9]*) echo "context     $ctx" ;;
+            *) if [ "$pct" -ge 80 ]; then
+                   echo "⛔ context   ${pct}% — COMPACT AT THE END OF THIS TICK. Every further turn pays the full window."
+               elif [ "$pct" -ge 60 ]; then
+                   echo "⚠ context    ${pct}% — finish the current unit, then consider compacting."
+               else
+                   echo "context     ${pct}% used"
+               fi ;;
+        esac
+    fi
     echo "devices     $(ls /dev/cu.usbmodem* 2>/dev/null | wc -l | tr -d ' ') of 4 enumerated"
     ls /dev/cu.usbmodem* 2>/dev/null | sed 's/^/            /'
     # ⛔⛔ ASK THE HARDWARE WHAT IT IS RUNNING. Firmware was changed, committed and left

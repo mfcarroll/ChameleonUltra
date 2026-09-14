@@ -53,7 +53,10 @@ for f in $(grep -ohE '`[A-Za-z0-9_./-]+\.(md|py|sh)`' README.md FINDINGS.md NEXT
         [ -e "$cand" ] && continue 2
     done
     # files that live in other repos are named, not linked; skip the ones we know
-    case "$b" in t5577_campaign.py) continue;; esac
+    # ⚠ `usage_check.sh` and `context_check.sh` live in utility-scripts/claude, outside this
+    # repo, and are referenced by name. They are real and executable; `./autopilot.sh status`
+    # runs both every tick, which is a far better liveness check than this one could be.
+    case "$b" in t5577_campaign.py|usage_check.sh|context_check.sh) continue;; esac
     note "referenced but missing: $f"
 done
 
