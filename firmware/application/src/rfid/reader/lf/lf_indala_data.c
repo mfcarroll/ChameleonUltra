@@ -941,7 +941,23 @@ bool gproxii_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out) {
      * ⚠ The host decodes `lf sniff --drive 7` captures from this same device 4 of 4 EXACT, so
      * the algorithm is right and something between the sniff path and the reader path is not.
      * That is the open question; see NEXT.md. Until it is answered this command ships as
-     * research, and the grid must say NOT VERIFIED rather than a read count. */
+     * research, and the grid must say NOT VERIFIED rather than a read count.
+     *
+     * ⭐⭐ ANSWERED AND SUPERSEDED — the paragraph above is history, dated 2026-09-15. The open
+     * question was closed by C211/C213: a capture taken too soon after another clips at BOTH
+     * rails, and a 50ms field-OFF inter-capture gap fixes it. This arm then read **12 of 12
+     * exact, 0 wrong**, and today's regression pass read it 4 of 4 on a fresh clone (C288).
+     * ⇒ The grid says a read count, not NOT VERIFIED. ⛔ Everything ABOVE this note still
+     * stands and must not be deleted with it: the drive is still fixed at 7, a sweep would
+     * still hand back those frames, and the reason is still that a fixed configuration
+     * distorts both captures identically.
+     *
+     * ⭐⭐⭐ AND THAT LAST POINT IS THE ONE TO CARRY AWAY, because it is what the agreement rule
+     * cannot do. `lf_sampled_read_phases` requires two CONSECUTIVE decodes at the SAME sample
+     * phase to be byte-identical, and it RESETS the comparison when the phase changes — so a
+     * wrong frame that recurs at a DIFFERENT phase never satisfies it. What defeats the rule
+     * is deterministic distortion: the same configuration producing the same wrong answer
+     * twice in a row. C269 said the opposite and is corrected by C293. */
     bool ok = lf_sampled_read_phases(gproxii_biphase_decode, GPROXII_BIPHASE_CAPTURE_SAMPLES,
                                      &r, timeout_ms, energy_out,
                                      GPROXII_PHASE_ROTATION,
