@@ -274,8 +274,11 @@
 #define DATA_CMD_AWID_SCAN                      (3051)
 #define DATA_CMD_PARADOX_SCAN                   (3052)
 #define DATA_CMD_PYRAMID_SCAN                   (3053)
-/* ⛔ Scan only, and not a deferral: nothing on this bench can read an FDX-A tag back — the
- * Proxmark's `lf fdx` is FDX-B — so a writer would certify itself. Same as InstaFob (C185). */
+/* ⭐ The refusal that stood here is RETIRED (C333). It read: "nothing on this bench can read an
+ * FDX-A tag back — the Proxmark's `lf fdx` is FDX-B — so a writer would certify itself." The
+ * Proxmark has a complete FDX-A under `lf destron`: demod, reader, **clone** and sim. It was
+ * looked for in one place. ⇒ The writer below is verified by an independent tool like every
+ * other. ⚠ InstaFob's refusal is NOT retired — the Proxmark really has no command for it. */
 #define DATA_CMD_FDXA_SCAN                      (3054)
 #define DATA_CMD_AWID_WRITE_TO_T55XX            (3055)
 #define DATA_CMD_PARADOX_WRITE_TO_T55XX         (3056)
@@ -294,5 +297,6 @@
 #endif
 #define DATA_CMD_FDXB_SCAN                      (3061)
 #define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)
+#define DATA_CMD_FDXA_WRITE_TO_T55XX            (3064)
 
 #endif

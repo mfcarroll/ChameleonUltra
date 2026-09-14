@@ -31,6 +31,7 @@ uint8_t scan_instafob(uint8_t *data);
 /** ⭐ The biphase family's SECOND protocol, and it needs none of GProxII's overrides — stock
  *  drive, shared rotation, no inter-capture gap. Measured, not assumed (C214). */
 uint8_t scan_fdxb(uint8_t *data);
+uint8_t write_fdxa_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t write_fdxb_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count);
 uint8_t scan_gproxii(uint8_t *data);
 /** ⚠ Instrumentation — the same read, reporting the decoder's energy on failure. */

@@ -609,6 +609,38 @@ int main(void) {
     bad += trial_t55xx("FDX-B    -> T5577 blocks", "0031bd39740201f8804039b518040201", 4,
                        T5577_FDXB_CONFIG, want_fdxb);
 
+    /* ⭐⭐ FDX-A, measured off `lf destron clone --uid 0F1E2D3C4B` (C339) — and it is the ONE
+     * that does not share AWID's config: **FSK2, not FSK2a**, `00105060` against `00107060`,
+     * one bit in the modulation field. C171's trap, and the reason every config here is read
+     * off a reference clone rather than inherited from a sibling.
+     *
+     * ⛔ THE INPUT IS THE COMPLEMENT OF WHAT `lf fdxa read` PRINTS, and that is the protocol,
+     * not a quirk of this test: an FSK2 tag stores the inverse of what our FSK2a-path reader
+     * reports. `write_fdxa_to_t55xx()` applies the complement and hands the result to the same
+     * `fsk2a_t55xx_blocks()` as everything else, so what is pinned here is what that function
+     * is actually given. The complement itself is asserted just below. */
+    static const uint32_t want_fdxa[] = {0x00105060, 0xAAE26A55, 0x69566659, 0x655A5A65};
+    bad += trial_t55xx("FDX-A    -> T5577 blocks", "aae26a5569566659655a5a65", 3,
+                       T5577_FDXA_CONFIG, want_fdxa);
+
+    /* ⚠ The reader's raw and the stored blocks, from the SAME tag, must be bitwise inverse.
+     * Measured on two Proxmark clones (C339). Pinned here so a change to either side that
+     * breaks the relationship fails on the host instead of on the bench. */
+    {
+        static const char reader_raw[] = "551d95aa96a999a69aa5a59a";
+        static const char stored[]     = "aae26a5569566659655a5a65";
+        int inv_bad = 0;
+        for (size_t i = 0; i < sizeof(reader_raw) - 1; i += 2) {
+            unsigned a = 0, b = 0;
+            sscanf(reader_raw + i, "%2x", &a);
+            sscanf(stored + i, "%2x", &b);
+            if (((a ^ b) & 0xFF) != 0xFF) { inv_bad++; }
+        }
+        printf("  %-34s %s\n", "FDX-A reader raw ~= blocks",
+               inv_bad == 0 ? "ok" : "MISMATCH");
+        bad += inv_bad;
+    }
+
     /* ✅ THE LAST TWO, and their reference dumps were MEASURED for this rather than found: C231
      * had to leave Securakey and Noralsy uncovered because nobody had ever written their block
      * forms down, and inventing the expected blocks from our own writer's code would have

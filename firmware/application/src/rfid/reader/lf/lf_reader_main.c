@@ -656,6 +656,34 @@ uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *o
  *
  * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
  */
+/**
+ * @brief Write a raw 96-bit FDX-A frame to a T55xx tag (FSK2, RF/50, 3 data blocks).
+ *
+ * ⛔⛔ THE FRAME IS STORED COMPLEMENTED, and that is measured rather than chosen. The tag
+ * carries FSK2 where every other FSK protocol here carries FSK2a, and the two differ in which
+ * tone means one — so the bits a reference clone stores are the bitwise inverse of the bits
+ * our FSK2a-path reader prints. Confirmed on two Proxmark clones (C339): blocks
+ * `AAE26A55 69566659 655A5A65` against our reader's raw `551d95aa96a999a69aa5a59a`, inverse in
+ * all 96 bits. ⇒ `frame12` is what `lf fdxa read` printed, and this complements it so the
+ * round trip is symmetric for whoever types it.
+ *
+ * ⚠ Shares fsk2a_t55xx_blocks() — the transcription is identical once the polarity is right.
+ *
+ * ⚠ A T5577 SENDS NO ACKNOWLEDGEMENT — returns STATUS_LF_TAG_OK regardless. Read it back.
+ */
+uint8_t write_fdxa_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+    uint32_t blks[4] = {0x00};
+    uint8_t inverted[12];
+    for (uint8_t i = 0; i < sizeof(inverted); i++) {
+        inverted[i] = (uint8_t)(~frame12[i]);
+    }
+    uint8_t blk_count = fsk2a_t55xx_blocks(inverted, 3, T5577_FDXA_CONFIG, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+}
+
 uint8_t write_fdxb_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[5] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_FDXB_CONFIG, blks);

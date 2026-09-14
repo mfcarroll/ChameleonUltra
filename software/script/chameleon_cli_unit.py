@@ -1005,7 +1005,7 @@ lf_instafob = lf.subgroup("instafob", "InstaFob commands (read only)")
 lf_awid = lf.subgroup("awid", "AWID commands")
 lf_paradox = lf.subgroup("paradox", "Paradox commands")
 lf_pyramid = lf.subgroup("pyramid", "Pyramid commands")
-lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only — nothing here can verify a write)")
+lf_fdxa = lf.subgroup("fdxa", "FDX-A (FECAVA Destron) commands")
 lf_gproxii = lf.subgroup("gproxii", "GProxII commands")
 lf_fdxb = lf.subgroup("fdxb", "FDX-B commands (ISO 11784/5 — NOT FDX-A)")
 lf_t55xx = lf.subgroup("t55xx", "Raw T5577 block access")
@@ -8083,6 +8083,32 @@ class LFFdxbWrite(_LFFskWrite):
             return None
 
 
+@lf_fdxa.command("write")
+class LFFdxaWrite(_LFFskWrite):
+    PROTOCOL = "FDX-A"
+    HEX_DIGITS = 24
+    EXAMPLE = "551d95aa96a999a69aa5a59a"
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = super().args_parser()
+        parser.description = (
+            "Write an FDX-A (FECAVA Destron) credential to a T5577. Configures FSK2, RF/50, "
+            "3 data blocks (00105060). Reads the tag back afterwards — a T5577 does not "
+            "acknowledge writes.\n"
+            "Pass the frame exactly as `lf fdxa read` prints it: the device complements it, "
+            "because an FSK2 tag stores the inverse of what our FSK2a-path reader reports.")
+        return parser
+
+    def _write(self, frame):
+        self.cmd.fdxa_write_to_t55xx(frame)
+
+    def _try_read(self):
+        try:
+            return self.cmd.fdxa_scan()[0].hex()
+        except Exception:
+            return None
+
+
 @lf_gproxii.command("read")
 class LFGProxIIRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -8235,7 +8261,10 @@ class LFFdxaRead(ReaderRequiredUnit):
         print("FDX-A FSK2a + Manchester")
         print(f"   Raw (96 bits): {color_string((CY, raw.hex()))}")
         print(f"   Payload:       {color_string((CY, pay.hex()))}")
-        print(f"   ⚠ Bit 7 of each byte is FDX-A's odd-parity bit, not payload.")
+        ident = bytes(b & 0x7F for b in pay)
+        print(f"   ID (parity masked): {color_string((CY, ident.hex()))}")
+        print(f"   ⚠ Bit 7 of each byte is FDX-A's odd-parity bit, not payload — so the")
+        print(f"     masked line is what the Proxmark's `lf destron reader` prints (C338).")
         print(f"   Read at sample phase {phase} ticks, "
               f"{tries} capture{'' if tries == 1 else 's'} taken")
 

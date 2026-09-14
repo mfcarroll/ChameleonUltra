@@ -227,6 +227,7 @@ class Command(enum.IntEnum):
     LF_READER_CAPTURE = 3060
     FDXB_SCAN = 3061
     FDXB_WRITE_TO_T55XX = 3062
+    FDXA_WRITE_TO_T55XX = 3064
 
 @enum.unique
 class Status(enum.IntEnum):

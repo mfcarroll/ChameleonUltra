@@ -1001,6 +1001,22 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
+    def fdxa_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
+                            old_keys: list = None):
+        """Write a raw 96-bit FDX-A frame onto a T55xx (FSK2, RF/50, 3 data blocks).
+
+        ⛔ FSK2, not the FSK2a every other FSK protocol here uses — one bit apart in the config
+        word. Measured off `lf destron clone` (C339). ⚠ Pass the frame exactly as
+        `lf fdxa read` prints it; the device complements it, because an FSK2 tag stores the
+        inverse of what an FSK2a-path reader reports.
+        """
+        if len(frame12) != 12:
+            raise ValueError("The raw frame must be exactly 12 bytes")
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
+        data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
+        return self.device.send_cmd_sync(Command.FDXA_WRITE_TO_T55XX, data)
+
     def fdxb_write_to_t55xx(self, frame16: bytes, new_key: bytes = None,
                             old_keys: list = None):
         """Write a raw 128-bit FDX-B frame onto a T55xx (DIPHASE, RF/32, 4 data blocks).

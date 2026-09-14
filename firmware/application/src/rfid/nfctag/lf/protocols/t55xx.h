@@ -226,6 +226,17 @@ extern "C" {
     T5577_MODULATION_FSK2a |      \
     (4 << T5577_MAXBLOCK_SHIFT))
 
+// ⛔⛔ FDX-A IS **FSK2**, NOT FSK2a — the one bit that separates it from every other FSK
+// protocol here, and C171's trap exactly: get it wrong and you write a tag nothing on this
+// bench can read. MEASURED off `lf destron clone` (C339): block 0 reads back `00105060`
+// against AWID/Paradox/Pyramid/HID's `00107060`, and the Proxmark's own `lf t55xx detect`
+// prints `Modulation........ FSK2`. The modulation field (bits 16-12) is 00101 = 5 here and
+// 00111 = 7 there.
+#define T5577_FDXA_CONFIG (       \
+    T5577_BITRATE_RF_50 |         \
+    T5577_MODULATION_FSK2 |       \
+    (3 << T5577_MAXBLOCK_SHIFT))
+
 // GProxII: BIPHASE at RF/64, three data blocks (96-bit frame).
 //
 // ⭐ MEASURED from a Proxmark `lf gproxii clone --xor 141 --fmt 26 --fc 123 --cn 1337`: block 0
