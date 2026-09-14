@@ -44,6 +44,8 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
 
+⭐ **THE READ PATH IS NOT STARVED — measured, not assumed (C341).** 14 protocols x 4 reads: median **2 captures**, which is the floor the corroboration rule sets, and 65% of reads sit exactly on it. ⇒ Holding the field across tries (the C335 lead) would buy about a third of a capture per read. Not the lever it looked like. ⛔ Per-arm ordering from `capcost.sh` is NOISE at n=4 — three arms moved by ≥1 capture between two runs. Run it twice before believing any ranking.
+
 ⚠ **#2 carries gated instrumentation** (`LF_RESEARCH_CMDS_ENABLED`, which this branch's `Makefile` sets to 1): a FAILED `FDXB_SCAN` returns a 12-byte counter payload instead of an empty one. It is the instrument U16 needed and it stays until something replaces it.
 
 ⛔ **EMULATION IS OFF THE TABLE while #2 is on the Proxmark.** It needs the Flipper as reader, and the Flipper faces #1 (deliberately un-reflashed, holds the NexWatch slot). The Proxmark cannot hear our PWM emulation — the dead-end note at the top of `NEXT.md`.
@@ -522,6 +524,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 07:45 | **C341 — read cost measured across the sampled path; C335's field-hold lead closes negative** | 47 → 48 | Median 2 captures (the floor), 65% at it, identical aggregate over two runs; per-arm ordering shown to be noise at n=4. `capcost.sh` added | 2 runs x 14 protocols x 4 reads, plaintext written first, bench restored |
 | 2026-09-14 07:15 | **U7 closed — §9 upstreaming assessment refreshed (§9j)** | 47 → 47 | Recount, PR 4's false FDX-A caveat corrected at both sites, the seven fix-PRs ordered ahead of the protocol PRs; `checkdocs.sh` taught that F-numbers live in FIXES.md | Counts from `git diff main...HEAD`; the new check proven by injecting a bogus id and watching it fail |
 | 2026-09-14 06:45 | **C340 — U17 closed: the FDX-A writer ships, blocks identical to the reference clone** | 46 → 47 | A refused arm became a verified one; `roundtrip.c` pins its vectors and the complement relationship | Wiped tag, alternating credentials, Proxmark as judge, dump equals pm3's own clone |
 | 2026-09-14 06:10 | **C338/C339 — FDX-A read upgraded to grade A; write constants measured** | 44 → 46 | The refusal C333 reopened is half retired: read verified on a real tag 10/10, writer fully specified off a reference clone and not yet built | pm3 `lf destron clone` as the independent writer, its own detect/dump as the source of the config word |
