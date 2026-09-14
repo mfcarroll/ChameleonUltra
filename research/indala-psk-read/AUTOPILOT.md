@@ -60,7 +60,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ⛔ **EMULATION IS OFF THE TABLE while #2 is on the Proxmark.** It needs the Flipper as reader, and the Flipper faces #1 (deliberately un-reflashed, holds the NexWatch slot). The Proxmark cannot hear our PWM emulation — the dead-end note at the top of `NEXT.md`.
 
-⚠ **Open, needs hands, not for an unattended run:** Indala emu slot 1 holds a bad frame (*not the Indala preamble*); EM410X emulation hit BOTH `flipper.py` arms, unexplained; the Flipper crash-rebooted at an unknown time.
+⚠ **Open, needs hands, not for an unattended run:** Indala emu slot 1 holds a bad frame (*not the Indala preamble*); ~~EM410X emulation hit BOTH `flipper.py` arms~~ ✅ **EXPLAINED AND CLOSED (C353)** — `rfid read indala` is a front-end, not a protocol filter; an ASK credential hitting both arms is expected; the Flipper crash-rebooted at an unknown time.
 
 ---
 
@@ -534,6 +534,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 14:55 | **C353 — the EM410X 'both arms' anomaly explained and retired; NEXT.md's stale C305 banner closed** | 59 → 60 | `rfid read indala` is a front-end, not a protocol filter — an ASK credential hitting both arms is expected. Verdict logic fixed in `flipper.py` and `emugrade.sh` | 3 reads per arm on a live EM4100 emulation, one invocation |
 | 2026-09-14 14:25 | **C352 — `emugrade.sh`: the emulate column reduced to one command, plumbing tested, results not taken** | 58 → 59 | The only real gap left needs a bench change an unattended run may not make. Two of eleven entries were wrong because econfig signatures are not write signatures | 11 arms executed against #2, none scored; #2 returned to reader mode |
 | 2026-09-14 13:55 | **C351 — the third audit axis: 9 of 11 fixes re-verified still-true on the live build, 0 regressed** | 57 → 58 | Completeness cannot detect a regression and a regression check cannot detect an omission. `fixcheck.sh` added and wired into FIXES.md's header | F10/F11 reported NOT CHECKED, not skipped |
 | 2026-09-14 13:25 | **C350 — auditing by CLAIM found four more unregistered upstream defects; FIXES.md 7 → 11** | 56 → 57 | The file audit is blind to a fix inside an assigned file, and F10/F11 were exactly that. Neither axis would have found the other's | 33 fix-shaped claims triaged; blindness demonstrated by checking F10/F11's files ARE named in §9d |

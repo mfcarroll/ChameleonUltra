@@ -12,9 +12,13 @@
 # ⭐ It encodes C328's discipline rather than just looping:
 #   1. NULL FIRST — #2 in reader mode, so it is emulating nothing. A hit here is ambient and
 #      every number below it would be worthless.
-#   2. Each arm reads with `--mode both`. The WRONG-modulation arm is a built-in control (C83):
-#      a PSK1 protocol must score on psk and 0 on ask, and vice versa. An arm that hits on
-#      BOTH is not a pass — EM410X did exactly that and remains unexplained.
+#   2. Each arm reads with `--mode both`, but ⛔ THE TWO ARMS ARE NOT SYMMETRIC (C353).
+#      `rfid read indala` selects a FRONT END, not a protocol: it decodes EM4100 3 of 3. So
+#        • a PSK1 protocol must score on psk and **0 on ask** — that ask arm IS the control;
+#        • an ASK protocol is EXPECTED to hit BOTH, and its real control is step 1's
+#          reader-mode null (C178), not the other arm.
+#      Reading "both arms hit" as a failure is what left EM410X on the open list as an
+#      unexplained anomaly for a whole session.
 #   3. NULL AGAIN at the end. A/B/A, because against anything intermittent A/B is not an
 #      experiment (M35).
 #

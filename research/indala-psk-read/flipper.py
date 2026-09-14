@@ -175,9 +175,17 @@ def cmd_read(a):
             print("  ⭐ PSK hits with the ASK arm empty — the reader was looking and found a")
             print("     PSK tag, not any tag. That ASK arm IS the control (C83).")
         elif psk and ask:
-            print("  ⚠ BOTH arms hit. The ASK arm is meant to be the null; something else is")
-            print("     on the pad, or the modes are not exclusive here. Do not treat the PSK")
-            print("     number as bracketed until this is explained.")
+            # ⛔ THE MODES ARE NOT SYMMETRIC, and this warning used to imply they were.
+            # `rfid read indala` selects a FRONT END, not a protocol filter: it decoded an
+            # EM4100 emulation 3 of 3 (C353). So an ASK credential hitting BOTH arms is the
+            # EXPECTED result, not a red flag. The reverse does not hold — a PSK signal is not
+            # recoverable through the ASK front end, which is why "PSK n, ASK 0" IS bracketed.
+            print("  ⚠ BOTH arms hit, and what that means depends on the protocol (C353):")
+            print("     • an ASK credential SHOULD hit both — `rfid read indala` is a front-end")
+            print("       selection, not a protocol filter, and decodes ASK perfectly well.")
+            print("     • a PSK credential hitting both means something else is on the pad.")
+            print("     ⇒ For an ASK arm the real control is the device in READER mode reading")
+            print("       nothing (C178), not the other modulation arm.")
         elif not psk and not ask:
             print("  ⚠ Nothing on either arm. This is a null with no positive control, which")
             print("     says the Flipper heard nothing — not that the emulator is silent (F05).")
