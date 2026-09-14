@@ -10,9 +10,13 @@
 #
 #   ./fixcheck.sh
 #
-# ⚠ Only the entries testable on rig B run here. F10 and F11 are EMULATION fixes and need the
-#   Flipper as reader; they are reported as NOT CHECKED rather than quietly skipped, because a
-#   register that hides its own coverage gaps is the problem this script exists for.
+# ⭐ F10 AND F11 NOW RUN TOO (C393). They are EMULATION fixes and need the Flipper as reader,
+#   which was unusable when this script was written — its `rfid` plugin would not load (C377).
+#   That is fixed and automatic, so the two entries that reported NOT CHECKED are now measured.
+# ⚠ They still degrade to NOT CHECKED rather than FAIL if the Flipper cannot be made ready: a
+#   dead reader and a dead emulator produce identical numbers (C373/C374/C376), so a rig-A arm
+#   that cannot prove its reader alive must not be scored at all — which is the same principle
+#   that made this script report its gaps in the first place.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="$HERE/../../software/script/.venv/bin/python"
@@ -96,8 +100,70 @@ if (cd "$HERE/ctest" && make ambig >/dev/null 2>&1 && ./ambig 2>&1 | grep -q "am
 else
   bad "F4  REGRESSED — ctest 'ambig' does not report unchanged ambiguity counts"
 fi
-note "F10 slot-type mode cycle — EMULATION, needs the Flipper as reader (rig A)"
-note "F11 emulation burst budget — EMULATION, needs a reader watching rig A"
+# ─── rig A: the two EMULATION fixes ───────────────────────────────────────────────────
+#
+# ⛔ THE READER MUST BE PROVEN ALIVE FIRST. `flipper.py heap` exits non-zero when the rfid
+# plugin will not fit (C377), and `flipper.py reboot` clears it in ~10s. If neither works the
+# two entries report NOT CHECKED, exactly as they did before — never PASS, never FAIL.
+CH1=/dev/tty.usbmodemC3A1656543DE1
+SLOT=8   # ⛔ THE DEVICE HAS EIGHT SLOTS, 1-8. This said 9 for one run, reasoning that
+         # emugrade.sh "owns" slot 8 — which is not a real conflict, because nothing here runs
+         # concurrently. `hw slot type -s 9` is REFUSED by the argument parser, so every econfig
+         # was rejected, the device kept whatever was already loaded, and the checks below
+         # reported "neither arm scored" and "F11 REGRESSED — the same frames-per-burst". Both
+         # were my own bug. ⚠ A rig-A arm that fails should be suspected of being the HARNESS
+         # before it is written down as a regression (C393).
+cu1 () { "$PY" "$CU" "hw connect -p $CH1" "$@" 2>&1 }
+
+# protocol -> slot type | econfig | the flipper.py arm that should score
+emu_arm () {   # $1 type  $2 econfig  $3 mode(psk|ask) ; echoes "hits/attempts", or "-" 
+  cu1 "hw slot type -s $SLOT -t $1" "hw slot enable -s $SLOT --lf" "$2" \
+      "hw slot change -s $SLOT" "hw mode -e" >/dev/null
+  sleep 1
+  # ⚠ SINGLE-MODE PRINTS A COLON AND DOUBLE-MODE DOES NOT — `=> ASK: 3/4` against
+  # `PSK 0/6 vs ASK 6/6`. Matching only the colon-less form scored every arm as a miss and
+  # reported "neither arm scored", which reads as a dead rig rather than a broken grep.
+  "$PY" "$HERE/flipper.py" read --mode "$3" --attempts 4 2>&1 |
+    grep -oiE "(psk|ask):? +[0-9]+/[0-9]+" | tail -1 | grep -oE "[0-9]+/[0-9]+"
+}
+fpb () { cu1 "hw emudebug" | grep -oE "frames per burst *: *[0-9]+" | grep -oE "[0-9]+$" }
+
+if ! "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1; then
+  "$PY" "$HERE/flipper.py" reboot >/dev/null 2>&1
+fi
+if ! "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1; then
+  note "F10 slot-type mode cycle — rig A reader would not start (see C377); NOT CHECKED"
+  note "F11 emulation burst budget — rig A reader would not start (see C377); NOT CHECKED"
+else
+  # ⭐ F10: the defect was that changing a slot's LF TYPE disarmed emulation until a REBOOT.
+  # So the test is two arms of DIFFERENT types back to back with no power cycle between them —
+  # and Gallagher→Indala is the strongest pair available, because it also crosses the PWM base
+  # clock boundary (125kHz → 1MHz), which is the other half of what the fix had to get right.
+  g=$(emu_arm Gallagher "lf gallagher econfig -s $SLOT --raw 7feaa31e76d86c6d868cc249" ask)
+  gf=$(fpb)
+  i=$(emu_arm Indala "lf indala econfig -s $SLOT --id a0000000e6bd0e92" psk)
+  if_=$(fpb)
+  if [[ "${g%%/*}" -gt 0 && "${i%%/*}" -gt 0 ]]; then
+    ok "F10 slot type changed Gallagher→Indala with no reboot and BOTH emulate — ask $g, psk $i"
+  elif [[ "${g%%/*}" -gt 0 || "${i%%/*}" -gt 0 ]]; then
+    bad "F10 REGRESSED — a type change disarmed emulation: ask ${g:--}, psk ${i:--}"
+  else
+    note "F10 neither arm scored — that is a silent RIG, not a verdict; NOT CHECKED"
+  fi
+
+  # ⭐ F11: the burst used to be a fixed FRAME COUNT, so a protocol whose frame is long ran a
+  # short window and a long-window reader failed at the boundary. The fix derives the count from
+  # the sequence's own duration — so the tell is that two protocols report DIFFERENT
+  # frames-per-burst. A regression to a constant makes them EQUAL, which no read score reveals.
+  if [[ -n "$gf" && -n "$if_" && "$gf" != "$if_" ]]; then
+    ok "F11 frames-per-burst is derived, not constant — Gallagher $gf vs Indala $if_"
+  elif [[ -n "$gf" && "$gf" == "$if_" ]]; then
+    bad "F11 REGRESSED — both protocols report the same frames-per-burst ($gf); it is a constant again"
+  else
+    note "F11 could not read frames-per-burst from hw emudebug; NOT CHECKED"
+  fi
+  cu1 "hw mode -r" >/dev/null
+fi
 
 print -r -- ""
 printf "  ⇒ %d pass, %d FAIL, %d not checkable on this rig\n" "$pass" "$fail" "$skip"
