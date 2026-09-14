@@ -21,6 +21,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="$HERE/../../software/script/.venv/bin/python"
 CU="$HERE/../../software/script/cu.py"
 CH2=/dev/tty.usbmodemF429364E46961
+PM3=/Users/Shared/code/personal/rfid/proxmark3/pm3
+PM3PORT=/dev/tty.usbmodemiceman1
 
 typeset -A W R
 W[indala]="lf indala write -r a0000000e6bd0e92";                          R[indala]="lf indala read"
@@ -62,7 +64,23 @@ hit () {  # 1 if the reader returned a credential
 
 fp_total=0; tested=0
 for w in $written; do
-  "$PY" "$CU" "hw connect -p $CH2" "${W[$w]}" >/dev/null 2>&1
+  # ⭐⭐ `blank` IS A HARDER NULL THAN AN EMPTY PAD, and the tree has never run it live. Every
+  # empty null so far is capture-based — a recorded empty field fed to a decoder. A WIPED
+  # T5577 is still a chip in the field, still loading and modulating it, emitting a blank
+  # pattern rather than nothing at all. A reader that manufactures a credential from that is
+  # worse than one that misreads a foreign tag, because there is no credential anywhere.
+  # ⛔ There is NO self-read for this row: every reader is expected to find nothing.
+  if [[ "$w" == blank ]]; then
+    $PM3 -p $PM3PORT -c "lf t55xx wipe" >/dev/null 2>&1
+    if $PM3 -p $PM3PORT -c "lf search" 2>&1 | grep -qiE "No known 125"; then
+      print -r -- "  (tag wiped and confirmed blank by pm3)"
+    else
+      print -r -- "  ⛔ WIPE DID NOT LEAVE IT BLANK — the row below means nothing, skipping"
+      continue
+    fi
+  else
+    "$PY" "$CU" "hw connect -p $CH2" "${W[$w]}" >/dev/null 2>&1
+  fi
   self=""; fps=()
   for r in $readers; do
     out=$("$PY" "$CU" "hw connect -p $CH2" "${R[$r]}" 2>&1)
@@ -76,7 +94,11 @@ for w in $written; do
     fi
     [[ "$r" != "$w" ]] && tested=$((tested+1))
   done
-  printf "  tag %-11s self-read %-5s   false positives: %s\n" "$w" "${self:-MISSED}" "${#fps[@]}"
+  if [[ "$w" == blank ]]; then
+    printf "  tag %-11s %-14s   false positives: %s\n" "$w" "(no self-read)" "${#fps[@]}"
+  else
+    printf "  tag %-11s self-read %-5s   false positives: %s\n" "$w" "${self:-MISSED}" "${#fps[@]}"
+  fi
 done
 print -r -- ""
 printf "  ⇒ %d cross-protocol reads on real tags, %d false positives\n" "$tested" "$fp_total"

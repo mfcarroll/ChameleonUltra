@@ -368,6 +368,12 @@ reruns any row: four fresh writes, each read back by the Proxmark, plaintext con
 compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Indala26, Indala224 and IDTECK, 4 of 4 each (C331),
 along with every other write arm in the tree.
 
+⭐⭐ **AND NO READER INVENTS A CREDENTIAL FROM A BLANK CHIP (C344)** — 105 reads across 21 readers on a wiped
+T5577, 0 false positives, the blank state confirmed by the Proxmark before each of the five runs. This is the
+failure a reviewer should fear most, because there is no credential anywhere to misread, and it is distinct from
+both the foreign-tag nulls above and the recorded empty-field captures cited per protocol.
+⚠ 0 in 105 is a **2.86%** pooled upper bound; at n = 5 per reader it measures the population, not any one arm.
+
 ⭐⭐⭐ **AND THE LOOP IS CLOSED IN BOTH DIRECTIONS (C343).** *We write, pm3 reads* — 18 arms, 72 writes, 0 failures
 (C330, C331, C340). *pm3 writes, we read* — 19 arms, 76 reads, 76 matches (`pm3written.sh`),
 six of them protocols that already ship upstream, which makes it a regression check on the shared
