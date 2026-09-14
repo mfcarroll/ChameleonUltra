@@ -156,6 +156,20 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    /* ⛔⛔ A MODULATOR CAN REFUSE, AND THIS USED TO HAND THE REFUSAL STRAIGHT TO EasyDMA.
+     * `lf_fsk2a_build()` returns NULL on any frame it cannot render — over 96 bits, or a
+     * worst case past the shared buffer — and `lf_tag_data_loadcb_inner()` assigns that
+     * result to `m_pwm_seq` unchecked. `nrfx_pwm_simple_playback()` then dereferences it,
+     * which is a NULL read in a release build where NRFX_ASSERT is compiled out.
+     * ⚠ Not reachable with today's protocols by exactly zero margin: AWID and HID Prox are
+     * 96 bits and cost 96*25 = 2400 entries against a 2400-entry buffer. **Pyramid is 128**
+     * and is the next FSK2a emitter in the queue, so it trips BOTH guards (F13).
+     * ⇒ Emit nothing and say so, rather than faulting. A silent slot is already a state this
+     * file handles (C129); a hard fault mid-field is not. */
+    if (m_pwm_seq == NULL) {
+        NRF_LOG_WARNING("lf emu: field present but NO waveform loaded — nothing to play");
+        return;
+    }
     m_dbg_playbacks++;
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst,
                              NRFX_PWM_FLAG_STOP);
@@ -184,9 +198,15 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
+        /* ⛔ Same guard as the field-detect path: a refused modulator leaves m_pwm_seq NULL
+         * and this is the site that would re-enter it every burst (F13). */
+        if (m_pwm_seq == NULL) {
+            lf_field_lost();
+            return;
+        }
         m_dbg_playbacks++;
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst,
-                             NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst,
+                                 NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();

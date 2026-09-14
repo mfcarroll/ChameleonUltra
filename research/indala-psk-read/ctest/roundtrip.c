@@ -42,6 +42,7 @@
 #include "securakey.h"
 #include "nexwatch.h"
 #include "lf_ask_biphase.h"
+#include "fsk2a_mod.h"
 #include "fsk2a_t55xx.h"
 #include "t55xx.h"
 
@@ -401,6 +402,51 @@ static int trial_t55xx(const char *name, const char *hex, uint8_t words, uint32_
  *     every mark run   2 entries = 4 carrier cycles      <- fixed, never scales
  *     every gap run    2 or 3 entries = 4 or 6 cycles    <- carries the frequency
  */
+/* ⭐⭐ THE BUFFER LIMIT AND THE REFUSAL, PINNED (F13).
+ *
+ * ⛔ `lf_fsk2a_build()` returns NULL rather than emitting a wrong frequency, which is right —
+ * but `lf_tag_data_loadcb_inner()` assigns that NULL to `m_pwm_seq` unchecked and both
+ * `nrfx_pwm_simple_playback()` sites dereference it. Those sites are guarded now; this arm
+ * pins the OTHER half, that the refusal happens where it is supposed to.
+ *
+ * ⚠ THE MARGIN IS EXACTLY ZERO AND THAT IS THE POINT. AWID and HID Prox are 96 bits and an
+ * all-ones frame costs 96*25 = 2400 entries against LF_FSK2A_MAX_ENTRIES = 2400 — it fits by
+ * nothing at all. PYRAMID IS 128 BITS (PYRAMID_FSK_FRAME_BITS) and is the next FSK2a emitter
+ * in the queue, so whoever writes it will hit both the frame-bit guard and the buffer guard
+ * on their first run. This arm is here so that lands as a printed FAIL and not as a NULL
+ * dereference in a release build. */
+static int trial_fsk_limits(void) {
+    static const lf_fsk2a_params_t p = {
+        .counter_top = 16, .short_cycles = 8, .long_cycles = 10,
+        .short_pulses = 6, .long_pulses = 5,
+    };
+    uint8_t ones[16];
+    memset(ones, 0xFF, sizeof(ones));
+    int bad = 0;
+
+    /* the worst case that must STILL FIT: 96 all-ones bits, exactly 2400 entries */
+    const nrf_pwm_sequence_t *seq = lf_fsk2a_build(&p, ones, 96);
+    if (seq == NULL) {
+        printf("  %-28s ⛔  refused the 96-bit worst case, which must fit\n", "FSK2a limits");
+        bad = 1;
+    } else if ((size_t)seq->length / 4u != 2400u) {
+        printf("  %-28s ⛔  96 all-ones built %zu entries, expected 2400\n",
+               "FSK2a limits", (size_t)seq->length / 4u);
+        bad = 1;
+    }
+
+    /* Pyramid's size: must be REFUSED, not silently truncated */
+    if (lf_fsk2a_build(&p, ones, 128) != NULL) {
+        printf("  %-28s ⛔  accepted 128 bits (Pyramid) — buffer overrun\n", "FSK2a limits");
+        bad = 1;
+    }
+    if (!bad) {
+        printf("  %-28s ✓   96 all-ones = 2400 entries (zero margin); 128 refused\n",
+               "FSK2a limits");
+    }
+    return bad;
+}
+
 static int trial_fsk_duty(void) {
     uint8_t frame[12] = {0x01, 0x1D, 0xB2, 0x18, 0x27, 0x1B, 0xD8, 0x11,
                          0x11, 0x11, 0x11, 0x11};
@@ -619,6 +665,7 @@ int main(void) {
     bad += trial_fsk("AWID     FSK2a RF/8-10", "011db218271bd81111111111", 96,
                      &awid, awid_fsk_decode);
     bad += trial_fsk_duty();
+    bad += trial_fsk_limits();
 
     /* ⭐⭐ THE FIRST BIPHASE EMITTER, on the credential the Proxmark wrote and our own reader
      * read back 12 of 12 exact (C213). ⚠ Its entry count is FIXED at two per bit where AWID's

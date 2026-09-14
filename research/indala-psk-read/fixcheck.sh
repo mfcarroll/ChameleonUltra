@@ -100,6 +100,17 @@ if (cd "$HERE/ctest" && make ambig >/dev/null 2>&1 && ./ambig 2>&1 | grep -q "am
 else
   bad "F4  REGRESSED — ctest 'ambig' does not report unchanged ambiguity counts"
 fi
+
+# ⛔ F13 IS HOST-CHECKABLE AND MUST STAY THAT WAY. The defect is a NULL handed to EasyDMA, which
+# only fires on a frame the builder refuses — so there is nothing on the bench to reproduce until
+# a >96-bit FSK2a emitter exists. `trial_fsk_limits()` pins BOTH halves: that the 96-bit worst
+# case still fits in exactly 2400 entries, and that 128 bits (Pyramid) is REFUSED rather than
+# silently truncated. ⚠ Break-tested by raising both limits, which makes it print the overrun.
+if (cd "$HERE/ctest" && make roundtrip >/dev/null 2>&1 && ./roundtrip 2>&1 | grep -q "FSK2a limits.*128 refused"); then
+  ok "F13 FSK2a buffer limits — ctest pins the zero margin and the 128-bit refusal"
+else
+  bad "F13 REGRESSED — ctest 'FSK2a limits' does not report 128 refused"
+fi
 # ─── rig A: the two EMULATION fixes ───────────────────────────────────────────────────
 #
 # ⛔ THE READER MUST BE PROVEN ALIVE FIRST. `flipper.py heap` exits non-zero when the rfid
@@ -170,9 +181,12 @@ fi
 # which is the opposite of what FIXES.md is for. Remove this line when F12 is fixed and give it
 # a real arm instead.
 print -r -- ""
-print -r -- "  ⛔ F12 FSK2a emulation emits a constant tone — OPEN, characterised only (C387)."
-print -r -- "     Not a regression target. The measurement that would settle it is ./fskcap.sh,"
-print -r -- "     which needs the two Chameleons facing each other (AUTOPILOT.md §5)."
+print -r -- "  ⛔ F12 FSK2a emulation emits a constant tone — OPEN, and now CONVICTED (C413)."
+print -r -- "     Not a regression target. ⛔ The next step is NOT ./fskcap.sh — that analyses with"
+print -r -- "     tonehist.py, which C401 invalidated. A real tag reads 44.4% RF/10 on the same"
+print -r -- "     chain where ours reads 7.0% (C413), and the failure is deterministic (C416)."
+print -r -- "     What is left needs AMPLITUDE: rdrcap.py with the two Chameleons facing, fed to"
+print -r -- "     askdemod.py / ctest cdemod (AUTOPILOT.md §5)."
 
 print -r -- ""
 printf "  ⇒ %d pass, %d FAIL, %d not checkable on this rig; 1 registered defect still OPEN (F12)\n" "$pass" "$fail" "$skip"
