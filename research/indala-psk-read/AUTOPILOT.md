@@ -49,7 +49,8 @@ what is true now. Same discipline C286 applied to `NEXT.md` §9f.
 T5577 4 of 4 after the flash. **#1 is deliberately NOT reflashed**: C289 showed by per-file diff
 that nothing changed today can reach the five working emulate arms, so flashing it would have
 risked the unit holding the NexWatch slot for a check that could not fail. The tag holds **HID
-H10301 FC 123 / CN 4567**, `parity ( ok )` per the Proxmark. `make check` is green on all four
+H10301 FC 123 / CN 4567**, `parity ( ok )` per the Proxmark — **written by OUR writer, because the
+Proxmark's write path stopped working mid-session and reports success anyway (C297, §5).** `make check` is green on all four
 arms — round trips, ambiguity counts, the `wiegand_other_matches` cross-check, and the
 320-capture decoder comparison.
 
@@ -415,6 +416,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 13:55 | **C297 — pm3 cannot write the T5577 any more** | 16 → 16 | 4 pm3 writes reported `Done!` and none landed; `lf t55xx detect` fails. Our writer recovered the bench first time. Recorded in §5 as a bench condition, not a blocker | Field measured healthy (13908 p-p, 3778 drops) to separate "tag gone" from "cannot write"; our writer on the same tag in the same minute is the control |
 | 2026-09-15 13:25 | **C296 — M36-M40 added to METHOD.md** | 16 → 16 | Five transferable lessons lifted out of the claims: entailment over captures, host-vs-device timing, append-only documents, ritual regression runs, failing branches of display fixes | Each traced to the specific failure that produced it; the caveat that method has no experimental test is stated |
 | 2026-09-15 12:55 | **C295 — the writer warns too** | 15 → 16 | 14 formats never read back as themselves, 3 sometimes; `lf hid prox write` now says so and names which format will be reported | Prediction tested on a real tag, not just the message's appearance; both lists pinned in `make check` |
 | 2026-09-15 12:30 | **§1 rewritten, #2 reflashed from a clean HEAD** | 15 → 15 | `hw version` now reads `96c9d1c` = HEAD with no `-dirty`, where it had been a mid-edit build matching no commit. §1 was 45 claims stale | Post-flash read check 4 of 4; every claim in the new §1 cites the claim that established it |
@@ -493,6 +495,23 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 ---
 
 ## 5. BLOCKED — needs a person
+
+### ⚠ 2026-09-15 13:55 — THE PROXMARK CANNOT WRITE THE T5577 ANY MORE. OURS CAN.
+
+**Not blocking — there is a working path — but the operator should know before reaching for
+`lf hid clone`.** pm3's writes stopped landing mid-session and it reports `Done!` regardless:
+4 attempts, 0 landed, each checked with an independent read. `lf t55xx detect` now fails
+outright, and the all-ones `lf t55xx dump` and empty `lf t55xx read -b 2` logged earlier
+today are the same fault — pm3's DOWNLINK. Its air reads are unaffected and correct.
+
+⭐ **The workaround is our own writer**, which landed first time and was confirmed by both
+readers: `lf hid prox write -f H10301 --fc 123 --cn 4567`. Every protocol here has one.
+
+⚠ The tag and the field are healthy — `lf sniff` peak-to-peak 13908 with 3778 real field
+drops — so this is not a coupling failure of the tag. Whether it is the Proxmark's antenna,
+its tuning, or the sandwich geometry for the downlink specifically is NOT established, and
+needs someone who can move things. ⇒ **If a Proxmark write is genuinely needed, that is a
+second reason to take the sandwich apart.**
 
 ### ⛔⛔ 2026-09-13 11:40 — STOP USING `rfid raw_analyze`. IT HAS WEDGED THE FLIPPER TWICE.
 

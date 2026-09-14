@@ -238,6 +238,7 @@ int main(void) {
         printf("\nDoes each format read back as ITSELF, unpinned?\n");
         for (size_t i = 0; i < ALL_COUNT; i++) {
             int tried = 0, self = 0; card_format_t stole = 0;
+            uint32_t ex_fc = 0; uint64_t ex_cn = 0;
             for (uint32_t fc = 0; fc < 512; fc += 43) {
                 for (uint64_t cn = 1; cn < 8192; cn += 811) {
                     wiegand_card_t c;
@@ -255,13 +256,23 @@ int main(void) {
                     card_format_t first = 0;
                     (void)matches(len, w, &first);          /* first in TABLE order */
                     if (first == ALL[i]) { self++; }
-                    else if (stole == 0) { stole = first; }
+                    else {
+                        /* ⭐ Name the first credential that does NOT read back as itself, so the
+                         * partial cases can be exercised on a real tag rather than left as a
+                         * ratio — M40: a branch nobody has seen print is untested. */
+                        if (stole == 0) { stole = first; ex_fc = fc; ex_cn = cn; }
+                    }
                 }
             }
             if (tried == 0) { continue; }
             if (self == tried) { continue; }               /* reads back as itself, always */
-            printf("  fmt %2d: %4d of %4d read back as itself — the rest report as fmt %d\n",
+            printf("  fmt %2d: %4d of %4d read back as itself — the rest report as fmt %d",
                    (int)ALL[i], self, tried, (int)stole);
+            if (self > 0) {
+                printf("  (e.g. fc %lu cn %llu does not)",
+                       (unsigned long)ex_fc, (unsigned long long)ex_cn);
+            }
+            printf("\n");
             never_self += (self == 0) ? 1 : 0;
             sometimes_self += (self > 0) ? 1 : 0;
         }
