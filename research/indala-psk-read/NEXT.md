@@ -656,11 +656,17 @@ what an upstream PR deletes** rather than a hunt through five files.
 
 | build | text | bss |
 |---|---|---|
-| gated **off** (default) | 333,300 | 164,744 |
-| gated **on** (this branch) | 334,388 | 168,752 |
+| gated **off** (default) | 335,492 | 146,068 |
+| gated **on** (this branch) | 337,052 | 154,084 |
 
-⇒ **1,088 bytes of flash and 4,008 of RAM**, and the gated-ON image is the same size as the
-pre-gating one, so the gate is transparent when enabled. The RAM is attributed to the byte by an
+⇒ **1,560 bytes of flash and 8,016 of RAM.**
+
+⚠ **RE-MEASURED 2026-09-14 (C390) AND BOTH NUMBERS HAVE GROWN** — the figures this replaces were
+1,088 and 4,008, taken on 2026-09-15 against a much earlier tree. The RAM cost has **exactly
+doubled**, 4,008 → 8,016, which is too clean to be drift: it is two staging buffers where there
+was one. ⛔ **Do not quote the old numbers to a reviewer**, and re-run `arm-none-eabi-size` on
+both builds rather than trusting this table after the next round of instrumentation — the
+measurement is two builds and five minutes, and it has now been wrong once. The RAM is attributed to the byte by an
 `nm` symbol diff — `out.0` (4,000) + `buf.1` (4) + `nsamp.2` (4), all static locals of the
 capture command's handler. ⭐ That **confirms** the source comment claiming the probe itself
 costs no RAM: `m_samples` (0x7000) is present identically in BOTH builds, so the 4 KB is the
@@ -678,12 +684,18 @@ host expecting an empty failure payload would misread four bytes of energy.
 
 The sites, found by `grep` on 2026-09-14 and now the gated ones:
 
+⚠ **LINE NUMBERS REFRESHED 2026-09-14 (C390); every one of them had drifted.** They are a
+convenience, not the contract — the contract is the `#if LF_RESEARCH_CMDS_ENABLED` blocks and the
+one `-D`. ⇒ **`grep` for the macro rather than trusting this table**, which is exactly how these
+were re-found.
+
 | | firmware | host |
 |---|---|---|
-| **3037 `LF_EMU_DEBUG`** (`hw emudebug`) | `data_cmd.h:235`, handler `app_cmd.c:761` (5 lines), dispatch row `app_cmd.c:3856` | `chameleon_enum.py:204`, `chameleon_cmd.py:753`, `chameleon_cli_unit.py:9029` |
-| **3038 `LF_RADIO_DEBUG`** (`hw lfdebug`) | `data_cmd.h:236`, handler `app_cmd.c:770` (5 lines), dispatch row `app_cmd.c:3857` | `chameleon_enum.py:205`, `chameleon_cmd.py:783`, `chameleon_cli_unit.py:9055` |
-| **3060 `LF_READER_CAPTURE`** | `data_cmd.h:264`, handler `app_cmd.c:852` (39 lines), dispatch row `app_cmd.c:3853`, and `lf_reader_capture_probe()` at `lf_indala_data.c:246` / `.h:158` | `chameleon_enum.py:227` and nothing else |
-| **The GProxII failure-energy payload** | `app_cmd.c:921-932` — the 4-byte payload returned on a FAILED scan | `chameleon_cmd.py:1004-1007` |
+| **3037 `LF_EMU_DEBUG`** (`hw emudebug`) | `data_cmd.h:258`, handler `app_cmd.c:762`, dispatch row `app_cmd.c:3968` | `chameleon_enum.py:204`, `chameleon_cmd.py:768`, `chameleon_cli_unit.py:9321` |
+| **3038 `LF_RADIO_DEBUG`** (`hw lfdebug`) | `data_cmd.h:259`, handler `app_cmd.c:771`, dispatch row `app_cmd.c:3969` | `chameleon_enum.py:205`, `chameleon_cmd.py:794`, `chameleon_cli_unit.py:9348` |
+| **3060 `LF_READER_CAPTURE`** | `data_cmd.h:292`, handler `app_cmd.c:855`, dispatch row `app_cmd.c:3961`, and `lf_reader_capture_probe()` at `lf_indala_data.c:270` / `.h:183` | `chameleon_enum.py:227` and nothing else |
+| **The GProxII failure-energy payload** | `app_cmd.c:1016-1040` — the gated block; `scan_gproxii_energy()` at :1023, the plain sibling `scan_gproxii()` at :1033 | `chameleon_cmd.py:1049-1051` |
+| **the gate itself** | `firmware/application/Makefile:431` — `CFLAGS += -DLF_RESEARCH_CMDS_ENABLED=1`, the single line an upstream PR deletes | — |
 
 ⭐ **Nothing shippable depends on any of them, and that is checked rather than hoped.**
 `lf_reader_capture_probe()` has exactly one caller (`app_cmd.c:866`); the two debug handlers are
