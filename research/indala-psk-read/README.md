@@ -86,6 +86,11 @@ Expect `a0000000e6bd0e92`, `Fmt 26 FC: 52 Card: 63612`.
 
 ## Tooling
 
+⭐⭐ **`TOOLS.md` is the COMPLETE inventory — read it first.** The table below is a curated subset
+kept for the Indala story this branch began as; it lists 13 of 43 scripts and nothing written since.
+`TOOLS.md` also opens with the three traps that cost real rework (C410), and `./checkdocs.sh` fails if
+an executable here is missing from it.
+
 | | |
 |---|---|
 | `mfdemod.py` | ⭐ The working decoder. `--selftest`, or pass capture files. |

@@ -31,11 +31,11 @@ done
 CIDS=$(ids C FINDINGS.md; ids F FINDINGS.md; ids F FIXES.md)
 # ⭐ FIXES.md is checked as a SOURCE of citations too, not just a ledger — it cites C-numbers
 # and nothing was validating them.
-for r in $(refs C NEXT.md README.md FIXES.md | sort -u; refs F NEXT.md README.md | sort -u); do
+for r in $(refs C NEXT.md README.md FIXES.md TOOLS.md | sort -u; refs F NEXT.md README.md | sort -u); do
     grep -qx "$r" <<<"$CIDS" || note "$r cited but not in FINDINGS.md or FIXES.md"
 done
 MIDS=$(grep -oE '^\*\*M[0-9]+' METHOD.md | tr -d '*')
-for r in $(refs M NEXT.md README.md FINDINGS.md | sort -u); do
+for r in $(refs M NEXT.md README.md FINDINGS.md TOOLS.md | sort -u); do
     grep -qx "$r" <<<"$MIDS" || note "$r cited but not in METHOD.md"
 done
 
@@ -46,7 +46,7 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ../..)
 # LOG.md and METHOD.md are excluded by design: LOG names files as they were at the time
 # (append-only, so a deleted file must keep its entry), and METHOD names removed files
 # deliberately, as an explanation of why they were removed.
-for f in $(grep -ohE '`[A-Za-z0-9_./-]+\.(md|py|sh)`' README.md FINDINGS.md NEXT.md ADVERSARIAL.md |
+for f in $(grep -ohE '`[A-Za-z0-9_./-]+\.(md|py|sh)`' README.md FINDINGS.md NEXT.md ADVERSARIAL.md TOOLS.md |
            tr -d '`' | sort -u); do
     b=$(basename "$f")
     for cand in "$f" "$b" "$ROOT/$f" "$ROOT/software/script/$b" "$ROOT/firmware/$b"; do
@@ -167,6 +167,28 @@ if [ -e FIXES.md ]; then
                 note "AUTOPILOT.md says '$n registered' but FIXES.md has $entries entries"
         done <<< "$(grep -oE '\*\*[0-9]+ registered' AUTOPILOT.md | grep -oE '[0-9]+')"
     fi
+fi
+
+echo "tool coverage"
+# ⛔⛔ A SIXTH DRIFT CLASS: A TOOL NOBODY CAN FIND GETS REBUILT. `README.md`'s Tooling table is a
+# CURATED SUBSET — 13 of 43 scripts — and it silently stopped growing, so a tick that needed to
+# drive a Chameleon spent four calls rediscovering `cu.py` (C409). The cost is not confusion, it
+# is REWORK, and the same rediscovery had already happened for the venv python.
+#
+# ⭐ `TOOLS.md` is the COMPLETE inventory, and this is what keeps it complete: every executable
+# in this directory must appear in it. Structural, mechanically checkable, zero judgement.
+# ⚠ Only executables — a data file or a half-written draft is not a tool, and demanding a row
+# for one is how a checker starts crying wolf (this file's repeated lesson).
+if [ -e TOOLS.md ]; then
+    missing=""
+    for t in *.py *.sh; do
+        [ -e "$t" ] || continue
+        [ -x "$t" ] || continue
+        grep -q "\`$t\`" TOOLS.md || missing="$missing $t"
+    done
+    [ -n "$missing" ] && note "TOOLS.md does not list:$missing (it is the complete inventory — add the row)"
+else
+    note "TOOLS.md is missing — it is the tool inventory checkdocs validates against"
 fi
 
 [ $fail -eq 0 ] && echo "✓ notes consistent" || echo "✗ see above"

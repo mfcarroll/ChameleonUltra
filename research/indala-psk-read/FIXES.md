@@ -41,7 +41,7 @@ regress — the script names it as open instead.
 | F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed**, ⛔ **NOT standalone: needs PR 1's drive API** |
 | F10 | Changing a slot's LF type silently disarms emulation until a reboot | `lf_tag_em.c/.h`, `tag_emulation.c`, `app_cmd.c` | yes — **fixed** |
 | F11 | The emulation burst is a FRAME COUNT, so long-window readers fail at the boundary | `lf_tag_em.c` | yes — **fixed** |
-| F12 | **FSK2a emulation emits a CONSTANT TONE** — HID Prox, ioProx and AWID advertise an emulate path that carries no data at all | `hidprox.c`, `ioprox.c`, `awid.c`, `lf_tag_em.c` | yes — ⛔ **NOT FIXED, characterised only** |
+| F12 | **FSK2a emulation emits a CONSTANT TONE** — HID Prox, ioProx and AWID advertise an emulate path that carries no data at all. ⭐ **CONFIRMED AT THE COIL (C409)**: AWID and HID Prox both peak at 60-64 us (RF/8) with **no peak at 80 us** (RF/10), through an analyser validated on a known-good EM410X control and a criterion fixed before the numbers were seen. The defect is in the EMITTER; the cause is still open | `hidprox.c`, `ioprox.c`, `awid.c`, `lf_tag_em.c` | yes — ⛔ **NOT FIXED, characterised only** |
 
 ---
 

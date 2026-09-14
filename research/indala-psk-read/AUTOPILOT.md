@@ -26,7 +26,9 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
    and take a compute unit. Do not debug firmware against a bench that is not there.
 2. `./autopilot.sh beat`
 3. Read §1 (STATE), then §2 (QUEUE) — the **EXECUTION ORDER** box overrides the numbering.
-4. Read `FINDINGS.md` and `METHOD.md` if this is a fresh context. `NEXT.md` is the plan;
+4. Read `TOOLS.md` **before driving anything** — it is the complete tool inventory and its
+   trap table is three things that have each cost rework (C410). Then `FINDINGS.md` and
+   `METHOD.md` if this is a fresh context. `NEXT.md` is the plan;
    this file is the queue. They must not disagree — if they do, `NEXT.md` wins and you fix
    this file.
 5. Take the first unit that can be **finished**. Work it to completion, verify it on
@@ -37,6 +39,40 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 ---
 
 ## 1. STATE
+
+### ⭐⭐⭐ 2026-09-14 16:05 — THE FSK2a EMITTER IS SINGLE-TONE AT THE COIL. MEASURED, NOT INFERRED (C409)
+
+⭐⭐ **F12/U11 has its first direct measurement.** AWID and HID Prox both emit a sharp peak at **60-64 us**
+— RF/8 — and **nothing at 80 us**, which is RF/10. AWID: 4081 of 16,983 pulse/duration pairs in one 4 us
+bin at 60 us, against 130 at 80. HID Prox: 2502 at 64, no peak at 80. ⇒ **The long tone is not being
+emitted at all**, so the defect is in the EMITTER and not the receiver. ⛔ **The cause is still open.**
+
+⭐ **HOW IT WAS MADE TO COUNT, because the last answer to this question was retracted (C401):**
+1. **The criterion was written down before any number was seen** — a band counts only as a **local
+   maximum**, never as a bin with counts in it. C401 binned a decaying curve and called two bins bands.
+2. **The analyser passed a known-good reference first** (M50): the EM410X control, a 6/6 arm, returned
+   peaks at **512 and 1024 us** — exactly RF/64 Manchester's half-bit and full-bit. That validates the
+   parser and fixes the time unit as microseconds without taking either on faith.
+3. **The resolution objection was asked and answered internally.** The control sits at 512 us while the
+   tones under test sit at 64-80, so a single peak could have meant *this instrument cannot resolve that
+   timescale*. It can: a 4 us bin at 64 us holding 4081 counts IS a resolved feature in the band under
+   test, so an RF/10 population would have formed its own peak. **That is what makes the negative
+   attributable** rather than another unbracketed null.
+
+⭐ **`flipraw.py` is the instrument** — `rfid raw_read` to a file plus a binary-safe `storage read_chunks`
+fetch, parsing Flipper's `RIFL` format. ⛔ **NOT `raw_analyze`**, which wedged the Flipper twice (§5).
+⚠ `raw_read` needs a **FULL PATH**: the bare name answers *"File is not RFID raw file"*.
+
+⇒ **NEXT, and it is a narrow question now**: the shared builder holds `counter_top` at 16 ticks (2 carrier
+cycles) and carries the tone in the DUTY pattern — mark 4 cycles, gap 4 for RF/8 and 6 for RF/10. The
+emission says every period came out as the RF/8 shape. So the question is whether the gap-6 entries are
+reaching the peripheral at all: compare `lf_fsk2a_build`'s entry counts against what `ctest/roundtrip.c`'s
+`trial_fsk_duty` already pins (543 tones, mark fixed at 4 cycles, gaps 378 x4 + 165 x6) and then read back
+what the device actually loaded. ⚠ **Rig A only, no hands, no bench change.**
+
+⚠ Slot 8 on #1 is left holding HID Prox in emulator mode.
+
+---
 
 ### ✅ 2026-09-14 17:55 — BOTH RIGS ARE LIVE AGAIN. RUN `./autopilot.sh bench` RATHER THAN ASSUMING (C408)
 
