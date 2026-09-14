@@ -10,8 +10,25 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 6
 
-new_key = b'\x20\x20\x66\x66'
-old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+# ⛔⛔ THESE TWO LINES LOCKED TAGS FOR YEARS, AND THE OLD VALUES ARE KEPT BELOW ON PURPOSE.
+#
+# `new_key` is the password a write SETS. It used to be 20206666 here — and 51243648 in the
+# function signatures of indala/indala224/gproxii/awid — so which password your tag ended up
+# with depended on which command you ran, and neither value was documented anywhere. Combined
+# with T5577_PWD being set in every config constant, **any write silently password-protected
+# the tag**, and a tag locked by `lf hid prox write` could not be opened by `lf gproxii write`,
+# by the Proxmark, or by anything else (C325).
+#
+# ⭐ `new_key` is now ZERO, which means "do not set a password". The firmware only ORs
+# T5577_PWD into block 0 when a non-zero key is supplied, so a plain write leaves the tag open.
+# Pass a key explicitly if you actually want protection.
+#
+# ⭐ `old_keys` is the list of passwords a tag might ALREADY be locked behind, tried in order so
+# previously-protected tags can still be written. 20206666 is first because it is what every
+# `lf hid prox write` from the old code left behind — its absence from this list is exactly why
+# a GProxII write could not open an HID-locked tag.
+new_key = b'\x00\x00\x00\x00'
+old_keys = [b'\x20\x20\x66\x66', b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
 
 LF_SNIFF_CHUNK_BYTES = 4000   # keep in step with LF_SNIFF_CHUNK_BYTES in firmware
@@ -691,7 +708,7 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.LF_T55XX_WRITE, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def indala_write_to_t55xx(self, raw8: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def indala_write_to_t55xx(self, raw8: bytes, new_key: bytes = None,
                               old_keys: list = None):
         """Write a raw 64-bit Indala frame onto a T55xx tag (PSK1, RF/32).
 
@@ -700,12 +717,13 @@ class ChameleonCMD:
         """
         if len(raw8) != 8:
             raise ValueError("The raw frame must be exactly 8 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!8s4s{4*len(old_keys)}s', raw8, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def indala224_write_to_t55xx(self, raw28: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def indala224_write_to_t55xx(self, raw28: bytes, new_key: bytes = None,
                                  old_keys: list = None):
         """Write a raw 224-bit Indala frame onto a T55xx tag.
 
@@ -717,7 +735,8 @@ class ChameleonCMD:
         """
         if len(raw28) != 28:
             raise ValueError("The raw frame must be exactly 28 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!28s4s{4*len(old_keys)}s', raw28, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.INDALA224_WRITE_TO_T55XX, data)
 
@@ -868,7 +887,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def keri_write_to_t55xx(self, frame8: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def keri_write_to_t55xx(self, frame8: bytes, new_key: bytes = None,
                             old_keys: list = None):
         """Write a raw 64-bit Keri frame onto a T55xx tag (PSK1, RF/32).
 
@@ -880,7 +899,8 @@ class ChameleonCMD:
         """
         if len(frame8) != 8:
             raise ValueError("The raw frame must be exactly 8 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!8s4s{4*len(old_keys)}s', frame8, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.KERI_WRITE_TO_T55XX, data)
 
@@ -981,7 +1001,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def fdxb_write_to_t55xx(self, frame16: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def fdxb_write_to_t55xx(self, frame16: bytes, new_key: bytes = None,
                             old_keys: list = None):
         """Write a raw 128-bit FDX-B frame onto a T55xx (DIPHASE, RF/32, 4 data blocks).
 
@@ -990,7 +1010,8 @@ class ChameleonCMD:
         """
         if len(frame16) != 16:
             raise ValueError("The raw frame must be exactly 16 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!16s4s{4*len(old_keys)}s', frame16, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.FDXB_WRITE_TO_T55XX, data)
 
@@ -1015,7 +1036,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def gproxii_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def gproxii_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                old_keys: list = None):
         """Write a raw 96-bit GProxII frame onto a T55xx (BIPHASE, RF/64, 3 data blocks).
 
@@ -1024,12 +1045,13 @@ class ChameleonCMD:
         """
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.GPROXII_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def awid_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def awid_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                             old_keys: list = None):
         """Write a raw 96-bit AWID frame onto a T55xx (FSK2a, RF/50, 3 data blocks).
 
@@ -1042,12 +1064,13 @@ class ChameleonCMD:
         """
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.AWID_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def paradox_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def paradox_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                old_keys: list = None):
         """Write a raw 96-bit Paradox frame onto a T55xx (FSK2a, RF/50, 3 data blocks).
 
@@ -1056,12 +1079,13 @@ class ChameleonCMD:
         """
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.PARADOX_WRITE_TO_T55XX, data)
 
     @expect_response(Status.LF_TAG_OK)
-    def pyramid_write_to_t55xx(self, frame16: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def pyramid_write_to_t55xx(self, frame16: bytes, new_key: bytes = None,
                                old_keys: list = None):
         """Write a raw 128-bit Pyramid frame onto a T55xx (FSK2a, RF/50, 4 data blocks).
 
@@ -1070,7 +1094,8 @@ class ChameleonCMD:
         """
         if len(frame16) != 16:
             raise ValueError("The raw frame must be exactly 16 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!16s4s{4*len(old_keys)}s', frame16, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.PYRAMID_WRITE_TO_T55XX, data)
 
@@ -1109,12 +1134,13 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def noralsy_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def noralsy_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                old_keys: list = None):
         """Write a raw 96-bit Noralsy frame onto a T55xx (ASK, RF/32, 3 data blocks)."""
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.NORALSY_WRITE_TO_T55XX, data)
 
@@ -1149,12 +1175,13 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def securakey_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def securakey_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                  old_keys: list = None):
         """Write a raw 96-bit Securakey frame onto a T55xx (ASK, RF/40, 3 data blocks)."""
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.SECURAKEY_WRITE_TO_T55XX, data)
 
@@ -1255,7 +1282,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def gallagher_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def gallagher_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                  old_keys: list = None):
         """Write a raw 96-bit Gallagher frame onto a T55xx (ASK, RF/32, 3 data blocks).
 
@@ -1266,7 +1293,8 @@ class ChameleonCMD:
         """
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.GALLAGHER_WRITE_TO_T55XX, data)
 
@@ -1293,7 +1321,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def nexwatch_write_to_t55xx(self, frame12: bytes, new_key: bytes = b"\x51\x24\x36\x48",
+    def nexwatch_write_to_t55xx(self, frame12: bytes, new_key: bytes = None,
                                 old_keys: list = None):
         """Write a raw 96-bit NexWatch frame onto a T55xx tag (PSK1, RF/32, 3 data blocks).
 
@@ -1306,7 +1334,8 @@ class ChameleonCMD:
         """
         if len(frame12) != 12:
             raise ValueError("The raw frame must be exactly 12 bytes")
-        old_keys = old_keys or [b"\x51\x24\x36\x48"]
+        new_key = new_key if new_key is not None else globals()["new_key"]
+        old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!12s4s{4*len(old_keys)}s', frame12, new_key, b''.join(old_keys))
         return self.device.send_cmd_sync(Command.NEXWATCH_WRITE_TO_T55XX, data)
 

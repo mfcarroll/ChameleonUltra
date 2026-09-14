@@ -332,7 +332,6 @@ uint8_t scan_jablotron(uint8_t *uid) {
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
  */
-#if LF_T55XX_SET_PASSWORD
 static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     for (uint8_t i = 0; i < old_passwd_count; i++) {
         uint32_t old_passwd = bytes_to_num(old_passwds + i * 4, 4);
@@ -340,24 +339,47 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
     }
     t55xx_reset_passwd(new_passwd, new_passwd);
 }
-#endif /* LF_T55XX_SET_PASSWORD */
 
 /**
  * Write card data to t55xx
  */
+/* ⭐⭐⭐ PASSWORD PROTECTION IS OPT-IN (C325). Passing a zero `new_passwd` — the default —
+ * writes the tag and leaves it OPEN, which is what every other tool in this space does.
+ *
+ * ⛔ The old behaviour set `T5577_PWD` in every config constant and sent an authenticated frame
+ * for every block, so any write silently locked the tag. The key then came from two different
+ * places depending on which protocol you called, so a tag locked by one command could not be
+ * opened by another. Two tags here were unrecoverable until the key was read off a third.
+ *
+ * The passes below are ordered so the tag ends in the state the caller asked for:
+ *   1. any key the tag might ALREADY be locked behind, so a previously-protected tag opens;
+ *   2. the new password, only when one was actually supplied;
+ *   3. an open write LAST, so an unprotected tag finishes correctly. */
 static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
-    uint32_t passwd = bytes_to_num(new_passwd, 4);
+    const uint32_t passwd = bytes_to_num(new_passwd, 4);
+    const bool set_pwd = (passwd != 0);
+
+    if (set_pwd && blk_count > 0) {
+        blks[0] |= T5577_PWD;
+    }
 
     start_lf_125khz_radio();
     bsp_delay_ms(1);  // Delays for a while after starting the field
 
-#if LF_T55XX_SET_PASSWORD
-    try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
-#else
-    (void)old_passwds;
-    (void)old_passwd_count;
-#endif
-    t55xx_write_data(passwd, blks, blk_count);
+    for (uint8_t k = 0; k < old_passwd_count; k++) {
+        const uint32_t old = bytes_to_num(old_passwds + k * 4, 4);
+        if (old == 0) {
+            continue;
+        }
+        t55xx_write_blocks(&old, blks, blk_count);
+    }
+
+    if (set_pwd) {
+        try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
+        t55xx_write_blocks(&passwd, blks, blk_count);
+    } else {
+        t55xx_write_blocks(NULL, blks, blk_count);
+    }
 
     stop_lf_125khz_radio();
 

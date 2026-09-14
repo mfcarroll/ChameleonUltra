@@ -125,15 +125,26 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
  * @param blk_count the number of blocks to write
  */
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
-    // write control bits (blk0) & data (w/wo passwd)
+    t55xx_write_blocks(passwd != 0 ? &passwd : NULL, blks, blk_count);
+}
+
+/* ⭐ One pass over the blocks with ONE authentication choice. `passwd == NULL` is the ordinary
+ * unprotected write; a non-NULL pointer authenticates every block with that key.
+ *
+ * ⛔ This used to send BOTH for every block — authenticated then open — which is how a tag
+ * ended up password-protected without anyone asking (C325). Choosing per pass instead lets
+ * `write_t55xx()` try the keys a tag might already hold and still finish with a clean open
+ * write, without ever setting a password that was not requested. */
+void t55xx_write_blocks(const uint32_t *passwd, uint32_t *blks, uint8_t blk_count) {
     for (uint8_t i = 0; i < blk_count; i++) {
-#if LF_T55XX_SET_PASSWORD
-        /* ⚠ On a tag WITHOUT PWD set this frame is misaligned by 32 bits — see t55xx.h. */
-        t55xx_send_cmd(T5577_OPCODE_PAGE0, &passwd, 0, &blks[i], i);
-#else
-        (void)passwd;
-#endif
-        t55xx_send_cmd(T5577_OPCODE_PAGE0, NULL, 0, &blks[i], i);
+        /* ⛔ TWICE, AND THAT IS RELIABILITY RATHER THAN REDUNDANCY. The old code sent every
+         * block twice as well — authenticated then open — and it is easy to read that as
+         * password handling and drop one. It is not: `lf_reader_main.c` records the raw
+         * single-block path landing roughly one write in three *because it sends once*, and
+         * `write_t55xx()` was preferred precisely because it repeats. Removing the second send
+         * trades a password bug for a flaky writer. */
+        t55xx_send_cmd(T5577_OPCODE_PAGE0, (uint32_t *)passwd, 0, &blks[i], i);
+        t55xx_send_cmd(T5577_OPCODE_PAGE0, (uint32_t *)passwd, 0, &blks[i], i);
     }
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);
 }

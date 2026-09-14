@@ -16,52 +16,20 @@ extern "C" {
 #define T5577_ST_TERMINATOR 0x00000008
 #define T5577_PWD 0x00000010
 
-/* ⭐⭐ EXPERIMENT SWITCH (2026-09-16) — does OUR WRITER lock tags out?
+/* ⛔⛔ T5577_PWD IS NOT SET BY DEFAULT ANY MORE, AND THAT IS A BUG FIX (C322-C325).
  *
- * A T5577 on this bench stopped answering the Proxmark entirely: detect fails, every block
- * reads back `80000000` (a start bit then silence — no reply), four `lf t55xx wipe` cycles were
- * rejected, and `recoverpw` found nothing. It still emits its stored credential perfectly, so
- * it is LOCKED, not damaged. The timeline in C298 says pm3 wrote it fine all day until our own
- * writer first ran against it.
+ * Every `T5577_*_CONFIG` below used to carry `T5577_PWD`, so **writing any tag silently enabled
+ * password protection**. Worse, the key came from two different places: `chameleon_cmd.py`'s
+ * module globals (`new_key = 20206666`) for hidprox and em410x, and a function default
+ * (`51243648`) for indala, indala224, gproxii and awid. A tag locked by `lf hid prox write`
+ * therefore could NOT be opened by `lf gproxii write`, or by the Proxmark, or by anything else —
+ * and nothing documented either value. Two tags on this bench were unrecoverable until the
+ * password was read off a third.
  *
- * ⛔ Two things in this write path can produce that, and BOTH are upstream defaults (`main`
- * carries the identical 8 configs and the same key):
- *   1. every `T5577_*_CONFIG` below sets `T5577_PWD`, so block 0 is written with password
- *      protection ENABLED;
- *   2. `write_t55xx()` calls `try_reset_t55xx_passwd()` and then sends every block TWICE —
- *      once authenticated, once not. ⚠ On a tag that does NOT yet have PWD set, the
- *      authenticated frame carries 32 password bits the tag is not expecting, so it is
- *      MISALIGNED by 32 bits and the tag writes whatever that misalignment decodes to.
- *
- * Setting this to 0 removes all three: no PWD bit, no password block write, no authenticated
- * frame. If a tag written by that build stays fully readable by the Proxmark, the password
- * machinery is the cause and this switch is the isolation that proved it.
- *
- * ⛔ DEFAULT 1 = the shipping behaviour, unchanged. */
-#ifndef LF_T55XX_SET_PASSWORD
-#define LF_T55XX_SET_PASSWORD 1
-#endif
+ * ⇒ Password protection is now OPT-IN and carried by the caller's key: `write_t55xx()` ORs
+ * `T5577_PWD` into block 0 only when a non-zero `new_passwd` was actually supplied. A plain
+ * write leaves the tag open, which is what every other tool in this space does. */
 
-/* ⭐⭐ RECOVERY BUILD — these two are SEPARATE for a reason (2026-09-16).
- *
- * `LF_T55XX_SET_PASSWORD` controls whether we AUTHENTICATE (send the password with every write
- * and try to set block 7). `LF_T55XX_PWD_BIT` controls whether the config word we write turns
- * password protection ON.
- *
- * ⇒ Setting AUTH=1 with PWD_BIT=0 is the combination that RECOVERS a locked tag: it can still
- * get in, because our writer is demonstrably the only thing this tag still answers, and the
- * config it lands clears the PWD bit — handing the tag back to every other tool.
- * ⛔ The no-password build cannot do this: it dropped the authenticated frame, so it cannot
- * open a tag that is already locked. */
-#ifndef LF_T55XX_PWD_BIT
-#define LF_T55XX_PWD_BIT LF_T55XX_SET_PASSWORD
-#endif
-
-#if LF_T55XX_PWD_BIT
-#define T5577_PWD_IF_ENABLED T5577_PWD
-#else
-#define T5577_PWD_IF_ENABLED 0
-#endif
 #define T5577_MAXBLOCK_SHIFT 5
 #define T5577_AOR 0x00000200
 #define T5577_PSKCF_RF_2 0
@@ -95,43 +63,36 @@ extern "C" {
 #define T5577_EM410X_64_CONFIG (  \
     T5577_BITRATE_RF_64 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_EM410X_ELECTRA_CONFIG ( \
     T5577_BITRATE_RF_64 |            \
     T5577_MODULATION_MANCHESTER |    \
-    T5577_PWD_IF_ENABLED |                      \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_HIDPROX_CONFIG ( \
     T5577_BITRATE_RF_50 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD_IF_ENABLED |                \
     (3 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_IOPROX_CONFIG ( \
     T5577_BITRATE_RF_64 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD_IF_ENABLED |                \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_PAC_CONFIG (        \
     T5577_MODULATION_DIRECT |     \
     T5577_BITRATE_RF_32 |         \
-    T5577_PWD_IF_ENABLED |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_JABLOTRON_CONFIG (  \
     T5577_MODULATION_DIPHASE |    \
     T5577_BITRATE_RF_64 |         \
-    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 // Indala: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
@@ -305,11 +266,13 @@ extern "C" {
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_PSK1 |       \
     T5577_PSKCF_RF_2 |            \
-    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
+
+/** One pass over `blks` with a single authentication choice; NULL = an open write. */
+void t55xx_write_blocks(const uint32_t *passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
 /* ⛔ THE THIRD PARAMETER IS A LOCK BIT, NOT A LENGTH. This header called it `data_len` while
  * the implementation in lf_t55xx_data.c has always treated it as `lock_bit`, so a caller who
