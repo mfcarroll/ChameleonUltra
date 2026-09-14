@@ -39,6 +39,16 @@ case "$PROTO" in
   securakey) WCMD="lf securakey write --raw 7fcb400001adea5344300000"; WANT="Securakey"; PLAIN="raw 7fcb400001adea5344300000" ;;
   noralsy)   WCMD="lf noralsy write --raw bb0214ff0112402233670000"; WANT="Noralsy"; PLAIN="raw bb0214ff0112402233670000" ;;
   gproxii)   WCMD="lf gproxii write --raw fac2a38c2b081af0210b12c2"; WANT="G-Prox"; PLAIN="raw fac2a38c2b081af0210b12c2" ;;
+  indala224) WCMD="lf indala write --224 -r 80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5"; WANT="len 224"; PLAIN="raw 80000001...928c14e5" ;;
+  idteck)    WCMD="lf idteck write --id 4944544b55667788"; WANT="Idteck";   PLAIN="frame 4944544b55667788" ;;
+  em410x)    WCMD="lf em 410x write --id 1234567890";      WANT="1234567890"; PLAIN="id 1234567890" ;;
+  ioprox)    WCMD="lf ioprox write --ver 1 --fc 83 --cn 1337"; WANT="IO Prox"; PLAIN="ver 1 fc 83 cn 1337" ;;
+  pac)       WCMD="lf pac write --cn CARD0001";            WANT="CARD0001"; PLAIN="cn CARD0001" ;;
+  viking)    WCMD="lf viking write --id 1a337f9c";         WANT="Viking";   PLAIN="id 1a337f9c" ;;
+  jablotron) WCMD="lf jablotron write --id 1234567890";    WANT="Jablotron"; PLAIN="id 1234567890" ;;
+  fdxb)      WCMD="lf fdxb write --raw 00339a080402079f8040797788040201"; WANT="999-000000001337"; PLAIN="raw 00339a08...040201 = animal id 999-000000001337"; CHECK="lf fdxb reader" ;;
+  paradox)   WCMD="lf paradox write --raw 0f55555695596a6a9999a59a"; WANT="Paradox"; PLAIN="raw 0f55555695596a6a9999a59a" ;;
+  pyramid)   WCMD="lf pyramid write --raw 00010101010101010101016eb35e5da4"; WANT="Pyramid"; PLAIN="raw 00010101...b35e5da4" ;;
   restore)
       print -r -- "-- restoring H10301 FC 123 / CN 4567 --" | tee -a "$LOG"
       "$PY" "$CU" "hw connect -p $CH2" "lf hid prox write -f H10301 --fc 123 --cn 4567" 2>&1 \
@@ -61,7 +71,7 @@ say "judged by  : pm3 $CHECK, looking for '$WANT'"
 
 hits=0
 for r in $(seq 1 $ROUNDS); do
-  "$PY" "$CU" "hw connect -p $CH2" "$WCMD" >/dev/null 2>&1
+  werr=$("$PY" "$CU" "hw connect -p $CH2" "$WCMD" 2>&1 | grep -iE "error|usage|invalid|need |unrecognized|Traceback" | head -1)
   out=$($PM3 -p $PM3PORT -c "$CHECK" 2>&1)
   line=$(print -r -- "$out" | grep -iE "$WANT" | head -2 | tr '\n' ' ' | tr -s ' ')
   if [[ -n "$line" ]]; then
@@ -69,7 +79,11 @@ for r in $(seq 1 $ROUNDS); do
     say "   round $r: PASS — $line"
   else
     other=$(print -r -- "$out" | grep -iE "Valid .* found|No known 125|Chipset detection" | head -2 | tr '\n' ' ' | tr -s ' ')
-    say "   round $r: FAIL — pm3 saw: ${other:-nothing}"
+    if [[ -n "$werr" ]]; then
+      say "   round $r: WRITE REFUSED — the CLI said: $werr"
+    else
+      say "   round $r: FAIL — pm3 saw: ${other:-nothing}"
+    fi
   fi
 done
 

@@ -87,8 +87,17 @@ registered `TAG_TYPE_*`.
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
-works, and every one of them now emulates too.** The only Indala gap left is the 224-bit
-WRITE, which is built and cannot be verified while the T5577 sits where it does (C155).
+works, and every one of them now emulates too.**
+
+⭐ **THE WRITE COLUMN ABOVE IS NO LONGER A PATCHWORK OF SESSIONS — every one of the 18 write
+arms was re-measured by the same battery on 2026-09-14 and every one is 4 of 4 (C330, C331).**
+72 writes, 72 independent Proxmark reads, 0 failures, every raw byte-identical to what was sent.
+`./regrade.sh <protocol> [rounds]` reruns any row: four fresh writes, so the score counts writes
+that landed rather than reads of one write.
+⛔ **C155's Indala224 caveat is retired** — it said the 224-bit write could not be verified while
+the T5577 sits where it does. It verified 4 of 4.
+⚠ NexWatch and FDX-B are judged on `lf nexwatch read` / `lf fdxb reader`, not `lf search`, which
+prints only a protocol name for them — a protocol-deep pass is not a credential-deep one.
 
 ⭐ **Indala is finished except for one unattended command.** Indala224 reads (C107), emulates
 6 of 6 exact (C152) and its writer is built — `lf indala write --224`, T5577 config `000820E0`,
@@ -300,7 +309,7 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 
 | protocol | read | write | emulate |
 |---|---|---|---|
-| Indala26 / Indala224 / IDTECK | **A** | **A** — Indala26 **4/4** re-graded (C330); 224 and IDTECK still on the older evidence | **B** |
+| Indala26 / Indala224 / IDTECK | **A** | **A** — all three **4/4** re-graded (C330, C331) | **B** |
 | Keri | **A** 6/6 | **A** **4/4** (C330) | **B** 6/6 |
 | NexWatch | **A** 6/6 | **A** **4/4** (C330) — judged on `lf nexwatch read`, not `lf search` | **B** 10/10 |
 | Gallagher | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
@@ -308,18 +317,18 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Noralsy | **A** 6/6 | **A** **4/4** (C330) | **B** 10/10 |
 | InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
 | AWID | **A** 5/5 real tag (C201) | **A** **4/4** re-graded (C330) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
-| Paradox | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
-| Pyramid | **A** 4/4 real tag (C201) | **A** 4/4 (C203) | ⛔ **not built** |
+| Paradox | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
+| Pyramid | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | FDX-A | **B** 4/4 — ⚠ against a Flipper EMULATION, pm3 has no FDX-A (C201) | ⛔ **refused** (C185) | ⛔ **not built** |
 | GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | ⛔ **impossible as designed (C242)** |
-| FDX-B | **A** 6/6, nulls 0/386 (C214) | **A** 4/4 (C215) | ⛔ **not built** |
+| FDX-B | **A** 6/6, nulls 0/386 (C214) | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | ⛔ **not built** |
 
 ⭐ **The write column was re-measured wholesale on 2026-09-14 (C330), and the numbers above are that
 measurement.** Every write arm had been scored while our own HID writer had the tag password-locked
 (C325), so the failures recorded against them said nothing about the writers. `./regrade.sh <protocol>`
 reruns any row: four fresh writes, each read back by the Proxmark, plaintext controlled and the raw
-compared byte-for-byte. ⛔ **Indala224 and IDTECK are NOT re-graded** — that row's `A` covers three
-protocols and only Indala26 has been through the new battery.
+compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Indala26, Indala224 and IDTECK, 4 of 4 each (C331),
+along with every other write arm in the tree.
 
 ⚠ **These six were missing from this grid entirely** until 2026-09-14 — it was written before the
 FSK and biphase families existed and nobody widened it. A reviewer handed a grid that silently

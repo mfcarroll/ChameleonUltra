@@ -40,7 +40,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ### ✅ 2026-09-14 02:45 — THE WRITE COLUMN IS MEASURED; THE ASK/BIPHASE FAMILY IS NEXT
 
-⭐ **U15 IS CLOSED (C330).** Every write arm re-graded against an unlocked tag with `./regrade.sh`: AWID, Keri, Indala26, NexWatch, Gallagher, Securakey, Noralsy and GProxII, **4 of 4 each — 32 writes, 32 independent Proxmark reads, 0 failures**, every raw frame byte-identical to what was sent. ⛔ **Nothing was ever wrong with the write arms**: C305's *0 of 9* was measuring the password lock our own HID writer had set (C325), and the password defect is fixed (F1, C326). `NEXT.md`'s grid write column is rebuilt from this run.
+⭐ **U15 IS CLOSED, AND THE WHOLE WRITE COLUMN WENT WITH IT (C330, C331).** `./regrade.sh` re-graded every write arm in the tree against an unlocked tag — all **18 protocols at 4 of 4: 72 writes, 72 independent Proxmark reads, 0 failures**, every raw frame byte-identical to what was sent. ⛔ **C155's Indala224 caveat is retired**: the 224-bit write verified 4 of 4. ⚠ NexWatch and FDX-B are judged on their own reader commands, not `lf search`, which prints only a protocol name for them. ⛔ **Nothing was ever wrong with the write arms**: C305's *0 of 9* was measuring the password lock our own HID writer had set (C325), and the password defect is fixed (F1, C326). `NEXT.md`'s grid write column is rebuilt from this run.
 
 ⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
 
@@ -518,6 +518,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 03:05 | **C331 — the whole write column re-measured: 18 protocols, 4 of 4, 72 writes** | 37 → 38 | `regrade.sh` extended past U15's eight; C155's Indala224 gap closed; NexWatch and FDX-B judges tightened from protocol-deep to credential-deep | Proxmark as independent judge, fresh write every  round, raw byte-for-byte, bench restored |
 | 2026-09-14 02:45 | **C330 — U15 CLOSED: all eight write arms 4 of 4 against an unlocked tag** | 36 → 37 | 32 writes, 32 independent pm3 reads, 0 failures; the grid's write column rebuilt; `regrade.sh` added so any row reruns | Proxmark as the independent judge, fresh write every round, raw compared byte-for-byte, bench restored |
 | 2026-09-14 08:15 | **C329 — GProxII write lands; sandwich rebuilt** | 35 → 36 | The password fix restores block-0 writes AND pm3's detect/reads together. U15 now 1 of 8 | Pre-registered criterion in `benchab.sh`, same script and rig as the pre-fix run |
 | 2026-09-14 08:00 | **C328 — emulate arms re-graded, §5 item closed** | 34 → 35 | IDTECK 4/4, EM410X 4/4 on the fixed firmware, with the Flipper as reader. Indala slot 1's null is bad slot data (`not the Indala preamble`), not code | Positive control and null both run first; EM410X's both-arms hit left explicitly unexplained |
