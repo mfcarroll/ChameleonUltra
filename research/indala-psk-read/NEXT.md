@@ -1,5 +1,7 @@
 # Next — ranked
 
+⚠ **OPEN DEFECT (C305, 2026-09-15): the raw-frame T5577 writers do not land — AWID and GProxII both — while `lf hid prox write` works on the same tag minutes either side.** Nothing was written at all, three times, verified by pm3 reading the prior credential intact. Tag, field, coupling, the password path, a silent no-op and my own recent changes are all excluded; the cause is NOT established. ⚠ Needs a diagnosis, not hands. ⇒ Next probes, in order: `lf t55xx write` (the raw block writer) to see whether ANY single block lands right now; then a 5-block writer (Pyramid) and a 3-block one (em410x) to test whether the three-vs-four block pattern is real or coincidence.
+
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
 ⛔ **The rule that produced everything below, and it still binds:** fix what exists before
