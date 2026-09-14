@@ -26,6 +26,18 @@ under **The bench** and **Working conventions**.
 
 ## ⚠ Needs hands — what is still queued
 
+⛔ **ONE TAG MOVE, AND IT IS THE LAST STEP OF U11/F12 (C411).** Write HID Prox to the T5577 with the Proxmark
+(rig B, nothing to move for that), then put **that tag on the FLIPPER's pad**, leaving rig A otherwise as it is.
+
+⭐ **Why**: the FSK2a cliff is measured — pure frames emit either tone correctly, every mixed frame collapses —
+but the two available receive chains disagree by **2-3x** on how much is lost (real AWID frame: ASK 0.4%, PSK
+2.3%, expected 30.4%). Both are envelope detectors with a duty-dependent bias, and mixing the tones IS a duty
+change, so neither can score itself. A **real FSK2a tag is a genuine mixed-tone source**: read it through both
+chains and the instruments get scored instead of scoring us. ⇒ ~2% on a real tag means the chains are blind to
+mixed FSK2a and our emitter may be fine; ~45% confirms the emitter is at fault.
+
+⚠ Nothing else is blocked — C400 is fully reachable on rig B exactly as it stands.
+
 ✅✅ **THE EMULATE COLUMN IS DONE AND NOTHING HERE NEEDS HANDS (C378).** 8 of 11 protocols emulate **6 of 6**:
 PSK1 (Indala, IDTECK, Keri, NexWatch) and ASK/biphase (Gallagher, Securakey, Noralsy, GProxII), each with its
 wrong-modulation arm at 0/6 as a built-in control and clean nulls either side. **FSK — HID Prox, ioProx, AWID —

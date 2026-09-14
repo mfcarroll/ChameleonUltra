@@ -40,7 +40,40 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⭐⭐⭐ 2026-09-14 16:05 — THE FSK2a EMITTER IS SINGLE-TONE AT THE COIL. MEASURED, NOT INFERRED (C409)
+### ⛔⭐ 2026-09-14 16:35 — THE CLIFF IS REAL, THE MAGNITUDE WAS PARTLY MY INSTRUMENT (C411, correcting C409)
+
+⭐⭐ **READ THIS BEFORE THE SECTION BELOW IT.** C409 said the emitter puts ONE tone on the coil and RF/10 is
+absent. The direction holds; *absent* does not. The **same emission** through the Flipper's **PSK** filter
+chain instead of its ASK chain returns **2-3x more RF/10** — the alternating frame 7.9% -> **21.6%**, the real
+AWID frame 0.4% -> **2.3%**. Only the receiver changed. ⇒ **No single-chain number is the emitted ratio.**
+
+⭐ **WHAT SURVIVES, AND IT IS STILL THE FINDING.** Both chains agree on direction and the shortfall is far too
+large to be instrument alone:
+
+| frame | ASK chain | PSK chain | expected |
+|---|---|---|---|
+| all 0s | 0.1% | 0.1% | 0% |
+| real AWID frame | 0.4% | **2.3%** | **30.4%** |
+| alternating every bit | 7.9% | **21.6%** | 45.5% |
+| all 1s | 73.1% | **84.9%** | 100% |
+
+⭐ **Pure frames are CORRECT IN BOTH DIRECTIONS** — so the emitter can produce either tone and both chains can
+resolve either. That is the positive control at the right timescale, and it is a real one, unlike C409's
+internal argument from its own peak.
+
+⭐⭐ **IT IS A CLIFF, NOT C387'S RATE CURVE — five points, not three**: pure 73%, run-8 **6.2%**, run-4 4.1%,
+run-2 5.2%, run-1 4.0%. It does NOT degrade in proportion to how often the tone changes; it falls the moment
+the frame holds BOTH tone lengths and is flat thereafter. ⇒ **The cause is mixing 4-entry and 5-entry tones.**
+⛔ The constant-bit-period hypothesis is dead too: `recompute_frames_per_burst()` sums the real `counter_top`s
+and assumes nothing about bit length.
+
+⛔ **BLOCKED ON CALIBRATING THE RECEIVERS, and it is ONE TAG MOVE** — see §5. Both available receivers are
+envelope detectors with a duty-dependent bias, and mixing the tones IS a duty change (50% vs 40%), which is
+what an AC-coupled front end with a ~27-sample time constant (C204) would distort.
+
+---
+
+### (corrected by C411 below) 2026-09-14 16:05 — THE FSK2a EMITTER IS SINGLE-TONE AT THE COIL (C409)
 
 ⭐⭐ **F12/U11 has its first direct measurement.** AWID and HID Prox both emit a sharp peak at **60-64 us**
 — RF/8 — and **nothing at 80 us**, which is RF/10. AWID: 4081 of 16,983 pulse/duration pairs in one 4 us
@@ -1078,6 +1111,22 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 ---
 
 ## 5. BLOCKED
+
+### ⛔ 2026-09-14 16:35 — ONE TAG MOVE WOULD CALIBRATE BOTH RECEIVERS (C411)
+
+⛔ **Scope: this blocks the last step of U11/F12 and nothing else.** The cliff is measured and the emitter is
+implicated; what cannot be measured on this bench is **how much of the shortfall is ours and how much is the
+receiver's**, because both chains are envelope detectors with a duty-dependent bias and they disagree 2-3x.
+
+⇒ **THE ASK: write HID Prox to the T5577 with the Proxmark (rig B, no move needed for that), then put THAT TAG
+on the FLIPPER's pad** and leave rig A otherwise as it is. A real FSK2a tag is a genuine mixed-tone source, so
+reading it through both chains scores the INSTRUMENTS instead of letting the instruments score us. If a real
+tag also reads ~2% RF/10 on the ASK chain, the chains are simply blind to mixed FSK2a and our emitter may be
+fine; if it reads near 45%, the emitter is confirmed at fault and the cliff is ours.
+
+⚠ **This is NOT C377's mistaken request** — it is backed by a 5-point rate sweep, a 2-chain disagreement and
+pure-tone controls at both ends, and it names exactly what each outcome would settle. ⭐ Nothing else is
+blocked: C400 is fully reachable on rig B as it stands.
 
 ### ✅ CLEARED 2026-09-14 16:10 — THE BENCH IS COUPLED. THE BLOCKER IS NOW MY ANALYSIS, NOT THE HARDWARE
 
