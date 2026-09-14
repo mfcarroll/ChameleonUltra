@@ -117,7 +117,9 @@ shipping `unpack()`, and new `gates.c` measures every reader acceptance gate in 
 
 ⛔⛔ **THE BENCH HAS A NEW AND SERIOUS CONSTRAINT (C305): IT CANNOT CHANGE THE TAG'S PROTOCOL.**
 A write lands **iff the config word it writes already matches the tag's**. `lf hid prox write`
-5 of 5 (it writes the config already there); GProxII, AWID, Keri and Indala **0 of 9**. After
+5 of 5 (it writes the config already there); GProxII, AWID, Keri and Indala **0 of 9**. ⭐ HID and
+GProxII write the SAME 4 blocks to the SAME addresses through the SAME function with the SAME
+password, and differ ONLY in the 32-bit values (L273). After
 all nine failures pm3 read the credential bit-identical. ⇒ **Any unit needing a non-HID
 credential on the T5577 is blocked.** ⛔ The mechanism is NOT established — it is a rule fitted
 to 14 observations. The leading candidate is block 0 being locked *if* a rejected write also
@@ -454,6 +456,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 21:40 | **L273 — corrected C305's block counts** | 23 → 23 | HID writes 4, not 3. Same count as GProxII, opposite outcome, so block count is refuted more cleanly and the two differ only in the values written | Counts read from the source constants for all five writers |
 | 2026-09-15 21:10 | **C307 — silent-success hole closed; `lf t55xx write` added** | 22 → 23 | 5 of 16 writers could report success having written nothing; all now return PAR_ERR. Raw block writer exposed as a CLI command for the C305 bench diagnosis | Audit covered all 16 writers, not the suspected ones; firmware rebuilt and flashed; HID arm re-verified |
 | 2026-09-15 20:30 | **C306 — pm3's downlink broken, listening intact** | 21 → 22 | `lf t55xx read` returns one identical word for every block while `lf search` is perfect. Second symptom class for C299. Also withdrew L270's over-strong refutation of *block 0 locked* | Identical-across-blocks is self-refuting as data; `lf search` is the null and passes throughout |
 | 2026-09-15 19:55 | **C305 — writes land iff the config already matches** | 21 → 21 | 5 of 5 with the tag's own config, 0 of 9 with any other, across four protocols. Block-0-locked and blk_count==0 both refuted | pm3 read the credential bit-identical after all nine failures; direct status queries returned LF_TAG_OK not PAR_ERR |
