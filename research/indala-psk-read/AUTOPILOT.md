@@ -129,6 +129,12 @@ aborts the session; `blk_count == 0` is dead (all writers return `LF_TAG_OK`, ne
 every attempt, but `lf t55xx detect` fails and `lf t55xx read` returns ONE IDENTICAL WORD for
 every block, which cannot be real data. A second, independent symptom class for C297/C299.
 
+⭐ **`./benchab.sh <label>` IS THE BENCH PROCEDURE — run it, do not improvise.** One battery,
+six sub-tests, self-verifying restore, appending comparable blocks to `bench-ab.log`. The
+`before` baseline is already captured (C311). ⛔ **Order: `before` → `nochamp2` → `opened`.**
+`nochamp2` means power down Chameleon #2 and change NOTHING else, and it MUST run before the
+stack is opened — that one action is the whole C299 test and opening the stack destroys it.
+
 ⇒ **NEXT.** Two things need HANDS and neither has moved: **power down Chameleon #2 and retry
 `lf hid clone`** (one action, no disassembly — settles C299), then **lift the T5577** for the
 emulate-arm re-grade. ⭐ The one compute unit that would unblock C305 is a **T5577 block READ**:
@@ -456,6 +462,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-16 00:20 | **C311 — bench A/B battery built and baselined** | 26 → 27 | `benchab.sh` runs the six-test battery identically each time; `before` captured with the sandwich assembled. Run order `before → nochamp2 → opened` is mandatory | Baseline independently reproduces C305, C306 and the 4-of-4 reader in one pass; ends by asserting the restore |
 | 2026-09-15 23:50 | **C310 — the read command is well-formed; the tag ignores it** | 25 → 26 | Decoded our own downlink off the capture: ONE,ZERO,ZERO,ZERO,ZERO,ZERO = opcode 10, lock 0, addr 000. Transmitter exonerated | The frame decoded off air matches the frame the source builds — two independent derivations; absolute timing left blank as unresolvable |
 | 2026-09-15 23:15 | **C309 — the tag never enters read mode** | 24 → 25 | Autocorrelation: HID frame present at lag 4800, 32-bit block absent at 1600, with and without password. Corrects C308's claim that the tag's output changed | Modulation-agnostic method finds the frame that IS there, so the negative cannot be blamed on the demodulator |
 | 2026-09-15 22:40 | **C308 — T5577 block read built; mechanism proved, block not decoded** | 23 → 24 | Command 3063 transmits a read INTO a live capture. The tag's 96-bit frame disappears after it (1.000 → 0.512), so the command lands; no 32-bit periodicity recovered | The control recovers a perfect period-96 frame with the same demodulator, so the failure is in the signal, not the tool |
