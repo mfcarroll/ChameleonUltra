@@ -74,10 +74,20 @@ Gallagher 32, Securakey 40, Noralsy 32, GProxII one constant, em410x 64, every P
 `LF_PSK1_SUBCARRIER_TOP`. **The three FSK emitters are the only ones that VARY `counter_top` within a
 sequence, and the variation is exactly what never reaches the air.**
 
-⇒ **LEADING MECHANISM**: the per-entry `counter_top` of a WAVEFORM-mode PWM sequence is not being applied, so
-the sequence plays at one period. ⚠ **That is an inference — the single tone is the measurement.**
-⇒ **THE CONFIRMING TEST IS NAMED AND CHEAP**: set BOTH hidprox tones to `counter_top` 10, reflash, re-capture.
-~80 us means the value is honoured when constant and the defect is specifically the variation.
+✅✅ **MECHANISM CONFIRMED BY EXPERIMENT (C383), no longer an inference.** Both hidprox tones were forced to
+`counter_top` 10, built, flashed and re-captured: **RF/10 periods 0 → 2640, RF/8 periods 2257 → 4**, the
+histogram peak moving 63 → **79 us**. ⇒ The peripheral plays exactly the period it is given, **the whole
+sequence at ONE period** — so the defect is specifically that a per-entry `counter_top` which VARIES within a
+sequence is not applied.
+
+⭐⭐ **THE FIX, AND WHY IT IS NOT WRITTEN YET.** `gcd(8, 10) = 2`, so both tones fit a CONSTANT `counter_top`
+of 2 carrier cycles with the frequency carried in the DUTY pattern: RF/8 = `on, on, off, off` (mark 4, gap 4)
+and RF/10 = `on, on, off, off, off` (mark 4, gap 6) — which preserves C226/C380's measured fixed 4-cycle mark
+for free. ⚠ **Cost is entries**: ~25 per bit against today's 5-6, so a 96-bit HID frame needs **~2,400
+entries (~19 KB)** where the array is sized **576**. PSK1's 3,584-entry path is precedent that the machinery
+copes, but **the RAM must be budgeted on paper first**, and ioProx's long tone is **11**, so `gcd(8, 11) = 1`
+and it needs `counter_top` 1 or a corrected tone.
+⛔ **Do not start writing the emitter before that budget exists.**
 
 ⛔ **WHY NO HOST TEST COULD EVER HAVE FOUND THIS**: `ctest` decodes the SEQUENCE ARRAY, where the two tones
 differ correctly. Only capturing the EMISSION separates what we intend from what we transmit — and this is
