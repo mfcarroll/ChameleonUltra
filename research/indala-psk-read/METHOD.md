@@ -368,6 +368,14 @@ read. Different timing regime, and the two were compared as though they were one
 ⇒ Name the regime when the tool is not the thing under test. "Captured with the same hardware"
 is not "captured the same way".
 
+**M41. ⚠ THE FIRMWARE BUILD NEEDS AN EXPLICIT TOOLCHAIN ROOT ON THIS MACHINE.**
+`firmware/build.sh` is `#!/usr/bin/env`-broken (run it with `bash`), and the SDK's
+`Makefile.posix` hardcodes `GNU_INSTALL_ROOT ?= /usr/bin/` where Homebrew puts
+`arm-none-eabi-gcc` in `/opt/homebrew/bin`. ⇒ `GNU_INSTALL_ROOT=/opt/homebrew/bin/ bash ./build.sh`
+compiles and links; only the final `nrfutil` packaging step fails, which a compile check does not
+need. ⛔ A shipping-code change that was never compiled is not verified, and the host `ctest`
+harness compiles only SOME of the files a change touches — `hidprox.c` is in none of its arms.
+
 **M38. ⚠ A DOCUMENT THAT IS ONLY EVER APPENDED TO PUTS ITS OLDEST LAYER WHERE THE READER
 FINISHES.** `NEXT.md` §9f grew across ten claims, each understanding added below the last. Its
 TAIL still said the defect was "reachable only when something else is already perturbing the

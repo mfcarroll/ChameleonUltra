@@ -867,59 +867,80 @@ uint64_t pack(wiegand_card_t *card) {
     return 0;
 }
 
-/* ⭐⭐ EVERY LAYOUT THAT FITS, NOT JUST THE FIRST — the behaviour C285 identified as one of
- * only two correct ones (the other being `-f`). `unpack()` returns the first match and the
- * caller prints it as the answer; on a real tag that is wrong for 15 of the 29 writable
- * formats (C284), because 12 of the 31 unpackers have no rejection path at all and the first
- * check-less format at a given length swallows everything there.
+/* ⭐⭐⭐ THE WALK PREFERS A FORMAT THAT CAN ACTUALLY REJECT, AND REPORTS ITS OWN AMBIGUITY.
  *
- * ⛔ THE ENUMERATION BELONGS HERE, in the file that owns `formats[]`. A caller cannot do it
- * without the table, and a HOST-side copy of 31 unpackers would be the "share the front end,
- * do not resemble it" mistake this project refuses — so the firmware decides which formats
- * match and the host only maps ids to names.
+ * The old walk returned the first row of the right bit length whose unpacker did not refuse,
+ * and a caller printed that as the answer. On real tags it relabelled 15 of 29 writable
+ * formats (C284): a Kastle tag holding fc 1 / cn 1 came back as Check Point card 8389632,
+ * because HCP32 sits two rows above KASTLE and checks NOTHING, so it swallowed the frame
+ * before the format that would have verified it was ever tried.
  *
- * Writes up to `max` matching format ids to `out`, skipping `except` (normally the one already
- * being reported), and returns the TOTAL number skipped-or-not, which may exceed `max`. */
-uint8_t wiegand_other_matches(uint8_t length, uint64_t hi, uint64_t lo, uint8_t except,
-                              uint8_t *out, uint8_t max) {
-    uint8_t total = 0;
-    for (int i = 0; i < ARRAY_SIZE(formats); i++) {
-        if (length != formats[i].bits || formats[i].unpack == NULL) {
-            continue;
-        }
-        if (formats[i].format == except) {
-            continue;
-        }
-        wiegand_card_t *card = formats[i].unpack(hi, lo);
-        if (card == NULL) {
-            continue;
-        }
-        free(card);
-        if (out != NULL && total < max) {
-            out[total] = (uint8_t)formats[i].format;
-        }
-        total++;
-    }
-    return total;
-}
-
+ * ⭐ THE TABLE ALREADY KNEW. Every row carries `fields.has_parity`, and C300 measured all 31
+ * unpackers against 4096 random frames each: the twelve that accept 100% of them are EXACTLY
+ * the twelve rows with `has_parity == 0`. The flag is correct, populated, and was simply never
+ * consulted by the walk. So this is not new data or a second opinion bolted on beside the
+ * function — it is the function finally reading the column next to the one it was using.
+ *
+ * Two passes. Formats that validate something go first, so a frame that genuinely parses as a
+ * CHECKED format beats one that merely fits a check-less layout. Only if nothing validates
+ * does a check-less row win, and then `verified` says so.
+ *
+ * ⛔ AMBIGUITY IS REPORTED, NOT HIDDEN, AND IT BELONGS ON THE RESULT. `matches` counts every
+ * format of this length that accepted — 1 means unambiguous — and `others` names the first few.
+ * A caller that wants the old behaviour reads `card->format` and ignores them; a caller that
+ * cares whether the answer is trustworthy now has the means to ask, in the same call, instead
+ * of re-walking the table through a parallel entry point that could drift out of step with it.
+ *
+ * ⚠ `format_hint` still pins absolutely: a caller that names a format gets that format or
+ * nothing, and `matches` is then 1 by construction. */
 wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo) {
-    for (int i = 0; i < ARRAY_SIZE(formats); i++) {
-        if (format_hint != 0 && format_hint != formats[i].format) {
-            continue;
+    wiegand_card_t *winner = NULL;
+    bool winner_verified = false;
+    uint8_t total = 0;
+    uint8_t named = 0;
+    uint8_t other_ids[WIEGAND_MAX_OTHER_FORMATS] = { 0 };
+
+    for (int pass = 0; pass < 2; pass++) {
+        const bool want_validating = (pass == 0);
+        for (int i = 0; i < (int)ARRAY_SIZE(formats); i++) {
+            if (format_hint != 0 && format_hint != formats[i].format) {
+                continue;
+            }
+            if (length != formats[i].bits) {
+                continue;
+            }
+            if (formats[i].unpack == NULL) {
+                continue;
+            }
+            const bool validates = (formats[i].fields.has_parity != 0);
+            if (validates != want_validating) {
+                continue;
+            }
+            wiegand_card_t *card = formats[i].unpack(hi, lo);
+            if (card == NULL) {
+                continue;
+            }
+            total++;
+            if (winner == NULL) {
+                card->format = (uint8_t)formats[i].format;
+                winner_verified = validates;
+                winner = card;
+                continue;
+            }
+            if (named < WIEGAND_MAX_OTHER_FORMATS) {
+                other_ids[named++] = (uint8_t)formats[i].format;
+            }
+            free(card);
         }
-        if (length != formats[i].bits) {
-            continue;
-        }
-        if (formats[i].unpack == NULL) {
-            continue;
-        }
-        wiegand_card_t *card = formats[i].unpack(hi, lo);
-        if (card == NULL) {
-            continue;
-        }
-        card->format = formats[i].format;
-        return card;
     }
-    return NULL;
+
+    if (winner == NULL) {
+        return NULL;
+    }
+    winner->matches = total;
+    winner->verified = winner_verified;
+    for (uint8_t k = 0; k < WIEGAND_MAX_OTHER_FORMATS; k++) {
+        winner->others[k] = other_ids[k];
+    }
+    return winner;
 }

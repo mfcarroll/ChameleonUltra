@@ -14,12 +14,28 @@ typedef struct {
 } wiegand_message_t;
 
 // Structure for unpacked wiegand card, like HID prox
+/** How many ALTERNATIVE layout ids a decoded card can carry. Two, because that is what fits
+ *  in the HID payload's spare bytes; `matches` still counts them all. */
+#define WIEGAND_MAX_OTHER_FORMATS 2
+
 typedef struct {
     uint32_t facility_code;
     uint64_t card_number;
     uint32_t issue_level;
     uint32_t oem;
     uint8_t format;
+    /** ⭐ How many formats of this bit length accepted the frame, INCLUDING `format`. 1 means
+     *  the read is unambiguous. Anything more means the credential above is one reading of
+     *  several, and a caller that prints it as the answer is guessing. */
+    uint8_t matches;
+    /** ⭐ Whether the winning format VALIDATED anything — parity, a checksum, a spacer — as
+     *  opposed to accepting the frame because it was the right length. C300 measured that 12
+     *  of the 31 unpackers can never reject, so this is the difference between a credential
+     *  that was checked and one that was merely parsed. */
+    bool verified;
+    /** The first few other layouts that also fit, for naming them. `matches - 1` is exact
+     *  even when it exceeds this array. */
+    uint8_t others[WIEGAND_MAX_OTHER_FORMATS];
 } wiegand_card_t;
 
 typedef struct {
@@ -90,6 +106,4 @@ extern wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, 
 /* ⭐ How many OTHER layouts of the same bit length also accept this frame, naming up to `max`
  * of them in `out`. See the note at the definition: an unpinned read is only the first match,
  * and for 15 of 29 formats that is the wrong one (C284, C285). */
-extern uint8_t wiegand_other_matches(uint8_t length, uint64_t hi, uint64_t lo, uint8_t except,
-                                     uint8_t *out, uint8_t max);
 extern wiegand_card_t *wiegand_card_alloc();

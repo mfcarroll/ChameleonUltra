@@ -93,12 +93,12 @@ uint8_t *hidprox_get_data(hidprox_codec *d) {
     /* ⭐ Bytes 13..15 — the ambiguity, which the reader could not previously express. 13 is how
      * many OTHER layouts of this length also accept the frame; 14 and 15 name the first two of
      * them. Those three bytes were already in the payload and already zero, so a host that
-     * reads only 13 is unaffected. ⚠ The COUNT is exact even when more than two are named. */
-    uint8_t extra[2] = { 0, 0 };
-    d->data[13] = wiegand_other_matches(hidprox_codec_get_length(d), 0, d->raw,
-                                        d->card->format, extra, 2);
-    d->data[14] = extra[0];
-    d->data[15] = extra[1];
+     * reads only 13 is unaffected. ⚠ The COUNT is exact even when more than two are named.
+     * ⭐ These come straight off the card `unpack()` returned, which counted them during its
+     * own walk — not from a second pass over the table that could disagree with the first. */
+    d->data[13] = (uint8_t)(d->card->matches > 0 ? d->card->matches - 1 : 0);
+    d->data[14] = d->card->others[0];
+    d->data[15] = d->card->others[1];
     return d->data;
 };
 

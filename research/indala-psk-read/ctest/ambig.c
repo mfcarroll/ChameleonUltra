@@ -199,13 +199,14 @@ int main(void) {
     }
 
 
-    /* ⭐⭐ THE NEW API, CHECKED AGAINST THIS FILE'S OWN INDEPENDENT COUNT. C287 added
-     * `wiegand_other_matches()` so the reader can name the other layouts that fit, and it is
-     * verified only by four hardware reads. This pins it: for every format at every length,
-     * the API's answer must equal (this file's own per-format enumeration) minus the one
-     * excluded — two different walks over the same table, which is the point.
+    /* ⭐⭐ `unpack()`'s OWN AMBIGUITY COUNT, CHECKED AGAINST THIS FILE'S INDEPENDENT ONE.
+     * C302 folded the enumeration INTO `unpack()` — the walk counts every format that accepted
+     * while it is already walking — so there is no longer a second entry point that could drift
+     * out of step with the first. This pins the surviving one: for every format at every length,
+     * `card->matches` from an UNPINNED unpack must equal this file's own per-format enumeration.
+     * Two different walks over the same table, which is the point.
      *
-     * ⛔ A table edit that breaks the API now fails `make check` instead of quietly changing
+     * ⛔ A table edit that breaks the count now fails `make check` instead of quietly changing
      * what `lf hid prox read` tells an operator. */
     {
         int checked = 0, disagreed = 0;
@@ -225,16 +226,16 @@ int main(void) {
                     }
                     if (len == 0) { continue; }
                     int mine = matches(len, w, NULL);          /* every format that accepts */
-                    uint8_t named[8];
-                    int theirs = wiegand_other_matches(len, 0, w, (uint8_t)ALL[i], named, 8);
+                    wiegand_card_t *u = unpack(0, len, 0, w);  /* UNPINNED: the real read path */
+                    int theirs = (u == NULL) ? -1 : (int)u->matches;
+                    if (u != NULL) { free(u); }
                     checked++;
-                    /* `mine` counts ALL acceptors including ALL[i] itself, which accepts its
-                     * own packing by construction; `theirs` excludes it. */
-                    if (theirs != mine - 1) { disagreed++; }
+                    /* Both count ALL acceptors, so they must agree exactly. */
+                    if (theirs != mine) { disagreed++; }
                 }
             }
         }
-        printf("\nwiegand_other_matches() against this file's own count: %d frames, %d disagree\n",
+        printf("\nunpack()->matches against this file's own count: %d frames, %d disagree\n",
                checked, disagreed);
         if (disagreed != 0) { verdict_moved = 1; }
     }
@@ -265,8 +266,14 @@ int main(void) {
                     }
                     if (len == 0) { continue; }
                     tried++;
-                    card_format_t first = 0;
-                    (void)matches(len, w, &first);          /* first in TABLE order */
+                    /* ⛔ THE REAL READ PATH, NOT TABLE ORDER. This used to call this file's own
+                     * `matches()` and take the first format in ALL[] order, which was the old
+                     * walk's semantics. Since C302 the shipping walk prefers a format that can
+                     * VALIDATE, so asking `matches()` would measure an ordering the firmware no
+                     * longer uses — a harness quietly grading the wrong algorithm. */
+                    wiegand_card_t *win = unpack(0, len, 0, w);
+                    card_format_t first = (win == NULL) ? 0 : (card_format_t)win->format;
+                    if (win != NULL) { free(win); }
                     if (first == ALL[i]) { self++; }
                     else {
                         /* ⭐ Name the first credential that does NOT read back as itself, so the
@@ -290,9 +297,12 @@ int main(void) {
         }
         /* ⛔ PINNED — `lf hid prox write`'s warning is built from these two sets (C295). If the
          * table is reordered or a format's checks change, the warning becomes wrong and this
-         * says so rather than letting the CLI mislead someone writing a tag. */
+         * says so rather than letting the CLI mislead someone writing a tag.
+         * ⭐ 14/3 became 12/4 when C302 taught the walk to prefer a validating format: KASTLE
+         * now reads back as itself ALWAYS — it was C284's headline failure — and HGEN37 went
+         * from never to 120 of 132. This arm is what caught the CLI lists going stale. */
         printf("  => %d never read back as themselves, %d sometimes\n", never_self, sometimes_self);
-        if (never_self != 14 || sometimes_self != 3) {
+        if (never_self != 12 || sometimes_self != 4) {
             printf("  ⛔ MOVED: the write-side warning's format lists are out of date\n");
             verdict_moved = 1;
         }
