@@ -106,8 +106,15 @@ one.**
 emulating `H10301`) captured through OUR OWN reader shows **both bands, 389 near RF/8 and 79 near RF/10**.
 ⚠ **Cause NOT established.** Tank settling fits every number, but a real FSK tag alternates every bit and
 works — it SHORTS its coil, a far larger and faster perturbation than driving a transistor across that node.
-⇒ **NEXT LEVER IS MODULATION DEPTH, NOT A THIRD ENCODING.** If the emitter cannot move the tank far enough to
-re-establish a tone within one tone period, depth is the variable; a fourth re-encoding is not.
+⛔ **DEPTH WAS THE NAMED LEVER AND IT IS REFUTED (C388).** Mark 4 -> 6 carrier cycles, single clean
+variable, against the `0xAA` worst case: **38 periods near RF/8, still ZERO near RF/10**, capture half
+the size, marks splitting into ~556 us held levels and ~10 us blips. A 6-cycle mark is **75% duty on
+RF/8**, so the field is loaded most of the time and the CONTRAST a reader measures is what gets spent.
+⭐ A second independent vote for C226's fixed 4-cycle mark: it is at or near OPTIMAL, not merely faithful.
+⇒ **U11'S CHEAP LEVERS ARE EXHAUSTED.** Encoding, loader, playback, clock, frame arithmetic, decoder,
+mark shape and depth are all eliminated by measurement. What remains is the TRANSITION between tones,
+degrading monotonically with its rate — and settling that needs an instrument this bench cannot point at
+its own emitter. **See §5.**
 ⛔ **C386's *the long tone never appears* is superseded** — it appears perfectly when not asked to alternate.
 
 ⛔⛔ **THE FIX IS BUILT AND IT DOES NOT WORK — READ THIS BEFORE TOUCHING U11 (C386).**
@@ -884,6 +891,31 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 ---
 
 ## 5. BLOCKED
+
+### ⚠ 2026-09-14 13:35 — U11 ONLY: OUR OWN CAPTURE INSTRUMENT CANNOT HEAR OUR OWN EMITTER (C387, C388)
+
+⛔ **Scope: this blocks U11 and nothing else.** Read, write and 8 of 11 emulate arms are finished and
+verified; the bench is otherwise healthy and every other unit can proceed.
+
+**What is known, and it is a lot.** The FSK emitter produces EITHER tone perfectly on its own — a steady
+RF/10 comes out at 79 us exactly as designed — and loses the long tone in proportion to how often the tone
+CHANGES: 3031 long periods when it never alternates, 261 when it alternates every 4 bits, **zero** when it
+alternates every bit. Mark quality tracks the same curve. Encoding, loader, playback, clock, frame
+arithmetic, our decoder, mark shape and modulation depth are each eliminated by measurement.
+
+⭐ **It is not an instrument artefact and the control was taken**: a genuine mixed-tone reference — the
+Flipper emulating `H10301` — captured through OUR OWN reader shows both bands, 389 near RF/8 and 79 near
+RF/10.
+
+⇒ **THE HANDS STEP.** Everything measured so far came through the Flipper's raw reader, a black box we are
+inferring from. `rdrcap.py` + `DATA_CMD_LF_READER_CAPTURE` return our own undecoded samples at a rate we set,
+and answering *what does our coil actually do when the tone changes* needs one Chameleon emulating while the
+other captures. **Either the two Chameleons face each other, or a scope goes on LF_OA.**
+
+⚠ **This is NOT C377's mistaken request.** That one asked for a `.fap` rebuild on a diagnosis `uptime`
+refuted in one command. This one is backed by a three-point rate curve, a positive control, and eight
+eliminated hypotheses — and it names exactly which measurement is missing.
+
 
 ### ✅ CLEARED 2026-09-14 12:15 — RIG A NEVER NEEDED HANDS (C377)
 
