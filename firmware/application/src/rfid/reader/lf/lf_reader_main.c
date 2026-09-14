@@ -332,6 +332,7 @@ uint8_t scan_jablotron(uint8_t *uid) {
 /**
  * Try reset t55XX tag passwords by enumerating old passwords.
  */
+#if LF_T55XX_SET_PASSWORD
 static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     for (uint8_t i = 0; i < old_passwd_count; i++) {
         uint32_t old_passwd = bytes_to_num(old_passwds + i * 4, 4);
@@ -339,6 +340,7 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
     }
     t55xx_reset_passwd(new_passwd, new_passwd);
 }
+#endif /* LF_T55XX_SET_PASSWORD */
 
 /**
  * Write card data to t55xx
@@ -349,7 +351,12 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
     start_lf_125khz_radio();
     bsp_delay_ms(1);  // Delays for a while after starting the field
 
+#if LF_T55XX_SET_PASSWORD
     try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
+#else
+    (void)old_passwds;
+    (void)old_passwd_count;
+#endif
     t55xx_write_data(passwd, blks, blk_count);
 
     stop_lf_125khz_radio();

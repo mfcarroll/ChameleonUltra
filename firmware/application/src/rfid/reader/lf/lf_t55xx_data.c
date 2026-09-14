@@ -127,7 +127,12 @@ void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count) {
     // write control bits (blk0) & data (w/wo passwd)
     for (uint8_t i = 0; i < blk_count; i++) {
+#if LF_T55XX_SET_PASSWORD
+        /* ⚠ On a tag WITHOUT PWD set this frame is misaligned by 32 bits — see t55xx.h. */
         t55xx_send_cmd(T5577_OPCODE_PAGE0, &passwd, 0, &blks[i], i);
+#else
+        (void)passwd;
+#endif
         t55xx_send_cmd(T5577_OPCODE_PAGE0, NULL, 0, &blks[i], i);
     }
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);

@@ -15,6 +15,38 @@ extern "C" {
 #define T5577_POR_DELAY 0x00000001
 #define T5577_ST_TERMINATOR 0x00000008
 #define T5577_PWD 0x00000010
+
+/* ⭐⭐ EXPERIMENT SWITCH (2026-09-16) — does OUR WRITER lock tags out?
+ *
+ * A T5577 on this bench stopped answering the Proxmark entirely: detect fails, every block
+ * reads back `80000000` (a start bit then silence — no reply), four `lf t55xx wipe` cycles were
+ * rejected, and `recoverpw` found nothing. It still emits its stored credential perfectly, so
+ * it is LOCKED, not damaged. The timeline in C298 says pm3 wrote it fine all day until our own
+ * writer first ran against it.
+ *
+ * ⛔ Two things in this write path can produce that, and BOTH are upstream defaults (`main`
+ * carries the identical 8 configs and the same key):
+ *   1. every `T5577_*_CONFIG` below sets `T5577_PWD`, so block 0 is written with password
+ *      protection ENABLED;
+ *   2. `write_t55xx()` calls `try_reset_t55xx_passwd()` and then sends every block TWICE —
+ *      once authenticated, once not. ⚠ On a tag that does NOT yet have PWD set, the
+ *      authenticated frame carries 32 password bits the tag is not expecting, so it is
+ *      MISALIGNED by 32 bits and the tag writes whatever that misalignment decodes to.
+ *
+ * Setting this to 0 removes all three: no PWD bit, no password block write, no authenticated
+ * frame. If a tag written by that build stays fully readable by the Proxmark, the password
+ * machinery is the cause and this switch is the isolation that proved it.
+ *
+ * ⛔ DEFAULT 1 = the shipping behaviour, unchanged. */
+#ifndef LF_T55XX_SET_PASSWORD
+#define LF_T55XX_SET_PASSWORD 1
+#endif
+
+#if LF_T55XX_SET_PASSWORD
+#define T5577_PWD_IF_ENABLED T5577_PWD
+#else
+#define T5577_PWD_IF_ENABLED 0
+#endif
 #define T5577_MAXBLOCK_SHIFT 5
 #define T5577_AOR 0x00000200
 #define T5577_PSKCF_RF_2 0
@@ -48,43 +80,43 @@ extern "C" {
 #define T5577_EM410X_64_CONFIG (  \
     T5577_BITRATE_RF_64 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD |                   \
+    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_EM410X_ELECTRA_CONFIG ( \
     T5577_BITRATE_RF_64 |            \
     T5577_MODULATION_MANCHESTER |    \
-    T5577_PWD |                      \
+    T5577_PWD_IF_ENABLED |                      \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_HIDPROX_CONFIG ( \
     T5577_BITRATE_RF_50 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD |                \
+    T5577_PWD_IF_ENABLED |                \
     (3 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_IOPROX_CONFIG ( \
     T5577_BITRATE_RF_64 |      \
     T5577_MODULATION_FSK2a |   \
-    T5577_PWD |                \
+    T5577_PWD_IF_ENABLED |                \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_VIKING_CONFIG (     \
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_MANCHESTER | \
-    T5577_PWD |                   \
+    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_PAC_CONFIG (        \
     T5577_MODULATION_DIRECT |     \
     T5577_BITRATE_RF_32 |         \
-    T5577_PWD |                   \
+    T5577_PWD_IF_ENABLED |                   \
     (4 << T5577_MAXBLOCK_SHIFT))
 
 #define T5577_JABLOTRON_CONFIG (  \
     T5577_MODULATION_DIPHASE |    \
     T5577_BITRATE_RF_64 |         \
-    T5577_PWD |                   \
+    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 // Indala: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
@@ -258,7 +290,7 @@ extern "C" {
     T5577_BITRATE_RF_32 |         \
     T5577_MODULATION_PSK1 |       \
     T5577_PSKCF_RF_2 |            \
-    T5577_PWD |                   \
+    T5577_PWD_IF_ENABLED |                   \
     (2 << T5577_MAXBLOCK_SHIFT))
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
