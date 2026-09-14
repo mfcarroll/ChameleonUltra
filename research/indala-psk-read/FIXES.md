@@ -18,6 +18,8 @@ that is about something else.
 | F7 | The repeat-read corroboration rule compares only the first 64 bits of any frame | `lf_indala_data.c` | ours — **fixed** |
 | F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | `lf_reader_data.c/.h`, `lf_reader_generic.c`, `lf_hidprox_data.c`, `lf_ioprox_data.c` | yes — **fixed** |
 | F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed** |
+| F10 | Changing a slot's LF type silently disarms emulation until a reboot | `lf_tag_em.c/.h`, `tag_emulation.c`, `app_cmd.c` | yes — **fixed** |
+| F11 | The emulation burst is a FRAME COUNT, so long-window readers fail at the boundary | `lf_tag_em.c` | yes — **fixed** |
 
 ---
 
@@ -223,3 +225,55 @@ frame rather than pass/fail: drive 2 → 6 errors, drive 4 (stock) → 6, **driv
 
 ⚠ Same reasoning as F8: an upstream defect in an upstream reader, independent of the protocol
 work, and it had no entry until the PR-split audit went looking for unassigned files.
+
+---
+
+## F10 — changing a slot's LF type silently disarms emulation until a reboot ✅ FIXED
+
+**Symptom.** Set a slot to one LF protocol, emulate, then change the slot's type and emulate
+again: nothing transmits. A reboot fixes it. Nothing reports an error at any point.
+
+**Root cause, three of them, found together (C129-C131).**
+1. `lf_sense_disable()` nulls `m_pwm_seq` and `lf_sense_enable()` never reloads it, so a mode
+   cycle throws the waveform away. The sequences are static and outlive the uninit —
+   `utils/psk1.h` already documented that — so nulling them was never necessary.
+2. `lf_tag_data_loadcb()` does not reinitialise the PWM base clock when the slot type changes,
+   so the clock stays at whatever the previous protocol needed. 125 kHz and 1 MHz are not
+   interchangeable.
+3. `hw slot type` does not say the change is RAM-only until `hw slot store`, so a user who
+   power-cycles loses it silently.
+
+**Fix.** `lf_sense_disable()` keeps `m_pwm_seq`; `lf_tag_data_loadcb()` became a wrapper calling
+`pwm_reinit_if_clock_changed()` after every load; `hw slot type` says what it did.
+
+**Verified on hardware:** a full round trip with no reboot and no power cycle — Indala → EM410X
+**ASK 4/4** → Indala **PSK 4/4**, where the ASK arm read **0/4** before. 19 reads across four
+configurations, each protocol acting as the other's control, with the clock and sequence state
+read from the device independently of the read outcome (C132).
+
+⚠ **Why it was missed for a whole session**: C349's audit enumerates FILES and asks which PR
+owns each. These three live in `lf_tag_em.c`, `tag_emulation.c` and `app_cmd.c` — all of which
+ARE assigned to a PR, so the file audit passed over them without looking inside. A fix inside an
+assigned file is invisible to it (C350).
+
+---
+
+## F11 — the emulation burst is a FRAME COUNT, so long-window readers fail at the boundary ✅ FIXED
+
+**Symptom.** A reader taking a long capture reads our emulation only when its window happens to
+fall inside one burst, and fails whenever the window crosses a boundary. The Proxmark failed
+beyond ~163 ms.
+
+**Root cause.** `lf_tag_em.c` played a fixed **frame count** — 10 frames — then paused to check
+the field. A frame count is the wrong unit, because a frame is not a fixed duration: 10 frames
+is 164 ms of Indala 64-bit but 328 ms of EM410x and 573 ms of Indala 224-bit, so the pause
+lands in a different place for every protocol.
+
+**Fix.** A **time budget** rather than a frame count. 500 ms, which is the value 32 Indala
+frames happened to give (524 ms) and the only length with evidence behind it.
+
+**Verified on hardware:** raising the burst moved the failure cliff with it — **197 ms ✗ → ✓ and
+262 ms ✗ → ✓**, six lengths bracketed either side, with the Proxmark's demodulator as the judge
+(it shares nothing with ours) and fc/2 amplitude 22.69 confirming coupling throughout (C75).
+
+⚠ Same blind spot as F10: `lf_tag_em.c` is assigned to a PR, so the file audit never looked.

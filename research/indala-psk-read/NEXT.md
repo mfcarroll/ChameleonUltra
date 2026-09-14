@@ -785,6 +785,19 @@ shrink the protocol PRs by removing arguments that do not belong in them:
 | F6 | `lf hid prox write` reported success without reading back | upstream |
 | F7 | the repeat-read corroboration rule compared only the first 64 bits | **ours** |
 
+⭐⭐ **NOW ELEVEN, NOT SEVEN (C349, C350).** Four more were found in two ticks by auditing along two different axes —
+by FILE (which PR owns this?) and by CLAIM (did this fix reach the register?). Neither would have found the other's:
+the file audit is structurally blind to a fix inside a file that IS assigned, which is where F10 and F11 were.
+⛔ None of the four was new work. All had been done, verified on hardware and written up in FINDINGS — some months
+apart — and none had reached the register that decides what gets upstreamed.
+
+| | what | ours or upstream's |
+|---|---|---|
+| F8 | A BLE advertising burst collapses the field mid-capture — 15-20% of HID/ioProx reads | upstream |
+| F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | upstream |
+| F10 | Changing a slot's LF type silently disarms emulation until a reboot | upstream |
+| F11 | The emulation burst is a frame count, so long-window readers fail at the boundary | upstream |
+
 ⇒ **The order is F1 first** — it is a data-loss defect that locks a user's tag out of every
 other tool, and it is the one a maintainer will care about most. F7 is ours and belongs with
 the shared capture engine (PR 1), not with the others.
