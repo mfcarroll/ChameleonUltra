@@ -42,7 +42,22 @@ extern "C" {
 #define LF_T55XX_SET_PASSWORD 1
 #endif
 
-#if LF_T55XX_SET_PASSWORD
+/* ⭐⭐ RECOVERY BUILD — these two are SEPARATE for a reason (2026-09-16).
+ *
+ * `LF_T55XX_SET_PASSWORD` controls whether we AUTHENTICATE (send the password with every write
+ * and try to set block 7). `LF_T55XX_PWD_BIT` controls whether the config word we write turns
+ * password protection ON.
+ *
+ * ⇒ Setting AUTH=1 with PWD_BIT=0 is the combination that RECOVERS a locked tag: it can still
+ * get in, because our writer is demonstrably the only thing this tag still answers, and the
+ * config it lands clears the PWD bit — handing the tag back to every other tool.
+ * ⛔ The no-password build cannot do this: it dropped the authenticated frame, so it cannot
+ * open a tag that is already locked. */
+#ifndef LF_T55XX_PWD_BIT
+#define LF_T55XX_PWD_BIT LF_T55XX_SET_PASSWORD
+#endif
+
+#if LF_T55XX_PWD_BIT
 #define T5577_PWD_IF_ENABLED T5577_PWD
 #else
 #define T5577_PWD_IF_ENABLED 0
