@@ -38,6 +38,32 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐ 2026-09-14 17:10 — THE BENCH IS ONE LINK BY DESIGN: #1 ↔ #2. READ BEFORE PLANNING ANY ARM (C405)
+
+⭐ **THE TWO CHAMELEONS FACE EACH OTHER AND NOTHING ELSE IS ON THEIR PADS.** The T5577 sits on the
+**Proxmark's** pad, completely separate, and the Flipper is not in the arrangement.
+
+| link | status | what a null there MEANS |
+|---|---|---|
+| **#1 ↔ #2** | ✅ **the only live one** | #2 decodes #1's EM410X; #1 decodes #2's |
+| Flipper ↔ #1 | — **not in the arrangement** | Flipper reads 0 of 3 of #1's Gallagher (6 of 6 this morning) — *the Flipper is not there* |
+| Chameleon ↔ T5577 | — **no tag on those pads** | #2 gets `LF tag not found` — *the tag is not there* |
+
+⚠ **NOTHING IS BROKEN — THIS IS A DELIBERATE REARRANGEMENT.** An earlier draft of this section called the two
+links "DEAD", which would have sent a tick hunting a fault that does not exist.
+⭐ **But one measurement IS load-bearing**: `flipper.py` ABORTS when its plugin will not load (C374) and it
+SCORED instead, which proves the Flipper is alive and this is geometry rather than C377's heap fault
+recurring. **pm3 still reads the T5577.**
+
+⛔ **WHAT IS BLOCKED**: the **emulate column** (8 of 11 at 6/6) cannot be re-measured — it needs the Flipper as
+reader; and **C400's real-tag read arms** cannot be retested — they need #2 at the T5577.
+✅ **WHAT WORKS**: `./fskcap.sh` captures (#1 emulates, #2 captures raw), either Chameleon reading the other's
+emulation **on the GPIO family ONLY** (M52 — never the SAADC family), and pm3 with the T5577 alone.
+⚠ **THE THREE CONFIGURATIONS ARE MUTUALLY EXCLUSIVE.** The bench is a choice now, not a given, and any future
+*needs hands* must say WHICH of the three it wants.
+
+---
+
 ### ⛔⛔ 2026-09-14 16:55 — TWO READ ARMS DOWN ON REAL TAGS. THE "FOUR" WAS MY TEST METHOD (C400, C404)
 
 ⛔⛔ **READ THIS BEFORE THE BLOCK BELOW, WHICH IS RETRACTED.** C402 reported four arms down, boundaried as
