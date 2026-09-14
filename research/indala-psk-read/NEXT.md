@@ -362,11 +362,15 @@ P10001 and PW39 with no `formats[]` row, so they can never be packed or unpacked
 the host enum has 31 and mirrors the table, so the CLI refuses them — but it is upstream's
 header and it looks like a gap until someone checks.
 
+⭐⭐ **THE ENUMERATION IS NOW BUILT (C287).** `wiegand_other_matches()` lives in the file that
+owns `formats[]`; the reader reports how many other layouts fit and names up to two, in payload
+bytes 13-15 that were already present and already zero. Verified against `lf hid reader` on
+three tags — our counts equal its parity-PASSING candidates exactly, 3 for 3. A Kastle tag now
+names Kastle among the alternatives instead of discarding it.
+
 ⚠ **What is NOT established.** W2804 and ACTPHID are missing from C284's sweep because the
 Proxmark refused every credential shape tried — a writer limitation, not a reader finding. And
-the enumerate-every-candidate behaviour has not been implemented here: it needs the firmware to
-return a list rather than one format, and a host-side transcription of 31 unpackers would be
-exactly the "share the front end, do not resemble it" mistake this project refuses.
+only two alternatives are NAMED for want of payload space; the count is exact.
 
 ### 9g. ⭐ TWO AUDITS A REVIEWER CANNOT DO THEMSELVES — the frame gates, and what we PRINT
 

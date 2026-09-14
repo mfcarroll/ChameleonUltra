@@ -86,4 +86,10 @@ typedef struct {
 
 extern uint64_t pack(wiegand_card_t *card);
 extern wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo);
+
+/* ⭐ How many OTHER layouts of the same bit length also accept this frame, naming up to `max`
+ * of them in `out`. See the note at the definition: an unpinned read is only the first match,
+ * and for 15 of 29 formats that is the wrong one (C284, C285). */
+extern uint8_t wiegand_other_matches(uint8_t length, uint64_t hi, uint64_t lo, uint8_t except,
+                                     uint8_t *out, uint8_t max);
 extern wiegand_card_t *wiegand_card_alloc();

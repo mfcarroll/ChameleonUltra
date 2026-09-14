@@ -90,6 +90,15 @@ uint8_t *hidprox_get_data(hidprox_codec *d) {
     num_to_bytes(d->card->card_number, 5, d->data + 5);    // 5 bytes
     num_to_bytes(d->card->issue_level, 1, d->data + 10);   // 1 bytes
     num_to_bytes(d->card->oem, 2, d->data + 11);           // 2 bytes
+    /* ⭐ Bytes 13..15 — the ambiguity, which the reader could not previously express. 13 is how
+     * many OTHER layouts of this length also accept the frame; 14 and 15 name the first two of
+     * them. Those three bytes were already in the payload and already zero, so a host that
+     * reads only 13 is unaffected. ⚠ The COUNT is exact even when more than two are named. */
+    uint8_t extra[2] = { 0, 0 };
+    d->data[13] = wiegand_other_matches(hidprox_codec_get_length(d), 0, d->raw,
+                                        d->card->format, extra, 2);
+    d->data[14] = extra[0];
+    d->data[15] = extra[1];
     return d->data;
 };
 

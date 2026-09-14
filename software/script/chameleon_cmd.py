@@ -642,7 +642,14 @@ class ChameleonCMD:
         """
         resp = self.device.send_cmd_sync(Command.HIDPROX_SCAN, struct.pack('!B', format))
         if resp.status == Status.LF_TAG_OK:
-            resp.parsed = struct.unpack('>BIBIBH', resp.data[:13])
+            # ⭐ Bytes 13..15 carry the AMBIGUITY the reader used to swallow: how many other
+            # layouts of this bit length also accept the frame, and the first two by format id.
+            # The firmware enumerates (it owns `formats[]`); the host only maps ids to names.
+            # ⚠ Older firmware left these three bytes zero, which reads as "no other match" —
+            # the honest degradation, and the reason they were chosen over a longer payload.
+            fields = struct.unpack('>BIBIBH', resp.data[:13])
+            others = tuple(b for b in resp.data[14:16] if b)
+            resp.parsed = fields + (resp.data[13], others)
         return resp
 
     @expect_response(Status.LF_TAG_OK)

@@ -867,6 +867,42 @@ uint64_t pack(wiegand_card_t *card) {
     return 0;
 }
 
+/* ⭐⭐ EVERY LAYOUT THAT FITS, NOT JUST THE FIRST — the behaviour C285 identified as one of
+ * only two correct ones (the other being `-f`). `unpack()` returns the first match and the
+ * caller prints it as the answer; on a real tag that is wrong for 15 of the 29 writable
+ * formats (C284), because 13 of the 32 unpackers have no rejection path at all and the first
+ * check-less format at a given length swallows everything there.
+ *
+ * ⛔ THE ENUMERATION BELONGS HERE, in the file that owns `formats[]`. A caller cannot do it
+ * without the table, and a HOST-side copy of 31 unpackers would be the "share the front end,
+ * do not resemble it" mistake this project refuses — so the firmware decides which formats
+ * match and the host only maps ids to names.
+ *
+ * Writes up to `max` matching format ids to `out`, skipping `except` (normally the one already
+ * being reported), and returns the TOTAL number skipped-or-not, which may exceed `max`. */
+uint8_t wiegand_other_matches(uint8_t length, uint64_t hi, uint64_t lo, uint8_t except,
+                              uint8_t *out, uint8_t max) {
+    uint8_t total = 0;
+    for (int i = 0; i < ARRAY_SIZE(formats); i++) {
+        if (length != formats[i].bits || formats[i].unpack == NULL) {
+            continue;
+        }
+        if (formats[i].format == except) {
+            continue;
+        }
+        wiegand_card_t *card = formats[i].unpack(hi, lo);
+        if (card == NULL) {
+            continue;
+        }
+        free(card);
+        if (out != NULL && total < max) {
+            out[total] = (uint8_t)formats[i].format;
+        }
+        total++;
+    }
+    return total;
+}
+
 wiegand_card_t *unpack(uint8_t format_hint, uint8_t length, uint64_t hi, uint64_t lo) {
     for (int i = 0; i < ARRAY_SIZE(formats); i++) {
         if (format_hint != 0 && format_hint != formats[i].format) {

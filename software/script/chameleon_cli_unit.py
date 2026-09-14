@@ -6002,7 +6002,7 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         format = 0
         if args.format is not None:
             format = HIDFormat[args.format].value
-        (format, fc, cn1, cn2, il, oem) = self.cmd.hidprox_scan(format)
+        (format, fc, cn1, cn2, il, oem, n_other, others) = self.cmd.hidprox_scan(format)
         cn = (cn1 << 32) + cn2
         print(f"HIDProx/{HIDFormat(format)}")
         # ⛔ SAY THAT AN UNPINNED READ IS A GUESS, because the firmware returns the FIRST
@@ -6018,6 +6018,16 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         #
         # ⛔ The fix is deliberately HERE and not in `unpack()`: that walk is shared by every
         # reader which guesses a format, and narrowing it is a change to other people's readers.
+        # ⭐⭐ NAME THE OTHER CANDIDATES. C285: the only correct behaviours are the Proxmark's —
+        # print every layout that fits, with its parity verdict — or pinning. This is the first
+        # half, and it is printed whether or not a format was pinned, because a pinned read is
+        # still one of several fits and the operator should know that.
+        if n_other:
+            named = ", ".join(str(HIDFormat(o)) for o in others)
+            more = "" if len(others) >= n_other else f" (+{n_other - len(others)} more)"
+            plural = "layout also fits" if n_other == 1 else "layouts also fit"
+            print(f"   {color_string((CY, f'{n_other} other {plural}'))}"
+                  f": {named}{more} — the Proxmark prints them all with a parity verdict each.")
         if args.format is None:
             if format in HID_BRANDED_FORMATS:
                 print(f"   {color_string((CY, '⚠ no format pinned'))} — this is the FIRST layout "
