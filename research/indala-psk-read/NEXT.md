@@ -368,6 +368,13 @@ reruns any row: four fresh writes, each read back by the Proxmark, plaintext con
 compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Indala26, Indala224 and IDTECK, 4 of 4 each (C331),
 along with every other write arm in the tree.
 
+⭐⭐ **EVERY READ ARM HAS NOW BEEN NULLED AGAINST THIRTEEN REAL FOREIGN TAGS (C342).** `nullmatrix.sh` writes each
+protocol to the T5577 and asks all fourteen readers: **182 cross-protocol reads, 0 false positives, and all 14
+self-reads correct**. This is the evidence a reviewer cannot reproduce from the repo — it needs the bench — and it
+is distinct from the capture-based nulls already cited per protocol, which are host-side against recorded samples.
+⚠ State it with its bound: n = 1 per cell, so 0 in 182 means a 95% upper bound of **1.65%** per cell, not zero.
+The high-n capture nulls remain the sensitive test for any single protocol.
+
 ⚠ **These six were missing from this grid entirely** until 2026-09-14 — it was written before the
 FSK and biphase families existed and nobody widened it. A reviewer handed a grid that silently
 omits a third of the protocols is worse off than one handed no grid at all.

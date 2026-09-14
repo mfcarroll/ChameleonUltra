@@ -524,6 +524,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 08:15 | **C342 — cross-protocol nulls against REAL TAGS, 182 reads, 0 false positives** | 48 → 49 | A test that needed every write arm working, so it was never runnable until tonight; FDX-A had never had one at all. `nullmatrix.sh` added | 14 written tags x 13 foreign readers, self-read as the per-row positive control |
 | 2026-09-14 07:45 | **C341 — read cost measured across the sampled path; C335's field-hold lead closes negative** | 47 → 48 | Median 2 captures (the floor), 65% at it, identical aggregate over two runs; per-arm ordering shown to be noise at n=4. `capcost.sh` added | 2 runs x 14 protocols x 4 reads, plaintext written first, bench restored |
 | 2026-09-14 07:15 | **U7 closed — §9 upstreaming assessment refreshed (§9j)** | 47 → 47 | Recount, PR 4's false FDX-A caveat corrected at both sites, the seven fix-PRs ordered ahead of the protocol PRs; `checkdocs.sh` taught that F-numbers live in FIXES.md | Counts from `git diff main...HEAD`; the new check proven by injecting a bogus id and watching it fail |
 | 2026-09-14 06:45 | **C340 — U17 closed: the FDX-A writer ships, blocks identical to the reference clone** | 46 → 47 | A refused arm became a verified one; `roundtrip.c` pins its vectors and the complement relationship | Wiped tag, alternating credentials, Proxmark as judge, dump equals pm3's own clone |
