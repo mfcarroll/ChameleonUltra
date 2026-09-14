@@ -227,6 +227,54 @@ int main(void) {
         if (disagreed != 0) { verdict_moved = 1; }
     }
 
+
+    /* ⭐⭐⭐ DOES A FORMAT READ BACK AS ITSELF? — the write side of C284, which measured the read
+     * side on 29 real tags at one credential each. `lf hid prox write -f IND26` produces a tag
+     * that an unpinned read reports as H10301 (C278, on hardware), and the write command says
+     * nothing about it. Before warning, establish WHICH formats have that property over a
+     * credential grid rather than the single fc 1 / cn 1 C284 could afford on the bench. */
+    {
+        int never_self = 0, sometimes_self = 0;
+        printf("\nDoes each format read back as ITSELF, unpinned?\n");
+        for (size_t i = 0; i < ALL_COUNT; i++) {
+            int tried = 0, self = 0; card_format_t stole = 0;
+            for (uint32_t fc = 0; fc < 512; fc += 43) {
+                for (uint64_t cn = 1; cn < 8192; cn += 811) {
+                    wiegand_card_t c;
+                    memset(&c, 0, sizeof(c));
+                    c.format = ALL[i]; c.facility_code = fc; c.card_number = cn;
+                    uint64_t w = pack(&c);
+                    if (w == 0) { continue; }
+                    uint8_t len = 0;
+                    for (uint8_t L = 26; L <= 56 && len == 0; L++) {
+                        wiegand_card_t *t = unpack((uint8_t)ALL[i], L, 0, w);
+                        if (t != NULL) { len = L; free(t); }
+                    }
+                    if (len == 0) { continue; }
+                    tried++;
+                    card_format_t first = 0;
+                    (void)matches(len, w, &first);          /* first in TABLE order */
+                    if (first == ALL[i]) { self++; }
+                    else if (stole == 0) { stole = first; }
+                }
+            }
+            if (tried == 0) { continue; }
+            if (self == tried) { continue; }               /* reads back as itself, always */
+            printf("  fmt %2d: %4d of %4d read back as itself — the rest report as fmt %d\n",
+                   (int)ALL[i], self, tried, (int)stole);
+            never_self += (self == 0) ? 1 : 0;
+            sometimes_self += (self > 0) ? 1 : 0;
+        }
+        /* ⛔ PINNED — `lf hid prox write`'s warning is built from these two sets (C295). If the
+         * table is reordered or a format's checks change, the warning becomes wrong and this
+         * says so rather than letting the CLI mislead someone writing a tag. */
+        printf("  => %d never read back as themselves, %d sometimes\n", never_self, sometimes_self);
+        if (never_self != 14 || sometimes_self != 3) {
+            printf("  ⛔ MOVED: the write-side warning's format lists are out of date\n");
+            verdict_moved = 1;
+        }
+    }
+
     /* ⛔ PINNED. If the formats table is reordered, extended or narrowed, these numbers move
      * and this arm says so — which is the whole reason a measurement belongs in the harness
      * rather than in a notebook. */

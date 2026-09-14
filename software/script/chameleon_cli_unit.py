@@ -6080,6 +6080,27 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
         print(f" CN: {color_string((CG, cn))}")
 
 
+# ⭐⭐ WHAT A FORMAT READS BACK AS. Measured in `ctest/ambig.c` over a credential grid against
+# the shipping `wiegand.c`, not guessed and not taken from one bench tag: for these formats an
+# UNPINNED read reports a different layout with a different credential, every time, because the
+# format that precedes them in `formats[]` accepts their frames and checks nothing (C285, C295).
+# ⇒ Writing one of these produces a tag that `lf hid prox read` will misname unless `-f` is used.
+WRITE_READS_BACK_AS = {
+    HIDFormat.IND26: HIDFormat.H10301,     HIDFormat.INDASC27: HIDFormat.IND27,
+    HIDFormat.TECOM27: HIDFormat.IND27,    HIDFormat.HPP32: HIDFormat.HCP32,
+    HIDFormat.KASTLE: HIDFormat.HCP32,     HIDFormat.KANTECH: HIDFormat.HCP32,
+    HIDFormat.WIE32: HIDFormat.HCP32,      HIDFormat.N10002: HIDFormat.H10306,
+    HIDFormat.SMP34: HIDFormat.H10306,     HIDFormat.BQT34: HIDFormat.H10306,
+    HIDFormat.H10304: HIDFormat.H10302,    HIDFormat.HGEN37: HIDFormat.P10004,
+    HIDFormat.MDI37: HIDFormat.H10302,     HIDFormat.ACTPHID: HIDFormat.C15001,
+}
+# ⚠ These three depend on the credential — 130 of 132, 65 of 132 and 33 of 132 read back as
+# themselves in the same sweep — so they get a softer note rather than a flat statement.
+WRITE_SOMETIMES_MISNAMED = frozenset({
+    HIDFormat.OPTUS34, HIDFormat.SIE36, HIDFormat.P10004,
+})
+
+
 @lf_hid_prox.command("write")
 class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -6106,6 +6127,23 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
         )
         self.cmd.hidprox_write_to_t55xx(id)
         print(f"HIDProx/{format}")
+        # ⭐ THE WRITE SIDE OF C284. The reader warns that an unpinned read is a guess; until now
+        # the WRITER said nothing, so `-f IND26` produced a tag that reads back as H10301 with a
+        # different credential and the operator was never told (C278 measured exactly that on a
+        # real tag). Symmetry matters here: the person who wrote the tag is the one who will be
+        # surprised by it later.
+        if format in WRITE_READS_BACK_AS:
+            other = WRITE_READS_BACK_AS[format]
+            print(f"   {color_string((CY, '⚠ this tag will NOT read back as ' + str(format)))} — an "
+                  f"unpinned {color_string((CG, 'lf hid prox read'))} reports it as "
+                  f"{color_string((CY, str(other)))}, with a different credential, because that "
+                  f"layout comes first in the table and checks nothing (C285).")
+            print(f"   Read it with {color_string((CG, '-f ' + format.name))} to get this format "
+                  f"back.")
+        elif format in WRITE_SOMETIMES_MISNAMED:
+            print(f"   {color_string((CY, '⚠ this tag may not read back as ' + str(format)))} — "
+                  f"whether an unpinned read names it correctly depends on the credential. "
+                  f"Verify with {color_string((CG, 'lf hid prox read -f ' + format.name))}.")
         if args.fc > 0:
             print(f" FC: {args.fc}")
         if args.il > 0:

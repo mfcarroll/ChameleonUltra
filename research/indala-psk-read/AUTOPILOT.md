@@ -415,6 +415,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 12:55 | **C295 — the writer warns too** | 15 → 16 | 14 formats never read back as themselves, 3 sometimes; `lf hid prox write` now says so and names which format will be reported | Prediction tested on a real tag, not just the message's appearance; both lists pinned in `make check` |
 | 2026-09-15 12:30 | **§1 rewritten, #2 reflashed from a clean HEAD** | 15 → 15 | `hw version` now reads `96c9d1c` = HEAD with no `-dirty`, where it had been a mid-edit build matching no commit. §1 was 45 claims stale | Post-flash read check 4 of 4; every claim in the new §1 cites the claim that established it |
 | 2026-09-15 12:10 | **C294 — C266's survivors were never unexplained** | 15 → 15 | Entailed: the reader returns only frames that matched their predecessor at the same phase, so those 3 recurred within a phase by construction. C207 confirmed | One assignment site and one return path; the host-vs-device timing trap named |
 | 2026-09-15 11:35 | **C293 — C269 corrected, and a second stale warning** | 15 → 15 | Our agreement needs two CONSECUTIVE decodes at the SAME phase and resets across phases, so C269's cross-phase explanation is void. `gproxii_read` still said NOT VERIFIED after C213 fixed it | Read the implementation rather than describing it; the right mechanism was already in our own C207 comment |
