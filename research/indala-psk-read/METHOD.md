@@ -368,6 +368,15 @@ read. Different timing regime, and the two were compared as though they were one
 ⇒ Name the regime when the tool is not the thing under test. "Captured with the same hardware"
 is not "captured the same way".
 
+**M43. ⛔ A DIFF'S SIZE IS NOT A PR'S SIZE, AND ONLY THE COMPILER KNOWS THE DIFFERENCE.**
+A hunk of 4 lines was called a 4-line PR. Building it on `main` revealed that the call site needs
+a guard that needs BLE connection state — **5 files and +140, thirty-five times the estimate**,
+with each dependency invisible until the previous one compiled. ⇒ **Before quoting a change's
+size to anyone, apply it to the target branch and BUILD IT.** `git diff --numstat` measures what
+you touched, not what you need, and the gap between those is exactly where an upstreaming plan
+dies on contact. ⭐ The failures are the measurement: each compile error names the next
+dependency.
+
 **M42. ⛔ A FIX THAT CHANGES WHICH CANDIDATE WINS INVALIDATES EVERY MESSAGE JUSTIFIED BY THE
 OLD ORDERING — AND THE HARNESS THAT GRADED IT.**
 C302 taught `unpack()` to prefer a format that can validate. Three things downstream had been

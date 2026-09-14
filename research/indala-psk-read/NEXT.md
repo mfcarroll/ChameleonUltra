@@ -629,9 +629,13 @@ below ever happening.
 - ⚠ **ONE DEPENDENCY, NAMED AND BOUNDED.** `lf_hidprox_data.c` carries a **4-line** change this
   patch does not include: the C47/C250 BLE advertising guard. It affects **how often a read
   succeeds**, not which format wins — so PR 0's correctness transfers, but a maintainer testing on
-  stock firmware will meet C45's old 15-20% intermittency. ⇒ **Send that 4-line guard as PR 0b**:
-  it is smaller still, changes no behaviour beyond reliability, and is the difference between
-  96/96 and 71/80 (C250).
+  stock firmware will meet C45's old 15-20% intermittency. ⇒ **Send it as PR 0b — but it is NOT the "4 lines"
+  this section first said (C314).** Compiling it on `main` found a two-step dependency chain: the
+  call site needs `lf_adv_suspend()`, which needs `g_is_ble_connected`, which this branch also
+  added. **The real surface is 5 files, +140 −3** — `lf_reader_data.c/.h`, `lf_hidprox_data.c`,
+  `ble_main.c/.h` — and it costs **+120 bytes** on top of PR 0. Still worth sending, and still the
+  difference between 96/96 and 71/80 (C250), but a plan promising a one-liner would have died on
+  contact.
 - ⛔ **It IS a behaviour change to shipping code and the PR must open with that**, not bury it:
   a reader that used to answer `HCP32` will now answer `KASTLE`. That is the point, and a
   maintainer must be given the chance to disagree. The measured before/after is in `ctest/ambig.c`
