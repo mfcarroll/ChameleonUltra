@@ -38,16 +38,18 @@ roundtrip: roundtrip.c $(FW)/lf_indala_psk.c $(FW)/lf_indala_psk.h $(FW)/lf_ask_
 # would print a PASS for code that no longer exists. A false pass in a correctness harness is
 # worse than a false failure, and costs a few seconds to remove entirely.
 .PHONY: check
-check: clean cdemod roundtrip ambig
+check: clean cdemod roundtrip ambig gates
 	@./roundtrip
 	@echo
 	@./ambig
+	@echo
+	@./gates
 	@echo
 	@$(PY) compare.py
 
 .PHONY: clean
 clean:
-	rm -f cdemod roundtrip ambig
+	rm -f cdemod roundtrip ambig gates
 
 # ⭐ Compiles the SHIPPING wiegand.c. `parity.h` lives under rfid/ and is header-only with
 # GCC builtins, so it needs an include path and no shim; `nordic_common.h` needs a one-line
@@ -55,3 +57,8 @@ clean:
 RFID := ../../../firmware/application/src/rfid
 ambig: ambig.c $(PROTO)/wiegand.c $(PROTO)/wiegand.h
 	$(CC) $(CFLAGS) -I$(PROTO) -I$(RFID) -Ishim -o $@ ambig.c $(PROTO)/wiegand.c
+
+# ⭐ Measures each SHIPPING format descriptor's `accept` hook, reached through the exported
+# table rather than a copy, so a gate that becomes a no-op is caught by `make check`.
+gates: gates.c $(FW)/lf_ask_manchester.c $(FW)/lf_ask_biphase.c $(FW)/lf_indala_psk.c $(FW)/lf_slicer.c $(FW)/lf_fsk2a.c
+	$(CC) $(CFLAGS) -o $@ gates.c $(FW)/lf_ask_manchester.c $(FW)/lf_ask_biphase.c $(FW)/lf_indala_psk.c $(FW)/lf_slicer.c $(FW)/lf_fsk2a.c -lm
