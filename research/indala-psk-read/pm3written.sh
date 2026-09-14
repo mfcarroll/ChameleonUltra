@@ -37,7 +37,22 @@ CLONE[gproxii]="lf gproxii clone --xor 141 --fmt 26 --fc 123 --cn 1337"; READ[gp
 CLONE[fdxa]="lf destron clone --uid 1A2B3C4D5E";            READ[fdxa]="lf fdxa read";            WANT[fdxa]="1aabbccd5e"
 CLONE[fdxb]="lf fdxb clone -c 999 -n 1337";                 READ[fdxb]="lf fdxb read";            WANT[fdxb]="1337"
 
-all=(indala idteck keri nexwatch gallagher securakey noralsy awid paradox pyramid gproxii fdxa fdxb)
+# ⛔⛔ THE SIX BELOW ARE THE ONES THAT ALREADY EXIST UPSTREAM, and leaving them out was the
+# same scoping mistake `nullmatrix.sh` made: scope to the protocols this branch ADDED and the
+# ones it only SHARES A CAPTURE ENGINE WITH go unchecked. If F5's buffer merge or F7's
+# corroboration change regressed any of them, that is a regression in code a maintainer
+# already ships — the most expensive kind to hand someone.
+# ⚠ Every expected string here was OBSERVED first, not guessed. Guessed match strings have
+# produced three phantom failures in this session.
+CLONE[hidprox]="lf hid clone -w H10301 --fc 123 --cn 4567"; READ[hidprox]="lf hid prox read -f H10301"; WANT[hidprox]="CN: 4567"
+CLONE[ioprox]="lf io clone --vn 1 --fc 83 --cn 1337";       READ[ioprox]="lf ioprox read";        WANT[ioprox]="007854E03059CDF7"
+CLONE[em410x]="lf em 410x clone --id 1234567890";           READ[em410x]="lf em 410x read";       WANT[em410x]="1234567890"
+CLONE[viking]="lf viking clone --cn 1A337F9C";              READ[viking]="lf viking read";        WANT[viking]="1a337f9c"
+CLONE[jablotron]="lf jablotron clone --cn 1234567890";      READ[jablotron]="lf jablotron read";  WANT[jablotron]="1234567890"
+CLONE[pac]="lf pac clone -r FF2049906D8541C9511C1B06C1B46551"; READ[pac]="lf pac read";           WANT[pac]="CARD0001"
+
+all=(indala idteck keri nexwatch gallagher securakey noralsy awid paradox pyramid gproxii fdxa fdxb
+     hidprox ioprox em410x viking jablotron pac)
 if (( $# )); then protos=("$@"); else protos=($all); fi
 
 READS="${READS:-4}"

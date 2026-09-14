@@ -369,10 +369,12 @@ compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Inda
 along with every other write arm in the tree.
 
 ⭐⭐⭐ **AND THE LOOP IS CLOSED IN BOTH DIRECTIONS (C343).** *We write, pm3 reads* — 18 arms, 72 writes, 0 failures
-(C330, C331, C340). *pm3 writes, we read* — 13 arms, 52 reads, 52 matches (`pm3written.sh`). ⛔ This is the answer to
+(C330, C331, C340). *pm3 writes, we read* — 19 arms, 76 reads, 76 matches (`pm3written.sh`),
+six of them protocols that already ship upstream, which makes it a regression check on the shared
+capture engine as well. ⛔ This is the answer to
 the sharpest question a reviewer can ask of a protocol branch: **how do you know your reader and your writer are not
 wrong together?** Each direction is judged by the other project's code, so a shared convention error cannot pass
-either. ⭐ Eight of the thirteen go further and cross the field/frame boundary — pm3 was given `--fc`/`--cn`/`--uid`
+either. ⭐ Nine of the nineteen go further and cross the field/frame boundary — pm3 was given `--fc`/`--cn`/`--uid`
 and our reader returned the frame we predicted, so two independently written field encoders agree too.
 ⚠ It does NOT cover the emulate arms, which still rest on a single reader.
 

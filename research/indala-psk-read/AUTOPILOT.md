@@ -44,7 +44,7 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
 
-⭐⭐ **THE READER/WRITER LOOP IS CLOSED BOTH WAYS (C343).** *We write, pm3 reads*: 18 arms, 72 writes. *pm3 writes, we read*: 13 arms, 52 reads, 52 matches. ⇒ A shared convention error cannot pass either direction, because each is judged by the other project's code. ⛔ Every other instrument here writes the tag with OUR writer — `nullmatrix.sh`, `capcost.sh`, `regrade.sh` — so `pm3written.sh` is the one that is not circular. Run it after any change to a decoder.
+⭐⭐ **THE READER/WRITER LOOP IS CLOSED BOTH WAYS (C343).** *We write, pm3 reads*: 18 arms, 72 writes. *pm3 writes, we read*: 19 arms, 76 reads, 76 matches — six of them protocols that already ship UPSTREAM, so it doubles as a regression check on the capture engine this branch rewired under them. ⇒ A shared convention error cannot pass either direction, because each is judged by the other project's code. ⛔ Every other instrument here writes the tag with OUR writer — `nullmatrix.sh`, `capcost.sh`, `regrade.sh` — so `pm3written.sh` is the one that is not circular. Run it after any change to a decoder.
 
 ⭐ **THE READ PATH IS NOT STARVED — measured, not assumed (C341).** 14 protocols x 4 reads: median **2 captures**, which is the floor the corroboration rule sets, and 65% of reads sit exactly on it. ⇒ Holding the field across tries (the C335 lead) would buy about a third of a capture per read. Not the lever it looked like. ⛔ Per-arm ordering from `capcost.sh` is NOISE at n=4 — three arms moved by ≥1 capture between two runs. Run it twice before believing any ranking.
 
@@ -526,6 +526,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 09:50 | **C343 extended — the six UPSTREAM protocols too; 76 of 76 across nineteen** | 50 → 50 | HID Prox, ioProx, EM410x, Viking, Jablotron and PAC verified against pm3-written tags: a regression check on the capture engine this branch rewired under them | 6 protocols x 4 reads, expectations observed not guessed |
 | 2026-09-14 09:20 | **C343 — read arms verified against PROXMARK-WRITTEN tags, 52 of 52; the loop closes both ways** | 49 → 50 | Closes the self-certification hole my own instruments had: every other test writes the tag with OUR writer. `pm3written.sh` added | 13 protocols x 4 reads; 8 of 13 driven by fields, not a raw frame |
 | 2026-09-14 08:50 | **C342 extended — the null matrix was asking only half the readers; 182 → 280 reads, still 0 false positives** | 49 → 49 | One list served as both tags and readers, so the GPIO/comparator, HID and ioProx readers were never asked. Lists separated | 14 tags x 20 foreign readers; bound now 1.07% |
 | 2026-09-14 08:15 | **C342 — cross-protocol nulls against REAL TAGS, 182 reads, 0 false positives** | 48 → 49 | A test that needed every write arm working, so it was never runnable until tonight; FDX-A had never had one at all. `nullmatrix.sh` added | 14 written tags x 13 foreign readers, self-read as the per-row positive control |
