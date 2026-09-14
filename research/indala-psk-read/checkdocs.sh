@@ -24,9 +24,15 @@ LOGIDS=$(ids L LOG.md)
 for r in $(refs L FINDINGS.md NEXT.md README.md METHOD.md | sort -u); do
     grep -qx "$r" <<<"$LOGIDS" || note "$r cited but not in LOG.md"
 done
-CIDS=$(ids C FINDINGS.md; ids F FINDINGS.md)
-for r in $(refs C NEXT.md README.md | sort -u; refs F NEXT.md README.md | sort -u); do
-    grep -qx "$r" <<<"$CIDS" || note "$r cited but not in FINDINGS.md ledger"
+# ⚠ F-NUMBERS LIVE IN `FIXES.md`, NOT `FINDINGS.md`. This read only FINDINGS.md, which was
+# right until FIXES.md was created (C326) and then silently wrong: every F-citation in NEXT.md
+# was reported missing. ⛔ The failure mode is the one that matters — a checker that cries wolf
+# on correct notes gets worked around instead of fixed, which is what nearly happened twice.
+CIDS=$(ids C FINDINGS.md; ids F FINDINGS.md; ids F FIXES.md)
+# ⭐ FIXES.md is checked as a SOURCE of citations too, not just a ledger — it cites C-numbers
+# and nothing was validating them.
+for r in $(refs C NEXT.md README.md FIXES.md | sort -u; refs F NEXT.md README.md | sort -u); do
+    grep -qx "$r" <<<"$CIDS" || note "$r cited but not in FINDINGS.md or FIXES.md"
 done
 MIDS=$(grep -oE '^\*\*M[0-9]+' METHOD.md | tr -d '*')
 for r in $(refs M NEXT.md README.md FINDINGS.md | sort -u); do

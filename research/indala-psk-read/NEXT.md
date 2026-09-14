@@ -711,6 +711,62 @@ upstream diff is one deleted `Makefile` line. Command **3063** and `raw_read_sam
 (C308) were added after that and are gated the same way, so they cost a shipping image nothing
 and need no separate removal.
 
+### 9j. ⭐⭐ REFRESHED 2026-09-14 — a recount, a retired caveat, and seven fix-PRs that go first
+
+⚠ **§9c's numbers are from 2026-09-13 and the branch has moved.** Recounted against `main`:
+
+| | 2026-09-13 | now |
+|---|---|---|
+| reviewable CODE (firmware + host scripts) | 10,242 lines, 59 files, 29 new | **11,584 lines, 63 files, 31 new** |
+| — of which the LF firmware surface | — | 51 files, +7,320 / −132 |
+| — of which host scripts | — | 4 files, +3,171 / −20 |
+| committed captures under `caps/` | 36,012 lines, 1,409 files | 36,012 lines, **1,441 files** |
+| research notes (`.md`) | 4,560 lines | **5,888 lines, 12 files** |
+| research tooling (`.py`, `.sh`, `ctest/`) | counted with the notes | **7,178 lines, 49 files** |
+| branch total | 204,959 insertions / 1,654 files | **209,204 / 1,701** |
+
+⇒ The reviewable surface grew by ~1,300 lines, not by the 4,000 the branch total suggests: most
+of the growth is notes and tooling, which no upstream PR carries.
+
+⛔⛔ **PR 4's FDX-A CAVEAT IS FALSE AND MUST BE DELETED BEFORE ANYONE READS IT.** It says:
+*"FDX-A ships READ ONLY and the PR must say why: nothing on any bench here can read an FDX-A tag
+back, so a writer would certify itself (C185)."* The Proxmark has a complete FDX-A under
+**`lf destron`** — demod, reader, clone and sim (C333). The refusal came from looking under
+`lf fdx`, which is FDX-B, a different protocol. ⇒ **FDX-A now ships READ AND WRITE**, both grade
+A: read 10 of 10 on a real Proxmark-written tag across two credentials (C338), write 4 of 4 from
+a confirmed-blank tag with the credential alternating every round, and the stored blocks
+byte-identical to `lf destron clone`'s own (C340). ⭐ The PR should carry the reversal rather
+than quietly drop the caveat — a reviewer who sees a refusal in one commit and a writer in the
+next deserves the reason.
+⚠ **InstaFob's refusal is NOT retired and must stay**: the Proxmark genuinely has no InstaFob
+command, so its write arm would still certify itself.
+
+⭐⭐ **`FIXES.md` IS NOW SEVEN ENTRIES, AND THEY ARE THE PRs THAT SHOULD GO FIRST.** Each is
+scoped standalone, none depends on the protocol work, and six of the seven are defects present
+on `main` — so they are the cheapest possible thing for a maintainer to say yes to, and they
+shrink the protocol PRs by removing arguments that do not belong in them:
+
+| | what | ours or upstream's |
+|---|---|---|
+| F1 | T5577 writes silently password-protect the tag, key differs by protocol | upstream — ⛔ the worst of them |
+| F2 | five writers report success having written nothing | upstream |
+| F3 | header declares a lock bit as a length | upstream |
+| F4 | `unpack()` relabels 15 of 29 writable HID formats | upstream |
+| F5 | two 28 KB capture buffers resident at once, 22% of RAM | upstream |
+| F6 | `lf hid prox write` reported success without reading back | upstream |
+| F7 | the repeat-read corroboration rule compared only the first 64 bits | **ours** |
+
+⇒ **The order is F1 first** — it is a data-loss defect that locks a user's tag out of every
+other tool, and it is the one a maintainer will care about most. F7 is ours and belongs with
+the shared capture engine (PR 1), not with the others.
+
+⚠ **§9h's instrumentation checklist still holds and has one more entry.** The
+`lf_sampled_stats_t` scan counters added 2026-09-14 (C337) live behind the same
+`LF_RESEARCH_CMDS_ENABLED` macro and surface on a FAILED `FDXB_SCAN`. They change the wire shape
+of a failure reply, which is exactly why they are gated — and the one line in
+`application/Makefile` that sets the macro to 1 is still the whole of what an upstream PR
+deletes.
+
 ### 9c. ⭐ Recommended shape — three PRs, not one
 
 ⛔ **Superseded in part by §9i above**: the counts here are from 2026-09-13, and the list below
@@ -734,8 +790,9 @@ The branch splits along its own dependency order:
 3. **The ASK/Manchester family** — `lf_ask_manchester.c`, the drive sweep, and Gallagher,
    Securakey, Noralsy. ⚠ InstaFob stays out until its write arm can be verified.
 4. **The FSK2a family** — `lf_fsk2a.c` plus AWID, Paradox, Pyramid and FDX-A, and the three
-   writers that go with them. ⚠ FDX-A ships READ ONLY and the PR must say why: nothing on any
-   bench here can read an FDX-A tag back, so a writer would certify itself (C185).
+   writers that go with them. ⛔ **FDX-A's READ-ONLY caveat here was FALSE — see §9j.** It
+   ships READ **AND WRITE**, both grade A (C338, C340): the Proxmark has a complete FDX-A under
+   `lf destron`, and C185 looked under `lf fdx`, which is FDX-B.
 5. **The ASK/biphase family** — `lf_ask_biphase.c` plus GProxII and FDX-B. ⭐ This one carries
    the 50ms inter-capture gap (C213), which is a HARDWARE finding rather than a protocol
    feature and is the part of this branch most worth a reviewer's attention: a capture taken
@@ -773,7 +830,7 @@ shared files are the part that actually needs thought: `app_cmd.c`, `data_cmd.h`
 | **1. Shared engine** | `lf_indala_psk.c/.h`, `lf_slicer.c/.h`, `lf_reader_generic.c/.h`, `lf_reader_data.c/.h`, `lf_125khz_radio.c/.h`, `netdata.h` | ⛔ Also carries the RENAMES (`lf_sampled_*`, `lf_drive_swept_read`) and the sizing constants. Everything below depends on it, and it touches no protocol |
 | **2. PSK1 family** | `keri.c/.h`, `nexwatch.c/.h`, `psk1.c/.h`, `indala.c/.h`, `idteck.c` | The `lf_psk1_format_t` descriptor refactor plus two formats. Indala and IDTECK exist upstream, so most of this is the refactor |
 | **3. ASK/Manchester family** | `lf_ask_manchester.c/.h`, `gallagher.c/.h`, `securakey.c/.h`, `noralsy.c/.h` | ⚠ Carries the drive sweep. ⛔ InstaFob stays OUT — no verifiable write arm |
-| **4. FSK2a family** | `lf_fsk2a.c/.h`, `fsk2a_t55xx.c/.h`, `awid.c/.h` | ⚠ FDX-A ships READ ONLY and the PR must say why (C185). ⛔ The AWID EMITTER should not ship at all until C243's mystery is solved — it is silent on hardware and shipping it would be the self-certification this project refuses |
+| **4. FSK2a family** | `lf_fsk2a.c/.h`, `fsk2a_t55xx.c/.h`, `awid.c/.h` | ⛔ **FDX-A's read-only caveat is RETIRED (§9j)** — it ships read AND write, both grade A (C338, C340). ⛔ The AWID EMITTER should not ship at all until C243's mystery is solved — it is silent on hardware and shipping it would be the self-certification this project refuses |
 | **5. ASK/biphase family** | `lf_ask_biphase.c/.h`, `gproxii.c/.h` | ⭐ Carries the 50ms inter-capture gap, which is a HARDWARE finding (C213) and the part most worth a reviewer's time. ⛔ The GProxII EMITTER must not ship: a biphase 0 is a held level and this PWM emits nothing for one (C242). Delete it or land it behind a comment saying so |
 | **(separate)** | `DATA_CMD_LF_READER_CAPTURE`, `lf_reader_capture_probe`, the GProxII failure-energy payload, `rdrcap.py`, `hw emudebug`, `hw lfdebug` | ⛔ INSTRUMENTATION. Strip, or land as its own "LF diagnostics" change with its own justification. It earned its place — the probe cracked C211 — but it is not a feature |
 
