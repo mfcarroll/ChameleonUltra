@@ -57,6 +57,21 @@ dead reader. ⭐⭐ **Credentials verified, not just hit counts**: GProxII reads
 `GProxII FAC2A38C2B081AF0210B12C2` (FC 123 / Card 1337 / LEN 26), byte-identical to the raw written; Indala
 reads `Indala26 CD7A1D30`, FC 52 / Card 63612. Counting hits alone would have repeated C353's front-end trap.
 
+⭐ **U11 PROGRESS — FIVE CAUSES ELIMINATED BY MEASUREMENT, ONE LEFT (C379, C380).** Ruled out: the **loader**
+(`have pwm seq` True, correct clock, distinct frames/burst), **playback** (36 bursts per read vs Gallagher's
+12 — the ratio is read duration, not emission), the **frame arithmetic**, our **own decoder** (round-trips
+exact), and the **mark shape** (C226's fixed-4 correction had only ever reached AWID; `hidprox.c` and
+`ioprox.c` still emitted `counter_top / 2`, now fixed, built and flashed — **and still 0/6**, with Gallagher
+6/6 bracketing either side).
+⇒ **WHAT IS LEFT IS C217'S ORIGINAL QUESTION, STILL UNANSWERED**: does the PWM peripheral actually emit what
+it is asked at `counter_top` **8 and 10**, where every working emitter here uses 32, 40 or 64? ⚠ An fc/8 tone
+switches the modulator at **15.6 kHz** against ASK RF/32's **3.9 kHz** — a 4x-faster switch through the same
+analog path, and untested.
+⇒ **NEXT STEP IS TO CAPTURE THE EMISSION, not to reason about it further.** The Flipper's `rfid raw_read`
+writes samples to a file that can be pulled over its CLI; compare a silent HID emission against a working
+Gallagher one. ⛔ Do not change another constant before that capture exists — five hypotheses have now died
+in a row, and the sixth should be measured first.
+
 ✅ **AND U11 IS ALREADY SCOPED (C379).** All three silent protocols LOAD a sequence — `have pwm seq : True`
 at the correct 125kHz, frames/burst **14 / 16 / 14**, distinct so three real waveforms were walked. ⇒ Not the
 loader and not the clock: the fault is FSK2a's **encoding**. The ASK emitters set `counter_top` to the carrier

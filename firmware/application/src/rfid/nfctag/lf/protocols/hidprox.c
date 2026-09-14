@@ -23,6 +23,21 @@
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (6)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
 
+/* ⭐⭐ A FIXED 4-CYCLE MARK, NOT 50% DUTY — THE SAME CORRECTION C226 MADE TO AWID (C380).
+ *
+ * A real FSK2a emission was captured on this bench and measured: the HIGH run is 4 carrier
+ * cycles on essentially EVERY tone, and only the LOW run varies to carry the frequency — 4 for
+ * RF/8, 6 for RF/10. The mark is the tag's load-modulation pulse, which is a property of the
+ * modulator rather than of the protocol, so it does not scale with the tone.
+ *
+ * ⛔ `counter_top / 2` gives 4 for the short tone and 5 for the long one. It is the obvious
+ * thing to write, it is what was here, and NO ROUND TRIP IN ctest CAN CATCH IT: our own
+ * demodulator only ever looks at the tone's PERIOD, which is identical either way.
+ * ⚠ AWID carries this correction and is still silent to the Flipper, so this is a shape defect
+ * that is NOT known to be the cause of that — do not read it as the emulate fix.
+ * ⇒ Pinned by `trial_fsk_duty()` in ctest/roundtrip.c so it cannot revert quietly. */
+#define LF_FSK2a_PWM_MARK_CYCLES (LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2)
+
 static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * 6] = {};
 
 nrf_pwm_sequence_t m_hidprox_pwm_seq = {
@@ -213,13 +228,13 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
         }
         if (!bit) {
             for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
+                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_MARK_CYCLES;
                 m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
                 k++;
             }
         } else {
             for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
+                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_MARK_CYCLES;
                 m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
                 k++;
             }

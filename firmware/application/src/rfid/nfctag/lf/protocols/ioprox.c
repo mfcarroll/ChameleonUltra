@@ -18,6 +18,14 @@
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (8)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
 
+/* ⭐⭐ A FIXED 4-CYCLE MARK, NOT 50% DUTY — see the note in hidprox.c and C226/C380. The mark is
+ * the tag's load-modulation pulse and does not scale with the tone; `counter_top / 2` would emit
+ * 4 for RF/8 and 5 for the long tone, which our own demodulator cannot tell apart because it
+ * only looks at the PERIOD. ⚠ ioProx's long tone is 11 here, not the family's 10 — left exactly
+ * as it was, because nothing on this bench has measured it and the mark is the only thing C226
+ * established. ⇒ Pinned by `trial_fsk_duty()` in ctest/roundtrip.c. */
+#define LF_FSK2a_PWM_MARK_CYCLES (LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2)
+
 static nrf_pwm_values_wave_form_t m_ioprox_pwm_seq_vals[IOPROX_RAW_SIZE * 6] = {};
 
 nrf_pwm_sequence_t m_ioprox_pwm_seq = {
@@ -334,13 +342,13 @@ static bool ioprox_decoder_feed(void *codec, uint16_t val) {
 static inline void ioprox_emit_bit(int *k, bool bit) {
     if (!bit) {
         for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
+            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_MARK_CYCLES;
             m_ioprox_pwm_seq_vals[*k].counter_top  = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
             (*k)++;
         }
     } else {
         for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
+            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_MARK_CYCLES;
             m_ioprox_pwm_seq_vals[*k].counter_top  = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
             (*k)++;
         }
