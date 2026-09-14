@@ -332,6 +332,13 @@ shipped (C276).** `lf hid prox read` now states that an unpinned read is the FIR
 fits rather than the only one, names the `-f` flag, and quotes the measured cost. The walk
 itself is untouched.
 
+⛔⛔ **THE NUMBER TO PUT IN FRONT OF UPSTREAM (C284): 15 of the 29 formats that can be written
+to a real tag come back as a DIFFERENT format with a DIFFERENT credential on an unpinned
+read.** Not a corner case — half the table. A Kastle tag holding fc 1 / cn 1 reports as HID
+Check Point card 8389632; `-f KASTLE` returns fc 1 / cn 1 exactly, so the tags are fine and
+the walk is what loses it. ⇒ Any proposal about `unpack()` should lead with that measurement
+rather than with C251's single corrupted-frame anecdote.
+
 ⭐ **And this row overstated the risk of changing it.** It said narrowing `unpack()` touches
 "every reader that guesses a format". A whole-tree grep finds **one caller: `hidprox.c:134`.**
 ioProx has a fixed XSF layout; Indala prints its own 26-bit interpretation without the table.
