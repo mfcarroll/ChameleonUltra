@@ -33,14 +33,18 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="$HERE/../../software/script/.venv/bin/python"
 CU="$HERE/../../software/script/cu.py"
-CH2=/dev/tty.usbmodemF429364E46961
+# ⚠ THE EMULATOR IS WHICHEVER CHAMELEON FACES THE FLIPPER, and that is #1, not #2 — the
+# script was written assuming #2 would be moved. #1 was reflashed to current firmware
+# 2026-09-14 (C363), so the emulate column needs no bench change at all.
+EMU="${EMU:-/dev/tty.usbmodemC3A1656543DE1}"
+CH2="$EMU"
 SLOT="${SLOT:-8}"          # a scratch slot, so nothing anyone curated is overwritten
 ATTEMPTS="${ATTEMPTS:-6}"
 cu () { "$PY" "$CU" "hw connect -p $CH2" "$@" 2>&1 }
 fread () { "$PY" "$HERE/flipper.py" read --mode both --attempts "$ATTEMPTS" 2>&1 }
 
 # protocol -> econfig args | expected modulation arm
-typeset -A E MOD
+typeset -A E MOD TYPE
 E[indala]="lf indala econfig -s $SLOT --id a0000000e6bd0e92";                 MOD[indala]=psk
 E[idteck]="lf idteck econfig -s $SLOT --id 4944544b55667788";               MOD[idteck]=psk
 E[keri]="lf keri econfig -s $SLOT --id 80003039";                           MOD[keri]=psk
@@ -52,6 +56,18 @@ E[hidprox]="lf hid prox econfig -s $SLOT -f H10301 --fc 123 --cn 4567";      MOD
 E[ioprox]="lf ioprox econfig -s $SLOT --ver 1 --fc 83 --cn 1337";            MOD[ioprox]=ask
 E[awid]="lf awid econfig -s $SLOT --raw 011d81711dd1181111111111";           MOD[awid]=ask
 E[gproxii]="lf gproxii econfig -s $SLOT --raw fac2a38c2b081af0210b12c2";     MOD[gproxii]=ask
+
+TYPE[indala]="Indala"
+TYPE[idteck]="IDTECK"
+TYPE[keri]="Keri"
+TYPE[nexwatch]="NexWatch"
+TYPE[gallagher]="Gallagher"
+TYPE[securakey]="Securakey"
+TYPE[noralsy]="Noralsy"
+TYPE[hidprox]="HIDProx"
+TYPE[ioprox]="ioProx"
+TYPE[awid]="AWID"
+TYPE[gproxii]="GProxII"
 
 allp=(indala idteck keri nexwatch gallagher securakey noralsy hidprox ioprox awid gproxii)
 if (( $# )); then protos=("$@"); else protos=($allp); fi
@@ -75,8 +91,21 @@ null_check "before" || { print -r -- "  ⇒ ABORTING: an ambient hit makes every
 
 for p in $protos; do
   [[ -z "${E[$p]:-}" ]] && { print -r -- "  $p: no econfig entry"; continue; }
-  err=$(cu "${E[$p]}" | grep -iE "error|usage|invalid|unrecognized|Traceback" | head -1)
+  # ⛔⛔ SET THE SLOT'S LF TYPE FIRST. `econfig` writes the CREDENTIAL and not the type, so a
+  # slot whose LF is still `(disabled)undef` emits nothing however correct the credential is.
+  # The firmware says so — `WARNING: Slot LF type is not Indala` — and the first version of
+  # this script filtered for error|usage|invalid|Traceback, which does not match WARNING. The
+  # answer was printed on the very first run and thrown away by my own grep.
+  cu "hw slot type -s $SLOT -t ${TYPE[$p]}" >/dev/null
+  err=$(cu "${E[$p]}" | grep -iE "error|warning|usage|invalid|unrecognized|Traceback" | head -1)
   if [[ -n "$err" ]]; then print -r -- "  ⛔ $p: econfig REFUSED — $err"; continue; fi
+  # ⛔⛔ PUT IT BACK INTO EMULATION MODE. Step 1's null check leaves the device in READER
+  # mode, and the first version of this script never switched back — so every arm was
+  # measured against a device emulating nothing and scored 0, with a clean null either side
+  # that looked like confirmation. The null and the arm were both right; the device was idle.
+  cu "hw slot change -s $SLOT" >/dev/null
+  cu "hw mode -e" >/dev/null
+  sleep 1
   o=$(fread)
   psk=$(print -r -- "$o" | grep -oiE "psk [0-9]+/[0-9]+" | head -1)
   ask=$(print -r -- "$o" | grep -oiE "ask [0-9]+/[0-9]+" | head -1)

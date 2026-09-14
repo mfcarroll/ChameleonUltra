@@ -71,10 +71,11 @@ PWM-on-the-coil at all. `./emugrade.sh` does all eleven arms in one command with
 (null first and abort on an ambient hit, wrong-modulation arm as control, null again, scratch slot 8).
 ⚠ **Plumbing tested, no arm ever scored — the first run is the experiment, not a regression check.**
 
-⛔⛔ **AND THE STATED REASON #1 IS NEVER REFLASHED DOES NOT SURVIVE CHECKING (C354).** It is said to hold
-*the NexWatch slot*; `hw slot list` shows **no NexWatch** — EM410X `DEADBEEF88` (active), Mifare Ultralight,
-EM410X, then empty. If nothing on #1 matters, the emulate column stops needing a bench change at all.
-⚠ **Operator's call. Not acted on.**
+✅ **#1 IS REFLASHED — `v2.2.0-670-g90be1e2` (C363, C364).** The *NexWatch slot* was a device-MODE reminder I
+repeated into a constraint; the operator confirmed neither unit has ever held a real credential. ⇒ **Emulate
+needs NO bench change** — #1 already faces the Flipper. ⚠ `./emugrade.sh` targets #1 by default now, and it
+**does not yet produce a result**: slot 1 EM410X reads as a positive control, Indala on slot 8 is 0 of 6 with
+the cause unreached after three script bugs of mine were fixed. Not a firmware finding — an unfinished test.
 
 #### Do not re-do these
 
@@ -567,6 +568,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 20:20 | **C364 — #1 reflashed, emulate unblocked with no bench change; battery still not producing a result** | 70 → 71 | Positive control passes (EM410X slot 1); Indala slot 8 is 0/6 after three of my own script bugs. `enter_dfu` needs a settle before nrfutil | 1 flash, 1 control, 3 script bugs |
 | 2026-09-14 19:50 | **C363 — traced the NexWatch-slot claim: it was a device-MODE reminder I repeated into a constraint** | 69 → 70 | Origin `5cda84ab` says *put it back to `hw mode -r`*; I compressed it into the loop prompt and restated it ~20 times. Operator confirms neither unit ever held a real credential | 3 commits traced, 16 changed files counted |
 | 2026-09-14 19:25 | **C362 — F9 is not standalone (needs PR 1's drive API); `FIXES.md` claimed all eleven were** | 68 → 69 | Third extraction, first failure. A wrong PREMISE rather than a wrong description — undetectable by reading. Header rewritten; 8 entries still untested | 3 extractions, 2 built, 1 failed at the first symbol |
 | 2026-09-14 19:00 | **C361 — PR 1 (F8) built on `main`, 6 files +51; its file list was wrong two ways** | 67 → 68 | Omitted `ble_main.h`, listed `lf_reader_generic.c` it does not need — so F8 does NOT depend on F5. First inter-PR ordering constraint found (`lf_pac_data.c`, shared with F9) | 2 builds, one deliberate failure that pinpointed the missing extern |
