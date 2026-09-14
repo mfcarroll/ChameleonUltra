@@ -353,10 +353,21 @@ bool lf_t55xx_read_block_probe(uint8_t block, uint32_t passwd, bool use_pwd, boo
 
 #endif /* LF_RESEARCH_CMDS_ENABLED */
 
+/* ⚠ INSTRUMENTATION — U16. A silent read tells the host nothing about WHY: whether the scan
+ * ran out of budget, never decoded anything, or decoded plenty that never agreed. Those need
+ * different fixes and the host cannot tell them apart. Counters here, surfaced on a FAILED
+ * fdxb scan under LF_RESEARCH_CMDS_ENABLED. ⇒ Remove when U16 closes. */
+static lf_sampled_stats_t m_stats;
+
+const lf_sampled_stats_t *lf_sampled_last_stats(void) {
+    return &m_stats;
+}
+
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                   lf_sampled_read_t *out, uint32_t timeout_ms, int32_t *energy_out,
                   const uint8_t *phases, uint8_t phase_count, uint8_t tries,
                   uint8_t drive, uint16_t gap_ms) {
+    memset(&m_stats, 0, sizeof(m_stats));
     if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
         capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
     }
@@ -374,6 +385,8 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
 
     for (size_t pi = 0; pi < phase_count && !ok; pi++) {
         const uint8_t phase = phases[pi];
+        m_stats.phases++;
+        m_stats.last_phase = phase;
         lf_125khz_radio_saadc_phase_set(phase);
 
         /* ⚠ RESET PER PHASE. A word decoded at one sample phase does not corroborate one at
@@ -424,8 +437,10 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
                 bsp_delay_ms(gap_ms);
             }
             size_t got = 0;
+            m_stats.attempts++;
             if (!raw_read_samples(m_samples, capture_samples,
                                   INDALA_CAPTURE_TIMEOUT_MS(capture_samples), &got, 0)) {
+                m_stats.capture_failed++;
                 continue;
             }
             /* ⛔⛔ DISCARD A SPLICED CAPTURE. `raw_read_samples` returns true for one: it
@@ -437,11 +452,16 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
              * ⚠ This costs nothing when drops do not happen and is the safe direction when
              * they do: a discarded capture is retried, a spliced one is believed. */
             if (lf_capture_dropped() != 0) {
+                m_stats.spliced++;
                 continue;
             }
+            m_stats.captures++;
 
             /* ⚠ IN PLACE: this consumes m_samples. Nothing needs the raw capture again. */
             bool decoded = decode(m_samples, got, &res);
+            if (decoded) {
+                m_stats.decodes++;
+            }
             /* Set by the decoder either way — see lf_indala_psk.h. */
             if (res.energy > loudest) {
                 loudest = res.energy;

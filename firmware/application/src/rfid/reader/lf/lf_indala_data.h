@@ -44,6 +44,21 @@
  */
 bool indala_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
 
+/** ⚠ INSTRUMENTATION — U16, remove when it closes. What the last sampled scan actually did,
+ *  so a silent read can be told apart from a starved one and from one that decoded plenty
+ *  and never agreed. */
+typedef struct {
+    uint16_t attempts;       /**< captures the scan tried to take. */
+    uint16_t captures;       /**< buffers it kept (not failed, not spliced). */
+    uint16_t decodes;        /**< kept buffers the decoder turned into a frame. */
+    uint16_t capture_failed; /**< `raw_read_samples` returned false. */
+    uint16_t spliced;        /**< discarded for dropped ring samples. */
+    uint8_t  phases;         /**< sample phases entered. */
+    uint8_t  last_phase;     /**< the last one entered. */
+} lf_sampled_stats_t;
+
+const lf_sampled_stats_t *lf_sampled_last_stats(void);
+
 /** Bytes written by idteck_read(): the 8-byte frame, then checksum, then the 24-bit card
  *  number most significant first, then phase/offset/tries — the same shape as Indala's. */
 #define IDTECK_READ_DATA_SIZE 16

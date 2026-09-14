@@ -945,6 +945,25 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_read_capture(uint16_t cmd, uint16
 static data_frame_tx_t *cmd_processor_fdxb_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[FDXB_READ_DATA_SIZE] = { 0x00 };
     status = scan_fdxb(card_data);
+#if LF_RESEARCH_CMDS_ENABLED
+    /* ⭐ INSTRUMENTATION — U16. On a FAILED scan, return what the scan actually did instead of
+     * an empty payload. "It read nothing" covers three different defects: the budget ran out
+     * before a second capture, nothing ever decoded, or plenty decoded and never two alike.
+     * Only the device can count those. ⛔ It changes the WIRE SHAPE of a failure reply, exactly
+     * as the GProxII energy probe does, so it stays gated. */
+    if (status != STATUS_LF_TAG_OK) {
+        const lf_sampled_stats_t *st = lf_sampled_last_stats();
+        uint8_t s8[12] = {
+            (uint8_t)(st->attempts >> 8),       (uint8_t)st->attempts,
+            (uint8_t)(st->captures >> 8),       (uint8_t)st->captures,
+            (uint8_t)(st->decodes >> 8),        (uint8_t)st->decodes,
+            (uint8_t)(st->capture_failed >> 8), (uint8_t)st->capture_failed,
+            (uint8_t)(st->spliced >> 8),        (uint8_t)st->spliced,
+            st->phases, st->last_phase
+        };
+        return data_frame_make(cmd, status, sizeof(s8), s8);
+    }
+#endif
     if (status != STATUS_LF_TAG_OK) {
         return data_frame_make(cmd, status, 0, NULL);
     }

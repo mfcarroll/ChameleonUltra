@@ -75,7 +75,7 @@ registered `TAG_TYPE_*`.
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **0/6 — and so are the two SHIPPED FSK2a emitters, so this is the device, not our emitter (C246)** | ✓ |
 | **FDX-A** | ✓ **4/4, emulation only** — ⚠ pm3 DOES have FDX-A, under `lf destron` (C333) | ⚠ **refusal REOPENED (C333)** — C185 called it unverifiable here; `lf destron clone` exists | ✗ | ✓ |
-| **FDX-B** | ⛔ **0/4 on the fixed build — the tail does not corroborate (C332)**; C214's 6/6 checked half the frame | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
+| **FDX-B** | ✓ **6/6 on device (C214, C215), re-confirmed 15/15 (C337)** — ⚠ one unreproduced failure episode | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
 | **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Keri** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, ROTATION verified against a reference clone (C234)** | ✓ **6/6 via Flipper (C160)** | ✓ |
@@ -359,7 +359,7 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Pyramid | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | FDX-A | **B** 4/4 — ⚠ against a Flipper EMULATION, pm3 has no FDX-A (C201) | ⛔ **refused** (C185) | ⛔ **not built** |
 | GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | ⛔ **impossible as designed (C242)** |
-| FDX-B | ⛔ **DOWNGRADED — 0 of 4 on the fixed build (C332).** C214's A 6/6 was corroborated on 8 of its 16 bytes; its tail does not repeat | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | ⛔ **not built** |
+| FDX-B | **A** 6/6 (C214/C215), **re-confirmed 15 of 15 (C337)** — ⚠ one unreproduced 0-of-4 episode, instrumented and unexplained | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | ⛔ **not built** |
 
 ⭐ **The write column was re-measured wholesale on 2026-09-14 (C330), and the numbers above are that
 measurement.** Every write arm had been scored while our own HID writer had the tag password-locked
