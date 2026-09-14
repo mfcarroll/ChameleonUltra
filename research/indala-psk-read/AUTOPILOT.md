@@ -91,6 +91,49 @@ in 92 captures (C267) — all distinct, so agreement caught them all (C268). A t
 broken produced 12, and one recurred (C269). ⇒ Quote that to a reviewer rather than any single
 number.
 
+### ✅ 2026-09-14 07:50 — THE PASSWORD DEFECT, AND WHAT IT RETIRES
+
+⭐⭐⭐⭐ **THE BIGGEST FINDING OF THIS BRANCH IS AN UPSTREAM DEFECT, AND IT IS FIXED (F1, C322-C326).**
+**Writing any T5577 with a ChameleonUltra silently password-protected it.** All 8
+`T5577_*_CONFIG` constants carried `T5577_PWD`, and the key came from two places —
+`chameleon_cmd.py`'s globals (`new_key = 20206666`) for hidprox/em410x, a function default
+(`51243648`) for indala/indala224/gproxii/awid — with neither documented. A tag locked by
+`lf hid prox write` could not be opened by `lf gproxii write`, by the Proxmark, or by anything
+else. Two tags here were unrecoverable until the key was read off a third.
+
+**Fixed and verified on hardware.** Password protection is opt-in: `T5577_PWD` is out of the
+config constants and `write_t55xx()` sets it only when a non-zero key is supplied; host `new_key`
+is zero and `old_keys` is `[20206666, 51243648, 19920427]` so previously-locked tags stay
+writable. A blank tag written with the fix reads `Block0 00107060`, **`Password set: No`**,
+block 7 `00000000`.
+
+⛔⛔ **WHAT THIS RETIRES — DO NOT BUILD ON ANY OF IT.**
+- **C305** — *"a write lands iff the config word already matches"* — DISSOLVED. The writes that
+  failed carried the wrong password. Nothing to do with config words.
+- **C299 / C306** — the sandwich geometry, coil coupling, BLE bursts, *"pm3's downlink is dead"*.
+  All one locked tag. pm3 was never faulty.
+- **C324** — a "deterministic corruption" I invented for a constant I had not looked up.
+- **C309 / C310's framing** — our read command was well-formed and *refused*, not ignored.
+- The `0EAAACAA` and `80000000` constants were demodulation artefacts of a failed read, nothing
+  more.
+
+⭐ **`FIXES.md` IS NEW AND IS THE PLACE FOR THIS CLASS OF WORK.** Six defects found while doing
+something else, **all six now fixed and hardware-verified**, each scoped as its own upstream PR
+and each present on `main`: F1 the password defect, F2 five writers reporting success having
+written nothing, F3 a header declaring a lock bit as a length, F4 `unpack()` relabelling 15 of 29
+formats, F5 two 28 KB capture buffers resident at once, F6 the HID writer asserting success
+without reading back. ⇒ Keep adding to it rather than folding these into the protocol work.
+
+**THE BENCH.** All four devices enumerate. **#2 runs `9d39c15` — a clean build of HEAD
+(`v2.2.0-592`, no `-dirty`)**. #1 is deliberately NOT reflashed and still holds the NexWatch
+slot. Both previously-locked tags are recovered; the working tag holds **H10301 FC 42 / CN 999**.
+⚠ **The sandwich is DISASSEMBLED** — it was taken apart chasing C299, which turned out to be the
+password. ⚠ The Flipper reported a crash-and-reboot at an unknown time; rig A, unexamined.
+
+⇒ **NEXT: re-grade the write arms.** GProxII, AWID, Keri, Indala, NexWatch, Gallagher, Securakey
+and Noralsy were all scored against a password-locked tag and their results are void. That is the
+first job, and it is pure unattended work.
+
 ### ✅ 2026-09-15 20:45 — WHAT CHANGED SINCE THE 12:30 PARAGRAPH ABOVE
 
 ⭐ **BOTH FORMER "DO NOT TOUCH" ITEMS WERE RELEASED BY THE OPERATOR and are DONE.**
@@ -350,6 +393,7 @@ the two Chameleons face each other.
 | **U11** | **FSK2a EMITTERS** — AWID first, then Paradox, Pyramid, FDX-A, one at a time. ⭐ The shape is known: the ASK emitters put one PWM entry per bit with `counter_top` set to the carrier cycles that bit occupies, and FSK2a only needs `counter_top` 8 or 10 per tone period instead. ⚠ A `ctest/roundtrip.c` arm per protocol, which is where three wrong encodings were caught before (C156) | device (rig A only — no tag needed) | the Flipper reads our emulation as the right credential, ≥5 of 5, with a control either side |
 | **U12** | **BIPHASE EMITTERS** — GProxII then FDX-B, only after U11 is completely done. ⚠ GProxII is BIPHASE and FDX-B is DIPHASE and INVERTED; they are one bit apart in the T5577 config and must not be assumed to share an emitter until one has been through end to end | device (rig A only) | same bar as U11 |
 | **U13** | **§9 REFRESH** — pure compute. The instrumentation list is stale: `DATA_CMD_LF_READER_CAPTURE`, the GProxII failure-energy reporting and `rdrcap.py` have all been added since it was written, and the command-id count is no longer 32. ⚠ The three-PR split also predates the biphase family | compute | §9 and §9b match the branch again |
+| **U15** | ⭐⭐ **RE-GRADE EVERY WRITE ARM AGAINST AN UNLOCKED TAG.** GProxII, AWID, Keri, Indala, NexWatch, Gallagher, Securakey and Noralsy were all scored while the tag was password-locked by our own writer, so every "write fails" result from 2026-09-15 onward is void (C325). ⭐ Pure unattended work: write, verify with pm3, restore. The grid's write column needs rebuilding from it | device (sandwich) | each protocol written and read back by an INDEPENDENT tool, 4 of 4, and the grid updated |
 | **U14** | ⭐ **HOW THE REFERENCES GET ACCURACY — audit every Flipper variant and the Proxmark for their scan / repeat-read discipline.** Operator-requested 2026-09-15. Today's C268/C269 found that our two-agreeing-stacks rule, not the frame gates, is what carries this reader — so what the references do about the same problem is directly load-bearing and has never been compared side by side. ⚠ **Include the variants, not just Momentum**: `flipperzero-firmware`, `Momentum-Firmware`, `Momentum-Firmware-slix`, `unleashed-firmware`, `roguemaster` and `proxmark3` are all on disk, so this needs no fetching. Questions: how many reads before reporting; whether agreement is on the PROTOCOL or on the DECODED DATA; per-protocol counts and why they differ; what happens when several protocols match; and what is GATED versus merely reported | compute | a side-by-side table in `NEXT.md` with each claim traced to the file and line that implements it, and our own rule placed against them |
 
 ⛔ **Not yours to decide** — leave these alone and do not "make progress" on them:
@@ -462,6 +506,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 07:50 | **§1 and §5 rewritten for the password defect** | 34 → 34 | §5's "bench cannot change tag protocol" blocker CLEARED — it was the password, not the bench. §1 now names what C325 retires so a fresh context cannot build on C299/C305/C306/C324 | #2 reflashed clean at `v2.2.0-592-g9d39c15`; notes consistent |
 | 2026-09-16 04:30 | **C318 — capture buffers shared, 28,672 B returned** | 33 → 34 | BSS 172,760 → 144,088; one 0x7000 symbol where there were two. Removes PR 1's RAM objection | Predicted then measured to the byte; three hardware paths + 4-arm harness |
 | 2026-09-16 03:55 | **C317 — 57 KB in two capture buffers, never live together** | 32 → 33 | `m_samples` and `sniff_buf` both 28,672 B and both static. Sharing one returns more than PR 1's entire RAM cost. Belongs in `lf_reader_generic.c`, not reached into from a protocol file | `nm` on the shipping image; usage traced across the tree. Not implemented — needs its own verified unit |
 | 2026-09-16 03:20 | **C316 — PR 1 builds; the real blocker is RAM** | 31 → 32 | Minimum is 13 files with a 3-line `app_cmd.c` hunk. Flash +1,024 B but BSS +24,692 B, almost all one buffer going 4,000 → 28,672 | `nm` attributes the cost to a named symbol, so the reviewer objection can be answered rather than just reported |
@@ -566,11 +611,13 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 ## 5. BLOCKED
 
-⛔⛔ **THE BENCH CANNOT CHANGE THE TAG'S PROTOCOL RIGHT NOW (C305, 2026-09-15).** Only
-`lf hid prox write` lands, because it writes the config word already on the tag; every writer
-that changes the config fails, 0 of 9 across four protocols. ⇒ **Any future unit that needs a
-non-HID credential on the T5577 is blocked until this is understood**, and that includes the
-write-and-read-back arms for GProxII, AWID, Keri and Indala. The mechanism is NOT established. — needs a person
+✅ **CLEARED 2026-09-14 — the entry that stood here was wrong.** It said the bench could not
+change the tag's protocol (C305). It could; the tag was **password-locked by our own writer**,
+and C325 dissolved that claim entirely. ⇒ **Nothing about the bench is blocked.** The sandwich,
+the geometry, the coil coupling and the "pm3 downlink is dead" account (C299/C306) were all the
+same one cause and are all retired. ⚠ The write arms for GProxII / AWID / Keri / Indala were
+scored as FAILING against a locked tag and **must be re-graded** — that is a queue item, not a
+blocker.
 
 ### ⚠ 2026-09-15 13:55 — THE PROXMARK CANNOT WRITE THE T5577 ANY MORE. OURS CAN.
 
