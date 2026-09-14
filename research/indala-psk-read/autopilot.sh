@@ -76,15 +76,22 @@ except Exception:
     pass
 PYEOF
 )
-        head8=$(git -C "$REPO" rev-parse --short=7 HEAD)
+        # ⛔⛔ COMPARE AGAINST THE LAST FIRMWARE COMMIT, NOT HEAD. A first version compared to
+        # HEAD and went red the moment a notes-only commit landed — which is every second
+        # commit here. A check that is permanently red gets worked around rather than fixed,
+        # which is exactly what nearly happened to `checkdocs.sh`. What matters is whether the
+        # flashed build CONTAINS the newest firmware change; notes commits after it are
+        # irrelevant to the device.
+        fwcommit=$(git -C "$REPO" log -1 --format=%h -- firmware/ 2>/dev/null)
+        built=$(printf '%s' "$fw" | sed -E 's/.*-g([0-9a-f]+).*/\1/')
         if [ -z "$fw" ]; then
             echo "firmware    #2 did not answer (busy, DFU, or reader mode) — check before device work"
         elif printf '%s' "$fw" | grep -q -- "-dirty"; then
             echo "⛔ firmware  #2 runs $fw — built from a DIRTY tree, so it matches no commit"
-        elif printf '%s' "$fw" | grep -q -- "$head8"; then
-            echo "firmware    #2 runs $fw — matches HEAD"
+        elif git -C "$REPO" merge-base --is-ancestor "$fwcommit" "$built" 2>/dev/null; then
+            echo "firmware    #2 runs $fw — current (includes $fwcommit, the last firmware commit)"
         else
-            echo "⛔ firmware  #2 runs $fw but HEAD is $head8 — THE DEVICE IS BEHIND THE SOURCE (C358)"
+            echo "⛔ firmware  #2 runs $fw — MISSING firmware commit $fwcommit, THE DEVICE IS BEHIND (C358)"
         fi
     fi
     # ⚠ A held port means another session is driving that device. Skip device work.
