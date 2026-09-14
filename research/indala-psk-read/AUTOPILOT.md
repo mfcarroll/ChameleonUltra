@@ -400,6 +400,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 08:35 | **C288 — regression pass, 12 read arms** | 14 → 14 | All 4/4 on `5a5fdf7c` after four gate changes and a payload extension. HID re-rated 24/24 against C248's 48/48 | Every credential Proxmark-written from arguments we chose; the one change with a plausible cost measured against its own pre-change number |
 | 2026-09-15 07:55 | **C287 — the reader names the other layouts** | 13 → 14 | `wiegand_other_matches()` in the file that owns the table; count + 2 names in payload bytes 13-15 that were already zero. Flashed to #2 | Counts equal the Proxmark's parity-passing candidates exactly on 3 tags; harness green; bench restored 4/4 |
 | 2026-09-15 07:10 | **C286 — §9f rewritten** | 13 → 13 | Ten claims had been appended in order; the tail still said the defect needs a perturbed capture, which C284 disproved on valid tags. Restated strongest-first | Three contradicted statements each named with the claim that refutes them; nothing dropped, history left in LOG.md |
 | 2026-09-15 06:35 | **C285 — the walk cannot be made correct** | 13 → 13 | 13 of 32 unpackers check nothing, and that list predicts C284's relabel map exactly. The Proxmark prints every candidate with a parity verdict; we pick the first | The check-less list and the relabel map were derived independently and agree; pm3's parity column confirms the 13 have nothing to check |
