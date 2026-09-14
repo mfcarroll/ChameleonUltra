@@ -105,5 +105,69 @@ for f in archive/*.md; do
     grep -q 'FROZEN' "$f" || note "$f lost its FROZEN banner"
 done
 
+echo "stale counts"
+# ⛔⛔ A FIFTH DRIFT CLASS, AND IT BIT TWICE IN ONE DAY. The four checks above ask whether a
+# REFERENCE resolves. Neither of the day's two worst notes defects was a broken reference:
+# §9h claimed the instrumentation gate cost "1,088 bytes of flash and 4,008 of RAM" when
+# re-measurement said 1,560 and 8,016 — the RAM figure had exactly doubled (C390) — and
+# FIXES.md's own header still said "9 of 11 pass ... F10 and F11 NOT CHECKED" hours after
+# C393 made it 11 of 11. Both were load-bearing numbers a maintainer would be handed, and
+# both were caught by someone happening to read them.
+#
+# ⭐ A stale count is NOT "a claim that is false", which this file correctly refuses to judge.
+# It is TWO PLACES STATING DIFFERENT NUMBERS FOR THE SAME THING, which is internal consistency
+# and is mechanically checkable.
+#
+# ⚠ DELIBERATELY NARROW. A checker that cries wolf on correct notes gets worked around instead
+# of fixed — this file says so itself, twice. So only two patterns are checked, both of which
+# were actually stale today, and anything ambiguous is left alone.
+if [ -e FIXES.md ]; then
+    entries=$(grep -cE '^\| F[0-9]+ \|' FIXES.md)
+    # ⚠ A REGRESSION TARGET IS A *FIXED* ENTRY. F12 is registered and deliberately NOT FIXED
+    # (C395), so it has no `fixcheck.sh` arm and must not be counted in an "N of M pass" total.
+    # ⛔ This check's FIRST run flagged "11 of 11 pass" against a 12-row table — prose that was
+    # correct in meaning and ambiguous on the page. Both sides were fixed: the count below
+    # excludes open entries, and the sentence in FIXES.md now says which 11 it means. Loosening
+    # a checker to silence a true ambiguity is how a checker stops being believed.
+    fixed=$(grep -E '^\| F[0-9]+ \|' FIXES.md | grep -vc 'NOT FIXED')
+    # (a) STRUCTURAL, zero false-positive risk: F-numbers must be 1..N with no gaps or repeats.
+    #     Catches a row added without renumbering, or a duplicated number.
+    maxf=$(grep -oE '^\| F[0-9]+ ' FIXES.md | grep -oE '[0-9]+' | sort -n | tail -1)
+    uniqf=$(grep -oE '^\| F[0-9]+ ' FIXES.md | grep -oE '[0-9]+' | sort -n | uniq | wc -l | tr -d ' ')
+    if [ -n "$maxf" ] && { [ "$entries" != "$maxf" ] || [ "$uniqf" != "$entries" ]; }; then
+        note "FIXES.md F-numbers are not 1..N: $entries rows, highest F$maxf, $uniqf distinct"
+    fi
+    # (b) the exact sentence that went stale: "N of M pass".
+    # ⛔⛔ CHECKING ONLY M IS NOT ENOUGH, AND THE BREAK-TEST CAUGHT ME. The first version compared
+    # the DENOMINATOR against the entry count — so restoring today's actual stale sentence,
+    # "9 of 11 pass", PASSED: the 11 was right and the 9 was the rot. A check written for a
+    # specific failure that does not catch that failure is worse than none, because it is
+    # believed. ⇒ Assert BOTH numbers.
+    # ⚠ N is asserted equal to M deliberately. A genuine shortfall — a real regression, or an
+    # arm that cannot run — then trips this and forces the prose to be rewritten ON PURPOSE,
+    # which is the outcome wanted: `fixcheck.sh` is what REPORTS a regression, and the notes
+    # claiming a stale all-clear is the thing this check exists to stop.
+    while read -r pair; do
+        # ⚠ A here-string always yields one line, so an EMPTY match reaches the loop as "" and
+        # reported "FIXES.md says ' of  pass'" against a perfectly clean file. A checker whose
+        # first output on correct notes is a false alarm is the failure mode this file warns
+        # about twice — guard the empty case before comparing anything.
+        [ -n "$pair" ] || continue
+        n=${pair%% of *}; m=${pair##* of }
+        if [ "$m" != "$fixed" ]; then
+            note "FIXES.md says '$n of $m pass' but it has $fixed FIXED entries ($entries rows)"
+        elif [ "$n" != "$m" ]; then
+            note "FIXES.md says '$n of $m pass' — a shortfall must be stated deliberately, not left stale"
+        fi
+    done <<< "$(grep -oE '[0-9]+ of [0-9]+ pass' FIXES.md | sed 's/ pass//')"
+    # (c) AUTOPILOT's §1 summary row states the same total.
+    if [ -e AUTOPILOT.md ]; then
+        while read -r n; do
+            [ -n "$n" ] && [ "$n" != "$entries" ] && \
+                note "AUTOPILOT.md says '$n registered' but FIXES.md has $entries entries"
+        done <<< "$(grep -oE '\*\*[0-9]+ registered' AUTOPILOT.md | grep -oE '[0-9]+')"
+    fi
+fi
+
 [ $fail -eq 0 ] && echo "✓ notes consistent" || echo "✗ see above"
 exit $fail

@@ -16,7 +16,9 @@ that is about something else.
 
 ⭐⭐ **RUN `./fixcheck.sh` BEFORE TRUSTING THIS FILE.** Most entries say *fixed and hardware-verified*, and some
 were verified months ago on firmware that has since been rewritten underneath them. The script re-tests each one
-against the build actually flashed: **11 of 11 pass, 0 regressed, 0 not checkable** as of 2026-09-14 (C393).
+against the build actually flashed: **11 of the 11 FIXED entries pass, 0 regressed, 0 not checkable** as of
+2026-09-14 (C393). ⚠ *Eleven of eleven, out of twelve rows* — F12 is registered and OPEN, so it is not a
+regression target and has no arm; the script names it separately.
 ⭐ F10 and F11 were the standing gap — EMULATION fixes needing the Flipper, whose plugin would not start (C377)
 — and they now run: F10 as a Gallagher → Indala type change with no reboot, both emulating, and F11 as
 frames-per-burst **21 vs 31**, derived rather than constant.
