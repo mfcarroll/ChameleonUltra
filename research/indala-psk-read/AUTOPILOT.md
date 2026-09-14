@@ -57,22 +57,37 @@ dead reader. ⭐⭐ **Credentials verified, not just hit counts**: GProxII reads
 `GProxII FAC2A38C2B081AF0210B12C2` (FC 123 / Card 1337 / LEN 26), byte-identical to the raw written; Indala
 reads `Indala26 CD7A1D30`, FC 52 / Card 63612. Counting hits alone would have repeated C353's front-end trap.
 
-⭐ **U11 PROGRESS — FIVE CAUSES ELIMINATED BY MEASUREMENT, ONE LEFT (C379, C380).** Ruled out: the **loader**
-(`have pwm seq` True, correct clock, distinct frames/burst), **playback** (36 bursts per read vs Gallagher's
-12 — the ratio is read duration, not emission), the **frame arithmetic**, our **own decoder** (round-trips
-exact), and the **mark shape** (C226's fixed-4 correction had only ever reached AWID; `hidprox.c` and
-`ioprox.c` still emitted `counter_top / 2`, now fixed, built and flashed — **and still 0/6**, with Gallagher
-6/6 bracketing either side).
-⇒ **WHAT IS LEFT IS C217'S ORIGINAL QUESTION, STILL UNANSWERED**: does the PWM peripheral actually emit what
-it is asked at `counter_top` **8 and 10**, where every working emitter here uses 32, 40 or 64? ⚠ An fc/8 tone
-switches the modulator at **15.6 kHz** against ASK RF/32's **3.9 kHz** — a 4x-faster switch through the same
-analog path, and untested.
-⇒ **NEXT STEP IS TO CAPTURE THE EMISSION, not to reason about it further.** The Flipper's `rfid raw_read`
-writes samples to a file that can be pulled over its CLI; compare a silent HID emission against a working
-Gallagher one. ⛔ Do not change another constant before that capture exists — five hypotheses have now died
-in a row, and the sixth should be measured first.
+⭐⭐⭐⭐ **U11'S ROOT CAUSE IS FOUND AND MEASURED OFF THE AIR (C382): OUR FSK EMITTERS EMIT ONLY ONE TONE.**
+Captured our own emission with the Flipper's `rfid raw_read` and histogrammed the periods:
 
-✅ **AND U11 IS ALREADY SCOPED (C379).** All three silent protocols LOAD a sequence — `have pwm seq : True`
+| capture | periods in the RF/8 band (58-70 us) | in the RF/10 band (74-88 us) | `raw_analyze` verdict |
+|---|---|---|---|
+| **HID Prox** | **2257** | **0** | `Protocol: not found` |
+| **AWID** | **3620** | **2** | `Protocol: not found` |
+| **Gallagher** (control) | RF/32 half-bits at 131 and 253 us | — | `Protocol: Gallagher [12 00 10 E1 00 00 1A 85]` |
+
+⇒ **There is no frequency modulation on the air at all**, so an FSK decoder has nothing to find. The control
+pins the scale (one unit ~1 us, RF/32 = 128/256 us) and proves the capture pipeline decodes correctly.
+
+⭐⭐ **AND IT UNIFIES THE WHOLE COLUMN.** Every emitter that WORKS uses a **single constant `counter_top`** —
+Gallagher 32, Securakey 40, Noralsy 32, GProxII one constant, em410x 64, every PSK1 protocol through psk1.c's
+`LF_PSK1_SUBCARRIER_TOP`. **The three FSK emitters are the only ones that VARY `counter_top` within a
+sequence, and the variation is exactly what never reaches the air.**
+
+⇒ **LEADING MECHANISM**: the per-entry `counter_top` of a WAVEFORM-mode PWM sequence is not being applied, so
+the sequence plays at one period. ⚠ **That is an inference — the single tone is the measurement.**
+⇒ **THE CONFIRMING TEST IS NAMED AND CHEAP**: set BOTH hidprox tones to `counter_top` 10, reflash, re-capture.
+~80 us means the value is honoured when constant and the defect is specifically the variation.
+
+⛔ **WHY NO HOST TEST COULD EVER HAVE FOUND THIS**: `ctest` decodes the SEQUENCE ARRAY, where the two tones
+differ correctly. Only capturing the EMISSION separates what we intend from what we transmit — and this is
+the first time anything on this bench has done that.
+
+⭐ **Eliminated on the way, each by measurement**: the loader (C379), playback (36 bursts vs Gallagher's 12),
+the frame arithmetic, our own decoder, the mark shape (C380 — fixed, still 0/6), and the whole shared air
+path including our reader (C381 — the Flipper's HID emulation reads back FC 123 / CN 4567 exactly).
+
+✅ **U11 SCOPING (C379).** All three silent protocols LOAD a sequence — `have pwm seq : True`
 at the correct 125kHz, frames/burst **14 / 16 / 14**, distinct so three real waveforms were walked. ⇒ Not the
 loader and not the clock: the fault is FSK2a's **encoding**. The ASK emitters set `counter_top` to the carrier
 cycles per BIT; FSK2a needs 8 or 10 per TONE PERIOD. Start with a `ctest/roundtrip.c` arm per protocol (C156).
