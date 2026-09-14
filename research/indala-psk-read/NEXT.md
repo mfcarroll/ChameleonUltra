@@ -380,7 +380,7 @@ reports as HID Check Point card 8389632. ⭐ **`-f KASTLE` returns fc 1 / cn 1 e
 spot-checked), so the tags are perfect and the walk is what loses the information. No
 corruption is involved anywhere in that result.
 
-**Why, and why it cannot be tweaked away (C285).** 13 of the 32 `unpack_*` functions have no
+**Why, and why it cannot be tweaked away (C285).** 12 of the 31 `unpack_*` functions have no (C300 measured this; C285 said 13 of 32)
 rejection path at all — `ind27`/`indasc27`/`tecom27` (one shared helper), `ind29`, `adt31`,
 `hcp32`, `hpp32`, `kantech`, `wie32`, `optus`, `smartpass`, `p10004`. That list predicts C284's
 relabel map exactly, and the two were derived independently. The walk lands on the first format

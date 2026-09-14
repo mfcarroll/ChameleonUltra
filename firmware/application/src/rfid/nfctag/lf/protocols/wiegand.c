@@ -870,7 +870,7 @@ uint64_t pack(wiegand_card_t *card) {
 /* ⭐⭐ EVERY LAYOUT THAT FITS, NOT JUST THE FIRST — the behaviour C285 identified as one of
  * only two correct ones (the other being `-f`). `unpack()` returns the first match and the
  * caller prints it as the answer; on a real tag that is wrong for 15 of the 29 writable
- * formats (C284), because 13 of the 32 unpackers have no rejection path at all and the first
+ * formats (C284), because 12 of the 31 unpackers have no rejection path at all and the first
  * check-less format at a given length swallows everything there.
  *
  * ⛔ THE ENUMERATION BELONGS HERE, in the file that owns `formats[]`. A caller cannot do it
