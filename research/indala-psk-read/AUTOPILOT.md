@@ -40,6 +40,37 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐ 2026-09-14 17:05 — F12 NARROWED TO THE WAVEFORM'S SHAPE. THE SEQUENCE REACHES THE PERIPHERAL INTACT (C414)
+
+⭐ **Four eliminations, all measured:**
+1. **Truncated playback is refuted** — `ff00...` leads with eight 1-bits and still emits only 6.2% RF/10.
+2. **The device loads the RIGHT LENGTH every time.** `hw lfdebug`'s `SEQ[0].CNT` reads **9216 / 9408 / 9340 /
+   9600** for all-zeros, alternating, the real AWID frame and all-ones — exactly `4x(2304+k)` for each frame's
+   one-bit count. **The long tones ARE in the buffer the peripheral is reading.**
+3. **DECODER load is WAVEFORM, base clock 1MHz** — both correct.
+4. `recompute_frames_per_burst()` was already cleared; it sums the real `counter_top`s.
+
+⚠⚠ **NEAR-MISS WORTH KNOWING: `PWM0 COUNTERTOP` reads 1000 where ours is 16.** That looks damning. Indala PSK1
+and Gallagher — **both 6/6 working arms**, same peripheral, same WAVEFORM mode — read **1000 too**. It is the
+init default. ⇒ Take the control before believing a register.
+
+⭐⭐ **WHAT IS ACTUALLY DIFFERENT, FROM THE REAL TAG'S OWN CAPTURE: ITS MARK TRACKS ITS TONE AND OURS DOES NOT.**
+A real tag puts a **~50 us** mark on its 76-79 us periods and a **~20 us** mark on its 62-65 us ones — roughly
+constant duty, which is what a subcarrier square wave is. We hold the mark **fixed at 4 carrier cycles**, so our
+duty is **50% for RF/8 and 40% for RF/10**, and the DC average of our load modulation moves whenever the tone
+changes. ⇒ That mechanism predicts **exactly** C411's cliff — a pure frame settles at one average and works in
+both directions, a mixed frame never settles — and predicts its rate-independence too, since what matters is
+that the average moves at all, not how often.
+
+⛔ **HYPOTHESIS, NOT MEASUREMENT.** The tank's Q makes the same prediction and is not ours.
+
+⇒ **THE TEST IS ALSO THE FIX, and it needs no hands**: make the mark HALF the tone period, as a real tag does —
+mark 4 / gap 4 for RF/8, mark 5 / gap 5 for RF/10, constant 50% duty. `counter_top` must then divide 4 AND 5
+carrier cycles, so **8 ticks rather than 16**, which doubles the worst case to **4800 entries (38,400 bytes)**.
+⚠ Pin it in `ctest/roundtrip.c` BEFORE it goes near hardware — that arm has caught three wrong encodings.
+
+---
+
 ### ✅⭐⭐ 2026-09-14 16:55 — F12 CONVICTED AGAINST A REAL TAG, AND C400 CLOSED AS NOT REPRODUCIBLE
 
 ⭐⭐⭐ **F12 IS A FIRMWARE DEFECT, NOT AN INSTRUMENT ARTEFACT (C413).** A Proxmark-written HID Prox H10301
