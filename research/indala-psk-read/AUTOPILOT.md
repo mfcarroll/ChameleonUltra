@@ -38,7 +38,38 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔⛔ 2026-09-14 16:25 — FOUR READ ARMS DOWN: EVERY ASK/BIPHASE PROTOCOL THIS BRANCH ADDED (C402)
+### ⛔⛔ 2026-09-14 16:55 — TWO READ ARMS DOWN ON REAL TAGS. THE "FOUR" WAS MY TEST METHOD (C400, C404)
+
+⛔⛔ **READ THIS BEFORE THE BLOCK BELOW, WHICH IS RETRACTED.** C402 reported four arms down, boundaried as
+*protocols this branch added*. **That was an artefact of reading one Chameleon's EMULATION with another's
+SAADC capture path, which cannot work by design** — and the firmware says so itself. Probing **Indala**, the
+flagship read on the same path, returns the reader's own diagnostic:
+
+> *a tag-like subcarrier is present but no frame of the requested type could be decoded ... or an emulated
+> tag whose subcarrier is not locked to the reader's own carrier*
+
+⭐ A real tag DIVIDES the reader's carrier, so its subcarrier is inherently phase locked. An emulating
+Chameleon generates PWM from its own clock, and *in reader mode the carrier is generated, not recovered —
+nothing in the design ever knew a reader's carrier phase*.
+⇒ **The split is real but I named it wrong**: it is **needs phase lock (SAADC: indala, gallagher, securakey,
+noralsy, gproxii) vs envelope (GPIO: em410x, viking, hidprox, ioprox)**. EM410X and Viking were "controls"
+that could not have failed.
+
+⛔ **RETRACTED**: C402's attribution, its Noralsy and GProxII failures (emulation-only ⇒ **status unknown**),
+and **C403 entirely** — it re-ran the same invalid configuration on pre-session firmware, so it says nothing
+about either build.
+
+✅ **WHAT STANDS IS C400 AND ONLY C400** — and it is still a real defect:
+**Gallagher 0 of 6 and Securakey 0 of 5 against REAL Proxmark-written TAGS** read by #2, with **EM410X 2/2**
+and **HID** passing on the SAME tag in the SAME position. A real tag is phase locked, so this is not explained
+by the above.
+⛔ **It can only be retested by moving #2 back to the T5577** — the rigs are mutually exclusive.
+⇒ **NEXT: do NOT test a SAADC-path read arm against an emulation. Ever.** Either the bench moves back, or the
+arm is left unmeasured and said to be so.
+
+---
+
+### (RETRACTED by C404) 2026-09-14 16:25 — FOUR READ ARMS DOWN: EVERY ASK/BIPHASE PROTOCOL THIS BRANCH ADDED (C402)
 
 ⛔ **Read this first — it supersedes the RF/32-and-RF/40 boundary below, which is REFUTED.**
 

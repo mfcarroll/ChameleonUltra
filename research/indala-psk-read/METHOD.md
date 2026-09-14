@@ -534,3 +534,17 @@ by +9,984 B — all under protocols that were already working and none of them e
 is SILENT on the air, not loud** (C130), so *semantically identical* would have been believed. All eight
 arms were re-graded and held at 6/6 (C394). ⇒ Ask what the arms DEPEND on, not what was edited; and note that
 a change with no visible effect anywhere is the shape of one that breaks something quietly.
+
+**M52 — A CHAMELEON CANNOT READ ANOTHER CHAMELEON'S EMULATION ON THE PHASE-LOCKED PATH, AND A NULL THERE
+MEANS NOTHING.**
+The SAADC whole-capture readers — indala, gallagher, securakey, noralsy, gproxii — recover a subcarrier that a
+real tag produces by DIVIDING the reader's carrier, so a real tag is inherently phase locked. An emulating
+Chameleon generates PWM from its own clock: *in reader mode the carrier is generated, not recovered, and
+nothing in the design ever knew a reader's carrier phase.* The envelope readers on the GPIO/comparator path —
+em410x, viking, hidprox, ioprox — do not care, which is why they read an emulation fine.
+⛔ **So an emulation-to-reader test is valid for the GPIO family and INVALID for the SAADC family**, and it
+fails silently in the direction that looks like a defect. It produced a confident four-arm regression report
+and a firmware build flashed to "exonerate" a session, before `lf indala read` printed the reason in one line
+(C404).
+⇒ **Pick the control from the family under test.** EM410X passing proved nothing about Gallagher, because
+EM410X could not have failed. A control that cannot fail is not a control.
