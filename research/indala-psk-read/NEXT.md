@@ -698,7 +698,9 @@ supplies `lf_adc_set_acq_fast` and `g_is_ble_connected`) and **a hunk of `app_cm
 changes `raw_read_to_buffer`'s signature and renames `LF_SNIFF_MAX_SAMPLES`; `app_cmd.c` calls
 both). ⇒ ⭐ **UPDATE (C316): PR 1 now BUILDS, and its `app_cmd.c` share is THREE LINES** — adapt the
 callers to the new API, do NOT import HEAD's chunked sniff handler. Verified minimum: 10 files +
-`ble_main.c/.h` + `app_cmd.c` (+4 −3). ⛔⛔ **The real blocker is RAM, not packaging**: PR 1 grows
+`ble_main.c/.h` + `app_cmd.c` (+4 −3). ⭐⭐ **AND C317 SAYS THE RAM BLOCKER IS FIXABLE**: the image carries TWO 28 KB capture buffers
+(`m_samples` and `sniff_buf`) that are never live together. Moving one shared buffer into
+`lf_reader_generic.c` returns 28,672 B — more than PR 1's whole RAM cost. ⛔⛔ **The real blocker is RAM, not packaging**: PR 1 grows
 BSS by **+24,692 B**, almost all of it `sniff_buf` going from 4,000 to 28,672 bytes — ~10% of the
 chip's RAM for one static buffer, which this plan has never mentioned and a reviewer certainly
 will. ⇒ The old note that the hunk-split is the blocking task — the note

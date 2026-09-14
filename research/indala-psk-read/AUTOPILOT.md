@@ -462,6 +462,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-16 03:55 | **C317 — 57 KB in two capture buffers, never live together** | 32 → 33 | `m_samples` and `sniff_buf` both 28,672 B and both static. Sharing one returns more than PR 1's entire RAM cost. Belongs in `lf_reader_generic.c`, not reached into from a protocol file | `nm` on the shipping image; usage traced across the tree. Not implemented — needs its own verified unit |
 | 2026-09-16 03:20 | **C316 — PR 1 builds; the real blocker is RAM** | 31 → 32 | Minimum is 13 files with a 3-line `app_cmd.c` hunk. Flash +1,024 B but BSS +24,692 B, almost all one buffer going 4,000 → 28,672 | `nm` attributes the cost to a named symbol, so the reviewer objection can be answered rather than just reported |
 | 2026-09-16 02:45 | **C315 — PR 1 does not build as specified** | 30 → 31 | Missing `ble_main.c/.h` and an `app_cmd.c` hunk. The hunk-split (+827 −8 across all five PRs) is the blocking task for the whole sequence. PR 0 unaffected | 3 builds, isolating one dependency class at a time so the remaining gap is bounded, not guessed |
 | 2026-09-16 02:05 | **C314 — PR 0b is 5 files, not 4 lines** | 29 → 30 | Compiling on `main` exposed a two-step dependency chain: call site → guard → BLE connection state. PR 0 unchanged | 4 builds, 3 failing in sequence; each compile error named the next dependency |
