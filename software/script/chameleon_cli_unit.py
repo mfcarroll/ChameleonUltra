@@ -6140,7 +6140,25 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
             args.il,
             args.oem,
         )
+        # ⭐⭐ READ BACK, AND PIN THE FORMAT WHILE DOING IT (F6).
+        #
+        # ⛔ This command used to print the arguments it was handed and "write done." — with no
+        # read at all. It says "write done" for a write to an EMPTY PAD, because a T5577 sends no
+        # acknowledgement and the firmware returns STATUS_LF_TAG_OK regardless. That cost real
+        # time on 2026-09-14: a write to a pad with no tag on it was reported as a success twice
+        # running, and believed. Every sibling writer here (gproxii, awid, keri, indala) already
+        # re-reads and prints a real verdict; this one was the odd one out.
+        #
+        # ⭐ The read-back is PINNED to the format just written. An unpinned read would report a
+        # correct write as wrong for the 12 formats that have no rejection path (C284/C302) —
+        # the verification would then be less trustworthy than the thing it verifies.
+        #
+        # ⚠ A read BEFORE the write is what separates "the write failed" from "no tag is
+        # coupled". Without it, an empty pad and a failed write look identical — which is
+        # exactly the confusion this whole entry exists to end.
+        before = self._read_pinned(format)
         self.cmd.hidprox_write_to_t55xx(id)
+        after = self._read_pinned(format)
         print(f"HIDProx/{format}")
         # ⭐ THE WRITE SIDE OF C284. The reader warns that an unpinned read is a guess; until now
         # the WRITER said nothing, so `-f IND26` produced a tag that reads back as H10301 with a
@@ -6166,7 +6184,37 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
         if args.oem > 0:
             print(f" OEM: {args.oem}")
         print(f" CN: {args.cn}")
-        print("write done.")
+
+        want = (args.fc, args.cn, args.il, args.oem)
+        if after is not None and after == want:
+            print(f"{color_string((CG, 'VERIFIED'))} — read back off the tag as "
+                  f"{color_string((CY, str(format)))}.")
+        elif after is None and before is None:
+            print(f"{color_string((CY, 'CANNOT TELL'))} — nothing readable before or after. The "
+                  f"tag may be uncoupled rather than unwritten: reposition it and try "
+                  f"{color_string((CG, 'lf hid prox read -f ' + format.name))}.")
+        elif after is None:
+            print(f"{color_string((CR, 'WRITE FAILED'))} — the tag read {before} before and "
+                  f"nothing after.")
+        elif after == before:
+            print(f"{color_string((CR, 'WRITE DID NOT LAND'))} — still reads {after}.")
+        else:
+            print(f"{color_string((CR, 'WRONG DATA ON THE TAG'))} — wanted {want}, read back "
+                  f"{after}.")
+
+    def _read_pinned(self, format):
+        """(fc, cn, il, oem) as the tag reads back under THIS format, or None.
+
+        ⚠ None is not proof of absence — it means this reader could not decode a frame of that
+        format right now, which an uncoupled tag and an unwritten one both produce."""
+        try:
+            r = self.cmd.hidprox_scan(format.value)
+        except Exception:
+            return None
+        if not r:
+            return None
+        _fmt, fc, cn_hi, cn_lo, il, oem = r[:6]
+        return (fc, (cn_hi << 32) | cn_lo, il, oem)
 
 
 @lf_hid_prox.command("econfig")

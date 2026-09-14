@@ -14,7 +14,7 @@ that is about something else.
 | F3 | Header declares a lock bit as a length | `t55xx.h` | yes |
 | F4 | `unpack()` relabels 15 of 29 writable HID formats | `wiegand.c/.h`, `hidprox.c` | yes |
 | F5 | Two 28 KB capture buffers resident at once — 22% of RAM | `lf_reader_generic.c/.h`, `lf_indala_data.c`, `app_cmd.c` | yes |
-| F6 | `lf hid prox write` reports success without reading back | `chameleon_cli_unit.py` | yes |
+| F6 | `lf hid prox write` reported success without reading back | `chameleon_cli_unit.py` | yes — **fixed** |
 
 ---
 
@@ -82,9 +82,27 @@ buffer in `lf_reader_generic.c`, which already owns `capture_begin()`. **−28,6
 three callers verified on hardware. ⚠ The contract widens: a scan between two chunk fetches now
 destroys the earlier capture across sniff and reader-capture, not just within each.
 
-## F6 — `lf hid prox write` reports success without reading back
+## F6 — `lf hid prox write` reported success without reading back ✅ FIXED
 
-It prints the arguments it was given and `write done.` — with no tag present at all. Its sibling
-writers (`gproxii`, `awid`, `keri`, `indala`) use a base class that re-reads and prints a real
-`VERIFIED` / `CANNOT TELL` / `WRITE DID NOT LAND`. ⛔ This cost real time here: a write to an
-empty pad was reported as a successful write, twice. **Not yet fixed.**
+**Symptom.** It printed the arguments it was handed and `write done.` — **with no tag on the pad
+at all**. A T5577 sends no acknowledgement and the firmware returns `STATUS_LF_TAG_OK`
+regardless, so there was nothing behind the word "done". Its sibling writers (`gproxii`, `awid`,
+`keri`, `indala`) already re-read and print a real verdict; this one was the odd one out.
+
+⛔ **This cost real time on 2026-09-14**: a write to an empty pad was reported as a success twice
+running, and believed, during the investigation that produced F1.
+
+**Fix.** Read back after the write, and report one of five verdicts: `VERIFIED`, `CANNOT TELL`,
+`WRITE FAILED`, `WRITE DID NOT LAND`, `WRONG DATA ON THE TAG`.
+
+Two details that matter more than they look:
+
+- ⭐ **The read-back is PINNED to the format just written.** An unpinned read would report a
+  correct write as wrong for the 12 formats with no rejection path (F4) — the verification would
+  then be less trustworthy than the thing it verifies.
+- ⚠ **There is also a read BEFORE the write.** That is what separates "the write failed" from "no
+  tag is coupled"; without it an empty pad and a failed write are indistinguishable, which is the
+  entire confusion this closes.
+
+**Verified on hardware, both directions.** Empty pad → `CANNOT TELL — nothing readable before or
+after`. Tag on the pad → `VERIFIED — read back off the tag as HID H10301 26-bit`.
