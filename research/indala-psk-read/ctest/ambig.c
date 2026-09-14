@@ -186,6 +186,47 @@ int main(void) {
         }
     }
 
+
+    /* ⭐⭐ THE NEW API, CHECKED AGAINST THIS FILE'S OWN INDEPENDENT COUNT. C287 added
+     * `wiegand_other_matches()` so the reader can name the other layouts that fit, and it is
+     * verified only by four hardware reads. This pins it: for every format at every length,
+     * the API's answer must equal (this file's own per-format enumeration) minus the one
+     * excluded — two different walks over the same table, which is the point.
+     *
+     * ⛔ A table edit that breaks the API now fails `make check` instead of quietly changing
+     * what `lf hid prox read` tells an operator. */
+    {
+        int checked = 0, disagreed = 0;
+        for (size_t i = 0; i < ALL_COUNT; i++) {
+            for (uint32_t fc = 1; fc < 256; fc += 37) {
+                for (uint64_t cn = 1; cn < 4096; cn += 613) {
+                    wiegand_card_t c;
+                    memset(&c, 0, sizeof(c));
+                    c.format = ALL[i]; c.facility_code = fc; c.card_number = cn;
+                    uint64_t w = pack(&c);
+                    if (w == 0) { continue; }
+                    /* Find this format's own bit length by asking which length it unpacks at. */
+                    uint8_t len = 0;
+                    for (uint8_t L = 26; L <= 56 && len == 0; L++) {
+                        wiegand_card_t *t = unpack((uint8_t)ALL[i], L, 0, w);
+                        if (t != NULL) { len = L; free(t); }
+                    }
+                    if (len == 0) { continue; }
+                    int mine = matches(len, w, NULL);          /* every format that accepts */
+                    uint8_t named[8];
+                    int theirs = wiegand_other_matches(len, 0, w, (uint8_t)ALL[i], named, 8);
+                    checked++;
+                    /* `mine` counts ALL acceptors including ALL[i] itself, which accepts its
+                     * own packing by construction; `theirs` excludes it. */
+                    if (theirs != mine - 1) { disagreed++; }
+                }
+            }
+        }
+        printf("\nwiegand_other_matches() against this file's own count: %d frames, %d disagree\n",
+               checked, disagreed);
+        if (disagreed != 0) { verdict_moved = 1; }
+    }
+
     /* ⛔ PINNED. If the formats table is reordered, extended or narrowed, these numbers move
      * and this arm says so — which is the whole reason a measurement belongs in the harness
      * rather than in a notebook. */

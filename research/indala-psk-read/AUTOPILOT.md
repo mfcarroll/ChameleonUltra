@@ -400,6 +400,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 09:40 | **C290 — the new API pinned in ctest** | 14 → 14 | `wiegand_other_matches()` cross-checked against an independent enumeration: 1,519 frames, 0 disagreements | Break test moved it to 1,519 of 1,519 and failed `make check`; binary deleted before rebuilding |
 | 2026-09-15 09:05 | **C289 — emulate arms provably untouched** | 14 → 14 | Seven firmware files changed since C241's build; the seven the working arms depend on have 0 commits between them. No flash of #1 taken | Per-file `git log` rather than a diff summary; the caveat that this reasons at file level is recorded |
 | 2026-09-15 08:35 | **C288 — regression pass, 12 read arms** | 14 → 14 | All 4/4 on `5a5fdf7c` after four gate changes and a payload extension. HID re-rated 24/24 against C248's 48/48 | Every credential Proxmark-written from arguments we chose; the one change with a plausible cost measured against its own pre-change number |
 | 2026-09-15 07:55 | **C287 — the reader names the other layouts** | 13 → 14 | `wiegand_other_matches()` in the file that owns the table; count + 2 names in payload bytes 13-15 that were already zero. Flashed to #2 | Counts equal the Proxmark's parity-passing candidates exactly on 3 tags; harness green; bench restored 4/4 |
