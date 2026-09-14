@@ -72,8 +72,13 @@ for w in $written; do
   # ⛔ There is NO self-read for this row: every reader is expected to find nothing.
   if [[ "$w" == blank ]]; then
     $PM3 -p $PM3PORT -c "lf t55xx wipe" >/dev/null 2>&1
-    if $PM3 -p $PM3PORT -c "lf search" 2>&1 | grep -qiE "No known 125"; then
-      print -r -- "  (tag wiped and confirmed blank by pm3)"
+    # ⛔ ASK TWICE, and for the OPPOSITE reason to regrade.sh. Here a pm3 MISS would wrongly
+    # confirm "blank" and make the whole row pass for free — the judge's intermittency flips
+    # from false-failure to false-PASS when the expected answer is "nothing". Measured: pm3's
+    # FDX-B reader misses 12% of asks on a written tag (C346), so one ask is not a blank check.
+    if $PM3 -p $PM3PORT -c "lf search" 2>&1 | grep -qiE "No known 125" && \
+       $PM3 -p $PM3PORT -c "lf search" 2>&1 | grep -qiE "No known 125"; then
+      print -r -- "  (tag wiped and confirmed blank by pm3, twice)"
     else
       print -r -- "  ⛔ WIPE DID NOT LEAVE IT BLANK — the row below means nothing, skipping"
       continue

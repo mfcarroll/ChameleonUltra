@@ -428,3 +428,15 @@ constructed input — a flipped spacer bit, a synthetic checksum, a guard-off bu
 other branch had ever rendered. One of them, once reached, turned out to drop two fields.
 ⇒ A branch nobody has seen print is a branch nobody has tested, and rare branches are exactly
 where a wrong f-string survives for years.
+
+**M44 — ASK THE JUDGE TWICE BEFORE BELIEVING A FAILURE, AND TWICE BEFORE BELIEVING A BLANK.**
+The independent reader that grades a write is not a perfect instrument. Measured: the Proxmark's
+`lf fdxb reader` misses **12% of asks on a correctly written tag** (53 of 60), while its HID, GProxII
+and AWID readers were 20 of 20 each (C346). A single ask inherits that miss rate, so a landed write
+reads as a failure — which is exactly how a 25-round soak reported `24 of 25` and nearly earned FDX-B
+a phantom writer defect.
+⛔ The correction is direction-dependent, and getting it backwards is worse than not doing it:
+  • when the expected answer is a CREDENTIAL, a miss is a false FAILURE — re-ask before recording one;
+  • when the expected answer is NOTHING (a blank-tag null), a miss is a false PASS — require the
+    negative answer twice, or the row passes for free.
+⇒ Neither retry costs anything. Both are in `regrade.sh` and `nullmatrix.sh`.

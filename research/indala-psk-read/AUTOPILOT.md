@@ -44,6 +44,8 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
 
+⛔⛔ **THE PROXMARK IS NOT A PERFECT JUDGE — `lf fdxb reader` misses 12% of asks on a correctly written tag (C346), where its HID, GProxII and AWID readers are 20/20.** ⇒ A single pm3 ask inherits that, so `regrade.sh` re-asks before recording a failure and `nullmatrix.sh`'s blank check demands the negative TWICE (a miss there is a false PASS, not a false failure). M44. Write soaks: 150 cycles, 0 lost writes once the judge is asked properly.
+
 ⭐⭐ **THE READER/WRITER LOOP IS CLOSED BOTH WAYS (C343).** *We write, pm3 reads*: 18 arms, 72 writes. *pm3 writes, we read*: 19 arms, 76 reads, 76 matches — six of them protocols that already ship UPSTREAM, so it doubles as a regression check on the capture engine this branch rewired under them. ⇒ A shared convention error cannot pass either direction, because each is judged by the other project's code. ⛔ Every other instrument here writes the tag with OUR writer — `nullmatrix.sh`, `capcost.sh`, `regrade.sh` — so `pm3written.sh` is the one that is not circular. Run it after any change to a decoder.
 
 ⭐ **THE READ PATH IS NOT STARVED — measured, not assumed (C341).** 14 protocols x 4 reads: median **2 captures**, which is the floor the corroboration rule sets, and 65% of reads sit exactly on it. ⇒ Holding the field across tries (the C335 lead) would buy about a third of a capture per read. Not the lever it looked like. ⛔ Per-arm ordering from `capcost.sh` is NOISE at n=4 — three arms moved by ≥1 capture between two runs. Run it twice before believing any ranking.
@@ -526,6 +528,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 11:20 | **C346 — the judge blinks: pm3 misses 12% of FDX-B asks; every single-ask verdict inherited it** | 52 → 53 | A write soak's lone failure in 150 cycles was the READER, not the writer. `regrade.sh` and `nullmatrix.sh` fixed in opposite directions; M44 added | 40-round probe with a second reader + 4 protocols x 20 pm3 asks |
 | 2026-09-14 10:45 | **C345 — read reliability re-measured after F5/F7: 250 reads, 0 failures, HID 100/100** | 51 → 52 | C250's 96/96 predated the capture-engine rework and had never been re-taken. `readsoak.sh` added | tag written once per protocol, then only read, so a miss isolates the read path |
 | 2026-09-14 10:15 | **C344 — the blank-chip null, live for the first time: 105 reads, 21 readers, 0 false positives** | 50 → 51 | Every previous empty null was a recorded capture; a wiped T5577 still modulates the field. `nullmatrix.sh blank` added | pm3 wipes and confirms blank before each of five runs |
 | 2026-09-14 09:50 | **C343 extended — the six UPSTREAM protocols too; 76 of 76 across nineteen** | 50 → 50 | HID Prox, ioProx, EM410x, Viking, Jablotron and PAC verified against pm3-written tags: a regression check on the capture engine this branch rewired under them | 6 protocols x 4 reads, expectations observed not guessed |

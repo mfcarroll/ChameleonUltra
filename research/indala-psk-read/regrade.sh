@@ -74,6 +74,17 @@ for r in $(seq 1 $ROUNDS); do
   werr=$("$PY" "$CU" "hw connect -p $CH2" "$WCMD" 2>&1 | grep -iE "error|usage|invalid|need |unrecognized|Traceback" | head -1)
   out=$($PM3 -p $PM3PORT -c "$CHECK" 2>&1)
   line=$(print -r -- "$out" | grep -iE "$WANT" | head -2 | tr '\n' ' ' | tr -s ' ')
+  # ⛔⛔ ASK THE JUDGE TWICE BEFORE BELIEVING A FAILURE. The Proxmark is not a perfect reader
+  # and a single ask inherits whatever miss rate it has: measured, `lf fdxb reader` misses
+  # **12% of asks on a correctly written FDX-B tag** (53 of 60), while its HID, GProxII and
+  # AWID readers were 20 of 20 (C346). One unretried ask turned a landed write into
+  # "gproxii WRITE: 24 of 25" in this very script. ⇒ A retry costs one read and removes the
+  # judge's own intermittency from every verdict.
+  if [[ -z "$line" ]]; then
+    out=$($PM3 -p $PM3PORT -c "$CHECK" 2>&1)
+    line=$(print -r -- "$out" | grep -iE "$WANT" | head -2 | tr '\n' ' ' | tr -s ' ')
+    [[ -n "$line" ]] && line="$line  (judge needed a retry)"
+  fi
   if [[ -n "$line" ]]; then
     hits=$((hits+1))
     say "   round $r: PASS — $line"
