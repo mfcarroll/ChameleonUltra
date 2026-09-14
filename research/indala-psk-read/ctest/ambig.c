@@ -130,6 +130,7 @@ int main(void) {
         printf("\nCan a NON-HID format ever win, by bit length?\n");
         for (uint8_t len = 26; len <= 56; len++) {
             int foreign = 0, covered = 0, uncovered = 0;
+            int ex_fmt = 0; uint32_t ex_fc = 0; uint64_t ex_cn = 0;
             for (size_t i = 0; i < ALL_COUNT; i++) {
                 int is_hid = 0;
                 for (size_t k = 0; k < sizeof(HIDF)/sizeof(HIDF[0]); k++) {
@@ -152,7 +153,17 @@ int main(void) {
                             wiegand_card_t *h = unpack((uint8_t)HIDF[k], len, 0, w);
                             if (h != NULL) { hid_takes = 1; free(h); break; }
                         }
-                        if (hid_takes) { covered++; } else { uncovered++; }
+                        if (hid_takes) { covered++; } else {
+                            /* ⭐ Remember one so the branch can be exercised on a real tag
+                             * rather than left as a count — `lf hid clone -w <fmt>` writes it.
+                             * ⚠ REMEMBERED, not printed here: printing inside the loop put the
+                             * example ABOVE the summary line it belongs to, which reads as if it
+                             * belonged to the previous length. */
+                            if (uncovered == 0) {
+                                ex_fmt = (int)ALL[i]; ex_fc = fc; ex_cn = cn;
+                            }
+                            uncovered++;
+                        }
                     }
                 }
             }
@@ -160,6 +171,10 @@ int main(void) {
             printf("  %2d bits: %5d foreign frames, %5d also taken by an HID format, "
                    "%5d NOT -> %s\n", len, foreign, covered, uncovered,
                    uncovered == 0 ? "non-HID can never win" : "a genuine foreign tag CAN win");
+            if (uncovered > 0) {
+                printf("           e.g. fmt %d, fc %lu, cn %llu — no HID format takes it\n",
+                       ex_fmt, (unsigned long)ex_fc, (unsigned long long)ex_cn);
+            }
             /* ⛔ PINNED PER LENGTH, because `lf hid prox read`'s message now BRANCHES on this.
              * The counts themselves depend on the credential grid and are not pinned; the
              * VERDICT is the claim the CLI relies on. */
