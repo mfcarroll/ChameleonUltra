@@ -176,7 +176,13 @@ static const uint8_t PHASE_ROTATION[] = {
  * and still a third of what the stacked 64-bit reader used to cost. The capture LENGTH is a
  * parameter because it is real time on the wire: 4096 samples is 33ms and 14336 is 114ms, so
  * a 64-bit read that captured the whole buffer would be 3.5x slower for nothing. */
-static int16_t m_samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
+/* ⭐ SHARED, NOT OWNED (C317). This was a second 28 KB static beside `lf sniff`'s; both now
+ * come from `lf_reader_generic.c`. The name is kept so the call sites below read unchanged.
+ * ⛔ The assert is the guard that matters: if a protocol ever needs a longer capture than the
+ * shared buffer holds, this stops compiling instead of overrunning it. */
+_Static_assert(LF_SAMPLED_MAX_CAPTURE_SAMPLES * 2 <= LF_CAPTURE_BUF_BYTES,
+               "a sampled capture no longer fits the shared LF capture buffer");
+#define m_samples (lf_capture_buffer())
 
 /* ⭐⭐ GPROXII'S OWN PHASE ORDER, AND IT IS MEASURED ON THE DEVICE RATHER THAN INHERITED.
  *

@@ -88,6 +88,24 @@ uint32_t lf_capture_dropped(void);
 bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
                       uint16_t settle_ms);
 
+/** ⭐⭐⭐ THE ONE LF CAPTURE BUFFER — 28,672 bytes, shared, and it used to be two.
+ *
+ * ⛔ This image carried TWO of these: `m_samples` in `lf_indala_data.c` for the sampled readers
+ * and `sniff_buf` in `app_cmd.c` for `lf sniff`. Both static, both 0x7000, both resident for the
+ * life of the firmware — **57,344 bytes, 22% of the nRF52840's 256 KB**, for two buffers that
+ * can never be in use at once because the device dispatches one command at a time (C317).
+ *
+ * ⭐ It lives HERE rather than in either caller, and that is the point: `lf sniff` is a generic
+ * LF feature and `lf_indala_data.c` is a protocol reader, so letting the sniff handler reach
+ * into the reader's static would invert the dependency. This file already owns
+ * `capture_begin()` and `raw_read_to_buffer()`, so it is where a capture buffer belongs.
+ *
+ * ⚠ THE CONTRACT, WHICH IS NOW SHARED: whatever captured last owns the contents. A scan
+ * between two chunk fetches destroys the earlier capture — already true of command 3060 and of
+ * `lf sniff`'s own chunking, and now true ACROSS them as well. */
+#define LF_CAPTURE_BUF_BYTES  LF_SNIFF_MAX_BYTES
+int16_t *lf_capture_buffer(void);
+
 /** Called once with the FIELD ALREADY UP and settled, immediately before the sample window
  *  opens. ⭐ This exists so a downlink command can be transmitted INTO a live capture — a
  *  T5577 regular-read only answers while the field it was addressed on stays up, so sending

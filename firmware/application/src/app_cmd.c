@@ -2795,7 +2795,8 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
         lf_125khz_radio_drive_set((length >= 10 && data[9] != 0) ? data[9] : 4);
     }
 
-    static uint8_t sniff_buf[LF_SNIFF_MAX_BYTES];
+    /* ⭐ The SHARED capture buffer (C317), not a second 28 KB static of our own. */
+    uint8_t *sniff_buf = (uint8_t *)lf_capture_buffer();
     static size_t sniff_len = 0;
 
     if (chunk == 0) {

@@ -204,6 +204,14 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
  * degraded Indala read, it is a failed one: the demodulator needs two whole 64-bit frames
  * (4096 samples) to guarantee that one of them lands entirely inside the window, so
  * returning 3000 samples would merely produce a confident wrong answer. */
+/* ⭐ The single capture buffer both the sampled readers and `lf sniff` write into. int16_t so
+ * the sample path is naturally aligned; the sniff path casts to bytes. See the header note. */
+static int16_t m_capture_buf[LF_CAPTURE_BUF_BYTES / 2];
+
+int16_t *lf_capture_buffer(void) {
+    return m_capture_buf;
+}
+
 bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
                       uint16_t settle_ms) {
     return raw_read_samples_probe(samples, count, timeout_ms, outlen, settle_ms, NULL, NULL);
