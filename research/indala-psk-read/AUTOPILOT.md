@@ -914,6 +914,15 @@ inferring from. `rdrcap.py` + `DATA_CMD_LF_READER_CAPTURE` return our own undeco
 and answering *what does our coil actually do when the tone changes* needs one Chameleon emulating while the
 other captures. **Either the two Chameleons face each other, or a scope goes on LF_OA.**
 
+✅ **THE MEASUREMENT IS ALREADY WRITTEN — `./fskcap.sh` (C391).** The moment the two Chameleons face
+each other, that one command does everything: it checks coupling with Gallagher (a 6/6 arm, so a null
+means NOT COUPLED rather than *emitter broken*), aborts in bench terms if they are not, and otherwise
+captures each FSK arm through `rdrcap.py` and histograms it with `./tonehist.py`. ⭐ The analyzer is
+already validated against a known-good reference — the Flipper's mixed-tone `H10301` through our own
+reader gives 389 periods near RF/8 and 94 near RF/10, both bands present — and its units need no
+calibration, because the SAADC samples once per carrier cycle so an RF/8 tone IS 8 samples.
+⚠ **Verified uncoupled on 2026-09-14**: `./fskcap.sh` aborts on the coupling check today, as it should.
+
 ⚠ **This is NOT C377's mistaken request.** That one asked for a `.fap` rebuild on a diagnosis `uptime`
 refuted in one command. This one is backed by a three-point rate curve, a positive control, and eight
 eliminated hypotheses — and it names exactly which measurement is missing.
