@@ -696,7 +696,12 @@ review.
 by reading, and it is missing two things PR 1 cannot compile without: **`ble_main.c/.h`** (it
 supplies `lf_adc_set_acq_fast` and `g_is_ble_connected`) and **a hunk of `app_cmd.c`** (PR 1
 changes `raw_read_to_buffer`'s signature and renames `LF_SNIFF_MAX_SAMPLES`; `app_cmd.c` calls
-both). ⇒ **The `app_cmd.c` hunk-split is the blocking task for the whole sequence** — the note
+both). ⇒ ⭐ **UPDATE (C316): PR 1 now BUILDS, and its `app_cmd.c` share is THREE LINES** — adapt the
+callers to the new API, do NOT import HEAD's chunked sniff handler. Verified minimum: 10 files +
+`ble_main.c/.h` + `app_cmd.c` (+4 −3). ⛔⛔ **The real blocker is RAM, not packaging**: PR 1 grows
+BSS by **+24,692 B**, almost all of it `sniff_buf` going from 4,000 to 28,672 bytes — ~10% of the
+chip's RAM for one static buffer, which this plan has never mentioned and a reviewer certainly
+will. ⇒ The old note that the hunk-split is the blocking task — the note
 below says it "must be split by hunk" and it never has been, and that diff is +827 −8 across all
 five PRs. ⭐ PR 0 (§9i) is unaffected: it builds alone.
 
