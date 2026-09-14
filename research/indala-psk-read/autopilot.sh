@@ -65,7 +65,17 @@ status)
     # and makes every later turn cheap. ⛔ This is the opposite of what this session believed
     # until the operator corrected it (C369). The check is local, needs no credential and costs
     # no tokens, so it is safe to run every tick.
-    ctx=$(sh "$UTIL/context_check.sh" "${CLAUDE_SESSION_ID:--c}" 2>/dev/null | tail -1)
+    # ⛔⛔ RUN IT FROM THE REPO ROOT, AND REFUSE A ZERO-MESSAGE ANSWER. `-c` means "the most
+    # recent session in $PWD", and sessions are keyed by the directory they STARTED in — the
+    # repo root, not this one. Run from here it finds nothing, silently measures a FRESH
+    # session's fixed overhead and reports **4%** while the real figure is 90%. A check that
+    # reports green when it should be red is worse than no check (C370).
+    # ⇒ cd to $REPO, and treat `msgs=0` as "that is not our session" rather than as a number.
+    ctx=$(cd "$REPO" && sh "$UTIL/context_check.sh" "${CLAUDE_SESSION_ID:--c}" 2>/dev/null | tail -1)
+    case "$ctx" in
+        *msgs=0*) echo "⛔ context   UNREADABLE — msgs=0 means it measured a fresh session, not ours. Do not trust it."
+                  ctx="" ;;
+    esac
     if [ -n "$ctx" ]; then
         pct=$(printf '%s' "$ctx" | sed -nE 's/.*pct=([0-9]+).*/\1/p')
         case "${pct:-0}" in
