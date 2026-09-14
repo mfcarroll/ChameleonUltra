@@ -416,6 +416,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 14:25 | **C298 — C297 is not a password** | 16 → 16 | Tested the obvious hypothesis and refuted it; C297's downlink account stands. Side finding: every write here sets the card's password `51243648`, previously undocumented | The test is destructive by design — block 2 would have wrecked the credential, so "air unchanged" cannot be a false negative |
 | 2026-09-15 13:55 | **C297 — pm3 cannot write the T5577 any more** | 16 → 16 | 4 pm3 writes reported `Done!` and none landed; `lf t55xx detect` fails. Our writer recovered the bench first time. Recorded in §5 as a bench condition, not a blocker | Field measured healthy (13908 p-p, 3778 drops) to separate "tag gone" from "cannot write"; our writer on the same tag in the same minute is the control |
 | 2026-09-15 13:25 | **C296 — M36-M40 added to METHOD.md** | 16 → 16 | Five transferable lessons lifted out of the claims: entailment over captures, host-vs-device timing, append-only documents, ritual regression runs, failing branches of display fixes | Each traced to the specific failure that produced it; the caveat that method has no experimental test is stated |
 | 2026-09-15 12:55 | **C295 — the writer warns too** | 15 → 16 | 14 formats never read back as themselves, 3 sometimes; `lf hid prox write` now says so and names which format will be reported | Prediction tested on a real tag, not just the message's appearance; both lists pinned in `make check` |
@@ -506,6 +507,11 @@ today are the same fault — pm3's DOWNLINK. Its air reads are unaffected and co
 
 ⭐ **The workaround is our own writer**, which landed first time and was confirmed by both
 readers: `lf hid prox write -f H10301 --fc 123 --cn 4567`. Every protocol here has one.
+
+⛔ **NOT a password — tested and refuted (C298).** Our writers DO set one (`51243648`, via
+`try_reset_t55xx_passwd`) and the timeline fitted, but a pm3 write authenticated with it left
+the air unchanged. ⭐ Worth knowing regardless: **every write this project performs sets the
+card's password**, which was undocumented.
 
 ⚠ The tag and the field are healthy — `lf sniff` peak-to-peak 13908 with 3778 real field
 drops — so this is not a coupling failure of the tag. Whether it is the Proxmark's antenna,
