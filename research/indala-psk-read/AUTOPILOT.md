@@ -38,33 +38,62 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ✅ 2026-09-14 02:45 — THE WRITE COLUMN IS MEASURED; THE ASK/BIPHASE FAMILY IS NEXT
+### ✅ 2026-09-14 08:05 — READ AND WRITE ARE FINISHED AND VERIFIED BOTH WAYS. EMULATE IS THE ONLY GAP.
 
-⭐ **U15 IS CLOSED, AND THE WHOLE WRITE COLUMN WENT WITH IT (C330, C331).** `./regrade.sh` re-graded every write arm in the tree against an unlocked tag — all **18 protocols at 4 of 4: 72 writes, 72 independent Proxmark reads, 0 failures**, every raw frame byte-identical to what was sent. ⛔ **C155's Indala224 caveat is retired**: the 224-bit write verified 4 of 4. ⚠ NexWatch and FDX-B are judged on their own reader commands, not `lf search`, which prints only a protocol name for them. ⛔ **Nothing was ever wrong with the write arms**: C305's *0 of 9* was measuring the password lock our own HID writer had set (C325), and the password defect is fixed (F1, C326). `NEXT.md`'s grid write column is rebuilt from this run.
+⭐ **Rewritten now.** What this replaces was a 02:45 heading — *the write column is measured, ASK/biphase
+is next* — with twelve bullets accreted under it, and ASK/biphase had been finished hours before. §1 is
+what a fresh context inherits, so it states what is true now; `LOG.md` keeps the history (C286's rule).
 
-⭐ **NEXT IS §10's ASK/biphase family — U10 (FDX-B).** §10 is organised by modulation family and a family's protocol is finished completely before the next is started.
+**THE BENCH.** Four devices enumerate. **#2 runs a clean build that contains the last `firmware/` commit —
+`./autopilot.sh status` now checks that every tick and says so (C358/M45).** #1 is on old firmware. The tag
+holds **HID `H10301 FC 123 / CN 4567`**, confirmed by the Proxmark. `make check` is green on all four arms.
 
-⭐ **AND ONLY FDX-B's (C347).** The other 19 judges answered **15 of 15 each — 285 asks, 0 misses**, so the write column's single-ask verdicts are sound everywhere else. ⚠ 15/15 is not proof: a judge as weak as FDX-B's still shows it 10% of the time and a 5% one 46%, so this rules out another bad judge, not a mild one. `judgerel.sh` re-measures any of them.
+#### What is finished, and how strongly
 
-⭐ **AND IT IS THE READER, NOT OUR TAG — CONTROLLED (C348).** pm3 reads its OWN FDX-B clone **35 of 40** against our tag's **32 of 40**, p = 0.55. Pooled 130 of 150 = 87%. ⚠ Our block dump differs from pm3's in blocks 3-4 for one legitimate reason: our test vector sets the **animal bit**, pm3's default clone does not, which moves that bit and the CRC. Do not report it as a writer bug.
+| | |
+|---|---|
+| **write, 18 arms** | 4 of 4 each — **72 writes, 0 failures**, pm3 judging (C330, C331) |
+| **read, 19 arms** | **76 of 76** against tags the **Proxmark's own encoder** wrote (C343). Nine of those cross the field/frame boundary too |
+| **cross-protocol nulls** | **280 reads** on 14 real tags against 20 foreign readers, **0 false positives** (C342) |
+| **blank-chip null** | **105 reads**, 21 readers, **0 false positives**, blank confirmed by pm3 each run (C344) |
+| **reliability** | **250 reads, 0 failures**; HID **100/100** after the capture-engine rework (C345) |
+| **the judge itself** | 19 of 20 pm3 readers **15/15**; only `lf fdxb reader` is weak at **87%**, and that is the READER not our tag — pm3 reads its own clone at the same rate (C346, C347, C348) |
+| **fixes** | **11 registered**, 9 re-verified against the flashed build by `./fixcheck.sh`; F10/F11 need rig A and report NOT CHECKED (C351) |
+| **warnings** | the branch adds **none** to the firmware and removes two; its whole debt was 2 lines, now fixed (C356, C357) |
 
-⛔⛔ **THE PROXMARK IS NOT A PERFECT JUDGE — `lf fdxb reader` misses 12% of asks on a correctly written tag (C346), where its HID, GProxII and AWID readers are 20/20.** ⇒ A single pm3 ask inherits that, so `regrade.sh` re-asks before recording a failure and `nullmatrix.sh`'s blank check demands the negative TWICE (a miss there is a false PASS, not a false failure). M44. Write soaks: 150 cycles, 0 lost writes once the judge is asked properly.
+⇒ **The loop closes in both directions**, so a shared convention error between our reader and our writer
+cannot pass either — each is judged by the other project's code.
 
-⭐⭐ **THE READER/WRITER LOOP IS CLOSED BOTH WAYS (C343).** *We write, pm3 reads*: 18 arms, 72 writes. *pm3 writes, we read*: 19 arms, 76 reads, 76 matches — six of them protocols that already ship UPSTREAM, so it doubles as a regression check on the capture engine this branch rewired under them. ⇒ A shared convention error cannot pass either direction, because each is judged by the other project's code. ⛔ Every other instrument here writes the tag with OUR writer — `nullmatrix.sh`, `capcost.sh`, `regrade.sh` — so `pm3written.sh` is the one that is not circular. Run it after any change to a decoder.
+#### The only real gap, and it is ready to run
 
-⭐ **THE READ PATH IS NOT STARVED — measured, not assumed (C341).** 14 protocols x 4 reads: median **2 captures**, which is the floor the corroboration rule sets, and 65% of reads sit exactly on it. ⇒ Holding the field across tries (the C335 lead) would buy about a third of a capture per read. Not the lever it looked like. ⛔ Per-arm ordering from `capcost.sh` is NOISE at n=4 — three arms moved by ≥1 capture between two runs. Run it twice before believing any ranking.
+⛔ **EMULATE.** It needs **#2 on the Flipper's pad with the T5577 out** — the Proxmark cannot hear
+PWM-on-the-coil at all. `./emugrade.sh` does all eleven arms in one command with C328's discipline encoded
+(null first and abort on an ambient hit, wrong-modulation arm as control, null again, scratch slot 8).
+⚠ **Plumbing tested, no arm ever scored — the first run is the experiment, not a regression check.**
 
-⚠ **#2 carries gated instrumentation** (`LF_RESEARCH_CMDS_ENABLED`, which this branch's `Makefile` sets to 1): a FAILED `FDXB_SCAN` returns a 12-byte counter payload instead of an empty one. It is the instrument U16 needed and it stays until something replaces it.
+⛔⛔ **AND THE STATED REASON #1 IS NEVER REFLASHED DOES NOT SURVIVE CHECKING (C354).** It is said to hold
+*the NexWatch slot*; `hw slot list` shows **no NexWatch** — EM410X `DEADBEEF88` (active), Mifare Ultralight,
+EM410X, then empty. If nothing on #1 matters, the emulate column stops needing a bench change at all.
+⚠ **Operator's call. Not acted on.**
 
-⭐ **WHEN THE BENCH CAN CHANGE, THE EMULATE RE-GRADE IS `./emugrade.sh`** — eleven arms in one command, C328's discipline encoded (null first and abort on an ambient hit, wrong-modulation arm as control, null again, scratch slot 8). ⚠ Plumbing tested 2026-09-14, **no arm has ever been scored with it**: the first run is the experiment.
+#### Do not re-do these
 
-⛔ **EMULATION IS OFF THE TABLE while #2 is on the Proxmark.** It needs the Flipper as reader, and the Flipper faces #1 (deliberately un-reflashed, holds the NexWatch slot). The Proxmark cannot hear our PWM emulation — the dead-end note at the top of `NEXT.md`.
+⛔ **RETIRED — C299, C305, C306, C324** were all one password-locked tag (C325), and C329 confirmed it by
+restoring reads, writes and detect together. ⛔ **C297's *the Proxmark's write path stopped working*** is
+part of that same family and is false.
+✅ **All three former *needs hands* items are closed or bounded**, none needed hands: the Indala slot held
+**Gallagher's frame** (C354), the EM410X both-arms hit is **expected** because `rfid read indala` is a
+front-end not a protocol filter (C353), and the Flipper crash is time-boxed to **00:29:36** with its cause
+unrecoverable (C355).
 
-⛔⛔ **THE REASON #1 IS NEVER REFLASHED DOES NOT SURVIVE CHECKING (C354).** §1 says it *holds the NexWatch slot*. `hw slot list` on #1 shows **no NexWatch**: slot 1 EM410X `DEADBEEF88` (active), slot 2 Mifare Ultralight, slot 3 EM410X `DEADBEEF88`, slots 4-8 empty. ⇒ If nothing on #1 matters, the emulate column stops needing a bench change. ⚠ **Operator's call — not acted on.**
-
-✅ **ALL THREE 'NEEDS HANDS' ITEMS CLOSED OR BOUNDED WITHOUT HANDS (C353, C354, C355), and neither needed a bench change.** ~~Indala emu slot 1 holds a bad frame~~ — it was **Gallagher's test frame truncated into the Indala slot**; the firmware's *(not the Indala preamble)* was the diagnostic working. Repaired. ~~EM410X emulation hit BOTH `flipper.py` arms~~ — `rfid read indala` selects a FRONT END, not a protocol, so an ASK credential hitting both arms is **expected**. ⚠ **Third item BOUNDED, not solved (C355):** the Flipper's `uptime` puts its last boot at **00:29:36**, and C328 confirmed it healthy at 00:57 — so *unknown time* becomes ~00:29. ⛔ The **cause is not recoverable**: the firmware keeps crash state in RTC and shows it on screen at boot, writing no file, and neither `/ext` nor `/ext/.int` carries a record. n = 1, no reproduction, nothing built on it. ⇒ Both closures came from asking the device rather than from the notes; both had sat on this list for the whole session.
+⚠ **#2 carries gated instrumentation** (`LF_RESEARCH_CMDS_ENABLED`, which this branch's `Makefile` sets to
+1): a FAILED `FDXB_SCAN` returns a 12-byte counter payload instead of an empty one.
 
 ---
+
+⚠ **THE BLOCK BELOW IS HISTORY AND CONTAINS CLAIMS SINCE RETIRED** — notably *the Proxmark's write path
+stopped working* (C297) and *#1 holds the NexWatch slot* (C354). Read it for how things got here, not for
+what is true.
 
 ### (historical) 2026-09-15 12:30 — WHERE THE READER WORK STANDS
 
@@ -385,26 +414,28 @@ the two Chameleons face each other.
 ## 2. THE QUEUE
 
 > **EXECUTION ORDER — this overrides the numbering below.**
-> ✅ **U1–U10 ARE ALL COMPLETE (2026-09-13).** Every protocol Momentum carries now READS and
-> WRITES here except the two that cannot be verified on this bench (FDX-A and InstaFob).
-> ⛔ **The queue does not end there either, and the grid says why: SIX protocols read and
-> write but do not EMULATE** — AWID, Paradox, Pyramid, FDX-A, GProxII, FDX-B.
-> ⛔ **U11 AND U12 ARE BLOCKED, NOT PENDING, AND FOR DIFFERENT REASONS.** U12 (biphase
-> emitters) is CLOSED: a held level does not transmit, so GProxII cannot be emulated this way
-> at all (C242) — do not write another biphase emitter. U11 (FSK2a emitters) is open but
-> unobservable: AWID's emitter is correct by every check available and silent anyway, and the
-> only reader that can hear rig A is the Flipper, which is under test.
-> ✅ **U14 IS LARGELY DONE — `NEXT.md` §11 (C291).** What remains is the per-protocol
-> *reasoning*, which no tree documents. ⭐ **(historical) U14 IS OPEN AND OPERATOR-REQUESTED (2026-09-15): audit the references' scan / repeat-read
-> discipline**, Flipper variants included. It is a COMPUTE unit — every tree is already on
-> disk — and it is the natural companion to C268/C269, which found the agreement rule rather
-> than the gates is what makes this reader safe.
-> ✅ **U13 is DONE.** ⭐ Everything else finished this session is in §4 and the grid.
-> **(historical) U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8.**
-> ⛔ §10 of `NEXT.md` is organised **by modulation family**, and a family's FIRST protocol
-> must be finished completely — read, write, emulate, all verified on hardware — before its
-> second is started. A shared path is only proven once something has been through it end to
-> end. U1–U3 close the PSK1 family; U5 opens ASK/biphase and U6 only follows once U5 is done.
+> ⭐⭐ **EVERY READ AND WRITE ARM IS DONE AND VERIFIED IN BOTH DIRECTIONS.** 18 write arms judged by
+> the Proxmark (72 writes, 0 failures) and 19 read arms against tags the Proxmark's own encoder wrote
+> (76 of 76). Nulls, soaks and the judge's own reliability are all measured — see §1.
+> ⛔ **FDX-A IS NO LONGER AN EXCEPTION.** This box used to say FDX-A *cannot be verified on this bench*.
+> It can: the Proxmark has a complete FDX-A under **`lf destron`**, not `lf fdx` (C333). It now reads
+> **10/10** and writes **4/4** with blocks byte-identical to pm3's own clone (C338, C340).
+> ⛔ **INSTAFOB REMAINS THE ONE REAL EXCEPTION** — the Proxmark has no InstaFob command at all, so a
+> writer would certify itself. That refusal stands.
+>
+> ⭐ **THE ONLY PROTOCOL WORK LEFT IS EMULATE, AND IT NEEDS A BENCH CHANGE.** Six protocols read and
+> write but do not emulate (AWID, Paradox, Pyramid, FDX-A, GProxII, FDX-B), and three more emulate at
+> 0/6. All of it needs **#2 on the Flipper's pad with the tag out** — the Proxmark cannot hear
+> PWM-on-the-coil. `./emugrade.sh` is written and plumbing-tested for exactly that moment.
+> ⛔ **U12 is CLOSED, not pending**: a held level does not transmit, so GProxII cannot be emulated this
+> way at all (C242) — do not write another biphase emitter. **U11** (FSK2a emitters) is open but
+> unobservable without rig A: AWID's emitter is correct by every available check and silent anyway.
+>
+> ✅ **U1–U10, U13, U14, U15, U16, U17 are all closed.** U16 closed as *not reproducible* rather than
+> solved, and its instrument is left in place (§1).
+> ⇒ **IF THE BENCH CANNOT CHANGE, THERE IS NO DEVICE UNIT LEFT IN THIS CONFIGURATION.** Say so and take
+> a compute unit rather than inventing one — the protocol work is finished, and the last several ticks
+> found their value in auditing the instruments rather than the firmware.
 
 | # | unit | needs | done when |
 |---|---|---|---|
@@ -536,6 +567,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 18:10 | **C359 — §1 and §2 rewritten; both had drifted into saying the opposite of what is true** | 65 → 66 | The sections a fresh context inherits still announced ASK/biphase as next and FDX-A as unverifiable. Historical block fenced with its retired claims named | every heading checked against what C330-C358 established |
 | 2026-09-14 17:25 | **C358 — device re-synced to source; `status` now reports firmware drift every tick** | 64 → 65 | C357's edit to `write_t55xx()` was built and never flashed; #2 sat several commits behind while every check reported clean. Verified 9/9 + 30 writes on a clean HEAD build; M45 added | the device's own `get_git_version()` against HEAD, three-way verdict, sensitivity tested |
 | 2026-09-14 16:55 | **C357 — the Nordic-only files measured; the branch's whole warning debt was 2 lines, fixed** | 63 → 64 | Closes C356's stated gap. None of the new LF files warn at all; `lf_reader_main.c` 3 → 1, the survivor upstream's | full firmware build at `-Wconversion`, `git blame` per hit to separate ours from inherited |
 | 2026-09-14 16:25 | **C356 — warning audit: 13 of 14 strict-built firmware files clean, all ours; upstream's `wiegand.c` improved 37 → 35** | 62 → 63 | The branch adds no warnings and removes two — a reviewer sees warnings before logic | `main` compiled the same way as the control; a zsh word-splitting bug nearly produced a false all-clear |
