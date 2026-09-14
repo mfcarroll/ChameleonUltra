@@ -30,11 +30,33 @@ EMULATION fixes needing the Flipper as reader, and the script reports them NOT C
 
 ## F1 — a T5577 write silently password-protects the tag ⛔ WORST OF THESE
 
+⭐⭐ **PR 0 IS WRITTEN AND BUILD-TESTED: `pr0-f1.patch`, 3 files, +19 −12, builds on `main` (C360).**
+⛔ Its implementing commit `aff5e377` does **not** apply to `main` — all four files conflict, because it was
+written against a tree that already carried this branch's other work. The patch is a reconstruction, not a
+cherry-pick. ⚠ `lf_t55xx_data.c` is NOT needed: `main` already writes each block twice, once authenticated and
+once not, so `t55xx_write_blocks()` is this branch's refactor rather than part of the fix.
+
 **Symptom.** Writing any T5577 with a ChameleonUltra locks it. The Proxmark can then no longer
 `detect`, `read`, `dump` or `wipe` it; every block reads back `80000000` (a start bit then
 silence). The tag still emits its credential perfectly, so it looks bricked rather than locked.
 
-**Root cause, two halves.**
+⛔⛔ **THE TWO HALVES ARE NOT BOTH UPSTREAM'S, and an extraction test against `main` is what
+showed it (C360).** Only the first half exists on `main`; the second is this branch's own.
+
+**Half one — UPSTREAM's, and the part the PR fixes.** All 8 `T5577_*_CONFIG` constants carry
+`T5577_PWD`, so every write enables password protection whether or not anyone asked, using the
+module global `new_key = 20206666`. ⛔ **`main`'s `old_keys` is `[51243648, 19920427]` and does
+NOT contain `20206666`** — so a tag a Chameleon has written can be re-opened by a Chameleon (via
+`try_reset_t55xx_passwd`'s new-key-to-new-key call) and by **nothing else**. The Proxmark, a
+Flipper, another vendor's reader: all locked out, silently, by a write that reported success.
+
+**Half two — OURS, and it never shipped.** The raw-frame writers `indala`, `indala224`,
+`gproxii` and `awid` carried a *different* hard-coded key as a function default, so a tag locked
+by one could not be rewritten by another. ⚠ **Those four writers do not exist on `main`** — they
+are this branch's additions, and whoever added them copied the wrong constant. It belongs in the
+branch's history, not in the upstream PR.
+
+**Root cause, as originally written (kept because the correction is the point):**
 1. All 8 `T5577_*_CONFIG` constants carried `T5577_PWD`, so every write enabled password
    protection whether or not anyone asked for one.
 2. The key came from two different places: `chameleon_cmd.py`'s module globals

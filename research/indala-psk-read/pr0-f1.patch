@@ -1,0 +1,105 @@
+diff --git a/firmware/application/src/rfid/nfctag/lf/protocols/t55xx.h b/firmware/application/src/rfid/nfctag/lf/protocols/t55xx.h
+index d75cbdd3..8ba07d28 100644
+--- a/firmware/application/src/rfid/nfctag/lf/protocols/t55xx.h
++++ b/firmware/application/src/rfid/nfctag/lf/protocols/t55xx.h
+@@ -48,43 +48,36 @@ extern "C" {
+ #define T5577_EM410X_64_CONFIG (  \
+     T5577_BITRATE_RF_64 |         \
+     T5577_MODULATION_MANCHESTER | \
+-    T5577_PWD |                   \
+     (2 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_EM410X_ELECTRA_CONFIG ( \
+     T5577_BITRATE_RF_64 |            \
+     T5577_MODULATION_MANCHESTER |    \
+-    T5577_PWD |                      \
+     (4 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_HIDPROX_CONFIG ( \
+     T5577_BITRATE_RF_50 |      \
+     T5577_MODULATION_FSK2a |   \
+-    T5577_PWD |                \
+     (3 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_IOPROX_CONFIG ( \
+     T5577_BITRATE_RF_64 |      \
+     T5577_MODULATION_FSK2a |   \
+-    T5577_PWD |                \
+     (2 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_VIKING_CONFIG (     \
+     T5577_BITRATE_RF_32 |         \
+     T5577_MODULATION_MANCHESTER | \
+-    T5577_PWD |                   \
+     (2 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_PAC_CONFIG (        \
+     T5577_MODULATION_DIRECT |     \
+     T5577_BITRATE_RF_32 |         \
+-    T5577_PWD |                   \
+     (4 << T5577_MAXBLOCK_SHIFT))
+ 
+ #define T5577_JABLOTRON_CONFIG (  \
+     T5577_MODULATION_DIPHASE |    \
+     T5577_BITRATE_RF_64 |         \
+-    T5577_PWD |                   \
+     (2 << T5577_MAXBLOCK_SHIFT))
+ 
+ // IDTECK: PSK1 at RF/32, subcarrier = carrier/2 (RF_2), 2 data blocks (64-bit frame).
+@@ -92,7 +85,6 @@ extern "C" {
+     T5577_BITRATE_RF_32 |         \
+     T5577_MODULATION_PSK1 |       \
+     T5577_PSKCF_RF_2 |            \
+-    T5577_PWD |                   \
+     (2 << T5577_MAXBLOCK_SHIFT))
+ 
+ #if defined(PROJECT_CHAMELEON_ULTRA)
+diff --git a/firmware/application/src/rfid/reader/lf/lf_reader_main.c b/firmware/application/src/rfid/reader/lf/lf_reader_main.c
+index 24814fa0..d507bed4 100644
+--- a/firmware/application/src/rfid/reader/lf/lf_reader_main.c
++++ b/firmware/application/src/rfid/reader/lf/lf_reader_main.c
+@@ -129,12 +129,22 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
+  * Write card data to t55xx
+  */
+ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+-    uint32_t passwd = bytes_to_num(new_passwd, 4);
++    const uint32_t passwd = (uint32_t)bytes_to_num(new_passwd, 4);
++    const bool set_pwd = (passwd != 0);
++
++    /* ⛔ PASSWORD PROTECTION IS OPT-IN. The bit lives in block 0, and it used to arrive there
++     * from the config constants, so every write enabled it whether or not a key was asked
++     * for. Set it here and only when a non-zero key was actually supplied. */
++    if (set_pwd && blk_count > 0) {
++        blks[0] |= T5577_PWD;
++    }
+ 
+     start_lf_125khz_radio();
+     bsp_delay_ms(1);  // Delays for a while after starting the field
+ 
+-    try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
++    if (set_pwd) {
++        try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
++    }
+     t55xx_write_data(passwd, blks, blk_count);
+ 
+     stop_lf_125khz_radio();
+diff --git a/software/script/chameleon_cmd.py b/software/script/chameleon_cmd.py
+index 168836c3..16140afd 100644
+--- a/software/script/chameleon_cmd.py
++++ b/software/script/chameleon_cmd.py
+@@ -10,8 +10,13 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
+ 
+ CURRENT_VERSION_SETTINGS = 6
+ 
+-new_key = b'\x20\x20\x66\x66'
+-old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
++# ⛔ A WRITE MUST NOT SET A PASSWORD THE USER DID NOT ASK FOR. `new_key` used to be
++# 20206666, so every `lf * write` password-protected the tag; the four raw-frame writers
++# carried a DIFFERENT key as a function default, so a tag locked by one could not be
++# rewritten by another, by the Proxmark, or by anything else. Zero means "do not protect".
++# The old keys stay in `old_keys` so tags already locked in the field can still be opened.
++new_key = b'\x00\x00\x00\x00'
++old_keys = [b'\x20\x20\x66\x66', b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+ 
+ 
+ class ChameleonCMD:
