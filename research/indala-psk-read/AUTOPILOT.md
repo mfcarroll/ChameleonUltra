@@ -38,7 +38,34 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
-### ⛔⛔⛔ 2026-09-14 15:55 — TWO ASK READ ARMS ARE DOWN, BOUNDED TO RF/32 AND RF/40 (C399, C400)
+### ⛔⛔⛔ 2026-09-14 16:25 — FOUR READ ARMS DOWN: EVERY ASK/BIPHASE PROTOCOL THIS BRANCH ADDED (C402)
+
+⛔ **Read this first — it supersedes the RF/32-and-RF/40 boundary below, which is REFUTED.**
+
+| protocol | coding | #1 reads #2's emulation |
+|---|---|---|
+| **EM410X**, **Viking** | pre-existing upstream | **✓** control, taken before AND after |
+| Gallagher RF/32, Securakey RF/40, Noralsy RF/32 | ASK, branch-added | **0 of 7** |
+| GProxII RF/64 | biphase, branch-added | **0 of 2** |
+
+⛔ **GProxII is RF/64 — the same rate as the passing control — so it is NOT bit rate.** The boundary is
+*protocols this branch added* against *protocols that were already there*, on the SAME GPIO/comparator path.
+⭐⭐ **AND IT IS NOT THE DECODE MATHS**: `make check` passes all four on the host against synthesized
+waveforms — *Gallagher ASK RF/32 decode exact*, *Securakey*, *Noralsy*, *GProxII biphase RF/64 decode exact*.
+⇒ **The device-side scan path for the branch's protocols is where to look.** EM410X and Viking reach the
+capture through their own upstream scan functions.
+⭐ **Two devices, two signal sources**: C400 saw the same on REAL pm3-written tags read by #2. The
+bench-geometry explanation C400 could not exclude is dead.
+⚠ **Not attributed to a commit.** Bisect is the fallback if the path inspection does not name it.
+
+⛔⛔ **BENCH TOPOLOGY CHANGED AND IS NOW MUTUALLY EXCLUSIVE.** #2 faces #1 and **can no longer read the T5577
+at all** — HID returns `LF tag not found` where it read FC 123 / CN 4567 an hour ago — while **pm3 still
+reads that tag**. ⇒ **A tick that runs a read arm on #2 against the tag will get a FALSE failure.** Read arms
+against a real tag now need the bench moved back; read arms against an EMULATION work as above.
+
+---
+
+### (superseded) 2026-09-14 15:55 — TWO ASK READ ARMS ARE DOWN, BOUNDED TO RF/32 AND RF/40 (C399, C400)
 
 ⛔ **This contradicts a headline claim and is the first thing to read.** `lf securakey read` is recorded as
 returning `7fcb400001adea5344300000` **6 of 6**, and Securakey is one of C343's nineteen arms at **76 of 76**.
