@@ -88,6 +88,28 @@ and the tones are **64 and 80 ticks, `gcd = 16`**. ⇒ **Constant `counter_top` 
 (2 on, 2 off), RF/10 = 5 entries (2 on, 3 off), which reproduces C226/C380's measured **4-carrier-cycle mark
 = 32 us = exactly 2 entries** for free. ⭐ ioProx's tone of 11 is legal too (64 and 88 ticks, `gcd = 8`), so
 that question stays open rather than blocking.
+⭐⭐⭐⭐ **U11 IS RATE-DEPENDENT — READ THIS FIRST, IT SUPERSEDES THE BLOCK BELOW (C387).**
+The emitter produces EITHER tone perfectly and loses the long one in proportion to how often the tone changes.
+Three diagnostic frames, same emitter, same instrument:
+
+| tone changes | periods near RF/8 | near RF/10 | mark |
+|---|---|---|---|
+| **never** (all ones) | 1 | **3031** | — |
+| **every 4 bits** (`0xF0`) | 2459 | **261** | 28-33 us |
+| **every bit** (`0xAA`) | 1078 | **0** | 7-25 us |
+
+⇒ **The encoding, the PWM and the 2-on/3-off duty pattern are CORRECT** — a steady RF/10 comes out at 79 us
+exactly as designed. What degrades is the TRANSITION between tones, monotonically with its frequency, and the
+mark quality tracks the same curve against an intended 32 us. **That is a settling signature, not a digital
+one.**
+⭐⭐ **NOT AN INSTRUMENT ARTEFACT — the control was taken.** A genuine mixed-tone reference (the Flipper
+emulating `H10301`) captured through OUR OWN reader shows **both bands, 389 near RF/8 and 79 near RF/10**.
+⚠ **Cause NOT established.** Tank settling fits every number, but a real FSK tag alternates every bit and
+works — it SHORTS its coil, a far larger and faster perturbation than driving a transistor across that node.
+⇒ **NEXT LEVER IS MODULATION DEPTH, NOT A THIRD ENCODING.** If the emitter cannot move the tank far enough to
+re-establish a tone within one tone period, depth is the variable; a fourth re-encoding is not.
+⛔ **C386's *the long tone never appears* is superseded** — it appears perfectly when not asked to alternate.
+
 ⛔⛔ **THE FIX IS BUILT AND IT DOES NOT WORK — READ THIS BEFORE TOUCHING U11 (C386).**
 `lf/utils/fsk2a_mod.c` ships the constant-`counter_top` emitter: one shared buffer, top 16 at a 1 MHz clock,
 the tone carried by the duty pattern, HID and AWID rewired, `IS_1MHZ_PWM_TYPE` added so the clock is one edit.
