@@ -165,7 +165,16 @@ else
   cu1 "hw mode -r" >/dev/null
 fi
 
+# ⛔ F12 IS AN OPEN DEFECT, NOT A FIX, so it has nothing to regress and gets no arm. It is named
+# here anyway: a register that only prints the REPAIRED defects reads as a clean bill of health,
+# which is the opposite of what FIXES.md is for. Remove this line when F12 is fixed and give it
+# a real arm instead.
 print -r -- ""
-printf "  ⇒ %d pass, %d FAIL, %d not checkable on this rig\n" "$pass" "$fail" "$skip"
+print -r -- "  ⛔ F12 FSK2a emulation emits a constant tone — OPEN, characterised only (C387)."
+print -r -- "     Not a regression target. The measurement that would settle it is ./fskcap.sh,"
+print -r -- "     which needs the two Chameleons facing each other (AUTOPILOT.md §5)."
+
+print -r -- ""
+printf "  ⇒ %d pass, %d FAIL, %d not checkable on this rig; 1 registered defect still OPEN (F12)\n" "$pass" "$fail" "$skip"
 print -r -- "  -- restoring the bench credential --"
 cu "lf hid prox write -f H10301 --fc 123 --cn 4567" | grep -iE "VERIFIED|CANNOT TELL" | sed 's/^/     /'

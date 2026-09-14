@@ -14,10 +14,17 @@ that is about something else.
 
 ⛔ **Everything here is present on `main`.** Where a defect is ours, it says so.
 
-⭐⭐ **RUN `./fixcheck.sh` BEFORE TRUSTING THIS FILE.** Every entry says *fixed and hardware-verified*, and some
+⭐⭐ **RUN `./fixcheck.sh` BEFORE TRUSTING THIS FILE.** Most entries say *fixed and hardware-verified*, and some
 were verified months ago on firmware that has since been rewritten underneath them. The script re-tests each one
-against the build actually flashed: **9 of 11 pass, 0 regressed** as of 2026-09-14 (C351). ⛔ F10 and F11 are
-EMULATION fixes needing the Flipper as reader, and the script reports them NOT CHECKED rather than skipping them.
+against the build actually flashed: **11 of 11 pass, 0 regressed, 0 not checkable** as of 2026-09-14 (C393).
+⭐ F10 and F11 were the standing gap — EMULATION fixes needing the Flipper, whose plugin would not start (C377)
+— and they now run: F10 as a Gallagher → Indala type change with no reboot, both emulating, and F11 as
+frames-per-burst **21 vs 31**, derived rather than constant.
+
+⛔⛔ **ONE ENTRY IS NOT FIXED, AND IT IS DELIBERATE.** F12 is an upstream defect this branch CHARACTERISED but
+did not repair; it is here because a register of found defects that silently omits the unrepaired ones tells a
+maintainer the opposite of the truth. It carries no `fixcheck.sh` arm, because an unfixed defect has nothing to
+regress — the script names it as open instead.
 
 | # | what | files | present on `main`? |
 |---|---|---|---|
@@ -32,6 +39,7 @@ EMULATION fixes needing the Flipper as reader, and the script reports them NOT C
 | F9 | `lf pac read` returns nothing: the reader's own field saturates its amplifier | `lf_pac_data.c` | yes — **fixed**, ⛔ **NOT standalone: needs PR 1's drive API** |
 | F10 | Changing a slot's LF type silently disarms emulation until a reboot | `lf_tag_em.c/.h`, `tag_emulation.c`, `app_cmd.c` | yes — **fixed** |
 | F11 | The emulation burst is a FRAME COUNT, so long-window readers fail at the boundary | `lf_tag_em.c` | yes — **fixed** |
+| F12 | **FSK2a emulation emits a CONSTANT TONE** — HID Prox, ioProx and AWID advertise an emulate path that carries no data at all | `hidprox.c`, `ioprox.c`, `awid.c`, `lf_tag_em.c` | yes — ⛔ **NOT FIXED, characterised only** |
 
 ---
 
@@ -327,3 +335,40 @@ frames happened to give (524 ms) and the only length with evidence behind it.
 (it shares nothing with ours) and fc/2 amplitude 22.69 confirming coupling throughout (C75).
 
 ⚠ Same blind spot as F10: `lf_tag_em.c` is assigned to a PR, so the file audit never looked.
+
+## F12 — FSK2a emulation emits a CONSTANT TONE ⛔ NOT FIXED, CHARACTERISED ONLY
+
+⛔ **HID Prox, ioProx and AWID all expose an emulate path, and none of them puts any data on the air.**
+Every other LF protocol on the device emulates correctly — 8 of 11 score 6 of 6 with a wrong-modulation
+control at 0 of 6 (C378) — and these three are the whole remainder.
+
+**The emission was captured and measured rather than inferred from a failed read.** With the Flipper's raw
+reader listening to our own coil:
+
+| frame emitted | periods in the RF/8 band | in the RF/10 band |
+|---|---|---|
+| the real credential | 2257 | **0** |
+| all ones (uniform long tone) | 1 | **3031** |
+| alternating every 4 bits | 2459 | **261** |
+| alternating every bit | 1078 | **0** |
+
+⇒ **The emitter can produce EITHER tone perfectly and loses the long one in proportion to how often the tone
+CHANGES** (C387). An FSK decoder handed a constant tone has no data to find, which is exactly the
+`Protocol: not found` the captures return while an ASK control decodes byte-exact through the same pipeline.
+
+⛔ **WHAT IS RULED OUT, EACH BY MEASUREMENT** — so a maintainer does not re-walk it: the loader (`hw emudebug`
+reports the waveform present with the correct clock, C379), playback, the frame arithmetic, our own decoder
+(the sequence round-trips exactly in `ctest`), the tone encoding itself (C386 rebuilt it on a constant
+`counter_top` with the frequency in the duty pattern — same result), the mark shape (C380), and modulation
+depth (C388 — a deeper mark is WORSE, because it spends the contrast a reader measures).
+
+⚠ **NOT ESTABLISHED: the cause.** A resonant tank needing time to settle when the modulation period changes
+fits every number, but a real FSK tag alternates every bit and works — it SHORTS its coil, a far larger and
+faster perturbation than driving a transistor across the same node.
+
+⇒ **THE MEASUREMENT THAT WOULD SETTLE IT** is named and scripted: `./fskcap.sh` captures our own emission
+through our own reader at a sample rate we set, and needs the two Chameleons facing each other (AUTOPILOT.md
+§5). Everything above came through the Flipper's raw reader, which is a black box we infer from.
+
+⚠ **This entry is NOT a PR.** It is a defect report with the elimination work already done — which is the part
+a maintainer cannot redo cheaply, because it took a bench, a rate sweep and a positive control.
