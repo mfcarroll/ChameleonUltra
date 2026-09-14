@@ -9,6 +9,7 @@
 #include "lf_fsk2a.h"
 #include "lf_ask_biphase.h"
 #include "lf_reader_generic.h"
+#include "protocols/t55xx.h"
 
 #define NRF_LOG_MODULE_NAME lf_indala
 #include "nrf_log.h"
@@ -294,6 +295,56 @@ bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phas
     *out = m_samples;
     return ok;
 }
+
+/* ⭐⭐⭐ READ ONE T5577 BLOCK — the measurement C305 needs and this tree has never had.
+ *
+ * C305 narrowed a write failure to one variable: block 0's VALUE. Nothing here can observe it.
+ * pm3 cannot either — its downlink is broken while its listening is fine (C306) — so the tag's
+ * own configuration word is currently unreadable by both tools on this bench.
+ *
+ * ⛔ WHY THIS NEEDS THE PROBE HOOK RATHER THAN TWO CALLS. A T5577 regular-read answers only
+ * while the field it was addressed on stays up, and `capture_begin()` raises the field itself.
+ * Sending the command and then starting a capture therefore resets the tag in between — the
+ * command is answered into a field that is about to drop, and the capture opens on a tag that
+ * has forgotten it. The command must be transmitted INTO a live capture, which is what
+ * `raw_read_samples_probe()` exists for.
+ *
+ * ⚠ THIS RETURNS SAMPLES, NOT A BLOCK. The tag answers in whatever modulation its config
+ * selects, so demodulating it needs to know that config — which for block 0 is the thing being
+ * asked. Host-side demodulation is the right place for that, and it is why this is an
+ * instrumentation command rather than a protocol one. */
+typedef struct {
+    uint8_t   opcode;
+    uint32_t *passwd;
+    uint8_t   block;
+} t55xx_read_arg_t;
+
+static void t55xx_read_fire(void *arg) {
+    t55xx_read_arg_t *a = (t55xx_read_arg_t *)arg;
+    /* `t55xx_send_cmd()`'s own comment gives the frame: "Read the mode directly,
+     * 2op(1+bck) 1(0) 3addr". Passing data == NULL is what makes it a READ. */
+    t55xx_send_cmd(a->opcode, a->passwd, 0, NULL, a->block);
+}
+
+bool lf_t55xx_read_block_probe(uint8_t block, uint32_t passwd, bool use_pwd, bool page1,
+                               size_t capture_samples, uint16_t settle_ms,
+                               const int16_t **out, size_t *got) {
+    if (capture_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) {
+        capture_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
+    }
+    t55xx_read_arg_t arg = {
+        .opcode = page1 ? T5577_OPCODE_PAGE1 : T5577_OPCODE_PAGE0,
+        .passwd = use_pwd ? &passwd : NULL,
+        .block  = block,
+    };
+    *got = 0;
+    bool ok = raw_read_samples_probe(m_samples, capture_samples,
+                                     INDALA_CAPTURE_TIMEOUT_MS(capture_samples), got,
+                                     settle_ms, t55xx_read_fire, &arg);
+    *out = m_samples;
+    return ok;
+}
+
 #endif /* LF_RESEARCH_CMDS_ENABLED */
 
 bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,

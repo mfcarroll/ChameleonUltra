@@ -893,6 +893,55 @@ static data_frame_tx_t *cmd_processor_lf_reader_capture(uint16_t cmd, uint16_t s
 }
 #endif /* LF_RESEARCH_CMDS_ENABLED */
 
+#if LF_RESEARCH_CMDS_ENABLED
+/* ⭐ T5577 REGULAR-READ, CHUNKED EXACTLY LIKE THE CAPTURE ABOVE so the same host tooling
+ * parses it. Payload: [0] block, [1] flags (bit0 use password, bit1 page1), [2..5] password
+ * (BE), [6..7] samples wanted (BE), [8] chunk index, [9] settle ms.
+ * ⚠ Chunk 0 performs the read; later chunks slice the SAME buffer, so a scan between chunks
+ * destroys it — the same contract the capture command already has. */
+static data_frame_tx_t *cmd_processor_lf_t55xx_read_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static const int16_t *buf = NULL;
+    static size_t nsamp = 0;
+
+    if (length < 9) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t  block  = data[0] & 0x07u;
+    bool     usepwd = (data[1] & 0x01u) != 0;
+    bool     page1  = (data[1] & 0x02u) != 0;
+    uint32_t passwd = ((uint32_t)data[2] << 24) | ((uint32_t)data[3] << 16) |
+                      ((uint32_t)data[4] << 8)  |  (uint32_t)data[5];
+    size_t   want   = ((size_t)data[6] << 8) | data[7];
+    uint8_t  chunk  = data[8];
+    uint16_t settle = (length >= 10) ? data[9] : 0;
+
+    if (chunk == 0) {
+        nsamp = 0;
+        lf_t55xx_read_block_probe(block, passwd, usepwd, page1, want, settle, &buf, &nsamp);
+    }
+    if (buf == NULL || nsamp == 0) {
+        return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
+    }
+    const size_t per_chunk = LF_SNIFF_CHUNK_BYTES / 2u;
+    size_t off = (size_t)chunk * per_chunk;
+    if (off >= nsamp) {
+        return data_frame_make(cmd, STATUS_LF_TAG_OK, 0, NULL);
+    }
+    size_t n = nsamp - off;
+    if (n > per_chunk) {
+        n = per_chunk;
+    }
+    static uint8_t out[LF_SNIFF_CHUNK_BYTES];
+    for (size_t i = 0; i < n; i++) {
+        uint16_t v = (uint16_t)buf[off + i] & 0x3FFFu;
+        out[2 * i] = (uint8_t)(v >> 8);
+        out[2 * i + 1] = (uint8_t)(v & 0xFFu);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)(n * 2u), out);
+}
+#endif /* LF_RESEARCH_CMDS_ENABLED */
+
+
 static data_frame_tx_t *cmd_processor_fdxb_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     uint8_t card_data[FDXB_READ_DATA_SIZE] = { 0x00 };
     status = scan_fdxb(card_data);
@@ -3869,6 +3918,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GPROXII_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_gproxii_write_to_t55xx,        NULL                   },
 #if LF_RESEARCH_CMDS_ENABLED
     {    DATA_CMD_LF_READER_CAPTURE,            before_reader_run,           cmd_processor_lf_reader_capture,             NULL                   },
+    {    DATA_CMD_LF_T55XX_READ_CAPTURE,        before_reader_run,           cmd_processor_lf_t55xx_read_capture,         NULL                   },
 #endif
     {    DATA_CMD_FDXB_SCAN,                    before_reader_run,           cmd_processor_fdxb_scan,                     NULL                   },
     {    DATA_CMD_FDXB_WRITE_TO_T55XX,          before_reader_run,           cmd_processor_fdxb_write_to_t55xx,           NULL                   },

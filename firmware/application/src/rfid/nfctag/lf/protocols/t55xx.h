@@ -264,7 +264,11 @@ extern "C" {
 #if defined(PROJECT_CHAMELEON_ULTRA)
 void t55xx_write_data(uint32_t passwd, uint32_t *blks, uint8_t blk_count);
 void t55xx_reset_passwd(uint32_t old_passwd, uint32_t new_passwd);
-void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t data_len, uint32_t *data, uint8_t block);
+/* ⛔ THE THIRD PARAMETER IS A LOCK BIT, NOT A LENGTH. This header called it `data_len` while
+ * the implementation in lf_t55xx_data.c has always treated it as `lock_bit`, so a caller who
+ * trusted the name and passed 32 would silently get "no lock bit" (any value other than 0 or 1
+ * means exactly that). Renamed to match the code 2026-09-15; no behaviour changed. */
+void t55xx_send_cmd(uint8_t opcode, uint32_t *passwd, uint8_t lock_bit, uint32_t *data, uint8_t block);
 #endif
 #ifdef __cplusplus
 }

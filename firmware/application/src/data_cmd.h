@@ -287,6 +287,10 @@
  * `lf sniff` is the OTHER path, which is precisely why it cannot answer the question. */
 #if LF_RESEARCH_CMDS_ENABLED
 #define DATA_CMD_LF_READER_CAPTURE              (3060)
+/* ⚠ INSTRUMENTATION for C305 — send a T5577 regular-read INTO a live capture and return the
+ * raw samples. The tag answers in whatever modulation its config selects, so the demodulation
+ * is host-side; for block 0 that config is exactly what is being asked for. */
+#define DATA_CMD_LF_T55XX_READ_CAPTURE          (3063)
 #endif
 #define DATA_CMD_FDXB_SCAN                      (3061)
 #define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)

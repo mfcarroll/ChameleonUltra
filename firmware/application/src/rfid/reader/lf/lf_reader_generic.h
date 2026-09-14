@@ -87,3 +87,15 @@ uint32_t lf_capture_dropped(void);
 
 bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
                       uint16_t settle_ms);
+
+/** Called once with the FIELD ALREADY UP and settled, immediately before the sample window
+ *  opens. ⭐ This exists so a downlink command can be transmitted INTO a live capture — a
+ *  T5577 regular-read only answers while the field it was addressed on stays up, so sending
+ *  the command and then starting a capture cannot work: `capture_begin()` raises the field
+ *  itself and the tag would have been reset in between (C308). */
+typedef void (*lf_capture_probe_fn)(void *arg);
+
+/** `raw_read_samples()` with an optional probe fired between the settle and the window.
+ *  Passing NULL is exactly `raw_read_samples()`, which is implemented in terms of this. */
+bool raw_read_samples_probe(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
+                            uint16_t settle_ms, lf_capture_probe_fn probe, void *arg);

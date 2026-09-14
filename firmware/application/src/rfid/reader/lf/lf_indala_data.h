@@ -158,6 +158,13 @@ bool instafob_read(uint8_t *data, uint32_t timeout_ms, int32_t *energy_out);
  *  data_cmd.h) rather than deleted — it costs a shipping image nothing and it is the only way
  *  back into the questions C209/C211 needed it for. */
 #if LF_RESEARCH_CMDS_ENABLED
+/** ⭐ Send a T5577 regular-read for one block INTO a live capture and return the raw samples.
+ *  See the long note in lf_indala_data.c: the command must be transmitted inside the capture's
+ *  own field session, because the tag forgets it the moment the field drops. */
+bool lf_t55xx_read_block_probe(uint8_t block, uint32_t passwd, bool use_pwd, bool page1,
+                               size_t capture_samples, uint16_t settle_ms,
+                               const int16_t **out, size_t *got);
+
 bool lf_reader_capture_probe(size_t capture_samples, uint8_t drive, uint8_t phase,
                              uint8_t repeats, uint16_t settle_ms, uint16_t gap_ms,
                              const int16_t **out, size_t *got);

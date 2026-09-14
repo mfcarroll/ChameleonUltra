@@ -206,11 +206,24 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
  * returning 3000 samples would merely produce a confident wrong answer. */
 bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
                       uint16_t settle_ms) {
+    return raw_read_samples_probe(samples, count, timeout_ms, outlen, settle_ms, NULL, NULL);
+}
+
+bool raw_read_samples_probe(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen,
+                            uint16_t settle_ms, lf_capture_probe_fn probe, void *arg) {
     *outlen = 0;
 
     lf_capture_ctx_t ctx;
     if (!capture_begin(&ctx, settle_ms)) {
         return false;
+    }
+
+    /* ⭐ The probe fires HERE, with the field up and settled and the ring already collecting,
+     * so whatever it transmits is modulated onto the same field session the samples come
+     * from. ⚠ It runs on the caller's thread and must be short: every microsecond it spends
+     * is a microsecond of tag response not being drained from the ring. */
+    if (probe != NULL) {
+        probe(arg);
     }
 
     autotimer *p_at = bsp_obtain_timer(0);
