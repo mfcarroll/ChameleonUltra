@@ -267,6 +267,10 @@ the two Chameleons face each other.
 > at all (C242) — do not write another biphase emitter. U11 (FSK2a emitters) is open but
 > unobservable: AWID's emitter is correct by every check available and silent anyway, and the
 > only reader that can hear rig A is the Flipper, which is under test.
+> ⭐ **U14 IS OPEN AND OPERATOR-REQUESTED (2026-09-15): audit the references' scan / repeat-read
+> discipline**, Flipper variants included. It is a COMPUTE unit — every tree is already on
+> disk — and it is the natural companion to C268/C269, which found the agreement rule rather
+> than the gates is what makes this reader safe.
 > ✅ **U13 is DONE.** ⭐ Everything else finished this session is in §4 and the grid.
 > **(historical) U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8.**
 > ⛔ §10 of `NEXT.md` is organised **by modulation family**, and a family's FIRST protocol
@@ -289,6 +293,7 @@ the two Chameleons face each other.
 | **U11** | **FSK2a EMITTERS** — AWID first, then Paradox, Pyramid, FDX-A, one at a time. ⭐ The shape is known: the ASK emitters put one PWM entry per bit with `counter_top` set to the carrier cycles that bit occupies, and FSK2a only needs `counter_top` 8 or 10 per tone period instead. ⚠ A `ctest/roundtrip.c` arm per protocol, which is where three wrong encodings were caught before (C156) | device (rig A only — no tag needed) | the Flipper reads our emulation as the right credential, ≥5 of 5, with a control either side |
 | **U12** | **BIPHASE EMITTERS** — GProxII then FDX-B, only after U11 is completely done. ⚠ GProxII is BIPHASE and FDX-B is DIPHASE and INVERTED; they are one bit apart in the T5577 config and must not be assumed to share an emitter until one has been through end to end | device (rig A only) | same bar as U11 |
 | **U13** | **§9 REFRESH** — pure compute. The instrumentation list is stale: `DATA_CMD_LF_READER_CAPTURE`, the GProxII failure-energy reporting and `rdrcap.py` have all been added since it was written, and the command-id count is no longer 32. ⚠ The three-PR split also predates the biphase family | compute | §9 and §9b match the branch again |
+| **U14** | ⭐ **HOW THE REFERENCES GET ACCURACY — audit every Flipper variant and the Proxmark for their scan / repeat-read discipline.** Operator-requested 2026-09-15. Today's C268/C269 found that our two-agreeing-stacks rule, not the frame gates, is what carries this reader — so what the references do about the same problem is directly load-bearing and has never been compared side by side. ⚠ **Include the variants, not just Momentum**: `flipperzero-firmware`, `Momentum-Firmware`, `Momentum-Firmware-slix`, `unleashed-firmware`, `roguemaster` and `proxmark3` are all on disk, so this needs no fetching. Questions: how many reads before reporting; whether agreement is on the PROTOCOL or on the DECODED DATA; per-protocol counts and why they differ; what happens when several protocols match; and what is GATED versus merely reported | compute | a side-by-side table in `NEXT.md` with each claim traced to the file and line that implements it, and our own rule placed against them |
 
 ⛔ **Not yours to decide** — leave these alone and do not "make progress" on them:
 §5 carrier-locking (a person's call; the recommendation is written), §7 BLE transport (needs
