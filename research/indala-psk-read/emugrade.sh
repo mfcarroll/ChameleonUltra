@@ -96,7 +96,13 @@ for p in $protos; do
   # The firmware says so — `WARNING: Slot LF type is not Indala` — and the first version of
   # this script filtered for error|usage|invalid|Traceback, which does not match WARNING. The
   # answer was printed on the very first run and thrown away by my own grep.
+  # ⛔⛔ FOUR SEPARATE THINGS, AND NOTHING IN THE NOTES SAID SO. A slot emits only when all of
+  # them are done: the TYPE is set, the CREDENTIAL is written, the LF interface is ENABLED,
+  # and the device is in emulator MODE. Miss the enable and `hw slot list` says
+  # `LF: (disabled)EM410X` — type present, interface off, nothing on the air. That one cost
+  # four rounds of chasing the wrong thing; the tell is `(disabled)` in the listing.
   cu "hw slot type -s $SLOT -t ${TYPE[$p]}" >/dev/null
+  cu "hw slot enable -s $SLOT --lf" >/dev/null
   err=$(cu "${E[$p]}" | grep -iE "error|warning|usage|invalid|unrecognized|Traceback" | head -1)
   if [[ -n "$err" ]]; then print -r -- "  ⛔ $p: econfig REFUSED — $err"; continue; fi
   # ⛔⛔ PUT IT BACK INTO EMULATION MODE. Step 1's null check leaves the device in READER

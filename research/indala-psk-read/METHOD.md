@@ -450,3 +450,17 @@ the dangerous case: nothing fails, the numbers are plausible, and they belong to
 ⇒ `./autopilot.sh status` now prints the device's own `get_git_version()` against HEAD every tick, and says
 which of three things is true: matches HEAD, built from a dirty tree so it matches no commit, or behind the
 source. ⚠ *Semantically identical, so it cannot matter* is a prediction. Flash it and run the battery.
+
+**M46 — AN EMULATION SLOT NEEDS FOUR THINGS, AND MISSING ONE LOOKS EXACTLY LIKE A BROKEN PROTOCOL.**
+A slot emits only when all four are true:
+  1. `hw slot type -s N -t <Type>`   — the protocol
+  2. `lf <proto> econfig -s N ...`    — the credential
+  3. `hw slot enable -s N --lf`       — **the interface**
+  4. `hw mode -e`                     — emulator mode
+⛔ Miss the enable and `hw slot list` prints `LF: (disabled)<Type>` — type present, interface off, nothing on
+the air. A working slot reads `LF: Empty <Type>`. That one word is the whole difference and it cost four rounds
+of chasing the protocol (C365).
+⇒ **When an emulate arm reads zero, put a KNOWN-GOOD protocol on the SAME slot before blaming the protocol.**
+EM410X on the suspect slot failed too, which ruled out Indala and PSK in one step and pointed at the slot.
+⚠ And read what the firmware prints: it said `WARNING: Slot LF type is not Indala` on the first attempt, and an
+error filter matching `error|invalid|Traceback` threw it away. Filter for `warning` too.
