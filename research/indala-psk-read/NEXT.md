@@ -590,7 +590,59 @@ C206 turned on. Under the original "strip it" plan both would have been deleted 
 survive in the tree at zero cost to a shipping image, and re-opening either question is one `-D`
 away instead of a git-archaeology exercise.
 
+### 9i. ⭐⭐ WHAT BECAME UPSTREAMABLE AFTER 2026-09-13 — and the one PR worth sending FIRST
+
+⛔ **The counts in §9c are stale and are superseded here.** Recounted against `main` on
+2026-09-16:
+
+| | files | insertions |
+|---|---|---|
+| whole branch | 1,698 | 208,250 |
+| **reviewable CODE** (`firmware/` + `software/`) | **64** | **+11,327 −154** |
+| research notes and captures | 1,633 | +196,922 |
+
+⚠ §9c said "59 files, 10,242 lines". The reviewable surface has grown by 5 files and ~1,100
+lines since, which is the honest number to quote rather than the one already written down.
+
+⭐⭐ **PR 0 — THE `unpack()` FIX, AND IT SHOULD GO FIRST BECAUSE IT DEPENDS ON NOTHING HERE.**
+
+**3 files, +102 −16.** `wiegand.c`, `wiegand.h`, `hidprox.c` — all of which exist upstream
+already, and `wiegand.h` gains **no new includes and no new externs**, so it carries none of
+this branch's LF protocol work with it. It is separable today, without the five-PR sequence
+below ever happening.
+
+- **What it fixes**: `unpack()` returned the first layout of the right bit length whose
+  unpacker did not refuse. On real tags that relabels **15 of 29 writable formats** (C284) — a
+  Kastle tag holding fc 1 / cn 1 reports as Check Point card 8389632.
+- **Why it is safe to reason about**: the table already carried `fields.has_parity`, and C300
+  proved by measurement that the flag is accurate — the 12 rows flagged 0 are exactly the 12
+  that accept 100% of random frames. The fix consults a column that was already correct.
+- **Verified on hardware**: KASTLE now reads back as itself **4 of 4** (C304), on a tag whose
+  prior build reproduced C284's failure.
+- ⛔ **It IS a behaviour change to shipping code and the PR must open with that**, not bury it:
+  a reader that used to answer `HCP32` will now answer `KASTLE`. That is the point, and a
+  maintainer must be given the chance to disagree. The measured before/after is in `ctest/ambig.c`
+  and runs in `make check`.
+
+⭐ **Three smaller things, each independently landable:**
+
+| what | size | behaviour change? |
+|---|---|---|
+| **`blk_count == 0` guards** (C307) — 5 writers that shared `fsk2a_t55xx_blocks()` could write NOTHING and still return `STATUS_LF_TAG_OK` | 5 hunks | ⚠ only when the count IS 0, which never happens on a working path |
+| **`t55xx.h` parameter rename** (C310) — the header called `t55xx_send_cmd()`'s third argument `data_len`; the code has always treated it as `lock_bit` | 1 line | none — documentation only |
+| **`lf t55xx write`** (C307) — the firmware handler and host binding both existed with no CLI command | host only | none — new command |
+
+⭐ **And §9h no longer describes a deletion.** The instrumentation is **compile-gated**
+(C303): `LF_RESEARCH_CMDS_ENABLED`, default 0, so a plain build is the shipping build and the
+upstream diff is one deleted `Makefile` line. Command **3063** and `raw_read_samples_probe()`
+(C308) were added after that and are gated the same way, so they cost a shipping image nothing
+and need no separate removal.
+
 ### 9c. ⭐ Recommended shape — three PRs, not one
+
+⛔ **Superseded in part by §9i above**: the counts here are from 2026-09-13, and the list below
+is FIVE PRs under a heading that says three. §9i adds a sixth — PR 0, the `unpack()` fix — which
+depends on none of them and should go first.
 
 ⭐ **10,242 lines of CODE will not be reviewed in one PR; it will be declined.** ⚠ The figure
 was "7,500" until it was recounted 2026-09-13. The branch as a whole is 204,959 insertions
