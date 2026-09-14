@@ -380,7 +380,8 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
          * another: that would be a different measurement agreeing, and the rule's evidence is
          * that two reads of the SAME configuration landed on the same word. */
         bool have_prev = false;
-        uint8_t prev_word[8] = { 0 };
+        uint8_t prev_word[LF_DECODE_MAX_FRAME_BYTES] = { 0 };
+        uint16_t prev_bits = 0;
         lf_decode_result_t res;
 
         for (uint8_t k = 0; k < tries && !ok; k++) {
@@ -466,13 +467,31 @@ bool lf_sampled_read_phases(lf_sampled_decode_fn decode, size_t capture_samples,
              * gate in lf_indala_psk.c catches that), and a loud IDTECK tag produced a stable
              * false Indala credential at sample phase 28 (C90, caught by the reject preamble).
              * This rule only rejects errors that SCATTER. */
-            if (have_prev && memcmp(prev_word, res.id, 8) == 0) {
+            /* ⛔⛔ COMPARE THE WHOLE FRAME, NOT THE FIRST 64 BITS. This was `memcmp(..., 8)`
+             * for every protocol, which is the entire frame for Indala26, IDTECK and Keri and
+             * a MINORITY of it for everything added since: 8 of 12 bytes for NexWatch,
+             * Gallagher, Securakey, Noralsy and GProxII, 8 of 16 for FDX-B and Pyramid, and 8
+             * of 28 for Indala224 — 160 bits that two "agreeing" captures never had to agree
+             * on. ⇒ The rule did not do what the comment above it says: the credential
+             * returned is the SECOND capture's, so a tail that differed was accepted silently
+             * and unseen. Length is compared too, because a frame recovered at one length
+             * does not corroborate one recovered at another. */
+            uint16_t bytes = (uint16_t)((res.frame_bits + 7u) / 8u);
+            /* ⚠ Every decoder sets `frame_bits` from its format table, so this cannot fire
+             * today. It is here because the failure it guards is silent: a zero length makes
+             * `memcmp` of nothing succeed and the corroboration rule accept anything. */
+            if (bytes == 0 || bytes > LF_DECODE_MAX_FRAME_BYTES) {
+                bytes = LF_DECODE_MAX_FRAME_BYTES;
+            }
+            if (have_prev && res.frame_bits == prev_bits &&
+                memcmp(prev_word, res.id, bytes) == 0) {
                 winner_res = res;
                 winner_tries = (uint8_t)(k + 1);
                 winner_phase = phase;
                 ok = true;
             } else {
-                memcpy(prev_word, res.id, 8);
+                memcpy(prev_word, res.id, bytes);
+                prev_bits = res.frame_bits;
                 have_prev = true;
             }
         }

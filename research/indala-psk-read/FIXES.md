@@ -15,6 +15,7 @@ that is about something else.
 | F4 | `unpack()` relabels 15 of 29 writable HID formats | `wiegand.c/.h`, `hidprox.c` | yes |
 | F5 | Two 28 KB capture buffers resident at once — 22% of RAM | `lf_reader_generic.c/.h`, `lf_indala_data.c`, `app_cmd.c` | yes |
 | F6 | `lf hid prox write` reported success without reading back | `chameleon_cli_unit.py` | yes — **fixed** |
+| F7 | The repeat-read corroboration rule compares only the first 64 bits of any frame | `lf_indala_data.c` | ours — **fixed** |
 
 ---
 
@@ -106,3 +107,68 @@ Two details that matter more than they look:
 
 **Verified on hardware, both directions.** Empty pad → `CANNOT TELL — nothing readable before or
 after`. Tag on the pad → `VERIFIED — read back off the tag as HID H10301 26-bit`.
+
+---
+
+## F7 — the corroboration rule compares only the first 64 bits ✅ FIXED
+
+**Symptom.** None visible, which is the problem. Reads were returned as corroborated that had
+only ever been corroborated on their first 8 bytes.
+
+**Root cause.** `lf_sampled_read_phases()` accepts a frame when two consecutive captures at the
+same sample phase decode to the same word, and the comparison was:
+
+```c
+uint8_t prev_word[8] = { 0 };
+...
+if (have_prev && memcmp(prev_word, res.id, 8) == 0) {
+```
+
+A literal 8, for every protocol. That is the whole frame for Indala26, IDTECK and Keri — all
+64-bit — and a minority of it for everything added since:
+
+| frame | bytes compared | bytes NOT compared |
+|---|---|---|
+| NexWatch, Gallagher, Securakey, Noralsy, GProxII (96b) | 8 of 12 | 32 bits |
+| FDX-B, Pyramid (128b) | 8 of 16 | 64 bits |
+| Indala224 (224b) | 8 of 28 | **160 bits** |
+
+⛔ **The returned credential is the SECOND capture's** (`winner_res = res`), so a tail that
+differed between the two was accepted and shipped unseen. The rule did not do what the comment
+above it says it does — *"two reads of the SAME configuration landed on the same word"*.
+
+**Fix.** Compare the whole frame, and the length with it:
+
+```c
+uint16_t bytes = (uint16_t)((res.frame_bits + 7u) / 8u);
+if (bytes == 0 || bytes > LF_DECODE_MAX_FRAME_BYTES) { bytes = LF_DECODE_MAX_FRAME_BYTES; }
+if (have_prev && res.frame_bits == prev_bits && memcmp(prev_word, res.id, bytes) == 0) {
+```
+
+`prev_word` widens to `LF_DECODE_MAX_FRAME_BYTES`. Every decoder `memset`s `out->id` and fills
+all `frame_bits` of it, so the widened comparison reads real decoded data rather than stale
+bytes. The length check is there because a frame recovered at one length does not corroborate
+one recovered at another. The clamp cannot fire today — every decoder sets `frame_bits` from
+its format table — and exists because the failure it guards is silent: a zero length makes
+`memcmp` of nothing succeed and the rule accept anything.
+
+**Verified on hardware**, `v2.2.0-602-g81bdaa1`, tag written and read by Chameleon #2:
+
+| protocol | frame | reads |
+|---|---|---|
+| Indala224 | 224b | **4 of 4 exact**, all 28 bytes corroborated |
+| NexWatch | 96b | **4 of 4 exact** |
+| GProxII, Gallagher, Securakey | 96b | **3 of 3 each** |
+| Pyramid | 128b | **3 of 3** |
+| **FDX-B** | 128b | ⛔ **0 of 4 — see below** |
+
+⛔ **This fix EXPOSED a second, separate defect and did not cause it.** FDX-B is the only one of
+the seven that cannot corroborate its own frame: its decoded tail differs between consecutive
+captures, and the 8-byte comparison had been hiding that since the arm was built. Its C214 grade
+of *A, 6/6* was earned on half the frame. The cause is not yet known and is queued as its own
+unit — an arm that cannot corroborate a read SHOULD fail rather than return a half-checked
+answer, so the failure is the correct behaviour and not a regression to paper over.
+
+⚠ **This one is OURS, not upstream.** `lf_sampled_read_phases()` is this branch's code. It is
+listed here anyway because it is not part of the LF-protocol work either — it is a defect in the
+shared read engine that the protocol work happened to walk into.
