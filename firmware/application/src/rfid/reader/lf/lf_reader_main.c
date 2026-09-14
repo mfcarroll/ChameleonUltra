@@ -574,6 +574,17 @@ uint8_t write_nexwatch_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *
 uint8_t write_awid_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[4] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_AWID_CONFIG, blks);
+    /* ⭐ Added 2026-09-15. The five writers sharing `fsk2a_t55xx_blocks()` were the only
+     * ones in this file without this check, and every sibling has it. Without it a packer
+     * that returned 0 would write NOTHING and still report `STATUS_LF_TAG_OK`, because a
+     * T5577 sends no acknowledgement — a silent no-op reported as success.
+     * ⛔ THIS IS NOT THE CAUSE OF C305 and must not be cited as a fix for it: all three
+     * failing writers were queried directly and returned `LF_TAG_OK`, never `PAR_ERR`, so
+     * their block counts were already non-zero. This closes a real hole that C305 happened
+     * to make me look at. */
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
@@ -586,6 +597,9 @@ uint8_t write_awid_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_
 uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[4] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_PARADOX_CONFIG, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
@@ -598,6 +612,9 @@ uint8_t write_paradox_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *o
 uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[5] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_PYRAMID_CONFIG, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
@@ -613,6 +630,9 @@ uint8_t write_pyramid_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *o
 uint8_t write_fdxb_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[5] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame16, 4, T5577_FDXB_CONFIG, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 
@@ -629,6 +649,9 @@ uint8_t write_fdxb_to_t55xx(uint8_t *frame16, uint8_t *new_passwd, uint8_t *old_
 uint8_t write_gproxii_to_t55xx(uint8_t *frame12, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t blks[4] = {0x00};
     uint8_t blk_count = fsk2a_t55xx_blocks(frame12, 3, T5577_GPROXII_CONFIG, blks);
+    if (blk_count == 0) {
+        return STATUS_PAR_ERR;
+    }
     return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
 }
 

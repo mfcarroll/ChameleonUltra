@@ -1008,6 +1008,7 @@ lf_pyramid = lf.subgroup("pyramid", "Pyramid commands")
 lf_fdxa = lf.subgroup("fdxa", "FDX-A commands (read only — nothing here can verify a write)")
 lf_gproxii = lf.subgroup("gproxii", "GProxII commands")
 lf_fdxb = lf.subgroup("fdxb", "FDX-B commands (ISO 11784/5 — NOT FDX-A)")
+lf_t55xx = lf.subgroup("t55xx", "Raw T5577 block access")
 
 
 @root.command("clear")
@@ -8126,6 +8127,50 @@ class LFGProxIIWrite(_LFFskWrite):
             return self.cmd.gproxii_scan()[0].hex()
         except Exception:
             return None
+
+
+@lf_t55xx.command("write")
+class LFT55xxWriteBlock(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Write one raw 32-bit word to a T5577 block. ⛔ UNRELIABLE BY DESIGN — see the note "
+            "on lf_t55xx_write_block() in lf_reader_main.c: it starts the field, waits 1ms, sends "
+            "the block ONCE and stops the field, so the tag is written from cold with no second "
+            "attempt. Measured at roughly one in three on a real tag, and 0 of 11 on this bench "
+            "on 2026-09-15 (C305). The protocol writers hold the field across all blocks and send "
+            "each one twice, which is why they are what every `lf <proto> write` uses. ⇒ Use this "
+            "to probe a tag, never to program one, and always read back.")
+        parser.add_argument("-b", "--block", type=int, required=True, metavar="<0-7>",
+                            help="block number (0-7 on page 0, 0-3 on page 1)")
+        parser.add_argument("-d", "--data", type=str, required=True, metavar="<8 hex>",
+                            help="the 32-bit word, e.g. 00107060")
+        parser.add_argument("--pwd", type=str, default=None, metavar="<8 hex>",
+                            help="send a password-authenticated write with this password")
+        parser.add_argument("--page1", action="store_true", help="target page 1 instead of page 0")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        try:
+            word = int(args.data.strip().lower().removeprefix("0x"), 16)
+        except ValueError:
+            print(f"{color_string((CR, 'data must be 8 hex digits'))}")
+            return
+        pwd = 0
+        use_pwd = args.pwd is not None
+        if use_pwd:
+            try:
+                pwd = int(args.pwd.strip().lower().removeprefix("0x"), 16)
+            except ValueError:
+                print(f"{color_string((CR, 'pwd must be 8 hex digits'))}")
+                return
+        self.cmd.lf_t55xx_write_block(args.block, word, use_pwd, pwd, args.page1)
+        page = 1 if args.page1 else 0
+        print(f"   sent: page {page} block {args.block} <- "
+              f"{color_string((CY, f'{word:08X}'))}"
+              f"{' (authenticated)' if use_pwd else ''}")
+        print(f"   {color_string((CY, 'A T5577 does not acknowledge writes'))} — this reports what "
+              f"was TRANSMITTED, not what landed. Read the tag back before believing it.")
 
 
 @lf_fdxa.command("read")
