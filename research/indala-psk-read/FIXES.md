@@ -162,12 +162,16 @@ its format table — and exists because the failure it guards is silent: a zero 
 | Pyramid | 128b | **3 of 3** |
 | **FDX-B** | 128b | ⛔ **0 of 4 — see below** |
 
-⛔ **This fix EXPOSED a second, separate defect and did not cause it.** FDX-B is the only one of
-the seven that cannot corroborate its own frame: its decoded tail differs between consecutive
-captures, and the 8-byte comparison had been hiding that since the arm was built. Its C214 grade
-of *A, 6/6* was earned on half the frame. The cause is not yet known and is queued as its own
-unit — an arm that cannot corroborate a read SHOULD fail rather than return a half-checked
-answer, so the failure is the correct behaviour and not a regression to paper over.
+⛔ **FDX-B's failure is NOT this fix, and my first account of it was wrong (C334).** I wrote that
+the widening had exposed an unstable FDX-B tail. The A/B refutes it: rebuilt and flashed with
+only the comparison reverted to `memcmp(..., 8)` and nothing else changed, **FDX-B still reads 0
+of 4**. Six host-decoded captures of the same tag agree on the whole 128-bit word 5 times in 6,
+and the single outlier differs in byte 3 — inside the range the old rule already compared.
+
+⇒ **FDX-B was already broken before this change**, by something between C214 and now; the
+password fix, F5's buffer merge and F6 all landed in between and none is ruled out. It is queued
+as U16. This entry keeps the failing row in the table above because that is what the hardware
+said on the day, not because the fix is responsible for it.
 
 ⚠ **This one is OURS, not upstream.** `lf_sampled_read_phases()` is this branch's code. It is
 listed here anyway because it is not part of the LF-protocol work either — it is a defect in the
