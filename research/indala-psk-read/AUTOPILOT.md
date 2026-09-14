@@ -456,6 +456,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-15 23:15 | **C309 — the tag never enters read mode** | 24 → 25 | Autocorrelation: HID frame present at lag 4800, 32-bit block absent at 1600, with and without password. Corrects C308's claim that the tag's output changed | Modulation-agnostic method finds the frame that IS there, so the negative cannot be blamed on the demodulator |
 | 2026-09-15 22:40 | **C308 — T5577 block read built; mechanism proved, block not decoded** | 23 → 24 | Command 3063 transmits a read INTO a live capture. The tag's 96-bit frame disappears after it (1.000 → 0.512), so the command lands; no 32-bit periodicity recovered | The control recovers a perfect period-96 frame with the same demodulator, so the failure is in the signal, not the tool |
 | 2026-09-15 21:55 | **L274 — C305 narrowed to block 0's value** | 23 → 23 | Five successful writes carried five different payloads, so the data words are not the gate; block 0's value is the only variable left, and no simple mechanism explains it | Entailment from measurements already taken (M36), no new bench time |
 | 2026-09-15 21:40 | **L273 — corrected C305's block counts** | 23 → 23 | HID writes 4, not 3. Same count as GProxII, opposite outcome, so block count is refuted more cleanly and the two differ only in the values written | Counts read from the source constants for all five writers |
