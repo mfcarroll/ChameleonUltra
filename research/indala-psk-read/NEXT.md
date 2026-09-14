@@ -26,6 +26,15 @@ under **The bench** and **Working conventions**.
 
 ## ⚠ Needs hands — what is still queued
 
+⭐⭐ **THE BIGGEST ITEM HERE IS NOW ONE COMMAND: `./emugrade.sh` (C352).** The emulate column is
+the only real gap left — every read and write arm is verified in both directions, nulled against
+real foreign tags and a blank chip, soaked, and judged by a judge that has itself been measured.
+⛔ **It needs #2 on the FLIPPER's pad with the T5577 out**, because the Proxmark cannot hear
+PWM-on-the-coil at all. Eleven arms, null-first with an abort on any ambient hit, the
+wrong-modulation arm as a built-in control, null again at the end, scratch slot 8.
+⚠ **Plumbing tested, results never taken** — the first run is the experiment, not a regression
+check.
+
 **Cleared 2026-09-13 — the bench was rebuilt and all four devices enumerate.** The two
 blockers that stopped the last session are gone: Chameleon #2 and the Flipper are back on
 USB, and the T5577 answers again. ⚠ Neither was diagnosed — see the watch row below.

@@ -56,6 +56,8 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ⚠ **#2 carries gated instrumentation** (`LF_RESEARCH_CMDS_ENABLED`, which this branch's `Makefile` sets to 1): a FAILED `FDXB_SCAN` returns a 12-byte counter payload instead of an empty one. It is the instrument U16 needed and it stays until something replaces it.
 
+⭐ **WHEN THE BENCH CAN CHANGE, THE EMULATE RE-GRADE IS `./emugrade.sh`** — eleven arms in one command, C328's discipline encoded (null first and abort on an ambient hit, wrong-modulation arm as control, null again, scratch slot 8). ⚠ Plumbing tested 2026-09-14, **no arm has ever been scored with it**: the first run is the experiment.
+
 ⛔ **EMULATION IS OFF THE TABLE while #2 is on the Proxmark.** It needs the Flipper as reader, and the Flipper faces #1 (deliberately un-reflashed, holds the NexWatch slot). The Proxmark cannot hear our PWM emulation — the dead-end note at the top of `NEXT.md`.
 
 ⚠ **Open, needs hands, not for an unattended run:** Indala emu slot 1 holds a bad frame (*not the Indala preamble*); EM410X emulation hit BOTH `flipper.py` arms, unexplained; the Flipper crash-rebooted at an unknown time.
@@ -532,6 +534,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-14 14:25 | **C352 — `emugrade.sh`: the emulate column reduced to one command, plumbing tested, results not taken** | 58 → 59 | The only real gap left needs a bench change an unattended run may not make. Two of eleven entries were wrong because econfig signatures are not write signatures | 11 arms executed against #2, none scored; #2 returned to reader mode |
 | 2026-09-14 13:55 | **C351 — the third audit axis: 9 of 11 fixes re-verified still-true on the live build, 0 regressed** | 57 → 58 | Completeness cannot detect a regression and a regression check cannot detect an omission. `fixcheck.sh` added and wired into FIXES.md's header | F10/F11 reported NOT CHECKED, not skipped |
 | 2026-09-14 13:25 | **C350 — auditing by CLAIM found four more unregistered upstream defects; FIXES.md 7 → 11** | 56 → 57 | The file audit is blind to a fix inside an assigned file, and F10/F11 were exactly that. Neither axis would have found the other's | 33 fix-shaped claims triaged; blindness demonstrated by checking F10/F11's files ARE named in §9d |
 | 2026-09-14 12:55 | **C349 — PR-split completeness audit: 10 of 63 files owned by no PR, two are unregistered UPSTREAM fixes** | 55 → 56 | F8 (the BLE guard behind C45's HID intermittency) and F9 (the PAC drive sweep) added to `FIXES.md`; the other eight assigned in §9d | files enumerated from git rather than from the notes |
