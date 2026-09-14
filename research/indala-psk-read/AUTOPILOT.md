@@ -462,6 +462,7 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 
 | when | unit | util5 before → after | what landed | what verified it |
 |---|---|---|---|---|
+| 2026-09-16 01:30 | **C313 — PR 0 separability proven by construction** | 28 → 29 | Patch applies to clean `main` and builds there: +248 B flash, no new BSS. `formats[]` byte-identical. One 4-line dependency (BLE guard) named as PR 0b | Unpatched control built first so +248 B is a measurement, not a cross-tree subtraction |
 | 2026-09-16 00:55 | **C312 — U7 refresh; `unpack()` fix is separable today** | 27 → 28 | 3 files, +102 −16, no new includes or externs, all three already upstream. Reviewable surface recounted at 64 files / +11,327 | Separability measured via the header's include/extern lines, not eyeballed; the honest recount went UP and is quoted that way |
 | 2026-09-16 00:20 | **C311 — bench A/B battery built and baselined** | 26 → 27 | `benchab.sh` runs the six-test battery identically each time; `before` captured with the sandwich assembled. Run order `before → nochamp2 → opened` is mandatory | Baseline independently reproduces C305, C306 and the 4-of-4 reader in one pass; ends by asserting the restore |
 | 2026-09-15 23:50 | **C310 — the read command is well-formed; the tag ignores it** | 25 → 26 | Decoded our own downlink off the capture: ONE,ZERO,ZERO,ZERO,ZERO,ZERO = opcode 10, lock 0, addr 000. Transmitter exonerated | The frame decoded off air matches the frame the source builds — two independent derivations; absolute timing left blank as unresolvable |

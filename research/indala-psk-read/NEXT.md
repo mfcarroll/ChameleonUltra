@@ -619,6 +619,19 @@ below ever happening.
   that accept 100% of random frames. The fix consults a column that was already correct.
 - **Verified on hardware**: KASTLE now reads back as itself **4 of 4** (C304), on a tag whose
   prior build reproduced C284's failure.
+- ✓✓ **SEPARABILITY IS PROVEN BY CONSTRUCTION, not by reading includes (C313).** The 163-line
+  patch was applied to a clean `main` worktree: `git apply --check` passes, it **builds**, and it
+  costs **+248 bytes of flash and no BSS** (297,892 → 298,140). Unpatched `main` was built first
+  as the control, so a failure could not have been misattributed.
+- ✓ **The `formats[]` table is BYTE-IDENTICAL to main** — zero table-row changes on this branch —
+  so the fix rests entirely on `has_parity` data that already exists upstream and cannot secretly
+  depend on a branch-only edit.
+- ⚠ **ONE DEPENDENCY, NAMED AND BOUNDED.** `lf_hidprox_data.c` carries a **4-line** change this
+  patch does not include: the C47/C250 BLE advertising guard. It affects **how often a read
+  succeeds**, not which format wins — so PR 0's correctness transfers, but a maintainer testing on
+  stock firmware will meet C45's old 15-20% intermittency. ⇒ **Send that 4-line guard as PR 0b**:
+  it is smaller still, changes no behaviour beyond reliability, and is the difference between
+  96/96 and 71/80 (C250).
 - ⛔ **It IS a behaviour change to shipping code and the PR must open with that**, not bury it:
   a reader that used to answer `HCP32` will now answer `KASTLE`. That is the point, and a
   maintainer must be given the chance to disagree. The measured before/after is in `ctest/ambig.c`
