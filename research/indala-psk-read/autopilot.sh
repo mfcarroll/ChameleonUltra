@@ -80,27 +80,27 @@ status)
         pct=$(printf '%s' "$ctx" | sed -nE 's/.*pct=([0-9]+).*/\1/p')
         case "${pct:-0}" in
             ''|*[!0-9]*) echo "context     $ctx" ;;
-            *) if [ "$pct" -ge 80 ]; then
-                   echo "⛔ context   ${pct}% — ARM THE COMPACT AT THE END OF THIS TICK. Every further turn pays the full window."
-                   echo "            sh $UTIL/compact_request.sh arm --project $REPO --require-clean --reason 'tick end ${pct}%'"
-               elif [ "$pct" -ge 60 ]; then
-                   echo "⚠ context    ${pct}% — finish the current unit, then arm the compact."
+            *) if [ "$pct" -ge 40 ]; then
+                   echo "⛔ context   ${pct}% — OVER THE LINE. Unattended: autocompact should have taken it already, so if"
+                   echo "            this session started before the setting was written, say so. Operator present: commit,"
+                   echo "            push, and ask for a manual /compact in ONE line — you cannot trigger one (C372)."
+               elif [ "$pct" -ge 30 ]; then
+                   echo "⚠ context    ${pct}% — finish the current unit and leave the tree committed."
                else
                    echo "context     ${pct}% used"
                fi ;;
         esac
     fi
-    # ⭐ NOTHING CAN TYPE /compact FOR US. A cron/loop fire, a peer message and the messaging
-    # socket all enqueue with skipSlashCommands hardcoded on, the control protocol has no compact
-    # verb, and Pre/PostCompact hooks only observe and block. The one lever that exists is the
-    # auto-compact THRESHOLD, so `compact_request.sh arm` drops it under this session's current
-    # size and the next turn trips auto-compact by itself.
-    # ⚠ THIS LINE ALSO DISARMS. `status` restores the threshold the moment it sees a
-    # compact_boundary newer than the arm, so running it every tick is the safety net — the
-    # PostCompact hook is only a shortcut, and a missed disarm can never cause a compact loop.
-    sh "$UTIL/compact_request.sh" status --project "$REPO" 2>/dev/null \
-        | sed 's/^compact /compact     /' \
-        || echo "compact     unavailable — the session cannot make itself compact this tick"
+    # ⛔⛔ NOTHING CAN TYPE /compact FOR THIS SESSION, AND THE THRESHOLD ONLY BITES AT STARTUP.
+    # Measured twice: with autoCompactWindow written and context at 209k against a 167k window, this
+    # session crossed two turn boundaries without compacting, while a CLI started fresh in the same
+    # directory read the new value. A settings-FILE write never reaches a running session (C372).
+    # ⇒ So this line is INFORMATION, not a control. It says what a session STARTED HERE would get.
+    # Unattended runs set it before launching; an operator-present run reads the context percentage
+    # above and asks for a manual /compact.
+    sh "$UTIL/autocompact.sh" --project "$REPO" 2>/dev/null \
+        | sed 's/^autocompact /autocompact /' \
+        || echo "autocompact unavailable"
     echo "devices     $(ls /dev/cu.usbmodem* 2>/dev/null | wc -l | tr -d ' ') of 4 enumerated"
     ls /dev/cu.usbmodem* 2>/dev/null | sed 's/^/            /'
     # ⛔⛔ ASK THE HARDWARE WHAT IT IS RUNNING. Firmware was changed, committed and left

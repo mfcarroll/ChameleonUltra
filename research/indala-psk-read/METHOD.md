@@ -474,18 +474,19 @@ local, needs no credential and costs no tokens. **≥80%: compact at the end of 
 ⚠ Carrying more context can still be the right call — mid-investigation, with state that would be expensive to
 rebuild. Make it a decision, not a drift.
 
-**M48 — THE SESSION COMPACTS ITSELF BY MOVING THE THRESHOLD, BECAUSE NOTHING CAN TYPE `/compact` FOR IT.**
+**M48 — COMPACTION IS DECIDED BEFORE THE SESSION STARTS, BECAUSE NOTHING CAN TRIGGER ONE FROM INSIDE.**
 Cron fires, peer messages and the messaging socket all enqueue with `skipSlashCommands` on; the control protocol
-has no compact verb; `Pre`/`PostCompact` hooks only observe and block. The only lever is `autoCompactWindow`
-(settings key, live-watched, 100k–1M).
+has no compact verb; `Pre`/`PostCompact` hooks only observe and block (C371). The one lever is
+`autoCompactWindow`, and it is read **at process start** — writing it under a running session does nothing,
+measured twice (C372).
 ```sh
 UTIL=/Users/Shared/code/personal/utility-scripts/claude
-sh "$UTIL/compact_request.sh" status --project "$REPO"     # every tick — this is also the disarm
-sh "$UTIL/compact_request.sh" arm --project "$REPO" --require-clean --reason 'tick end 84%'
+sh "$UTIL/autocompact.sh" 40 --project "$REPO"    # unattended: compact at 40%, from the NEXT session on
+sh "$UTIL/autocompact.sh" off --project "$REPO"   # operator present: leave it alone, ask for /compact
 ```
-⭐ `arm` sets the window to `0.8 x` the measured context, so **auto-compact trips on the NEXT turn** — the turn
-that arms must therefore end compact-safe: commit, push, leave nothing important only in context.
-⛔ `--require-clean` refuses while the tree is dirty. A compact keeps only what is on disk; committing first is
-what makes it free.
-⚠ A setting is not per-session. `arm` refuses when another live session shares the project directory rather than
-quietly changing the threshold under it (C371).
+⭐ Scope is the project (`<project>/.claude/settings.local.json`, gitignored) so sessions in other repos are
+untouched. `--scope user` is global and deliberate.
+⛔ **An operator-present loop cannot compact and must not pretend to.** At the threshold it commits, pushes and
+asks for a manual `/compact` in one line — that is the exception to *never stop to ask*.
+⚠ Every tick still ends compact-safe either way: commit, push, keep §1 current. Auto-compaction lands between
+turns and keeps only what is on disk.

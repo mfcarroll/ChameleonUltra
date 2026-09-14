@@ -77,17 +77,18 @@ needs NO bench change** — #1 already faces the Flipper. ⚠ `./emugrade.sh` ta
 **does not yet produce a result**: slot 1 EM410X reads as a positive control, Indala on slot 8 is 0 of 6 with
 the cause unreached after three script bugs of mine were fixed. Not a firmware finding — an unfinished test.
 
-#### The loop can now compact itself
+#### Compaction is decided BEFORE the session starts
 
-⭐ **`./autopilot.sh status` prints a `compact` line, and that line is also the disarm.** Nothing can type
-`/compact` — cron fires and peer messages both hardcode `skipSlashCommands`, the control protocol has no
-compact verb, and `Pre`/`PostCompact` hooks only block (C371). The one lever is the auto-compact **threshold**,
-so `utility-scripts/claude/compact_request.sh arm` drops `autoCompactWindow` to `0.8 x` the measured context and
-the **next turn** trips auto-compact by itself.
-⛔ **The turn that arms must end compact-safe** — commit, push, leave nothing important only in context. Use
-`--require-clean` and it will refuse to arm over a dirty tree.
-⚠ A setting is not per-session: `arm` refuses when another live session shares this repo directory. A missed
-disarm cannot loop — see M48.
+⛔ **Nothing can type `/compact` from inside a session** — cron fires and peer messages hardcode
+`skipSlashCommands`, the control protocol has no compact verb, and `Pre`/`PostCompact` hooks only block (C371).
+⛔ **And the one lever, `autoCompactWindow`, is read at process start.** Writing it under a running session does
+nothing: two trials, file in place, three turn boundaries, no compaction — while a freshly forked CLI read the
+new value off the same file (C372).
+⇒ **Unattended:** `sh $UTIL/autocompact.sh 40 --project $REPO` **before launching the session**, and
+auto-compaction then runs itself for the whole run.
+⇒ **Operator present:** leave it off. At the threshold the tick commits, pushes and **asks for a manual
+`/compact` in one line** — the one sanctioned exception to *never stop to ask*.
+⚠ `./autopilot.sh status` prints the project's setting. That line is information, not a control.
 
 #### Do not re-do these
 
