@@ -56,7 +56,14 @@ waveforms — *Gallagher ASK RF/32 decode exact*, *Securakey*, *Noralsy*, *GProx
 capture through their own upstream scan functions.
 ⭐ **Two devices, two signal sources**: C400 saw the same on REAL pm3-written tags read by #2. The
 bench-geometry explanation C400 could not exclude is dead.
-⚠ **Not attributed to a commit.** Bisect is the fallback if the path inspection does not name it.
+✅ **AND IT IS NOT THIS SESSION'S DOING (C403)** — proven by flashing, not argued from the diff. Built
+`940ba078`, the last firmware commit BEFORE this session, flashed it to #1 and re-ran the arms:
+**Gallagher 0/3, Securakey 0/2, EM410X control reading `deadbeef88`** — identical to HEAD. The tag and
+reader paths share PWM0, so my base-clock change was a live objection a diff could not answer; it is
+dead now.
+⚠ **Not attributed to a commit**, but the range is bounded: the fault is OLDER than `940ba078`, and it
+is the branch's own arms that are down — recorded verified (`lf securakey read` 6 of 6; C343's
+nineteen at 76/76). Bisect is the fallback if inspecting the scan path does not name it.
 
 ⛔⛔ **BENCH TOPOLOGY CHANGED AND IS NOW MUTUALLY EXCLUSIVE.** #2 faces #1 and **can no longer read the T5577
 at all** — HID returns `LF tag not found` where it read FC 123 / CN 4567 an hour ago — while **pm3 still
