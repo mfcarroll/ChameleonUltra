@@ -26,14 +26,24 @@ under **The bench** and **Working conventions**.
 
 ## ⚠ Needs hands — what is still queued
 
-⭐⭐ **THE BIGGEST ITEM HERE IS NOW ONE COMMAND: `./emugrade.sh` (C352).** The emulate column is
-the only real gap left — every read and write arm is verified in both directions, nulled against
-real foreign tags and a blank chip, soaked, and judged by a judge that has itself been measured.
-⛔ **It needs #2 on the FLIPPER's pad with the T5577 out**, because the Proxmark cannot hear
-PWM-on-the-coil at all. Eleven arms, null-first with an abort on any ambient hit, the
-wrong-modulation arm as a built-in control, null again at the end, scratch slot 8.
-⚠ **Plumbing tested, results never taken** — the first run is the experiment, not a regression
-check.
+⛔⛔ **THE ONE ITEM THAT BLOCKS EVERYTHING ELSE: THE FLIPPER'S `rfid` COMMAND DOES NOT LOAD (C373).**
+Both `rfid read` and `rfid emulate` answer `failed to load external command`. `rfid` is a plugin, and the
+loader refuses a `.fap` whose API does not match the running firmware. SD is healthy (exFAT, 57 GiB free,
+`lfrfid.fap` present at 66304b); the firmware is the operator's own fork — **`mntm-dev`, API 87.47, branch
+`t5577-deep-read`, commit `0e9661f4`, built 12-09-2026**. ⇒ **Rebuild `lfrfid.fap` against that tree, or
+flash a firmware matching the installed `.fap`.**
+
+⛔ **UNTIL THEN THE EMULATE COLUMN IS UNMEASURED, NOT FAILING.** Every arm this branch recorded — the
+eleven `emugrade.sh` arms, the `0 of 6` Indala, the EM410X "positive control" — was scored against a reader
+that was never listening, and `flipper.py` reported the refusal as an ordinary miss (C374, now fixed to
+abort on the first attempt). ⭐ The firmware is exonerated on its own instrument: `hw emudebug` shows
+`have pwm seq : True` with the correct clock, and `playbacks started : 0` is right for a tag no reader has
+energised. **Nothing about the Chameleons needs changing — `./emugrade.sh` runs against #1 as it stands.**
+
+⭐ **Re-run is then one command: `./emugrade.sh`.** Eleven arms, null-first with an abort on any ambient
+hit, the wrong-modulation arm as a built-in control, null again at the end, scratch slot 8. ⚠ **Confirm the
+instrument first** — a clean `./flipper.py read` is now itself the check, because it aborts when the plugin
+will not load.
 
 **Cleared 2026-09-13 — the bench was rebuilt and all four devices enumerate.** The two
 blockers that stopped the last session are gone: Chameleon #2 and the Flipper are back on
@@ -45,7 +55,7 @@ approved for removal; the T5577 may be rewritten to whatever a test needs.
 | | why a person is required |
 |---|---|
 | ✅ **CLOSED 2026-09-13 — it was a capture taken too soon after another, and the fix is a 50ms field-off gap (C213)** | ⭐ The instrument that closed it is committed: `DATA_CMD_LF_READER_CAPTURE` + `rdrcap.py` run the READER's own capture and hand back the samples undecoded. ⚠ What holds the charge across `stop_lf_125khz_radio()` is still not established — tag storage or amplifier AC coupling — and that is a question for an oscilloscope, not this bench |
-| ⛔⛔ **THE FLIPPER IS OFF USB — unplug and replug it** | Dropped 2026-09-13 11:30 during a `rfid raw_analyze` that printed 72,518 lines over the CDC link; the port now errors "Device not configured". ⚠ Probably our doing, and avoidable: use `rfid raw_read` and pull the FILE instead. ⇒ Until it is back, rig A is unavailable and NO emulation can be verified — which is U11 and U12 |
+| ⛔⛔ **THE FLIPPER'S `rfid` PLUGIN WILL NOT LOAD — rebuild `lfrfid.fap` or reflash (C373)** | ⭐ **Superseded the old *Flipper is off USB* row, which is cleared**: it enumerates, its CLI answers, `info device` and `storage` both work. What fails is the plugin load — `failed to load external command` on `rfid read` and `rfid emulate` alike — an API mismatch between `/ext/apps/RFID/lfrfid.fap` and the running `mntm-dev` API 87.47 (branch `t5577-deep-read`, built 12-09-2026). ⛔ Until it is fixed rig A can score nothing, and the entire emulate column is **void, not negative**. ⚠ Do not read any past emulate number as evidence of anything (C374)
 | ⛔ **NEEDS THE TWO CHAMELEONS FACING EACH OTHER: nothing here can capture rig A's EMISSION** | ⭐ The AWID emitter round-trips through our own decoder exactly and is SILENT to the Flipper 0 of 6, with a Gallagher control at 6 of 6 on the same slot minutes later (C217). So the question is whether the PWM peripheral emits what it is asked to at `counter_top` 8 and 10 — every other emitter here uses 32, 40 or 64 — and answering it needs a reader pointed at rig A's Chameleon. ⚠ The Flipper cannot: it has no raw-capture path in this harness, and its own FSK read is the thing under test. ⇒ Either the two Chameleons face each other (one emulates, one runs `lf sniff`), or a scope. This is the same request §1's status was built for |
 | ⚠ **WATCH, not a blocker: the tag has twice stopped answering the Chameleon mid-session** | ⭐ **The diagnostic comes FIRST, before blaming any code.** One `lf sniff --bits 16` and the fc/2 amplitude: below ~1 means nothing is answering and no firmware change will help; ~24 and up is a healthy tag (C163). ⛔ Two episodes, two different signatures — C159 had fc/2 down to 9.6 with broadband rms UP to 1550, C163 had both at the floor — so the cause is not established and "interference" should not be quoted as settled. ⚠ Both times our own field measured healthy: rms scales with drive and `hw lfdebug` is clean. ⚠ Both times two devices had also dropped off USB, which is a lead and not a diagnosis. ⇒ If it recurs: check enumeration, take the fc/2 pair, and record it rather than working around it |
 | ⚠ **The bench tag is EM410x `DEADBEEF88`** — `drivesoak.py` cycles the tag through PAC, HID, Indala and EM410x and leaves it on whichever its last round wrote. It has worn three credentials in one day: PAC (as recorded), then HID Prox (as found), then Indala for C138's control, now PAC again | ⛔ Not deliberate — it is wherever the soak left it. §2's PAC specimen is one unattended command away (`lf pac clone --cn CD4F5552`), and so is C138's Indala reference (`lf indala clone -r a0000000e6bd0e92`). ⚠ Check what is actually on the tag before running anything against it: this row has been stale twice and both times it sent experiments at the wrong specimen. ⚠ It is no longer the carrier-locked Indala reference C138 used — restoring that is one unattended command, `lf indala clone -r a0000000e6bd0e92`, and the §4/§5 work is finished with it for now. ⛔ Its previous contents are dumped to `~/lf-t55xx-1D555955-5569A9A5-55A59569-D5B2649F-B3C6AD1F-CF649393-928C14E5-dump.json` and restore with `lf t55xx restore -f <that file>`. ⚠ §2's PAC specimen is no longer on this tag — but `pactest/` reproduces that failure on the host from a committed capture, so the physical tag is not the only specimen. ⛔ Restore `0x00081040 / 0x4944544B / 0x55667788` before relying on C90-C92's regressions again |

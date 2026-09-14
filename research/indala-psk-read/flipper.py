@@ -69,7 +69,17 @@ SUCCESS = re.compile(r"^([A-Za-z][A-Za-z0-9 ]*?) ((?:[0-9A-F]{2}){2,})$")
 
 # The CLI printed usage or a protocol listing instead of running what we asked. That means the
 # command or an argument was rejected, and every count after it would be meaningless.
-REJECTED = ("Available protocols:", "rfid <write | emulate>", "Unknown protocol")
+#
+# ⛔⛔ `failed to load external command` IS THE ONE THAT COST A WHOLE UNIT (C373). `rfid` is not
+# built into the firmware — it is a plugin, `/ext/apps/RFID/lfrfid.fap`, and the loader refuses
+# it when the .fap's API version does not match the running firmware's. The refusal is ONE red
+# line and then a normal prompt: no usage, no protocol listing, nothing the patterns above
+# match. So every attempt scored a clean `-`, and eleven emulate arms reported `0/6` against a
+# reader that was never listening. ⇒ A dead instrument must abort, never score zero — a null
+# with no positive control is not evidence (F05), and this one looked exactly like a firmware
+# finding for a whole unit.
+REJECTED = ("Available protocols:", "rfid <write | emulate>", "Unknown protocol",
+            "failed to load external command")
 
 
 class Flipper:

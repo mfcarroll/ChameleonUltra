@@ -38,6 +38,39 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔ 2026-09-14 11:35 — THE EMULATE COLUMN IS UNMEASURED, NOT FAILING. RIG A'S READER IS DOWN.
+
+⭐ **Read this before anything below it.** U18 — *the emulator never sets `m_pwm_seq`* — **is retracted in
+full (C373)**, and so is every emulate number this branch has recorded.
+
+⛔ **THE FLIPPER'S `rfid` COMMAND DOES NOT RUN.** It answers both `rfid read` and `rfid emulate` with one red
+line, `failed to load external command`. `rfid` is a plugin, not built in, and the loader refuses a `.fap`
+whose API does not match the running firmware. The SD card is fine (exFAT, 57 GiB free, `lfrfid.fap` 66304b
+present). The firmware is the operator's own fork: **`mntm-dev`, API 87.47, branch `t5577-deep-read`, built
+12-09-2026**. ⇒ **Hands: rebuild `lfrfid.fap` against that tree, or flash a firmware matching the installed
+.fap.** Nothing on rig A can be scored until then.
+
+⛔ **WHAT THAT INVALIDATES.** All eleven `emugrade.sh` arms, the `0 of 6` Indala, and the EM410X "positive
+control" — every one was taken against a reader that was never listening, with a clean null either side
+because a silent reader also reads nothing. **`flipper.py` scored the refusal as an ordinary miss** and
+printed `0/N`; it now aborts on the first attempt instead (C374).
+
+✅ **THE FIRMWARE IS EXONERATED, ON ITS OWN INSTRUMENT.** `hw emudebug` with Gallagher on slot 8 reports
+**`have pwm seq : True`**, `frames per burst : 21`, `LF sense state : ENABLE`, `PWM base clock : 125kHz`.
+The loader ran and took its branch. `playbacks started : 0` is **correct** for a tag no reader has ever
+energised — playback starts only from `lpcomp_event_handler(UP)` — and `SEQ[0].PTR ours: False` follows from
+that, so `hw lfdebug`'s ⛔ banner was reporting an idle tag, not a fault.
+
+✅ **C129/C130 RE-VERIFIED ON HARDWARE (C375).** Slot 8 Gallagher → Indala → Gallagher: clock tracks type
+**125kHz → 1MHz → 125kHz**, `have pwm seq` stays True throughout, frames/burst **21 → 31 → 21**. ⇒ `emudebug`'s
+old *changing a slot's LF tag type kills emulation until a power cycle* was **stale text and is corrected** —
+no upstream defect, no `FIXES.md` entry, and no power cycle needed between emulate arms.
+
+⇒ **THE STANDING LESSON, NOW NINE DEEP.** `hw lfdebug` was the wrong instrument and `hw emudebug` — which
+answers the question directly and had existed all along — was never asked. Suspect the instrument first.
+
+---
+
 ### ✅ 2026-09-14 08:05 — READ AND WRITE ARE FINISHED AND VERIFIED BOTH WAYS. EMULATE IS THE ONLY GAP.
 
 ⭐ **Rewritten now.** What this replaces was a 02:45 heading — *the write column is measured, ASK/biphase
@@ -467,7 +500,8 @@ the two Chameleons face each other.
 | **U12** | **BIPHASE EMITTERS** — GProxII then FDX-B, only after U11 is completely done. ⚠ GProxII is BIPHASE and FDX-B is DIPHASE and INVERTED; they are one bit apart in the T5577 config and must not be assumed to share an emitter until one has been through end to end | device (rig A only) | same bar as U11 |
 | **U13** | **§9 REFRESH** — pure compute. The instrumentation list is stale: `DATA_CMD_LF_READER_CAPTURE`, the GProxII failure-energy reporting and `rdrcap.py` have all been added since it was written, and the command-id count is no longer 32. ⚠ The three-PR split also predates the biphase family | compute | §9 and §9b match the branch again |
 | **U15** | ✅ **DONE 2026-09-14 (C330) — every write arm re-graded against an unlocked tag: all eight 4 of 4, 32 writes, 0 failures, every raw byte-identical.** The old failures were the password lock (C325), not the writers. `./regrade.sh <protocol> [rounds]` reruns any row. ⛔ Indala224 and IDTECK were NOT re-graded — only Indala26 | device (sandwich) | ✅ met |
-| **U18** | ⛔⛔⛔ **THE EMULATOR NEVER SETS `m_pwm_seq` (C367, C368).** `hw lfdebug` reports `SEQ[0].PTR ours: False` on every failing arm, with `ENABLE: 1` and the correct `125kHz` clock — the modulator never ran. ⛔ **Ruled out by trying them**: not ASK-specific (EM410X fails too), not the clock, not stale RAM — slot bounce, `hw slot store` + bounce, and a **full reboot with the credential persisted** all leave it NULL while `hw slot list` shows the slot correctly configured. ⭐ **Where to look**: `lf_tag_data_loadcb_inner()` in `lf_tag_em.c` is a chain of branches each guarded by `buffer->length >= <size>`; a short buffer **silently** skips the modulator and leaves the pointer NULL. Gallagher's guard is 12 bytes and its econfig writes 12, so the guard should pass — meaning the buffer may not reach the loader, or the loader may not run for this type. ⇒ **Next step is instrumentation INSIDE that function**, not more black-box probing: log `type` and `buffer->length` on entry and which branch is taken. ⚠ PSK1 emulates 6/6 in the same session, so the path is not wholly broken | device (rig A) | the branch that is or is not taken, identified |
+| **U18** | ⛔⛔⛔ **RETRACTED — THERE WAS NEVER A FIRMWARE DEFECT HERE (C373).** `hw emudebug` reports **`have pwm seq : True`** and `frames per burst : 21` with Gallagher loaded: the loader ran and took its branch, so *the emulator never sets `m_pwm_seq`* is false and `lf_tag_data_loadcb_inner()` needs no instrumentation. What is 0 is **`playbacks started`**, and playback starts only from `lpcomp_event_handler(UP)`, which needs a reader's field. ⛔ **The Flipper's `rfid` command was not running** — `failed to load external command`, an API mismatch between `lfrfid.fap` and the firmware on it — so every arm was scored against a reader that was never listening, and `flipper.py` reported that as a clean `0/N` (C374, now fixed to abort). ⭐ Indala PSK1, the arm §1 recorded as 6/6, scores 0/4 in the same session: not protocol-specific, and never was. ⇒ **The emulate column is UNMEASURED, not failing.** It reopens as U19 the moment the Flipper reads again | — | ✅ closed as retracted |
+| **U19** | ⛔ **THE EMULATE COLUMN, RE-RUN ONCE THE FLIPPER READS AGAIN.** Nothing about it has been measured (C373) — the eleven `0/6` arms are void, not negative. ⭐ **Blocked on one hands step**: `/ext/apps/RFID/lfrfid.fap` must match the running firmware's API (**87.47**, `mntm-dev`, branch `t5577-deep-read`, built 12-09-2026, the operator's own Momentum fork). Rebuild the .fap against that tree or flash a firmware matching the installed .fap. ⇒ **Verify the instrument BEFORE scoring anything**: `./flipper.py read` now aborts on a refused plugin load, so a clean run of it is itself the check | device (rig A) + hands | `./emugrade.sh` produces scored arms with a positive control |
 | **U16** | ⛔ **CLOSED AS NOT REPRODUCIBLE (C337), NOT AS SOLVED.** FDX-B reads **15 of 15** — 6/6 CLI, 3/3 raw, 9/9 across an A/B/A — so the `0 of 4` that opened this unit is not a standing defect. ⚠ **It was real once**: the gated scan counters caught it at 17 captures kept, 8 phases, ZERO decodes, so the failure mode is a silent DECODER, not a failed agreement. Trigger unknown; drive inheritance refuted. ⇒ **If it returns**, the instrument is already in place — call `FDXB_SCAN` raw and read the 12-byte failure payload (attempts / kept / decodes / capture_failed / spliced / phases / last_phase). Do not theorise before re-running the baseline | device | ✅ closed; reopen only on a reproduction |
 | **U17** | ✅ **DONE 2026-09-14 — FDX-A reads AND writes, both grade A (C338, C340).** Read 10 of 10 on a real Proxmark-written tag across two credentials; write 4 of 4 from a confirmed-blank tag with the credential alternating every round, and the stored blocks are **byte-identical to `lf destron clone`'s own**. Config `00105060` — FSK2, not the family's FSK2a. ⇒ C185's *refused, not deferred* is fully retired: it rested on looking for FDX-A under `lf fdx` instead of `lf destron` | device (sandwich) | ✅ met |
 | **U14** | ✅ **DONE 2026-09-14 — `NEXT.md` §11 is complete.** The three questions the first pass left open are answered against the source: the Flipper's `validate_count` is the bar AFTER the first sighting, so the real requirement is 4 non-PSK / 7 PSK against our 2; the Proxmark takes ONE capture and stops at the first of 26 demodulators to match, so by default a shadowed protocol is never reported; and our own rule compared 8 bytes rather than the frame until C332 fixed it | compute | ✅ met |
@@ -726,6 +760,31 @@ the cable out), anything in `NEXT.md`'s **Needs hands** table.
 ---
 
 ## 5. BLOCKED
+
+### ⛔⛔ 2026-09-14 11:35 — RIG A'S READER IS DOWN. NEEDS HANDS. (C373)
+
+**The Flipper's `rfid` CLI does not load**, so nothing on rig A can be scored — every emulate arm
+is void rather than negative, and the whole emulate column is unmeasured.
+
+```
+rfid read indala   ->   failed to load external command
+rfid emulate ...   ->   failed to load external command
+```
+
+**Diagnosed, not guessed.** SD is healthy — exFAT, 57 GiB free, `/ext/apps/RFID/lfrfid.fap` present at
+66304b. `rfid` is a plugin, and the loader refuses a `.fap` whose API does not match the firmware. The
+Flipper runs the operator's own fork: **`mntm-dev`, API 87.47, branch `t5577-deep-read`, commit `0e9661f4`,
+built 12-09-2026**, origin `github.com/mfcarroll/Momentum-Firmware.git`.
+
+⇒ **THE HANDS STEP — one of two.** Rebuild `lfrfid.fap` against that firmware tree and copy it to
+`/ext/apps/RFID/`, or flash a firmware whose API matches the installed `.fap`.
+
+⭐ **The check is now free and automatic.** `./flipper.py read` aborts on a refused plugin load (C374), so
+a clean run of it *is* the confirmation that rig A is back. Do not score an emulate arm without one.
+
+⚠ **Chameleon #1 is exonerated and needs nothing** — `hw emudebug` shows the waveform loaded and the clock
+correct. Leave the bench as it is; only the Flipper needs attention.
+
 
 ✅ **CLEARED 2026-09-14 — the entry that stood here was wrong.** It said the bench could not
 change the tag's protocol (C305). It could; the tag was **password-locked by our own writer**,

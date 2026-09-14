@@ -9322,9 +9322,10 @@ class HWFactoryReset(DeviceRequiredUnit):
 class HWEmuDebug(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = ("⚠ §3 instrumentation: dump the LF emulation state. Changing a "
-                              "slot's LF tag type kills emulation until a power cycle, and "
-                              "every test costs one, so this reads everything at once.")
+        parser.description = ("⚠ §3 instrumentation: dump the LF emulation state — sense "
+                              "state, tag type, PWM base clock, whether a waveform is loaded "
+                              "and whether playback has ever started. Reads everything at "
+                              "once because each field answers a different failure.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
