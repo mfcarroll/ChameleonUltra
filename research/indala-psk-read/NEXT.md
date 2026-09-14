@@ -369,10 +369,11 @@ compared byte-for-byte. ⭐ **All three of that row ARE now re-graded** — Inda
 along with every other write arm in the tree.
 
 ⭐⭐ **EVERY READ ARM HAS NOW BEEN NULLED AGAINST THIRTEEN REAL FOREIGN TAGS (C342).** `nullmatrix.sh` writes each
-protocol to the T5577 and asks all fourteen readers: **182 cross-protocol reads, 0 false positives, and all 14
+protocol to the T5577 and asks EVERY `lf * read` the CLI has — 20 of them, the GPIO/comparator family
+included: **280 cross-protocol reads, 0 false positives, and all 14
 self-reads correct**. This is the evidence a reviewer cannot reproduce from the repo — it needs the bench — and it
 is distinct from the capture-based nulls already cited per protocol, which are host-side against recorded samples.
-⚠ State it with its bound: n = 1 per cell, so 0 in 182 means a 95% upper bound of **1.65%** per cell, not zero.
+⚠ State it with its bound: n = 1 per cell, so 0 in 280 means a 95% upper bound of **1.07%** per cell, not zero.
 The high-n capture nulls remain the sensitive test for any single protocol.
 
 ⚠ **These six were missing from this grid entirely** until 2026-09-14 — it was written before the

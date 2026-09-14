@@ -38,9 +38,23 @@ W[fdxa]="lf fdxa write --raw 551d5699999a9aa5a5a666a9";                   R[fdxa
 W[gproxii]="lf gproxii write --raw fac2a38c2b081af0210b12c2";             R[gproxii]="lf gproxii read"
 W[fdxb]="lf fdxb write --raw 00339a080402079f8040797788040201";           R[fdxb]="lf fdxb read"
 
-all=(indala indala224 idteck keri nexwatch gallagher securakey noralsy
-     awid paradox pyramid fdxa gproxii fdxb)
-if (( $# )); then written=("$@"); else written=($all); fi
+# ⛔⛔ THE READER LIST IS NOT THE TAG LIST, and conflating them left a real gap. The first
+# version asked only the fourteen SAMPLED-path readers, so the GPIO/comparator readers
+# (em410x, Viking, Jablotron, PAC) and HID/ioProx were never asked whether they false-positive
+# on any of these tags — the untested direction, and the one where a cross-family false
+# positive would actually live. Readers are now every `lf * read` the CLI has.
+R[em410x]="lf em 410x read"
+R[hidprox]="lf hid prox read -f H10301"
+R[ioprox]="lf ioprox read"
+R[pac]="lf pac read"
+R[viking]="lf viking read"
+R[jablotron]="lf jablotron read"
+R[instafob]="lf instafob read"
+
+tags=(indala indala224 idteck keri nexwatch gallagher securakey noralsy
+      awid paradox pyramid fdxa gproxii fdxb)
+readers=($tags em410x hidprox ioprox pac viking jablotron instafob)
+if (( $# )); then written=("$@"); else written=($tags); fi
 
 hit () {  # 1 if the reader returned a credential
   print -r -- "$1" | grep -qiE "Raw|Card:|Payload|Internal ID|Country|88bit" && return 0 || return 1
@@ -50,7 +64,7 @@ fp_total=0; tested=0
 for w in $written; do
   "$PY" "$CU" "hw connect -p $CH2" "${W[$w]}" >/dev/null 2>&1
   self=""; fps=()
-  for r in $all; do
+  for r in $readers; do
     out=$("$PY" "$CU" "hw connect -p $CH2" "${R[$r]}" 2>&1)
     if hit "$out"; then
       if [[ "$r" == "$w" ]]; then
