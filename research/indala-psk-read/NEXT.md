@@ -139,14 +139,27 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    costs an AC-coupled receive path its baseline and swallows the short runs that follow.
    ⛔ It cannot be tested by picking a better credential — the 8-bit sync marker is fixed by the
    protocol, so 2048us of static is in EVERY PAC frame.
-   ⭐⭐ **THE NEXT UNIT IS FREE AND USES CAPTURES ALREADY ON DISK: ASK WHERE IN THE FRAME THE
-   TRANSITIONS GO MISSING.** Align each captured cycle against the predicted bitstream and locate the losses.
-   ⚠ State the criterion first: **clustered immediately after the 8-bit sync run ⇒ baseline wander,
-   and the receive path is implicated; spread uniformly ⇒ baseline wander is refuted** and the loss is
-   payload-position-independent, which points back at the emitter. ✅ Three cycles are already resolved
-   (32/28/18 runs at /tmp/pacdiff_*.raw and /tmp/pac_ELTIWRQ5.raw), so this costs no bench time and no flash.
-   ⚠ If it implicates the receive path, that is the **Flipper**, and the honest consequence is that PAC
-   emulate may be ungradeable on this bench — say so rather than inventing an instrument.
+   ⛔⛔ **THE POSITIONAL UNIT WAS RUN AND IT CARRIES NO INFORMATION (C440) — DO NOT RE-RUN IT.**
+   Recovering measured transition positions needs a cyclic alignment, that alignment was found by maximising
+   overlap over 128 offsets x 2L starts, and a permutation control (same runs, order shuffled, same search)
+   put the null mean at 17.1 / 21.2 / 20.0 against observed 17 / 19 / 21 — **at or below chance**. So
+   **baseline wander is neither supported nor refuted**, and any position-based question needs a different
+   method, not a better offset search. ⭐ New rule **M55**: permutation-test a fit that came from a
+   maximisation.
+   ✅ What the control did establish: the measured run sequence in its true order aligns no better than a
+   shuffle of itself ⇒ **no evidence the emission is a position-preserving sub-sampling of the frame**,
+   which is the shape C438 implicitly assumed.
+   ⭐⭐ **THE NEXT UNIT IS ALIGNMENT-FREE BY CONSTRUCTION: CAN THE MEASURED RUNS BE A MERGE OF THE
+   PREDICTED ONES AT ALL?** A dropped transition merges two adjacent runs, so under any drop-only model every
+   measured run must be a **sum of CONSECUTIVE predicted runs**, and one cycle must tile the 128-bit frame
+   exactly. That is a dynamic-programming question over the predicted run list — no offsets, no maxima,
+   nothing to overfit — and it either tiles or it does not.
+   ⚠ State the reading in advance: **tiles ⇒ drop-only survives and the merge pattern is the next
+   thing to characterise; does NOT tile ⇒ the emission is not the frame with transitions removed**, and
+   C438's whole framing goes with it.
+   ✅ Costs no bench time: three cycles are already resolved (32 / 28 / 18 runs) at /tmp/pacdiff_*.raw and
+   /tmp/pac_ELTIWRQ5.raw. ⚠ Measured runs come from a per-capture fitted bias — carry the rounding
+   tolerance into the tiling test rather than demanding exact integers.
    ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
    no PAC read-side question needs a re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.

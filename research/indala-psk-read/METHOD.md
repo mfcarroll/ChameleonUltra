@@ -593,3 +593,23 @@ C429/C430 measured ~96us; fitted per capture it is **93us and 151us** in two cap
 the same emitter and the same pad. ⇒ Fit it per capture, and report what changes when you do — here it
 fixed the rounding and changed the recovered bits **not at all**, which is exactly how a nuisance parameter is
 told apart from the defect.
+
+
+**M55 — IF YOU FOUND THE FIT BY MAXIMISING, PERMUTATION-TEST THE MAXIMISATION BEFORE YOU BELIEVE IT.**
+
+⛔ C440's alignment searched 128 cyclic offsets x 2L cycle starts for the overlap-maximising match between a
+measured run sequence and a predicted frame. It returned 17 of 18, 19 of 28, 21 of 32 — numbers that read
+as a good fit, and which produced a missing-position list, a clustering percentage and a
+survival-by-run-length table, all ready to report. **A permutation control — same run multiset, order
+shuffled, same maximisation, 300 draws — put the null mean at 17.1, 21.2 and 20.0.** The observed fit was
+at or below chance in all three.
+
+⭐ The control is cheap and mechanical: **shuffle the thing whose ORDER is supposed to carry the signal,
+re-run the identical search, and compare.** If the search finds as much in the shuffle, the search is what
+produced the number.
+
+⚠ A search over N offsets gets N chances to look good, and the more thoroughly you search the better the
+best result looks — so the size of the search space is itself a reason to run the control, not a reason to
+trust the fit. ⇒ **Any number obtained by taking a maximum over alignments, offsets, thresholds or phases
+needs its own null.** This is the same failure family as M54 (comparing quantities that were processed
+differently); here the asymmetry is between a number that was optimised and a baseline that was not.
