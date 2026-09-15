@@ -40,6 +40,25 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔ 2026-09-14 19:05 — THE DUTY FIX IS REFUTED BY OUR OWN NOTES (C421)
+
+C420 queued a 50%-duty rebuild of the FSK2a emitter. **It had already been tried and it was 0 of 6.** C226: our
+emitter used to spend 5 high / 5 low on the long tone, that is 50% duty, and it emulated 0 of 6; changing it to the
+fixed 4-cycle mark was still 0 of 6; *duty is not the cause either — the fourth hypothesis to fall*. C380 then
+found the correction had reached AWID only, fixed `hidprox.c` and `ioprox.c`, flashed, and got 0 of 6 again with
+Gallagher 6/6 bracketing.
+
+⚠ **The gap, stated not hidden**: those trials ran under the OLD per-entry-`counter_top` encoding. But C415 showed
+the two encodings fail identically, so encoding is not the variable and duty is not rescued by changing it.
+
+⭐ **C226 is also the better measurement than the one that displaced it** — it captured a WORKING emission on our
+own SAADC path, decoded byte-exact, 1,668 periods, not an envelope detector's receiver-shaped pulse width.
+
+⭐⭐ **WHAT SURVIVES IS C380'S UNTESTED QUESTION**: every working emitter here uses a tone or bit period of 32, 40
+or 64 carrier cycles; FSK2a uses 8 and 10, a 4x faster switch through the same analog path. C420's majority-takes-all
+curve is predicted by a band-limited path without any duty asymmetry. ⇒ **Next unit: RF/32 + RF/40, same 4:5 ratio,
+same duty, rate alone changed.**
+
 ### ⭐⭐ 2026-09-14 18:55 — F12: THE MINORITY TONE IS LOST, NOT "ANY MIXED FRAME" (C420)
 
 Six AWID frames, each scored against an expectation **computed from its own bits** (`flipraw.py --raw --frac`):

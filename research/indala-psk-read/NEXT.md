@@ -4,14 +4,19 @@
 
 ✅ **CLOSED — the banner here said *OPEN DEFECT (C305): the raw-frame T5577 writers do not land*, and it was wrong in its entirety.** Nothing was wrong with those writers. Our own `lf hid prox write` had password-locked the tag with a key the other writers do not carry, so they were refused and landed nothing (C325). C305's *lands iff the config matches* rule was a pattern fitted to 14 observations of one locked tag. ⇒ The password defect is fixed (F1/C326), the write path is confirmed restored (C329), and **all 18 write arms have since been re-graded 4 of 4, 72 writes, 0 failures** (C330, C331). ⛔ Left visible rather than deleted: this was the most confidently wrong thing in these notes, and it sat at the top of the file as a warning to the next reader for a whole session after it was disproved.
 
-⭐⭐ **NEXT UNIT (2026-09-14, C420): the FSK2a DUTY FIX — and it is unblocked for the first time.** C415 forbade
-another emitter rebuild until the playback path and the analog side were told apart; C420 tells them apart
-(long-tone survival depends on frame COMPOSITION, which no logic defect can do). ⇒ Make the mark **half the tone
-period** at both tones, as a real subcarrier is: `counter_top` 8 instead of 16, mark 4/gap 4 for RF/8 and mark
-5/gap 5 for RF/10. ⚠ Worst case doubles to **4800** entries, so `LF_FSK2A_MAX_ENTRIES` rises with it and **F13's
-two guards must be re-pinned against the new bound** — in `ctest/roundtrip.c` BEFORE it reaches hardware. ⛔ Pyramid's
-emitter stays QUEUED BEHIND this: adding a fifth FSK2a emitter while the first four do not reach the air is exactly
-the breadth-on-a-broken-foundation this file's rule forbids.
+⛔ **THE DUTY FIX QUEUED HERE BY C420 IS REFUTED — C421.** It had already been on the air: our emitter once spent
+5 high / 5 low on the long tone (50% duty, exactly what was proposed) and emulated **0 of 6**, and C226 recorded duty
+as *the fourth hypothesis to fall*. C420's composition MEASUREMENT stands; the duty MECHANISM does not. Building it
+would be the fourth encoding written against unchanged air, which C415 forbade.
+
+⭐⭐ **NEXT UNIT (2026-09-14, C421): the SWITCHING-RATE EXPERIMENT — C380's question, never tested.** Every emitter
+that WORKS on this device runs a tone or bit period of 32, 40 or 64 carrier cycles (Gallagher 32, Securakey 40,
+Noralsy 32, EM410X 64); the FSK2a family runs 8 and 10, switching the modulator at **15.6 kHz against ASK RF/32's
+3.9 kHz**. ⇒ Scale the FSK2a tone periods up 4x to **RF/32 and RF/40**: same 4:5 tone ratio, same duty pattern,
+**only the switching rate changes**. ⚠ It emits no valid AWID frame and no reader will decode it — it does not need
+to, because `flipraw.py --raw --frac` measures tone composition and that is the observable. A band-limited analog
+path predicts C420's majority-takes-all curve without the duty asymmetry, and unlike duty it has not been falsified
+on the air. ⛔ Pyramid's emitter stays QUEUED BEHIND this.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
