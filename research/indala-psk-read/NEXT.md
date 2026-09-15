@@ -1,5 +1,24 @@
 # Next — ranked
 
+⛔⛔⛔ **READ THIS BEFORE TAKING ANY PAC UNIT — THE FOUNDATION MOVED, 2026-09-15 (C465).** The whole
+PAC investigation rests on C431's *PAC emulate is SILENT to the Flipper*. **The Flipper does not
+decode a REAL PAC tag either** — 3 of 3 silent, on a tag the pm3 read byte-exact the same day and #2
+read independently, with the Flipper coupled to it (a raw capture returns 8200 pairs with periods to
+2812us) and Momentum's PAC decoder present in the protocol table. ⇒ **C431's PAC row is a statement
+about the FLIPPER on this protocol, not about our emitter**, and C443 fixed that interpretation in
+advance: both silent ⇒ PAC emulate is UNGRADEABLE on this bench with the Flipper as judge.
+⚠ **This does NOT overturn the CAPTURE-based air measurements** — C452's +34.5 duty points never
+needed a decoder — so "PAC's emission is unlike the eight ASK arms" still stands on its own footing.
+⇒ **What changes**: any unit whose evidence is *the Flipper did not decode it* is now void as
+evidence about the emitter, and the pm3's raw buffer (C464) is the instrument to use instead.
+
+⭐ **BENCH, AS THE OPERATOR LEFT IT 2026-09-15** — ⛔ NOT what `bench` expects, so its arms read DEAD
+and that is CORRECT geometry, not a fault: **#1 on its own (unpaired), #2 on the Proxmark's pad,
+the T5577 on the FLIPPER's pad.** ⇒ rig B is now pm3 + #2 with no tag between them, which is the
+clean comparator-free capture path C464 established; rig A is Flipper + the real tag, which is
+C443's control and has now been run. ⚠ `autopilot.sh bench` still describes the OLD topology and
+should be taught this one before its DEAD lines mislead a later tick.
+
 ✅✅ **DONE, 2026-09-15 — THE PAC BUFFER IS CORRECT ENTRY FOR ENTRY (C462), AND C459's BLOCKER WAS
 NEVER REAL (C461).** All 128 entries match `pac.c:365` — `channel_0 = bits[i] ? 33 : 0`, `counter_top
 = 32` — with gproxii through the same command as a control that returns 96 entries at counter_top 64
