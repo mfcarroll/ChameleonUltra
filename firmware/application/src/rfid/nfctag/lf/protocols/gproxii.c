@@ -11,20 +11,25 @@
  *   Gallagher (ASK/Manchester): one entry per BIT, duty fixed at half, and the DATA picks the
  *     polarity — the entry itself is the transition.
  *   AWID (FSK2a): six or five entries per bit, duty half, and the data picks the counter_top.
- *   GProxII (biphase): two entries per bit, counter_top fixed at a half-bit, and the data
- *     picks whether the LEVEL changes between them. Each entry holds ONE level for its whole
- *     period — duty 0 or duty == counter_top — and nothing toggles inside an entry.
+ *   GProxII (biphase): ONE entry per bit, counter_top the whole bit, and the data picks
+ *     whether a mid-bit transition is added — carried by channel_0's top (inversion) bit,
+ *     the same trick gallagher.c uses. A 0 bit holds one level for the whole period.
  *
  * ⭐ The rule, straight from the decoder this is tested against: a transition at every bit
  * BOUNDARY by construction, and an extra one mid-bit for a 1. `lf_ask_biphase.c` asks exactly
  * one question per bit — did the middle step too — so this emitter answers it by construction.
  *
- * ⚠ WHY 32 AND NOT 64. A GProxII bit is RF/64, but the emitter's unit is the HALF-bit, so
- * `counter_top` is 32 — the same value Gallagher uses for a whole RF/32 bit. That matters
- * beyond tidiness: AWID's emitter uses counter_top 8 and 10, it is the one emitter here the
- * Flipper will not read, and Momentum's own demodulator accepts its ideal output (C220). If
- * this one reads on the same rig, the difference between them is the counter_top magnitude and
- * that localises the AWID defect. If it does NOT read, the fault is broader than FSK. */
+ * ⚠ `counter_top` IS 64 — THE WHOLE BIT — AND THIS COMMENT USED TO SAY 32 (C428). An earlier
+ * design spent two entries per bit at a half-bit counter_top; the code has long since spent
+ * ONE entry per bit at `GPROXII_CARRIER_CYCLES_PER_BIT`, putting the mid-bit transition in
+ * channel_0's inversion bit instead. The buffer is sized to match, one entry per bit, and was
+ * re-checked against F13's class of defect — it does not overflow.
+ *
+ * ⛔ The paragraph here also used to propose this emitter as a CONTROL that would localise the
+ * AWID defect by comparing counter_top magnitudes. That question is answered and the answer is
+ * not magnitude as such: C422 held the ratio, duty and buffer constant and moved only the tone
+ * RATE, and the emission recovered — F12 is a bandwidth limit (C424/C425, consistent but
+ * unconfirmed), and C427 found no firmware fix for it. Do not re-run that comparison. */
 static nrf_pwm_values_wave_form_t m_gproxii_vals[GPROXII_BIT_COUNT] = {};
 
 static const nrf_pwm_sequence_t m_gproxii_seq = {

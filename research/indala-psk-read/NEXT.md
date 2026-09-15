@@ -48,12 +48,19 @@ instruments), firmware surface EXHAUSTED (C427). ⇒ **U11's four FSK2a emitters
 FDX-A — are RETIRED as unreachable on Ultra hw_v1.** Do not open another emitter rebuild. ⭐ **What reopens
 everything**: a scope on `LF_OA_OUT` or `LF_ANT_DRV` returning a loaded Q far from 6-8.
 
-⭐⭐ **NEXT UNIT: GO BACK TO THE GOAL, WHICH IS NOT BLOCKED.** AUTOPILOT.md:1170 lists six protocols that write
-but do not emulate: **AWID, Paradox, Pyramid, FDX-A** (the FSK2a four, now retired) and **GProxII, FDX-B**. The
-last two are **NOT FSK2a** — biphase/ASK at RF/32, the same rate as Gallagher, Securakey and Noralsy, all of
-which emulate 6/6. ⇒ They sit comfortably inside the tank's bandwidth and nothing in C422-C427 blocks them.
-⚠ **VERIFY BEFORE BUILDING**: `emugrade.sh` already carries a `gproxii` econfig line, so that list may be stale
-— ask the flashed firmware what it actually emulates (M45) before writing anything.
+✅ **THE LIST WAS CHECKED, NOT TRUSTED (C428).** Of AUTOPILOT § line 1170's six, **GProxII IS already built**
+(`TagSpecificType.GProxII = 308`, a full emitter, an `emugrade.sh` arm) and **FDX-B genuinely is not** (command
+ids 3061/3062 only, **no `TagSpecificType`**). ⇒ With the FSK2a four retired by C427, **FDX-B is the only
+unbuilt emulate arm left that F12 does not block** — it is biphase, not FSK2a.
+
+⭐⭐ **NEXT UNIT, and it is two small ones in order:**
+1. **Confirm GProxII actually EMITS, on hardware (M45).** It is built, but built is not emitting. `flipraw.py`
+   needs a `gproxii` entry in its `arm()` ECFG dict, then one capture on rig A. ⭐ **Criterion, already
+   corrected from source**: GProxII is RF/**64** — bit **512 us**, half-bit **256 us** — so the discriminator is
+   a local-maximum peak at **256 us**, because 512 us is the EM410X control's own half-bit and would be shared.
+   ⛔ Do not use the RF/32 figure; that was wrong from memory.
+2. **Then build the FDX-B emitter**, which needs a `TagSpecificType` as well as a modulator. It is biphase at a
+   rate the tank passes comfortably, so nothing in C422-C427 blocks it.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
