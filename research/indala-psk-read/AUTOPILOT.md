@@ -55,6 +55,10 @@ identifies the one in DFU — macOS leaves BOTH nodes listed after the trigger. 
 ⚠ **BUILD AFTER COMMITTING.** The first attempt flashed a `-dirty` package and `status` caught it (*built from a
 DIRTY tree, so it matches no commit*), because it was built while the notes edits were still uncommitted.
 
+✅ **AND THE BENCH SURVIVED THE DOUBLE FLASH** — `./autopilot.sh bench` after both units were reprogrammed:
+rig A LIVE, rig B LIVE, `#1 ↔ #2` DEAD as it should be. ⚠ Worth running, not assuming: a flash resets slot
+state, and a slot needs FOUR things before it emits (M46).
+
 ---
 
 ### ⭐⭐ 2026-09-14 17:35 — THE MIXED-FRAME FAILURE IS DETERMINISTIC. F12 IS NOW A BOX (C416)
