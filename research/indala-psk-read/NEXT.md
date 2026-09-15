@@ -186,10 +186,27 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    Then capture the **real T5577 PAC tag with the Flipper**. C436 left a known-good `CARD0001` on it, so it
    carries the **same 128-bit frame with the same 2048us static stretches** as the emulation — same
    protocol, same frame, same instrument, same suspect property, differing only in **emitter**.
-   ⭐ **State the reading in advance, both ways**: real tag captures at full run count while the emulation
-   does not ⇒ **long DC is exonerated and the fault is the emulator**; both show the same deficit ⇒
-   **the deficit is the Flipper's capture of long-DC waveforms**, and PAC emulate is ungradeable on this bench
-   — record that rather than inventing an instrument.
+   ⛔⛔ **THE READING ABOVE IS REWRITTEN BY C449 — THE PREMISE OF THE OLD ONE IS FALSE.** It said
+   *real tag at full run count while the emulation is SHORT*. **The emulation is not short.** Measured
+   through this same Flipper chain against predictions taken from `pac.c` itself: predicted max run
+   **2304us**, measured **6021us**; predicted high-time **45.3%** (58 ones of 128 bits for `1337BEEF`),
+   measured **85.7%**. The two controls in the same session land on their own source predictions
+   (fdxb 384→364us, gproxii 512→661us) and their construction-fixed 50% duty pins the comparator bias at
+   **43-89us**, against the **883us** PAC would need. ⇒ the emission is **too long and too high**, and
+   C439's *long static swallows the runs after it* is refuted **in its stated direction**.
+   ⭐ **The rewritten reading, still stated in advance**: capture the real tag and score it on the SAME two
+   numbers. Real tag near **2304us / 45.3%** while the emulation sits at 6021us / 85.7% ⇒ **the receive
+   chain handles long DC and the fault is the emulator**. Real tag ALSO long and high ⇒ **the Flipper's
+   comparator holds high through long static and merges what follows**, PAC emulate is ungradeable on this
+   bench, and that is recorded rather than an instrument invented.
+   ⛔ **What no longer needs the bench move at all (C448)**: *the Flipper cannot represent long DC* is dead
+   from Momentum's own source — `protocol_pac_stanley_decoder_feed` accepts **60-4000us**, quantises at
+   256us, and carries an explicit `>= 9 bit periods` branch pair built to align PAC's 2304us sync run. That
+   guard is also why the arm is SILENT rather than wrong: `duration > 4000us` drops the sample before a bit
+   is pushed, and **p95 of our PAC high runs is 5954us**.
+   ⚠ `flipgrade.py`'s pac criterion could never have passed until this tick — it wanted `CARD0001` while
+   Momentum renders `CIN: %08lX` from four bytes, and `CARD0001` contains an `R`. Fixed to `1337BEEF`;
+   pac re-graded **SILENT** with NULL silent and fdxb PASS, so the verdict stands (C448).
    ⚠ The rigs are **mutually exclusive** (C405): moving the T5577 to rig A costs rig B, which is where
    C400's real-tag Gallagher/Securakey unit lives. ⚠ Predict the real tag's run structure from
    `pac_build_bitstream` BEFORE capturing, and fit the bias per capture (M54); carry a null for any best-fit

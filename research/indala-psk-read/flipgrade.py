@@ -40,10 +40,19 @@ ARMS = [
     ("ioprox",   "ioProx",   "lf ioprox econfig -s %d --ver 1 --fc 83 --cn 1337",             ["83", "1337"]),
     ("viking",   "Viking",   "lf viking econfig -s %d --id 1A337195",                         ["1A337195"]),
     ("jablotron", "Jablotron", "lf jablotron econfig -s %d --id 1122334455",                  ["1122334455"]),
-    # ⚠ PAC's credential is EIGHT ASCII CHARACTERS, not hex: `--cn CARD0001`, which is also the
-    # firmware's own factory default (lf_tag_em.c:702). `add_card_arg` registers it as --cn but
-    # stores it in args.id, which is why reading on_exec alone suggests --id.
-    ("pac",      "PAC",      "lf pac econfig -s %d --cn CARD0001",                             ["CARD0001"]),
+    # ⚠ PAC's credential is EIGHT ASCII CHARACTERS, not hex: `--cn 1337BEEF`. `add_card_arg`
+    # registers it as --cn but stores it in args.id, which is why reading on_exec alone
+    # suggests --id.
+    # ⛔⛔ THE TOKEN HERE USED TO BE `CARD0001` AND IT COULD NEVER HAVE MATCHED — a criterion
+    # that cannot pass is not a criterion, exactly as a control that cannot fail is not a
+    # control (M52, C441). Momentum's PAC renderer is
+    #     furi_string_printf(result, "CIN: %08lX", bit_lib_get_bits_32(protocol->data, 0, 32))
+    # and `protocol->data` is FOUR bytes produced by `hex_chars_to_uint8(asciiCardId, ...)` —
+    # so the Flipper NEVER prints the eight ASCII characters, only their hex VALUE. Worse,
+    # `CARD0001` contains an `R`, which is not a hex digit, so it cannot even round-trip.
+    # ⇒ the credential must be eight UPPERCASE HEX characters, and the token is that same
+    # string, which is then exactly what `CIN:` carries. `1337BEEF` -> `CIN: 1337BEEF`.
+    ("pac",      "PAC",      "lf pac econfig -s %d --cn 1337BEEF",                             ["1337BEEF"]),
     # ⚠ Indala's decode is a 26-bit sub-format, not our 64-bit raw: NEXT.md records this exact
     # credential reading back as `Indala26 CD7A1D30` FC 52 / Card 63612.
     ("indala",   "Indala",   "lf indala econfig -s %d --id a0000000e6bd0e92",                 ["52", "63612"]),
