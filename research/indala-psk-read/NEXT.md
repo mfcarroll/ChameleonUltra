@@ -127,27 +127,26 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    with C436's frame proven the defect is the **MODULATOR or the AIR PATH**.
    ⛔ Refuted, do not re-try: short held levels being swallowed predicts 18.0/22.1 runs per frame against
    the measured 28/32 at every threshold.
-   ✅✅ **SPLIT DONE — THE AIR PATH IS EXONERATED AND THE MODULATOR IS THE DEFECT (C438).**
-   EM410X emits **78 single-256us runs per frame and all survive** (104 measured vs 103 true), on the same
-   pad and the same 32768us frame ⇒ 256us is not too short for the air path. The difference is PWM
-   geometry: EM410X's 256us run is **half an entry** (`counter_top 64`, duty 1/2 — an in-entry toggle),
-   PAC's is **one whole entry held** (`counter_top 32`, `channel_0` 0 or 33). ⇒ **what PAC loses is a
-   single-entry HELD LEVEL**, and the emission tracks it: single-bit runs 17/31/61 give measured runs per
-   frame 32/28/18.
-   ⛔ Do not re-open as air path or bandwidth — and **C425's loaded-Q claim is NOT implicated here**;
-   leave it to the queued F12 review.
-   ⚠ Known limits: rests on **3 resolved points, not 4** (BBGFGXP0's cycle is unresolved on a half-length
-   capture), and the exact law is open — `runs >= 2` is exact once and short twice.
-   ⭐⭐ **THE NEXT UNIT IS A DIRECT FIRMWARE TEST OF THE SINGLE-ENTRY HELD LEVEL, AND IT NEEDS NO NEW
-   INSTRUMENT.** Re-emit PAC with the modulator changed to spend **TWO entries per bit at `counter_top 16`**
-   instead of one at 32 — same bit period, same held level, but no run is ever a single entry. If the
-   lost transitions come back, the single-entry held level is proven the cause and the fix is structural.
-   ⚠ State in advance what *no change* would mean: it would refute the single-entry reading and leave the
-   held level itself (any length) as the suspect — in which case compare against `jablotron.c`, which
-   holds levels and is graded PASS.
-   ⭐ Cheaper still if it comes first: **`pac_build_bitstream` is already proven correct (C436)**, so this
-   unit may change ONLY `pac_modulator` — any diff touching the bitstream is out of scope.
-   ⚠ A firmware change means a build and a flash: re-verify FUNCTIONALLY, not by version string (M45).
+   ⛔⛔ **DO NOT RUN THE `counter_top 16` FIRMWARE EXPERIMENT THIS FILE USED TO QUEUE — FDX-B
+   ALREADY ANSWERED IT (C439).** `fdxb.c` is `counter_top 32`, **one entry per bit, PAC's EXACT geometry**,
+   holds a whole entry at a level with the same `counter_top + 1` idiom, and decodes **byte-exact** (C430).
+   ⇒ the geometry, the entry count and the whole-entry held level are all **proven to work**; C438's
+   *single-entry held level* mechanism is retracted, and so is its *air path exonerated* headline.
+   ⭐⭐ **THE ONE PROPERTY NO CONTROL COVERS IS LONG STATIC STRETCHES.** Max static, from each
+   emitter's source: **FDX-B 384us, EM410X 512us, GProxII 512us — all decode; PAC 2048us — loses
+   runs.** Every working protocol here is transition-guaranteed (Manchester/biphase); **PAC is the only NRZ
+   one**. ⚠ Live hypothesis, consistent with every number and NOT established: a long static stretch
+   costs an AC-coupled receive path its baseline and swallows the short runs that follow.
+   ⛔ It cannot be tested by picking a better credential — the 8-bit sync marker is fixed by the
+   protocol, so 2048us of static is in EVERY PAC frame.
+   ⭐⭐ **THE NEXT UNIT IS FREE AND USES CAPTURES ALREADY ON DISK: ASK WHERE IN THE FRAME THE
+   TRANSITIONS GO MISSING.** Align each captured cycle against the predicted bitstream and locate the losses.
+   ⚠ State the criterion first: **clustered immediately after the 8-bit sync run ⇒ baseline wander,
+   and the receive path is implicated; spread uniformly ⇒ baseline wander is refuted** and the loss is
+   payload-position-independent, which points back at the emitter. ✅ Three cycles are already resolved
+   (32/28/18 runs at /tmp/pacdiff_*.raw and /tmp/pac_ELTIWRQ5.raw), so this costs no bench time and no flash.
+   ⚠ If it implicates the receive path, that is the **Flipper**, and the honest consequence is that PAC
+   emulate may be ungradeable on this bench — say so rather than inventing an instrument.
    ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
    no PAC read-side question needs a re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
