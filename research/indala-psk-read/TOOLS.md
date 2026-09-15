@@ -81,3 +81,15 @@ cannot go stale the way the README table did. Add the row when you add the tool.
 | `clockoffset.py` / `framedrift.py` | The emulator's frame period against the reader's clock (ppm); a real T5577's frame-to-frame drift |
 | `drivesoak.py` | Soak the LF reader until the drive control goes inert |
 | `pacber.py` / `burstnull.py` | Score a PAC capture by **bit error rate** rather than pass/fail; burst nulls |
+
+## ⛔ A trap that produced a confident false pass (C429)
+
+**RIFL's second value per pair is the PERIOD — a high run PLUS the low run after it — not one run.** Check it
+on the bytes: `587+156=743`, `354+157=511`. A criterion written in RUN lengths scores the wrong quantity and
+reported **100.0% against a true 48.8%**, raising no error at all. `flipraw.py --biphase` now works in periods.
+
+**And a peak LOCATION may discriminate nothing.** `em410x.c` and `gproxii.c` are both one PWM entry per bit at
+`counter_top` 64, so both emit 256us and 512us quanta. Twice in a row a criterion was written as *look for a
+peak at X* and twice it was wrong. ⭐ What works instead: compute the expected distribution from the modulator
+source, and pick SEVERAL payloads whose predictions are far apart — a constant tone cannot track three
+different data-matched distributions, and no single capture can rule one out.

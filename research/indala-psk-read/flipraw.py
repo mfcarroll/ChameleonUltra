@@ -127,6 +127,35 @@ def frac_expected(hexframe, short_pulses=6, long_pulses=5):
     return (lng / (lng + sht) if (lng + sht) else 0.0), ones, zeros
 
 
+# ⛔ RIFL's second value is the PERIOD — a high run PLUS the low run after it — not one run.
+# Checked on real data: 587+156=743 and 354+157=511 are the recorded durations themselves (C429).
+# A criterion written in run lengths scores the wrong quantity and reads 100% against a true 49%.
+BIPHASE_PERIODS = (512, 768, 1024)
+
+
+def periods_expected_biphase(hexframe, reps=40):
+    """Biphase (gproxii): EVERY bit carries a boundary transition and a 1 bit adds a mid-bit one,
+    so a 0 bit is ONE 512 us run and a 1 bit TWO 256 us runs. Derived from gproxii_modulator,
+    not from the protocol's name. Pairing consecutive runs into periods gives 512/768/1024."""
+    bits = bin(int(hexframe, 16))[2:].zfill(len(hexframe) * 4)
+    runs = []
+    for _ in range(reps):
+        for b in bits:
+            runs += [512] if b == "0" else [256, 256]
+    per = [runs[i] + runs[i + 1] for i in range(0, len(runs) - 1, 2)]
+    n = len(per) or 1
+    return {k: per.count(k) / n for k in BIPHASE_PERIODS}, bits.count("1"), bits.count("0")
+
+
+def periods_measured(durations, tol=0.15):
+    n = len(durations) or 1
+    out = {}
+    for k in BIPHASE_PERIODS:
+        lo, hi = k * (1 - tol), k * (1 + tol)
+        out[k] = sum(1 for d in durations if lo <= d <= hi) / n
+    return out
+
+
 def frac_measured(durations, bands=None):
     """RF/10 share actually captured, counting only durations that are one tone or the other."""
     lo, split, hi = bands or (TONE_LO, TONE_SPLIT, TONE_HI)
@@ -200,14 +229,15 @@ def arm(emu, proto, slot=8, raw=None):
         "awid":    ("AWID",    "lf awid econfig -s %d --raw 011d81711dd1181111111111" % slot),
         "hidprox": ("HIDProx", "lf hid prox econfig -s %d -f H10301 --fc 123 --cn 4567" % slot),
         "ioprox":  ("IOProx",  "lf ioprox econfig -s %d --ver 1 --fc 83 --cn 1337" % slot),
+        "gproxii": ("GProxII", "lf gproxii econfig -s %d --raw f84602a46119d4a114211046" % slot),
     }
     if proto not in ECFG:
         raise SystemExit("no econfig for %s" % proto)
     t, ec = ECFG[proto]
     if raw is not None:
-        if proto != "awid":
-            raise SystemExit("--raw is only wired for awid")
-        ec = "lf awid econfig -s %d --raw %s" % (slot, raw)
+        if proto not in ("awid", "gproxii"):
+            raise SystemExit("--raw is only wired for awid and gproxii")
+        ec = "lf %s econfig -s %d --raw %s" % (proto, slot, raw)
     cmds = ["hw connect -p %s" % emu, "hw slot type -s %d -t %s" % (slot, t),
             "hw slot enable -s %d --lf" % slot, ec,
             "hw slot change -s %d" % slot, "hw mode -e"]
@@ -229,6 +259,8 @@ def main():
     c.add_argument("--raw", default=None, help="12-byte AWID frame in hex, overrides the econfig")
     c.add_argument("--bands", default=None,
                    help="lo,split,hi in us for --frac; default 54,72,92 (RF/8 vs RF/10)")
+    c.add_argument("--biphase", action="store_true",
+                   help="score the measured whole-bit share against the share the frame implies")
     c.add_argument("--frac", action="store_true",
                    help="score measured RF/10 share against the share the frame implies")
     a = ap.parse_args()
@@ -253,6 +285,20 @@ def main():
         return 1
     top = Counter((d // 4) * 4 for d in durs).most_common(8)
     print("  top duration bins (us): " + ", ".join("%d:%d" % (b, c) for b, c in top))
+    if a.biphase:
+        if not a.raw:
+            raise SystemExit("--biphase needs --raw: the expectation comes from the frame bits")
+        exp, ones, zeros = periods_expected_biphase(a.raw)
+        got = periods_measured(durs)
+        print("    frame %s -> %d one-bits, %d zero-bits" % (a.raw, ones, zeros))
+        worst = 0.0
+        for k in BIPHASE_PERIODS:
+            delta = abs(got[k] - exp[k])
+            worst = max(worst, delta)
+            print("    %4d us: expected %5.1f%%   measured %5.1f%%   (%+.1f points)"
+                  % (k, 100 * exp[k], 100 * got[k], 100 * (got[k] - exp[k])))
+        print("    covered %.1f%% of all periods; worst band error %.1f points"
+              % (100 * sum(got.values()), 100 * worst))
     if a.frac:
         if not a.raw:
             raise SystemExit("--frac needs --raw: the expectation comes from the frame bits")

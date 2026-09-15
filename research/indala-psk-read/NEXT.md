@@ -54,13 +54,15 @@ ids 3061/3062 only, **no `TagSpecificType`**). ⇒ With the FSK2a four retired b
 unbuilt emulate arm left that F12 does not block** — it is biphase, not FSK2a.
 
 ⭐⭐ **NEXT UNIT, and it is two small ones in order:**
-1. **Confirm GProxII actually EMITS, on hardware (M45).** It is built, but built is not emitting. `flipraw.py`
-   needs a `gproxii` entry in its `arm()` ECFG dict, then one capture on rig A. ⭐ **Criterion, already
-   corrected from source**: GProxII is RF/**64** — bit **512 us**, half-bit **256 us** — so the discriminator is
-   a local-maximum peak at **256 us**, because 512 us is the EM410X control's own half-bit and would be shared.
-   ⛔ Do not use the RF/32 figure; that was wrong from memory.
-2. **Then build the FDX-B emitter**, which needs a `TagSpecificType` as well as a modulator. It is biphase at a
-   rate the tank passes comfortably, so nothing in C422-C427 blocks it.
+✅ **DONE — GProxII EMITS, AND A COMMERCIAL READER DECODES IT BYTE-EXACT (C429).** The Flipper returns
+`GProxII FAC2A38C2B081AF0210B12C2` FC 123 Card 1337 LEN 26, with EM410X `DEADBEEF88` as the same-session
+control. **C242 is refuted**, so the emulate column above is corrected. ⚠ Two criteria in a row were wrong
+here — see C429; the method that worked was three frames whose predictions span 90 points, not a peak location.
+
+1. **Build the FDX-B emitter.** It needs a `TagSpecificType` as well as a modulator. It is biphase at a
+   rate the tank passes comfortably, so nothing in C422-C427 blocks it. ⭐ **Grade it the way C429 did**:
+   predictions computed from the modulator, several frames chosen so their predictions are far apart, and
+   the FLIPPER as the reader — never our own SAADC reader against an emulation (M52).
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
@@ -185,7 +187,7 @@ registered `TAG_TYPE_*`.
 | **NexWatch** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C234)** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
 | **Securakey** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag (C233)** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
 | **Noralsy** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ⛔ **IMPOSSIBLE as designed — a biphase 0 is a HELD level and this PWM emits nothing for one (C242)** | ✓ |
+| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✅ **the FLIPPER decodes our emulation byte-exact — `FAC2A38C2B081AF0210B12C2` FC 123 Card 1337 (C429)**; ⛔ C242's *impossible as designed* is REFUTED, killed by a 92-held-level frame | ✓ |
 | **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
@@ -460,7 +462,7 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Paradox | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | Pyramid | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | FDX-A | **A** 10/10 real tag, 2 credentials (C338) | **A** 4/4, blocks identical to the reference clone (C340) | ⛔ **not built** |
-| GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | ⛔ **impossible as designed (C242)** |
+| GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | **A** **byte-exact on the Flipper (C429)** — C242 refuted |
 | FDX-B | **A** 6/6 (C214/C215), **re-confirmed 15 of 15 (C337)** — ⚠ one unreproduced 0-of-4 episode, instrumented and unexplained | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | ⛔ **not built** |
 
 ⭐ **The write column was re-measured wholesale on 2026-09-14 (C330), and the numbers above are that
