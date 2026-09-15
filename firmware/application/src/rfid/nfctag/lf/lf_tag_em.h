@@ -83,3 +83,29 @@ void lf_tag_em_debug_get(uint8_t *out);
 #define LF_TAG_EM_SEQ_MAX_ENTRIES   256
 #define LF_TAG_EM_SEQ_DUMP_MAX      (LF_TAG_EM_SEQ_HEADER_SIZE + LF_TAG_EM_SEQ_MAX_ENTRIES * 8)
 uint16_t lf_tag_em_seq_get(uint16_t start, uint16_t count, uint8_t *out);
+
+/** ⭐ §3 instrumentation: install a SYNTHETIC wave-form of pure alternating static runs, so the
+ * long-DC question can be asked of the playback path directly instead of through a credential.
+ *
+ * `holdsweep.py` fixed the criterion before this existed: `pac.c:363-367` writes one entry per
+ * bit at `counter_top = PAC_RF_PER_BIT` (32) with `channel_0 = bits[i] ? 33 : 0`, and at the
+ * 125 kHz base clock one tick is one 8us carrier cycle — so one entry is 256us and a run of N
+ * identical entries is a level held for exactly N * 256us. This builds that shape and nothing
+ * else: `entries_per_run` at compare 33, then `entries_per_run` at compare 0, repeated to fill
+ * the buffer, every entry `counter_top` 32 and `channel_1`/`channel_2` zero (pac.c writes
+ * neither). ⇒ PREDICTION: measured max static run = N * 256us, slope 1 through the origin.
+ *
+ * ⛔⛔ REVERSIBLE BY CONSTRUCTION, AND THAT IS A REQUIREMENT, NOT A PROPERTY. The synthetic
+ * buffer is a separate array; `m_pwm_seq` is merely re-pointed at it. Arming ANY slot through
+ * the normal path calls that protocol's modulator and re-points `m_pwm_seq` back at the
+ * protocol's own values, so an unattended tick cannot leave a device emitting this.
+ *
+ * ⛔ REFUSED (returns 0) unless an emulation is already armed at the 125 kHz base clock. At
+ * 1 MHz a `counter_top` of 32 is 32us, not 256us, and the whole criterion above silently
+ * becomes eight times wrong — the exact shape of trap this project keeps paying for.
+ *
+ * @param entries_per_run 1..LF_TAG_EM_HOLD_MAX_RUN
+ * @return entries actually installed, 0 if refused. */
+#define LF_TAG_EM_HOLD_MAX_RUN      64
+#define LF_TAG_EM_HOLD_MAX_ENTRIES  256
+uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run);

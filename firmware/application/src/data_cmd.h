@@ -305,6 +305,16 @@
  * modulator actually WROTE. This returns the live buffer through `m_pwm_seq`, so EVERY arm goes
  * through the same command and gproxii can be carried as the control. */
 #define DATA_CMD_LF_EMU_SEQDUMP                 (3065)
+/* ⭐ Install a SYNTHETIC wave-form of alternating static runs of N entries at PAC's own idiom
+ * (compare 33 / 0, counter_top 32), so the long-DC question can be put to the playback path
+ * directly rather than through a credential. C443 showed from source that no shipping protocol
+ * can ask it: jablotron's `level = !level` makes a boundary transition structural, every other
+ * arm is transition-guaranteed, and PAC is the only NRZ config in t55xx.h — so the arm had to be
+ * BUILT. `holdsweep.py` fixed the criterion (max static run = N * 256us, slope 1) before this
+ * command existed, and the buffer must be checked with DATA_CMD_LF_EMU_SEQDUMP before any air
+ * reading is trusted (C462). ⛔ Reversible: re-arming any slot restores that protocol's own
+ * modulator. */
+#define DATA_CMD_LF_EMU_SEQHOLD                 (3066)
 #endif
 #define DATA_CMD_FDXB_SCAN                      (3061)
 #define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)

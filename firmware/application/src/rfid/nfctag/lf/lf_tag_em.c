@@ -101,6 +101,12 @@ static uint16_t m_dbg_hf_rel = 0;       /* ...and releases; these must stay bala
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 
+#if LF_RESEARCH_CMDS_ENABLED
+/* PAC's own carrier cycles per bit (pac.c: PAC_RF_PER_BIT 32). Named rather than repeated so the
+ * synthetic hold buffer below cannot drift from the protocol whose shape it is imitating. */
+#define PAC_HOLD_RF_PER_BIT 32u
+#endif
+
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
@@ -1010,3 +1016,72 @@ uint16_t lf_tag_em_seq_get(uint16_t start, uint16_t count, uint8_t *out) {
     }
     return n;
 }
+
+#if LF_RESEARCH_CMDS_ENABLED
+/* ⭐ §3 INSTRUMENTATION — a synthetic wave-form of pure alternating static runs.
+ *
+ * ⛔ Gated at compile time as well as at the command table: a production build must not be able
+ * to emit a buffer that belongs to no protocol.
+ *
+ * ⚠ The shape and its prediction are `holdsweep.py`'s, written before this code existed, and the
+ * numbers come from `pac.c` rather than from memory: counter_top 32 and compare 33/0 are PAC's
+ * own idiom, so a run of N entries is N * 256us at the 125 kHz base clock.
+ *
+ * ⛔ `m_tag_type` IS DELIBERATELY NOT TOUCHED. It selects the PWM base clock (line ~230) and the
+ * divisor in recompute_frames_per_burst(), so writing it here would change the meaning of every
+ * counter_top in flight. The clock is INHERITED from whatever is armed, and a 1 MHz type is
+ * refused outright rather than silently rescaled — at 1 MHz `counter_top` 32 is 32us and the
+ * whole criterion would be eight times wrong while still looking like a clean straight line. */
+static nrf_pwm_values_wave_form_t m_hold_vals[LF_TAG_EM_HOLD_MAX_ENTRIES] = {};
+
+static nrf_pwm_sequence_t m_hold_seq = {
+    .values.p_wave_form = m_hold_vals,
+    .length = 0,
+    .repeats = 0,
+    .end_delay = 0,
+};
+
+uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run) {
+    if (entries_per_run < 1u || entries_per_run > LF_TAG_EM_HOLD_MAX_RUN) {
+        return 0;
+    }
+    /* ⛔ An arm must already be loaded: this borrows its clock, and with m_pwm_seq NULL there is
+     * nothing to restore by re-arming either. */
+    if (m_pwm_seq == NULL || IS_1MHZ_PWM_TYPE(m_tag_type)) {
+        return 0;
+    }
+
+    /* Whole run PAIRS only — a buffer ending mid-pair would put one run of a different length at
+     * the wrap, which is exactly the measurement this is trying to make. */
+    const uint16_t pair = (uint16_t)(2u * entries_per_run);
+    uint16_t pairs = (uint16_t)(LF_TAG_EM_HOLD_MAX_ENTRIES / pair);
+    if (pairs == 0) {
+        return 0;
+    }
+
+    uint16_t n = 0;
+    for (uint16_t p = 0; p < pairs; p++) {
+        for (uint16_t i = 0; i < entries_per_run; i++) {
+            m_hold_vals[n].channel_0 = (uint16_t)(PAC_HOLD_RF_PER_BIT + 1u);
+            m_hold_vals[n].channel_1 = 0;
+            m_hold_vals[n].channel_2 = 0;
+            m_hold_vals[n].counter_top = PAC_HOLD_RF_PER_BIT;
+            n++;
+        }
+        for (uint16_t i = 0; i < entries_per_run; i++) {
+            m_hold_vals[n].channel_0 = 0;
+            m_hold_vals[n].channel_1 = 0;
+            m_hold_vals[n].channel_2 = 0;
+            m_hold_vals[n].counter_top = PAC_HOLD_RF_PER_BIT;
+            n++;
+        }
+    }
+
+    m_hold_seq.length = (uint16_t)(n * 4u);
+    m_pwm_seq = &m_hold_seq;
+    /* ⚠ The burst length is derived from the sequence, so it must be recomputed or the device
+     * keeps playing the previous protocol's frame count against a different frame duration. */
+    recompute_frames_per_burst();
+    return n;
+}
+#endif /* LF_RESEARCH_CMDS_ENABLED */

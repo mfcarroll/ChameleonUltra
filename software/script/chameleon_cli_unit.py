@@ -9390,6 +9390,34 @@ class HWEmuDebug(DeviceRequiredUnit):
         print(f"   frames per burst : {d['frames_per_burst']}")
 
 
+@hw.command("emuhold")
+class HWEmuSeqHold(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("⭐ instrumentation: install a SYNTHETIC wave-form of alternating "
+                              "static runs of N entries at PAC's own idiom (compare 33/0, "
+                              "counter_top 32 — one entry is 256us at the 125 kHz clock). Asks "
+                              "the playback path how long a level it can hold, which no shipping "
+                              "protocol can ask (C443). ⛔ Arm a 125 kHz emulation FIRST: this "
+                              "borrows its clock and is refused otherwise. ⛔ Reversible — "
+                              "re-arm any slot to restore that protocol's own modulator. "
+                              "⭐ Check it with `hw emuseq --raw` before trusting the air.")
+        parser.add_argument("-n", "--entries", type=int, required=True,
+                            help="entries per static run, 1..64")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        n = self.cmd.lf_emu_seqhold(args.entries)
+        if n == 0:
+            print("   ⛔ REFUSED — nothing armed, or the armed type runs the 1 MHz clock where")
+            print("      counter_top 32 would be 32us, not 256us. Arm a 125 kHz protocol first.")
+            return
+        print(f"   entries installed: {n}   ({n // (2 * args.entries)} run pairs of "
+              f"{args.entries} high + {args.entries} low)")
+        print(f"   predicted static run: {args.entries * 256} us")
+        print("   ⭐ verify with `hw emuseq --raw` under a reader field before believing the air")
+
+
 @hw.command("emuseq")
 class HWEmuSeqDump(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:

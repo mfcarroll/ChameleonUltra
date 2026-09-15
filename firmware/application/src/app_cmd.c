@@ -793,6 +793,21 @@ static data_frame_tx_t *cmd_processor_lf_emu_seqdump(uint16_t cmd, uint16_t stat
     uint16_t n = lf_tag_em_seq_get(start, count, out);
     return data_frame_make(cmd, STATUS_SUCCESS, n, out);
 }
+
+/* ⭐ Install the synthetic alternating-hold buffer. Request is 2 bytes, big-endian
+ * entries_per_run (1..LF_TAG_EM_HOLD_MAX_RUN); response is 2 bytes, the entry count actually
+ * installed, so the host can check it against 2 * N * pairs rather than assume it.
+ * ⛔ A zero response is a REFUSAL, not an empty buffer: nothing is armed, or the armed type runs
+ * the 1 MHz clock where counter_top 32 would be 32us instead of 256us. */
+static data_frame_tx_t *cmd_processor_lf_emu_seqhold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t per_run = ((uint16_t)data[0] << 8) | data[1];
+    uint16_t n = lf_tag_em_seq_hold(per_run);
+    uint8_t out[2] = { (uint8_t)(n >> 8), (uint8_t)(n & 0xFF) };
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
 #endif /* LF_RESEARCH_CMDS_ENABLED */
 
 static data_frame_tx_t *cmd_processor_indala224_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -4008,6 +4023,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
     {    DATA_CMD_LF_EMU_SEQDUMP,               NULL,                        cmd_processor_lf_emu_seqdump,                NULL                   },
+    {    DATA_CMD_LF_EMU_SEQHOLD,               NULL,                        cmd_processor_lf_emu_seqhold,                NULL                   },
 #endif
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },

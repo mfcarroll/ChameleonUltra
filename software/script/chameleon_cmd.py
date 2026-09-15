@@ -822,6 +822,38 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def lf_emu_seqhold(self, entries_per_run):
+        """
+        ⭐ Instrumentation: install a SYNTHETIC wave-form of alternating static runs.
+
+        `holdsweep.py` fixed the criterion before the firmware existed, from `pac.c:363-367`:
+        one entry per bit at `counter_top` 32 with `channel_0` 33 or 0, and at the 125 kHz base
+        clock one tick is one 8us carrier cycle — so one entry is 256us and a run of N identical
+        entries is a level held for exactly N * 256us. This asks the playback path that question
+        directly, which no shipping protocol can (C443: jablotron's `level = !level` is
+        structural, every other arm is transition-guaranteed, and PAC is the only NRZ config in
+        `t55xx.h`).
+
+        ⛔ A return of 0 is a REFUSAL, not an empty buffer: either nothing is armed, or the armed
+        type runs the 1 MHz clock where `counter_top` 32 would be 32us and the criterion above
+        would be eight times wrong while still looking like a clean straight line.
+
+        ⛔ Reversible: re-arming any slot through the normal path restores that protocol's own
+        modulator, so a device cannot be left emitting this.
+
+        ⭐ Check the installed buffer with `lf_emu_seqdump()` before trusting any air reading
+        (C462) — that reads back through the same `m_pwm_seq` pointer playback is handed.
+
+        :param entries_per_run: 1..64
+        :return: entries actually installed (2 * entries_per_run * pairs), or 0 if refused.
+        """
+        resp = self.device.send_cmd_sync(Command.LF_EMU_SEQHOLD,
+                                         struct.pack(">H", entries_per_run))
+        if resp.status == Status.SUCCESS:
+            resp.parsed = struct.unpack(">H", resp.data)[0]
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def lf_emu_seqdump(self, start=0, count=256):
         """
         ⭐ Instrumentation: read the LIVE PWM wave-form entries the LF emulation is playing.
