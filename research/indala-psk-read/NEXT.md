@@ -105,12 +105,15 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    ✅ **BOTH EMISSION HYPOTHESES ARE NOW CLOSED.** (a) `pac_modulator` already uses `counter_top + 1`, so it
    is not a C242 held-level defect (C432); (b) **PAC DOES emit** — 1023 pairs, NRZ at RF/32 with every top
    period bin a whole multiple of the 256us bit (C433). ⇒ **The remaining question is DECODE, not emission**:
-   why does the Flipper's PAC/Stanley decoder reject a structurally correct emission? ⭐ Look at framing and
-   credential — compare our `pac_build_bitstream` output against what `lf pac read` returns off a REAL
-   pm3-written PAC tag on rig B, which is the one comparison that separates "our bits are wrong" from "the
-   Flipper wants something else". ⛔ Do NOT grade this with our own reader against the emulation if PAC turns
-   out to be SAADC-family; check M52's list first. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
-   payloads whose predictions are far apart, Flipper as reader.
+   why does the Flipper's PAC/Stanley decoder reject a structurally correct emission?
+   ⛔ **FIRST, VALIDATE THE DECODER — C434 left it unvalidated on purpose and its 97/128 means nothing yet.**
+   Emit a SECOND PAC credential and check the recovered bits change EXACTLY as the two expectations differ
+   (the C429 differential method). Only then is a mismatch attributable to firmware. ⭐ C434's capture is saved
+   at `/tmp/pac_cap.raw`, so the first half costs no bench time. ⚠ The Flipper biases single RUNS by ~96us and
+   only PERIODS are unbiased (C429/C430) — an NRZ decode necessarily works in runs, which is exactly why it
+   needs a control. ✅ Settled from source: PAC's T5577 config has **no inversion bit**, so C430's
+   inverted-sense fix does not transfer. ⛔ Do NOT grade with our own reader against the emulation if PAC is
+   SAADC-family; check M52's list first.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
