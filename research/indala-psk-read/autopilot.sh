@@ -129,14 +129,30 @@ status)
         pct=$(printf '%s' "$ctx" | sed -nE 's/.*pct=([0-9]+).*/\1/p')
         case "${pct:-0}" in
             ''|*[!0-9]*) echo "context     $ctx" ;;
-            *) if [ "$pct" -ge 40 ]; then
-                   echo "⛔ context   ${pct}% — OVER THE LINE. Unattended: autocompact should have taken it already, so if"
-                   echo "            this session started before the setting was written, say so. Operator present: commit,"
-                   echo "            push, and ask for a manual /compact in ONE line — you cannot trigger one (C372)."
-               elif [ "$pct" -ge 30 ]; then
-                   echo "⚠ context    ${pct}% — finish the current unit and leave the tree committed."
+            # ⛔⛔⛔ `pct` IS A FRACTION OF THE *EFFECTIVE WINDOW*, WHICH `autoCompactWindow`
+            # SHRINKS — AND READING IT AS A FRACTION OF A FIXED 1M COST TWO TICKS (C467).
+            # This block used to stop the loop at pct>=40 and say "autocompact should have taken
+            # it already". Both halves were wrong once the operator set autoCompactWindow=400000:
+            # the setting does NOT mean "compact at 40%", it means "the window IS 400000", and
+            # context_check divides by exactly that. So 48% meant 190k used with 176k FREE, and a
+            # compaction was nowhere near — while this line called it OVER THE LINE and two
+            # firmware units were declined for a budget that was never tight.
+            # ⇒ Compaction fires when the window is nearly full, i.e. when `free` runs down to the
+            # reserved buffer — about 92% here — NOT at the setting's numeric value. The numbers
+            # below are fractions of whatever `window=` actually says, so they follow the setting
+            # instead of contradicting it.
+            *) free=$(printf '%s' "$ctx" | sed -nE 's/.*free=([0-9]+).*/\1/p')
+               win=$(printf '%s' "$ctx" | sed -nE 's/.*window=([0-9]+).*/\1/p')
+               tot=$(printf '%s' "$ctx" | sed -nE 's/.*total=([0-9]+).*/\1/p')
+               where="${pct}% of a ${win:-?}-token window (${tot:-?} used, ${free:-?} free)"
+               if [ "$pct" -ge 85 ]; then
+                   echo "⛔ context   $where — a compaction is CLOSE (it fires when free hits the"
+                   echo "            reserved buffer, ~92%). Land the work NOW and start nothing that"
+                   echo "            cannot be committed inside this tick."
+               elif [ "$pct" -ge 70 ]; then
+                   echo "⚠ context    $where — commit and push before taking anything new."
                else
-                   echo "context     ${pct}% used"
+                   echo "context     $where"
                fi
                # ⭐⭐ THE STALENESS GUARD — the operator's, and it is the belt to the braces above.
                # Context CHANGES every tick: a tick appends turns, so it climbs, and a compaction
@@ -173,8 +189,13 @@ status)
     # ⇒ So this line is INFORMATION, not a control. It says what a session STARTED HERE would get.
     # Unattended runs set it before launching; an operator-present run reads the context percentage
     # above and asks for a manual /compact.
+    # ⛔ `autocompact.sh` RENDERS THE SETTING AS A PERCENTAGE OF A NOTIONAL 1M WINDOW, WHICH
+    # READS LIKE A TRIGGER THRESHOLD AND IS NOT ONE (C467). `autoCompactWindow: 400000` sets the
+    # WINDOW SIZE; compaction fires when that window is nearly full. The context line above is
+    # already a fraction of this same number, so the two must never be compared as if one were a
+    # threshold for the other.
     sh "$UTIL/autocompact.sh" --project "$REPO" 2>/dev/null \
-        | sed 's/^autocompact /autocompact /' \
+        | sed 's/^autocompact \([0-9]*\)% (\([0-9]*\) tokens)/autocompact window = \2 tokens (NOT a \1% trigger — see C467)/' \
         || echo "autocompact unavailable"
     echo "devices     $(ls /dev/cu.usbmodem* 2>/dev/null | wc -l | tr -d ' ') of 4 enumerated"
     ls /dev/cu.usbmodem* 2>/dev/null | sed 's/^/            /'
