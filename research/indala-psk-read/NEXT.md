@@ -95,12 +95,18 @@ board — so it is currently believed on a structural argument from two firmware
 bench does not have. If the review cannot break the argument, the honest outcome is that F12 stays closed and
 the reason is written down, not that it is proven.
 
-⭐⭐ **NEXT UNIT — and the emulate column is now the question, not the protocols:**
-1. **Re-grade the emulate column end to end against the FLIPPER.** C428/C429/C430 each found the emulate
-   status of a protocol was stale, wrong, or untested, and two of the three were wrong in the notes rather
-   than in the firmware. ⭐ The grid at §9d lists every emulate arm; `emugrade.sh` is the harness but
-   ⛔ its reader is Chameleon #2, which M52 forbids for the SAADC family (indala, gallagher, securakey,
-   noralsy, gproxii). ⇒ The unit is a Flipper-based emugrade arm, then one pass.
+✅ **DONE — THE EMULATE COLUMN IS RE-GRADED (C431): 12 of 16 arms pass against the Flipper**, null silent,
+via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
+
+⭐⭐ **NEXT UNIT — PAC EMULATION IS SILENT AND NOTHING EXPLAINS IT (C431).**
+1. **Diagnose the PAC emulate arm.** It was never in C378's 11-protocol survey, so this is an unmeasured arm,
+   not a regression. ⛔ It is NOT an F12 case: `pac.c` is **NRZ at RF/32** with a full modulator — 128
+   entries, one per bit, `counter_top` 32 — the same shape and rate as FDX-B, which decodes byte-exact.
+   ⭐ First places to look, in order: (a) NRZ holds a level across runs of like bits, so this is the C242
+   held-level question again — check `counter_top + 1` vs `counter_top` in `pac_modulator`, which is exactly
+   what made held levels audible for gproxii/fdxb; (b) whether the Flipper's PAC/Stanley decoder wants a
+   credential ours does not produce. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
+   payloads whose predictions are far apart, Flipper as reader.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
