@@ -194,7 +194,7 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    (M55).
    ✅ Until the move is made, the autopilot-reachable work is **C400 on rig B** and the Flipper-based
    emulate re-grade of arms that are NOT PAC.
-2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
+2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags. ✅ **No longer unattributed at the engine level (C444)**: Indala, which shares `lf_indala_data.c` and `lf_drive_swept_read` with both failing arms, reads a pm3-written tag **5/5 byte-exact** (`A0000000E6BD0E91`, FC 52 Card 63612), so the SAADC capture path is NOT down. ⇒ the fault is in **Gallagher's and Securakey's own decoders**, and that is the next unit: write each with pm3, confirm twice (M44), read with #2, and compare the failing decoder against `indala_read`'s working path in the same file. ⚠ Keep the control in the run — Indala on the same tag is the arm that proves the engine is up that day. ⚠ The T5577 now holds Indala, not PAC.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
