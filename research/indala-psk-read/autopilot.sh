@@ -184,35 +184,40 @@ status)
     # the device. A result taken against a stale build is unattributable and looks exactly like
     # a good one. ⚠ Best-effort: a missing venv, a busy port or a device in DFU must not fail
     # `status`, which callers chain with `&&`.
-    if [ -x "$REPO/software/script/.venv/bin/python" ] && [ -e /dev/tty.usbmodemF429364E46961 ]; then
-        fw=$("$REPO/software/script/.venv/bin/python" - <<'PYEOF' 2>/dev/null
+    # ⛔⛔ ASK BOTH DEVICES, AND NAME WHICH ONE ANSWERED. This used to ask #2 alone, and the
+    # moment the research build went onto #1 the line shouted THE DEVICE IS BEHIND every tick
+    # about a unit that is deliberately stock, while saying nothing about the unit actually
+    # carrying the build under test. ⚠ A warning that is wrong every tick gets ignored, which is
+    # how C358 happened in the first place — so a per-device answer is the point, not a tidier
+    # message. ⚠ Opens each port DIRECTLY: `cu.py` without -p answers from whichever Chameleon
+    # enumerates first, which is C459/C461.
+    if [ -x "$REPO/software/script/.venv/bin/python" ]; then
+        fwcommit=$(git -C "$REPO" log -1 --format=%h -- firmware/ 2>/dev/null)
+        for dev in "#1:/dev/tty.usbmodemC3A1656543DE1" "#2:/dev/tty.usbmodemF429364E46961"; do
+            name=${dev%%:*}; port=${dev#*:}
+            [ -e "$port" ] || continue
+            fw=$("$REPO/software/script/.venv/bin/python" - "$port" <<'PYEOF' 2>/dev/null
 import sys
 sys.path.insert(0, "/Users/Shared/code/personal/rfid/ChameleonUltra/software/script")
 try:
     import chameleon_com, chameleon_cmd
-    d = chameleon_com.ChameleonCom(); d.open("/dev/tty.usbmodemF429364E46961")
+    d = chameleon_com.ChameleonCom(); d.open(sys.argv[1])
     print(chameleon_cmd.ChameleonCMD(d).get_git_version()); d.close()
 except Exception:
     pass
 PYEOF
 )
-        # ⛔⛔ COMPARE AGAINST THE LAST FIRMWARE COMMIT, NOT HEAD. A first version compared to
-        # HEAD and went red the moment a notes-only commit landed — which is every second
-        # commit here. A check that is permanently red gets worked around rather than fixed,
-        # which is exactly what nearly happened to `checkdocs.sh`. What matters is whether the
-        # flashed build CONTAINS the newest firmware change; notes commits after it are
-        # irrelevant to the device.
-        fwcommit=$(git -C "$REPO" log -1 --format=%h -- firmware/ 2>/dev/null)
-        built=$(printf '%s' "$fw" | sed -E 's/.*-g([0-9a-f]+).*/\1/')
-        if [ -z "$fw" ]; then
-            echo "firmware    #2 did not answer (busy, DFU, or reader mode) — check before device work"
-        elif printf '%s' "$fw" | grep -q -- "-dirty"; then
-            echo "⛔ firmware  #2 runs $fw — built from a DIRTY tree, so it matches no commit"
-        elif git -C "$REPO" merge-base --is-ancestor "$fwcommit" "$built" 2>/dev/null; then
-            echo "firmware    #2 runs $fw — current (includes $fwcommit, the last firmware commit)"
-        else
-            echo "⛔ firmware  #2 runs $fw — MISSING firmware commit $fwcommit, THE DEVICE IS BEHIND (C358)"
-        fi
+            built=$(printf '%s' "$fw" | sed -E 's/.*-g([0-9a-f]+).*/\1/')
+            if [ -z "$fw" ]; then
+                echo "firmware    $name did not answer (busy, DFU, or reader mode) — check before device work"
+            elif printf '%s' "$fw" | grep -q -- "-dirty"; then
+                echo "⚠ firmware  $name runs $fw — built from a DIRTY tree, so it matches no commit"
+            elif git -C "$REPO" merge-base --is-ancestor "$fwcommit" "$built" 2>/dev/null; then
+                echo "firmware    $name runs $fw — current (includes $fwcommit, the last firmware commit)"
+            else
+                echo "⛔ firmware  $name runs $fw — MISSING firmware commit $fwcommit, IT IS BEHIND (C358)"
+            fi
+        done
     fi
     # ⚠ A held port means another session is driving that device. Skip device work.
     holders=$(lsof /dev/cu.usbmodem* 2>/dev/null | tail -n +2)
