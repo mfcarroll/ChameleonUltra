@@ -613,3 +613,27 @@ best result looks — so the size of the search space is itself a reason to run 
 trust the fit. ⇒ **Any number obtained by taking a maximum over alignments, offsets, thresholds or phases
 needs its own null.** This is the same failure family as M54 (comparing quantities that were processed
 differently); here the asymmetry is between a number that was optimised and a baseline that was not.
+
+**M56 — AN EMULATION READBACK NEEDS A READER FIELD, AND A REGISTER THAT READS THE SAME FOR EVERY ARM IS
+READING NOTHING.**
+
+LF emulation is **field-driven**: the tag path only plays a burst when a reader's carrier is sensed. With a
+Chameleon on the Flipper's pad and the Flipper idle, `hw mode -e` arms the slot and **nothing ever plays** —
+`hw emudebug` says `emulating now: False` and `playbacks started` does not move. Every PWM0 register then
+still holds whatever the READER path last left there.
+
+⛔ That is exactly what C454's first run returned, and it looked like a clean result: `SEQ[0].CNT` read **512**
+for pac, gproxii and securakey alike. 512 is pac's correct answer — so a pac-only run would have reported
+*the sequence descriptor reaching the peripheral is right* from a register that had not been written since the
+reader last used it. **The only reason it was caught is that gproxii and securakey must read 384 and did not.**
+
+⇒ **Two rules.** (1) Hold a reader field up while you query — put the Flipper in `rfid read` and read the
+registers during that window; `emulating now: True` and an advancing `playbacks started` are the evidence that
+the field was there. (2) **Carry arms whose predicted values DIFFER**, and treat identical readings across
+them as an instrument fault rather than a measurement. A register that cannot disagree is C452's *control that
+cannot fail* wearing different clothes.
+
+⚠ And not every field survives the fix: `PWM0 COUNTERTOP` still read **1000** — the reader's carrier value —
+for all three arms even with the field up, because in WaveForm mode the decoder writes COUNTERTOP per entry and
+a USB query lands between bursts. `SEQ[0].CNT` works, `COUNTERTOP` does not; find out which is which by making
+the arms disagree, not by assuming.

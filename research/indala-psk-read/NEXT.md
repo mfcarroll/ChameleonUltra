@@ -235,12 +235,22 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    ⭐ **And the emission is DETERMINISTIC**: `55555555` gives max HIGH run 4306 / 4305 / 4303us and
    duty 87.7 / 87.6 / 87.6% across three separate sessions — better repeatability than the controls.
    So C440/C441/C451 did not fail to a moving target.
-   ⭐⭐ **THE NEXT AUTOPILOT UNIT: READ `m_pac_pwm_seq_vals` OFF THE DEVICE.** It is the one step in
-   the chain never verified on hardware — C436 did exactly this for the T5577 blocks and M45 does it
-   for slot contents. ⛔ **State the criterion first**: for `1337BEEF`, `pacdiff.build()` gives the
-   128 bits, so entry *i* must be `channel_0 = bits[i] ? 33 : 0`, `counter_top = 32`, and
-   `.length` = 512 uint16 words. All 128 match ⇒ the buffer is right and the fault is in playback or
-   downstream; any mismatch ⇒ located byte-exact.
+   ✅✅ **HALF OF THAT UNIT IS DONE AND NEEDED NO FIRMWARE (C454).** `hw lfdebug`'s `SEQ[0].CNT`
+   **is** the sequence `.length` in uint16 words. With the Flipper held in `rfid read` so the field is
+   up: pac **512**, gproxii **384**, securakey **384** — each exactly its own `NRF_PWM_VALUES_LENGTH`.
+   ⇒ **PAC's descriptor on the hardware is 128 entries.** `frames per burst` agrees independently —
+   **16 / 11 / 17**, each `ceil(500000 / (entries × counter_top × 8))` from that arm's own header.
+   ⛔⛔ **READ M56 BEFORE REPEATING ANY OF THIS.** The first run returned **512 for every arm** with
+   `emulating now: False` and `playbacks started` frozen — LF emulation is **field-driven** and the
+   Flipper was idle, so nothing played and PWM0 still held the reader's state. 512 is pac's *correct*
+   answer, so a pac-only run would have published a stale register as a result.
+   ⚠ **Do not quote `PWM0 COUNTERTOP`**: it reads **1000**, the reader's carrier, for every arm even
+   with the field up. ⚠ `playbacks started` deltas are uncontrolled unless the read window is equal.
+   ⭐⭐ **WHAT IS LEFT OF THE UNIT: THE PER-ENTRY `channel_0` VALUES.** Criterion: for `1337BEEF`,
+   `pacdiff.build()` gives the 128 bits, so entry *i* must be `channel_0 = bits[i] ? 33 : 0` and
+   `counter_top = 32`. All 128 match ⇒ the buffer is right and the fault is in playback or downstream;
+   any mismatch ⇒ located byte-exact. ⛔ The dump must be taken **with a reader field present**, or
+   snapshotted inside `pac_modulator` — a later USB query reads a peripheral that is not playing.
    ⛔⛔ **CARRY A CONTROL: dump fdxb's sequence with the SAME command** against a host mirror of
    `fdxb_modulator`. A dump that cannot disagree with anything is not a dump.
    ⚠ **FLASH #2, NOT #1.** #1 is on the Flipper's pad and rig A is the only live rig for this work;
