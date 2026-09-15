@@ -40,6 +40,23 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ✅ 2026-09-14 18:20 — BOTH DEVICES ARE ON HEAD AND THE FIX LEDGER IS RE-VERIFIED (C419)
+
+✅ #2 was `v2.2.0-712-gba7e722`, #1 was `v2.2.0-740-g4aba1a2`; **both now run `v2.2.0-769-g3a0e687`**, `status`'s
+⛔ is cleared, and `./fixcheck.sh` reports **12 pass, 0 FAIL** on that build.
+
+⭐⭐ **THE TARGETED FLASH — THE GUARD IS THE SERIAL, NOT THE TRAIT.** Trigger DFU on the chosen `/dev/cu.` port,
+then **refuse to program unless the listing shows exactly ONE DFU device AND its serial is the intended one**
+(`F429364E4696` = #2, `C3A1656543DE` = #1), then `nrfutil device program --serial-number <that> --traits
+nordicDfu` with `/Users/Shared/code/personal/rfid/.tools/bin/nrfutil` (⛔ the bare name is not on PATH, C200).
+⚠ **§5's cross-check does not work on this host**: it says the other unit's normal port still being present
+identifies the one in DFU — macOS leaves BOTH nodes listed after the trigger. The serial is the only answer.
+
+⚠ **BUILD AFTER COMMITTING.** The first attempt flashed a `-dirty` package and `status` caught it (*built from a
+DIRTY tree, so it matches no commit*), because it was built while the notes edits were still uncommitted.
+
+---
+
 ### ⭐⭐ 2026-09-14 17:35 — THE MIXED-FRAME FAILURE IS DETERMINISTIC. F12 IS NOW A BOX (C416)
 
 ⭐ **Five repeats of the identical mixed frame**: 0.6%, 0.3%, 0.1%, 0.5%, 0.6% RF/10 — all under 1%, a spread of
