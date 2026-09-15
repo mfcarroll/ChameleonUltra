@@ -64,6 +64,7 @@ cannot go stale the way the README table did. Add the row when you add the tool.
 | `rdrcap.py` | Capture through **our own reader's** path, saved like `lf sniff --bits 16` |
 | `t55rdcap.py` | Send a T5577 regular-read into a live capture and keep the raw samples |
 | `pm3monitor.py` | Live fc/2 amplitude on the Proxmark, for sliding an emulating device around |
+| ⭐⭐ `pm3cap.py` | **The comparator-free instrument of record (C464/C466).** `lf read -s N` + `data save` into a run histogram: level holds in us, top bins, longest run, and `--expect` scored against a floor you state FIRST. ⛔ It never calls a pm3 demodulator — that is the point: a decode failure is not evidence about a signal (C465, and the operator's T5577 work on `lf t55xx detect`). One sample = 8us = one carrier cycle = one PWM `counter_top` tick, which is why a `counter_top` of 32 reads back as a 256us run |
 | `emuprobe.py` / `emutest.py` | What is an emulating tag transmitting (spectrum, not a verdict); and test it against the Proxmark's own demodulator, bracketed |
 | `nulltest.py` | A **loud-signal** null: prove a wrong tag is present, then prove the reader ignores it |
 

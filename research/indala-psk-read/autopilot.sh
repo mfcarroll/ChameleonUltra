@@ -237,9 +237,20 @@ bench)
     # whole session after the pads had been rearranged, and a tick then read the resulting
     # expected nulls as a four-arm regression (C402/C403, retracted by C404). Enumeration and
     # coupling are different questions and only one of them was ever asked.
-    # ⚠ The probes use EM410X ON PURPOSE: it is the only protocol proven at BOTH ends on every
-    # link, and it is in the GPIO family, so it is legal to read from an emulation (M52). A
-    # SAADC-family probe would fail for a reason that has nothing to do with coupling.
+    #
+    # ⛔⛔ THE TOPOLOGY CHANGED ON 2026-09-15 AND THIS FILE DESCRIBED THE OLD ONE FOR A WHOLE
+    # TICK. The bench is now:
+    #     Flipper + the real T5577 (PAC CARD0001)   — the real-tag rig
+    #     pm3     + Chameleon #2, NOTHING between   — the comparator-free capture rig (C464)
+    #     #1      unpaired, on its own              — by design, not a fault
+    # Every arm below probes THAT bench. A stale map is exactly what produced C402/C404 and
+    # C458, so when the pads move again, this block moves with them.
+    #
+    # ⛔⛔⛔ AND THE PROBE MUST FIT THE INSTRUMENT. C465: the Flipper decodes NOTHING from a REAL
+    # PAC tag, 3 of 3, on a tag the pm3 read byte-exact the same day — so a DECODE probe against
+    # the Flipper arm would print DEAD for a perfectly coupled pad and invite exactly the false
+    # bench report C458 made. The Flipper arm therefore asks for a RAW CAPTURE and scores
+    # COUPLING (pair count), never a credential.
     HERE="$(cd "$(dirname "$0")" && pwd)"
     PY="$HERE/../../software/script/.venv/bin/python"
     CU="$HERE/../../software/script/cu.py"
@@ -248,60 +259,67 @@ bench)
     PM3=/Users/Shared/code/personal/rfid/proxmark3/pm3
     cu1 () { "$PY" "$CU" "hw connect -p $P1" "$@" 2>&1; }
     cu2 () { "$PY" "$CU" "hw connect -p $P2" "$@" 2>&1; }
-    emu () { # $1 = port
-        "$PY" "$CU" "hw connect -p $1" "hw slot type -s 8 -t EM410X" "hw slot enable -s 8 --lf" \
-            "lf em 410x econfig -s 8 --id DEADBEEF88" "hw slot change -s 8" "hw mode -e" >/dev/null 2>&1
-        sleep 1
-    }
-    echo "  bench links (EM410X across the emulation links — proven at both ends and GPIO-family,"
-    echo "  so legal from an emulation (M52); the tag arm probes em410x, hidprox and pac — C458)"
-    cu2 "hw mode -r" >/dev/null 2>&1
-    emu "$P1"
-    flip=DEAD
-    "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1 || "$PY" "$HERE/flipper.py" reboot >/dev/null 2>&1
-    fo=$("$PY" "$HERE/flipper.py" read --mode ask --attempts 3 2>&1)
-    case "$fo" in *REJECTED*) flip="READER DOWN — plugin will not load (C377), not a coupling verdict" ;;
-                  *EM4100*|*[1-9]/3*) flip=LIVE ;; esac
-    c12=DEAD; cu2 "hw mode -r" "lf em 410x read" 2>&1 | grep -qi deadbeef88 && c12=LIVE
-    cu1 "hw mode -r" >/dev/null 2>&1
-    emu "$P2"
-    c21=DEAD; cu1 "hw mode -r" "lf em 410x read" 2>&1 | grep -qi deadbeef88 && c21=LIVE
-    cu2 "hw mode -r" >/dev/null 2>&1
-    # ⛔⛔ THIS ARM ACCEPTED A NARROWER SET OF PROTOCOLS THAN THE pm3 ARM BELOW, AND THAT
-    # PRODUCED A FALSE TOPOLOGY REPORT FOR A WHOLE SESSION (C458). The tag held PAC — the
-    # previous tick had deliberately restored `CARD0001` onto it — so `lf hid prox read` and
-    # `lf em 410x read` both returned nothing and this printed DEAD, while the pm3 arm's
-    # `valid.*found` matched *Valid PAC/Stanley ID found!* and printed LIVE. The two arms
-    # disagreed about the SAME tag, and the disagreement was reported as "rig B has come
-    # apart". ⇒ **probe the protocols the tag might actually hold, and name the one that
-    # answered**; a silent null here is never a topology verdict (C402/C404/C408).
-    tag=DEAD; tagvia=""
-    for pr in "lf em 410x read" "lf hid prox read" "lf pac read"; do
-        if cu2 "hw mode -r" "$pr" 2>&1 | grep -qiE "FC:|EM410X/|PAC/Stanley"; then
-            tag=LIVE; tagvia=" (via ${pr#lf })"; break
-        fi
-    done
-    pm3tag=DEAD; "$PM3" -c "lf search" 2>&1 | grep -qiE "valid.*found|H10301|EM 410" && pm3tag=LIVE
-    printf "  %-28s %s\n" "Flipper <-> #1 (rig A)"      "$flip"
-    printf "  %-28s %s\n" "#1 <-> #2"                   "$c12 / $c21"
-    printf "  %-28s %s\n" "#2 <-> a tag on its pad"     "$tag$tagvia"
-    printf "  %-28s %s\n" "pm3 <-> T5577 (separate)"    "$pm3tag"
+    echo "  bench links, topology of 2026-09-15: Flipper + real T5577, pm3 + #2 (no tag), #1 alone"
     echo ""
-    [ "$flip" = LIVE ] || echo "  ⛔ BLOCKED without rig A: the emulate column (8 of 11), and U11's FSK capture"
-    [ "$flip" = LIVE ] || echo "     via the Flipper's raw_read — the ONLY instrument that has ever resolved our"
-    [ "$flip" = LIVE ] || echo "     tone structure (C387's peaks). ⇒ ASK FOR: Flipper + #1 on one pad."
-    [ "$tag" = LIVE ]  || echo "  ⛔ BLOCKED without rig B: every real-tag READ arm, including C400's open"
-    [ "$tag" = LIVE ]  || echo "     Gallagher/Securakey failure. ⇒ ASK FOR: pm3 + T5577 + #2 sandwiched."
-    [ "$tag" = LIVE ]  || echo "     ⚠ DEAD here means em410x, hidprox AND pac all returned nothing. It still"
-    [ "$tag" = LIVE ]  || echo "     cannot tell a missing tag from one holding a protocol not probed — check"
-    [ "$tag" = LIVE ]  || echo "     what the pm3 says is on the tag before calling this a bench change (C458)."
-    if [ "$flip" = LIVE ] && [ "$tag" = LIVE ]; then
-        echo "  ✅ Both rigs live — every open unit is reachable. This is the setup to keep."
-    else
-        echo "  ⭐ THE SETUP TO ASK FOR IS BOTH AT ONCE: Flipper + #1, and pm3 + T5577 + #2 as a"
-        echo "     separate sandwich. They do not conflict, and together they unblock everything."
-        echo "     ⚠ #1 <-> #2 is NOT needed by any open unit and costs both rigs (C405)."
+
+    # ── arm 1: Flipper <-> the real T5577 ─────────────────────────────────────────────────
+    # ⚠ Scored on PAIR COUNT, not on a decode. An empty capture is a 20-byte file; a coupled
+    # pad returns thousands of pulse/duration pairs (C465 measured 8200). The floor is 1000.
+    flip=DEAD; flipwhy=""
+    "$PY" "$HERE/flipper.py" heap >/dev/null 2>&1 || "$PY" "$HERE/flipper.py" reboot >/dev/null 2>&1
+    fo=$("$PY" "$HERE/flipraw.py" capture pac --no-arm --seconds 3 2>&1)
+    pairs=$(printf '%s' "$fo" | sed -n 's/.*bytes, \([0-9][0-9]*\) pulse.*/\1/p' | head -1)
+    case "$fo" in *"would not load"*|*REJECTED*)
+        flipwhy=" — the rfid app will not load (C377/flipraw), NOT a coupling verdict" ;; esac
+    if [ -n "$pairs" ] && [ "$pairs" -gt 1000 ]; then
+        flip="LIVE ($pairs pairs)"
     fi
+
+    # ── arm 2: pm3 <-> #2 ─────────────────────────────────────────────────────────────────
+    # ⚠ EM410X ON PURPOSE: GPIO family, so legal to read from an emulation (M52), and proven at
+    # both ends on this link (C466). The criterion is derived from the emitter source, not from
+    # a histogram: em410x_64 is clock_per_bit 64 Manchester (em410x.c:129), so a half-bit is 32
+    # carrier cycles = 256us and a whole bit 512us at the pm3's 8us sample. BOTH probes are
+    # run: the raw buffer answers COUPLING and the decoder answers IDENTITY, and only the raw
+    # one is allowed to return a verdict if they disagree (a decode failure is never evidence
+    # about a signal — C464, C465, and the operator's T5577 work).
+    cu2 "hw slot type -s 8 -t EM410X" "hw slot enable -s 8 --lf" \
+        "lf em 410x econfig -s 8 --id DEADBEEF88" "hw slot change -s 8" "hw mode -e" >/dev/null 2>&1
+    sleep 1
+    pm3emu=DEAD; pm3why=""
+    cap=$("$PY" "$HERE/pm3cap.py" --label "#2 emulating EM410X" --samples 40000 --expect 256,512 2>&1)
+    if printf '%s' "$cap" | grep -q "✓ 256"; then
+        pm3emu="LIVE"
+        printf '%s' "$cap" | grep -q "✓ 512" || pm3why=" (256us only — half the structure)"
+    fi
+    dec=no
+    "$PM3" -c "lf em 410x reader" 2>&1 | grep -qi "DEADBEEF88" && dec=yes
+    [ "$dec" = yes ] && pm3why="$pm3why, decoded byte-exact"
+    [ "$dec" = no ] && [ "$pm3emu" = LIVE ] && pm3why="$pm3why, raw only — decoder silent"
+    # ⛔ leave nothing armed: the operator is not here and a tick must not find #2 emitting.
+    cu2 "hw mode -r" >/dev/null 2>&1
+
+    # ── arm 3: #1, unpaired ───────────────────────────────────────────────────────────────
+    one=ABSENT
+    cu1 "hw version" 2>&1 | grep -qi "Chameleon Ultra connected" && one="present, UNPAIRED (by design)"
+
+    printf "  %-30s %s\n" "Flipper <-> real T5577"   "$flip$flipwhy"
+    printf "  %-30s %s\n" "pm3 <-> #2 (raw buffer)"  "$pm3emu$pm3why"
+    printf "  %-30s %s\n" "#1"                       "$one"
+    echo ""
+    [ "$flip" = DEAD ] && echo "  ⛔ BLOCKED without the Flipper arm: nothing currently open — C465 retired the"
+    [ "$flip" = DEAD ] && echo "     Flipper as a judge for PAC. It still decodes GProxII and FDX-B byte-exact"
+    [ "$flip" = DEAD ] && echo "     (C429/C430), so a DEAD here blocks re-grading those. ⇒ ASK FOR: a tag or an"
+    [ "$flip" = DEAD ] && echo "     emulator back on the Flipper's pad."
+    [ "$pm3emu" = DEAD ] && echo "  ⛔ BLOCKED without the pm3 arm: EVERYTHING open — the hw emuhold sweep and the"
+    [ "$pm3emu" = DEAD ] && echo "     like-for-like PAC capture both read through this buffer (C464). ⇒ ASK FOR:"
+    [ "$pm3emu" = DEAD ] && echo "     Chameleon #2 flat on the Proxmark's antenna with no tag between them."
+    if [ "$flip" != DEAD ] && [ "$pm3emu" = LIVE ]; then
+        echo "  ✅ Both rigs live — every open unit is reachable. This is the setup to keep."
+    fi
+    echo "  ⚠ A DEAD arm is a PROBE RESULT, not a topology fact (C402/C404/C408/C458). With no"
+    echo "     operator at the bench, report which probes were silent and stop — never report a"
+    echo "     bench change, and never infer one from a silent null."
     ;;
 *)
     echo "usage: autopilot.sh {beat|gate|status|bench}" >&2

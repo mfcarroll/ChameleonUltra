@@ -12,12 +12,12 @@ needed a decoder — so "PAC's emission is unlike the eight ASK arms" still stan
 ⇒ **What changes**: any unit whose evidence is *the Flipper did not decode it* is now void as
 evidence about the emitter, and the pm3's raw buffer (C464) is the instrument to use instead.
 
-⭐ **BENCH, AS THE OPERATOR LEFT IT 2026-09-15** — ⛔ NOT what `bench` expects, so its arms read DEAD
-and that is CORRECT geometry, not a fault: **#1 on its own (unpaired), #2 on the Proxmark's pad,
-the T5577 on the FLIPPER's pad.** ⇒ rig B is now pm3 + #2 with no tag between them, which is the
+✅ **BENCH, AS THE OPERATOR LEFT IT 2026-09-15, AND `bench` NOW KNOWS IT (L430)**: **#1 on its own
+(unpaired), #2 on the Proxmark's pad, the T5577 on the FLIPPER's pad.** All three arms read correctly —
+Flipper <-> T5577 LIVE on pair count (never a decode: C465), pm3 <-> #2 LIVE raw AND decoded byte-exact
+(C466), #1 present and unpaired by design. ⇒ rig B is now pm3 + #2 with no tag between them, which is the
 clean comparator-free capture path C464 established; rig A is Flipper + the real tag, which is
-C443's control and has now been run. ⚠ `autopilot.sh bench` still describes the OLD topology and
-should be taught this one before its DEAD lines mislead a later tick.
+C443's control and has now been run.
 
 ✅✅ **DONE, 2026-09-15 — THE PAC BUFFER IS CORRECT ENTRY FOR ENTRY (C462), AND C459's BLOCKER WAS
 NEVER REAL (C461).** All 128 entries match `pac.c:365` — `channel_0 = bits[i] ? 33 : 0`, `counter_top
@@ -34,7 +34,10 @@ transition-guaranteed, and PAC is the only NRZ config in `t55xx.h` — so the pr
 by choosing a protocol or a credential. ⭐ **But flashing now works (L426), so the arm can be BUILT
 rather than found**: `holdsweep.py` specifies `hw emuhold`, which fills a buffer with alternating
 static runs of N entries at PAC's own idiom (compare 33 / 0, counter_top 32), and sweeps N. No
-credential, no bench move — rig A already points the Flipper at #1.
+credential, no bench move. ⛔⛔ **But holdsweep.py was written when the Flipper faced #1, and it no
+longer does. THE READER IS NOW `pm3cap.py` AGAINST #2** — which is strictly better, because C466 has
+just proven that path end to end on a known emission and it carries no comparator at all. Re-derive
+the criterion for that instrument before running the sweep, keeping N=1,2 as the positive control.
 
 ⭐⭐ **CROSS-PROJECT REFERENCE, AND IT SHARPENS THE RULE ABOVE**: the operator's T5577 deep-read work
 in `/Users/Shared/code/personal/rfid/Momentum-Firmware` (branch `t5577-deep-read`, whose entry point
@@ -57,7 +60,9 @@ the Flipper's pad, or the SAADC amplitude path), and both need hands. Do not wri
 cannot hold DC" from the sweep alone.
 
 
-⛔ **DEAD END, 2026-09-14: the Proxmark does NOT read our LF emulation.** Tried #2 emulating slot 1 (Indala) on the pm3 antenna, tag removed. Control clean (`lf search` finds nothing with no emulation) and coupling confirmed (`hw tune` 18.79 V with #2 on the pad vs 21.05 V bare) — but both `lf search` and `lf indala reader` find nothing. ⚠ **Inconclusive between "pm3 cannot hear it" and "the emulation is silent"**, and the two cannot be separated without a second reader. ⇒ **§2 already said this**: *the only reader that can hear rig A is the Flipper*. Our emulators DRIVE their coil with PWM rather than load-modulating, so a reader expecting a passive tag may simply not decode them. ⭐ **The emulate-arm re-grade therefore needs the Flipper and a bench session, not a pm3 and ten minutes.** Do not retry it with the Proxmark.
+⛔⛔ **PARTLY REFUTED BY C466 — READ THAT FIRST. The Proxmark DOES read our LF emulation: raw run structure and a byte-exact `EM 410x ID DEADBEEF88` from #2 emulating. The mechanism this entry offered — *a reader expecting a passive tag may simply not decode a PWM-driven emitter* — is wrong as a general claim. What survives is the narrow INDALA observation below, and its named suspect is now PSK phase lock, not PWM drive.**
+
+⛔ **DEAD END, 2026-09-14: the Proxmark does NOT read our INDALA emulation.** Tried #2 emulating slot 1 (Indala) on the pm3 antenna, tag removed. Control clean (`lf search` finds nothing with no emulation) and coupling confirmed (`hw tune` 18.79 V with #2 on the pad vs 21.05 V bare) — but both `lf search` and `lf indala reader` find nothing. ⚠ **Inconclusive between "pm3 cannot hear it" and "the emulation is silent"**, and the two cannot be separated without a second reader. ⇒ **§2 already said this**: *the only reader that can hear rig A is the Flipper*. Our emulators DRIVE their coil with PWM rather than load-modulating, so a reader expecting a passive tag may simply not decode them. ⭐ **The emulate-arm re-grade therefore needs the Flipper and a bench session, not a pm3 and ten minutes.** Do not retry it with the Proxmark.
 
 ✅ **CLOSED — the banner here said *OPEN DEFECT (C305): the raw-frame T5577 writers do not land*, and it was wrong in its entirety.** Nothing was wrong with those writers. Our own `lf hid prox write` had password-locked the tag with a key the other writers do not carry, so they were refused and landed nothing (C325). C305's *lands iff the config matches* rule was a pattern fitted to 14 observations of one locked tag. ⇒ The password defect is fixed (F1/C326), the write path is confirmed restored (C329), and **all 18 write arms have since been re-graded 4 of 4, 72 writes, 0 failures** (C330, C331). ⛔ Left visible rather than deleted: this was the most confidently wrong thing in these notes, and it sat at the top of the file as a warning to the next reader for a whole session after it was disproved.
 
