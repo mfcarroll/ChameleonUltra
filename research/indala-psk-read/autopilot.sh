@@ -42,6 +42,33 @@ gate)
         echo "   Unstage the file, remove the string, and re-run. Never --no-verify past this."
         exit 1
     fi
+    # ⛔⛔ THE GATE WAS ONLY A SECRET SCAN, AND THAT LET UNCOMPILED FIRMWARE BE COMMITTED.
+    # Every tick reported "✓ gate clean" before committing and read it as *this builds*. It
+    # never meant that. F13 changed `lf_tag_em.c` — a file NO host test compiles, because
+    # `ctest/` builds the decoders and the emitters and not the tag-emulation driver — and the
+    # change reached origin having never been through a compiler (C418).
+    # ⭐ So: when the staged diff touches `firmware/`, BUILD IT. Notes-only commits are the
+    # common case and stay instant, which is what keeps this from being worked around.
+    # ⚠ `build.sh` needs two things this shell does not give it: the toolchain is in
+    # /opt/homebrew/bin, not the /usr/bin its Makefile.posix names, and `nrfutil` is not on
+    # PATH — the same absence that masqueraded as a dead device for four hours (C200).
+    if git -C "$REPO" diff --cached --name-only | grep -q '^firmware/'; then
+        echo "  firmware touched — compiling (notes-only commits skip this)"
+        if (cd "$REPO/firmware" && PATH="/Users/Shared/code/personal/rfid/.tools/bin:$PATH" \
+              GNU_INSTALL_ROOT=/opt/homebrew/bin/ GNU_VERSION=$(arm-none-eabi-gcc -dumpversion) \
+              bash build.sh >/tmp/indala_fwbuild.log 2>&1); then
+            echo "  ✓ firmware builds"
+        elif grep -q 'ultra-dfu-app.zip' /tmp/indala_fwbuild.log 2>/dev/null || \
+             [ -f "$REPO/firmware/objects/ultra-dfu-app.zip" ]; then
+            # ⚠ build.sh's LAST step is `mergehex`, which is not installed here and is only
+            # the SWD convenience artifact. The DFU package is already written by then, so a
+            # failure after it is not a build failure — check for the artifact, not the code.
+            echo "  ✓ firmware builds (packaging tail failed: mergehex absent, DFU zip written)"
+        else
+            echo "⛔ FIRMWARE DOES NOT BUILD — see /tmp/indala_fwbuild.log. DO NOT COMMIT."
+            exit 1
+        fi
+    fi
     echo "✓ gate clean"
     ;;
 
