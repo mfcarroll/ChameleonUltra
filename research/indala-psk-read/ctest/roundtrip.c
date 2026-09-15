@@ -419,6 +419,7 @@ static int trial_fsk_limits(void) {
     static const lf_fsk2a_params_t p = {
         .counter_top = 16, .short_cycles = 8, .long_cycles = 10,
         .short_pulses = 6, .long_pulses = 5,
+        .mark_cycles = LF_FSK2A_MARK_CYCLES,
     };
     uint8_t ones[16];
     memset(ones, 0xFF, sizeof(ones));

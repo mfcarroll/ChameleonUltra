@@ -39,7 +39,7 @@ const nrf_pwm_sequence_t *lf_fsk2a_build(const lf_fsk2a_params_t *p,
 
     const uint16_t short_ticks = (uint16_t)(p->short_cycles * LF_FSK2A_TICKS_PER_CYCLE);
     const uint16_t long_ticks  = (uint16_t)(p->long_cycles * LF_FSK2A_TICKS_PER_CYCLE);
-    const uint16_t mark_ticks  = (uint16_t)(LF_FSK2A_MARK_CYCLES * LF_FSK2A_TICKS_PER_CYCLE);
+    const uint16_t mark_ticks  = (uint16_t)(p->mark_cycles * LF_FSK2A_TICKS_PER_CYCLE);
 
     /* ⛔ The whole scheme rests on `counter_top` dividing BOTH tone periods and the mark. If it
      * does not, the tone this emits is not the tone asked for — refuse rather than emit a

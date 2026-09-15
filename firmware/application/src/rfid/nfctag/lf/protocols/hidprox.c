@@ -220,6 +220,7 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
         .long_cycles  = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE,
         .short_pulses = LF_FSK2a_PWM_HI_FREQ_LOOP,
         .long_pulses  = LF_FSK2a_PWM_LO_FREQ_LOOP,
+            .mark_cycles  = LF_FSK2A_MARK_CYCLES,
     };
     return lf_fsk2a_build(&params, frame, HIDPROX_RAW_SIZE);
 };

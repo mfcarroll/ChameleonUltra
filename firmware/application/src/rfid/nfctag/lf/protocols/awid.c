@@ -82,6 +82,7 @@ static const nrf_pwm_sequence_t *awid_modulator(awid_codec *d, uint8_t *buf) {
         .long_cycles  = AWID_TONE_LONG_CYCLES,
         .short_pulses = AWID_PULSES_SHORT,
         .long_pulses  = AWID_PULSES_LONG,
+        .mark_cycles  = LF_FSK2A_MARK_CYCLES,
     };
     return lf_fsk2a_build(&params, buf, AWID_BIT_COUNT);
 }

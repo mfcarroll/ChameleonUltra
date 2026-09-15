@@ -74,6 +74,7 @@ typedef struct {
     uint8_t  long_cycles;    /* ...and in the LONG one */
     uint8_t  short_pulses;   /* how many short tones make a 0 bit */
     uint8_t  long_pulses;    /* how many long tones make a 1 bit */
+    uint8_t  mark_cycles;    /* carrier cycles the mark holds HIGH, the same for both tones (C226) */
 } lf_fsk2a_params_t;
 
 /** @brief Build the FSK2a PWM sequence for one frame.
