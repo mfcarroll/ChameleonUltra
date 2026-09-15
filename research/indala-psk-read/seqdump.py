@@ -91,8 +91,18 @@ def gproxii_expect(raw):
 
 
 def cu(port, *cmds):
-    r = subprocess.run([PY, CU, "-p", port] + list(cmds), capture_output=True, text=True)
-    return r.stdout + r.stderr
+    """⛔⛔ THE PORT IS SELECTED WITH `hw connect -p`, NOT A `-p` FLAG ON cu.py — cu.py HAS NO SUCH
+    FLAG. Passing `-p <path>` hands cu.py two unparseable COMMANDS: it prints its help for each,
+    then auto-connects with a bare `hw connect`, which takes whichever Chameleon it finds first.
+    That is not a crash and not an error — it is a silent wrong-device read, and it cost a whole
+    finding (C459 retracted): a correctly flashed #1 was graded through #2, twice, and the flashing
+    tool was blamed for reporting a success it had actually earned."""
+    r = subprocess.run([PY, CU, "hw connect -p %s" % port] + list(cmds),
+                       capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if "Chameleon Ultra connected" not in out and "connected" not in out.lower():
+        return out + "\n⛔ NO CONNECT LINE — the device was not reached."
+    return out
 
 
 BAD = ("unrecognized", "invalid", "usage:", "error", "need exactly", "not set to")

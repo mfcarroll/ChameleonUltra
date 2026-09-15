@@ -1,20 +1,18 @@
 # Next — ranked
 
-⛔⛔ **TOP OF THE QUEUE, AND IT NEEDS AN OPERATOR: THE PWM BUFFER READ-BACK IS WRITTEN AND CANNOT BE
-FLASHED (C459).** The firmware command `DATA_CMD_LF_EMU_SEQDUMP` (3065), the host `hw emuseq` and
-`seqdump.py` are all done, and the criterion is pre-registered in the tool: entry *i* must be
-`channel_0 = bits[i] ? 33 : 0`, `counter_top = 32`, with gproxii carried through the same command as
-a control that can actually fail (96 entries at counter_top 64). **The image contains the code and
-the device does not**, because `nrfutil device program` exits 0, prints nothing and programs nothing
-— unchanged at `--log-level trace`, with targeting measured and excluded. ⇒ **The next session
-cannot take this unit unattended.** It needs either a working flash route or an operator at the
-bench; ⛔ do not re-run the same nrfutil command hoping for a different result, and ⛔ do not fall
-back to `nrf5sdk-tools dfu usb-serial` (it is the 6.1.7 path TOOLS.md records as broken with this
-bootloader).
+✅✅ **DONE, 2026-09-15 — THE PAC BUFFER IS CORRECT ENTRY FOR ENTRY (C462), AND C459's BLOCKER WAS
+NEVER REAL (C461).** All 128 entries match `pac.c:365` — `channel_0 = bits[i] ? 33 : 0`, `counter_top
+= 32` — with gproxii through the same command as a control that returns 96 entries at counter_top 64
+and also matches, both under a field verified by `playbacks` rising. **So every step from the
+credential to the PWM buffer is now verified on hardware, and the fault is downstream of the
+buffer.**
 
-⭐ **EITHER CHAMELEON WILL DO FOR THAT DUMP (C460).** The pm3's field drives #2's emulation through
-the T5577 between them — `playbacks` 0 → 2, measured against a baseline — so the flash target is no
-longer constrained to #1 by the field source.
+⭐ **THE NEXT QUESTION IS THEREFORE PLAYBACK OR THE ANALOG DRIVE, AND C453 ALREADY NAMES THE
+SUSPECT**: PAC is the only emitter that holds one level across MANY consecutive entries, and it sits
++34.5 points of duty clear of eight ASK arms inside a 3.0-point band (C452). ⇒ The buffer is
+exonerated; what to measure next is what the peripheral DOES with a long static level — which is the
+C242 held-level question, now asked of a buffer known to be right. ⚠ Not started, and no criterion
+has been written for it yet.
 
 
 ⛔ **DEAD END, 2026-09-14: the Proxmark does NOT read our LF emulation.** Tried #2 emulating slot 1 (Indala) on the pm3 antenna, tag removed. Control clean (`lf search` finds nothing with no emulation) and coupling confirmed (`hw tune` 18.79 V with #2 on the pad vs 21.05 V bare) — but both `lf search` and `lf indala reader` find nothing. ⚠ **Inconclusive between "pm3 cannot hear it" and "the emulation is silent"**, and the two cannot be separated without a second reader. ⇒ **§2 already said this**: *the only reader that can hear rig A is the Flipper*. Our emulators DRIVE their coil with PWM rather than load-modulating, so a reader expecting a passive tag may simply not decode them. ⭐ **The emulate-arm re-grade therefore needs the Flipper and a bench session, not a pm3 and ten minutes.** Do not retry it with the Proxmark.

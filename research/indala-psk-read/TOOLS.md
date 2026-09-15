@@ -8,6 +8,17 @@ Chameleon and does not know `cu.py` exists will **rediscover it**, and one did: 
 on `chameleon_cli_main.py` silently ignoring its argv before `cu.py` was found in a grep of a shell
 script (C409).
 
+⛔⛔⛔ **READ THIS WHOLE FILE, TOP TO BOTTOM, BEFORE ACTING ON ANY SUSPECTED HARDWARE PROBLEM.** It is
+a couple of hundred lines and it is FASTER than the alternative, which has now happened three times:
+C409 (four calls spent on `chameleon_cli_main.py` silently ignoring its argv), C457 (a published
+blocker on a missing `nrfutil` that this file already gave the command for) and C459 (a published
+blocker on a flashing tool that had actually worked, because the verification read the wrong device
+through a flag `cu.py` does not have — and the row for that was about to be written here). ⛔ **A
+device that "does not answer", a tool that "does nothing", a reading that "makes no sense" is a
+TOOLING SYMPTOM until this file says otherwise.** Suspect the instrument first, and this file is the
+instrument's documentation. Do not skim it for the one row you expect to need: the trap that costs
+the session is the one you did not know to look for.
+
 ⛔ **THIS FILE IS CHECKED.** `./checkdocs.sh` fails if an executable here is not listed below, so it
 cannot go stale the way the README table did. Add the row when you add the tool.
 
@@ -154,7 +165,8 @@ cause — plenty of free heap but no contiguous block big enough for the CLI plu
 | after `power reboot` | **132176** |
 | ⭐ **`seqdump.py` — read the PWM wave-form entries off the device and grade them against the emitter SOURCE** | The one step of the PAC path no air-side measurement can reach: four air routes are refuted, each by its own control (C440/C441/C451/C456), because the air carries what the PERIPHERAL made of the buffer, never the buffer. ⛔ Needs firmware carrying `DATA_CMD_LF_EMU_SEQDUMP` (3065) — **not yet flashable, see C459** | `./seqdump.py pac gprox` — gproxii goes through the SAME command (96 entries at counter_top 64 vs pac's 128 at 32) so a constant or stale answer cannot pass. ⛔ Guards on `playbacks` RISING, not the `emulating` flag (C460) |
 | ⭐ **`enterdfu.py` — put ONE NAMED Chameleon into DFU** | `resource/tools/enter_dfu.py` walks `comports()` and takes the FIRST Chameleon it finds, with no way to say which — a coin toss with two on the bench, and the C363 hazard C364 paid for | `./enterdfu.py --port /dev/tty.usbmodemC3A1656543DE1`. Prints what it is leaving alone, and refuses if any device is ALREADY in DFU, because then the flash target is ambiguous |
-| ⛔⛔ **`nrfutil device program` EXITS 0 AND PROGRAMS NOTHING — the flash route is blocked (C459)** | With a device genuinely in DFU it returns exit 0 and 249 bytes, all of it the unrelated JLink warning: no progress, no error, no programming, unchanged at `--log-level trace`. The image is fine — `application.map` carries the new symbol — and the device is unchanged, proven by the client refusing command 3065 while 3037 behind the same gate answers | ⛔ Do NOT fall back to `nrfutil nrf5sdk-tools dfu usb-serial`: that is `pc_nrfutil_legacy_v6.1.7`, the 6.1.7 path the row above records as never completing this bootloader's handshake. ⚠ Unresolved — needs an operator |
+| ⭐ **`cu.py -p /dev/tty.X "hw version"` — FIXED 2026-09-15, and the fix is the lesson** | ⛔ **Until today cu.py had no `-p`.** It took COMMANDS, so `-p` and the path were each run as one, the help was printed for each, and it auto-connected with a bare `hw connect` — **whichever Chameleon enumerated first**. No crash, no error, no wrong exit code: a confident answer from the other unit. **It cost a published finding** (C459, retracted): #1 was flashed correctly, verified twice through #2, and `nrfutil` was blamed for reporting a success it had earned. Both *independent* signals agreed because both came from the same wrong device. The giveaway sat in the output — cu.py's help dump above every reading, and `playbacks started: 2`, #2's counter from an experiment #1 never ran | ⭐ **`-p/--port` now exists** and unknown options are REFUSED rather than reinterpreted as commands, because with two devices on the bench a wrong-device answer is worse than no answer. `"hw connect -p /dev/tty.X"` inside the command string also works and is what `flipgrade.py` always did. ⛔ Passing both is refused |
+| ⭐ **FLASHING WORKS — `nrfutil device program` is fine, and C459 blamed it for a reading error (retracted)** | The route is `enterdfu.py --port <tty>` then `nrfutil device program --firmware firmware/objects/ultra-dfu-app.zip --traits nordicDfu`. In a terminal it draws a progress bar and ends `100% [1/1 <serial>] Programmed`; captured non-interactively it prints only the unrelated JLink warning, and `--json` gives 85 progress records ending `result=success, message=Programmed`. ⚠ **Quiet output is NOT failure** — verify by asking the DEVICE, with the correct connect idiom | ⭐ `enterdfu.py` targets ONE named port; `resource/tools/enter_dfu.py` takes whichever Chameleon enumerates first (the C363 hazard). ⛔ Still do not use `nrf5sdk-tools dfu usb-serial` — that is the 6.1.7 path recorded above as never completing this bootloader's handshake |
 
 ⚠ **Repeated app load/unload cycles fragment it**, which is exactly what a grading pass over 16 arms does —
 so expect it after `flipgrade.py` and reboot before trusting a later capture. ⭐ After any reboot, re-run the
