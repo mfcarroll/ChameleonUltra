@@ -204,8 +204,23 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    256us, and carries an explicit `>= 9 bit periods` branch pair built to align PAC's 2304us sync run. That
    guard is also why the arm is SILENT rather than wrong: `duration > 4000us` drops the sample before a bit
    is pushed, and **p95 of our PAC high runs is 5954us**.
-   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS (C450): FIND THE SILENT/NON-SILENT
-   CREDENTIAL BOUNDARY.** `EEEEEEEE` produced a **20-byte capture — RIFL header, ZERO blocks** —
+   ✅✅ **C450'S QUEUED UNIT RAN AND THE CONFOUND IS BROKEN (C451) — do not re-run the walk.**
+   A nine-credential walk `EEEEEEEE`→`55555555` holds predicted structure constant while duty walks
+   40.6→53.1%. Pooled over **14 credentials** predicting 40.6-56.2%, measured duty is **87.6% sd 1.91,
+   r = -0.043, r² = 0.002** ⇒ **the emission's duty carries no information about the frame at all.**
+   Max HIGH run is the variable instead: **4281-27866us**, always far above the frame's own 2560-3328us.
+   ⛔⛔ **AND DO NOT RESURRECT THE STRAIGHT LINE.** The walk fitted `maxrun = 91060 - 1276.5 × ones`
+   with residuals **+1, 0, -5, +3 us** — and three pre-registered predictions off the walk came back
+   4281 against 22131, 6867 against 1707, and 27866 against an **impossible -846**. A ±5us fit through
+   four points of one structured credential family has **no reach outside it** (C440/M55).
+   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS (C451): RUN `airduty.py` ACROSS EVERY
+   EMULATE ARM.** Each arm's predicted duty comes from its own modulator — Manchester and biphase are
+   50% by construction, PAC's is its frame's one-fraction. If every other arm lands on its own
+   prediction and **only PAC sits at 87.6%**, PAC is alone, and the emulate column gains an air-side
+   grade that is quantitative rather than pass/fail. ⛔ `ARMS` in `airduty.py` currently holds three
+   entries; extending it means writing one predicted max-run and one predicted duty per arm **from that
+   arm's own source**, never from a previous capture.
+   ⭐ **STILL OPEN AND STILL THE SHARPEST HANDLE: THE SILENT CREDENTIAL.** `EEEEEEEE` produced a **20-byte capture — RIFL header, ZERO blocks** —
    twice, with both controls passing either side, while `55555555` produced 1535 pairs. The slot is
    not the explanation: the device returns `Raw: FF2049906D4551545515455154551403`, byte-identical
    to `pacdiff.build`'s mirror (M45). ⇒ **a credential whose frame is provably correct on the device

@@ -87,6 +87,9 @@ def capture(tag, seconds):
     finally:
         f.close()
     pulses, durs, meta = flipraw.parse(data)
+    # ⭐ The file length is reported because it is the ONE unambiguous reading here: a 20-byte
+    # file is the RIFL header with zero data blocks, which no parse subtlety can produce.
+    meta["bytes"] = len(data)
     return pulses, durs, meta
 
 
@@ -116,8 +119,9 @@ def report(tag, pulses, durs, meta, pred_max, pred_duty):
     # ⛔ An EMPTY capture is not a duty of zero and must never be averaged into anything: a
     # silent emitter and a reader that never listened produce the identical file (C373).
     if n == 0 or sum(durs) == 0:
-        print("  %-6s ⛔ EMPTY CAPTURE — nothing on the air, or nothing captured. "
-              "Not a measurement; do not read it as one." % tag)
+        print("  %-6s ⛔ EMPTY CAPTURE — %d bytes, no data blocks. Nothing on the air, or "
+              "nothing captured. Not a measurement; do not read it as one."
+              % (tag, meta.get("bytes", -1)))
         return None
     slips = meta.get("slips", 0)
     hi, tot = sum(pulses), sum(durs)
