@@ -65,7 +65,7 @@ def capture(samples, timeout=180):
     return vals, None
 
 
-def runs(vals, hyst=0.15, min_run=2):
+def runs(vals, hyst=0.15, min_run=2, want_levels=False):
     """Level-hold lengths in samples, via a Schmitt trigger about the mean.
 
     ⛔ A bare threshold at the mean turns every noise wiggle into a transition and fills the
@@ -90,14 +90,14 @@ def runs(vals, hyst=0.15, min_run=2):
         if state == 1 and v <= lo:
             n = i - start
             if n >= min_run:
-                out.append(n)
+                out.append((n, 1) if want_levels else n)
             else:
                 dropped += 1
             state, start = 0, i
         elif state == 0 and v >= hi:
             n = i - start
             if n >= min_run:
-                out.append(n)
+                out.append((n, 0) if want_levels else n)
             else:
                 dropped += 1
             state, start = 1, i
@@ -118,14 +118,33 @@ def main():
                          "source, never from a histogram you have already seen (M-rules).")
     ap.add_argument("--floor", type=float, default=0.05)
     ap.add_argument("--json", action="store_true")
+    # ⛔ THE EMULATION PLAYS IN BURSTS, and across the pause between bursts the line sits static
+    # for milliseconds. Those gaps are not runs of the frame and they dominate both the maximum
+    # and the duty: leave them in and every capture reports a millisecond ceiling and a duty
+    # pulled toward whichever level the emitter idles at. The cut is stated as a NUMBER ABOVE THE
+    # FRAME'S OWN LONGEST RUN, never fitted to the data, and what it removed is always reported.
+    ap.add_argument("--gap-above", type=float, default=None,
+                    help="us; runs longer than this are inter-burst gaps, excluded and counted")
+    ap.add_argument("--duty", action="store_true",
+                    help="report the time split between the two levels. ⛔ POLARITY IS NOT KNOWN: "
+                         "the pm3 samples an envelope and a Chameleon HIGH may read either way, "
+                         "so BOTH shares are printed and the caller compares to a prediction and "
+                         "its complement")
     a = ap.parse_args()
 
     vals, err = capture(a.samples)
     if vals is None:
         print("  ⛔ no trace written — is the Proxmark free? %s" % err)
         return 2
-    rl, dropped, ptp = runs(vals, a.hyst, a.min_run)
-    us = [r * a.us_per_sample for r in rl]
+    rl, dropped, ptp = runs(vals, a.hyst, a.min_run, want_levels=True)
+    levels = [lv for _, lv in rl]
+    us = [r * a.us_per_sample for r, _ in rl]
+    gaps = 0
+    if a.gap_above is not None:
+        keep = [i for i, d in enumerate(us) if d <= a.gap_above]
+        gaps = len(us) - len(keep)
+        us = [us[i] for i in keep]
+        levels = [levels[i] for i in keep]
     hist = Counter(us)
     total = len(us)
     top = hist.most_common(a.top)
@@ -139,6 +158,8 @@ def main():
 
     print("  %s: %d samples, %d runs (%d dropped as jitter), p-p %.0f"
           % (a.label, len(vals), total, dropped, ptp))
+    if a.gap_above is not None:
+        print("  excluded %d run(s) longer than %.0fus as inter-burst gaps" % (gaps, a.gap_above))
     if not total:
         print("  ⛔ NO RUN STRUCTURE — nothing is modulating this field, or the pad is not coupled.")
         return 1
@@ -147,6 +168,12 @@ def main():
     if dropped > total:
         print("  ⚠ more jitter than structure (%d dropped vs %d kept) — distrust this capture"
               % (dropped, total))
+    if a.duty and us:
+        hi = sum(d for d, lv in zip(us, levels) if lv == 1)
+        lo = sum(d for d, lv in zip(us, levels) if lv == 0)
+        if hi + lo:
+            print("  level split: %.1f%% / %.1f%%   (⛔ polarity unknown — compare against BOTH "
+                  "the prediction and its complement)" % (100 * hi / (hi + lo), 100 * lo / (hi + lo)))
     if a.expect:
         want = [float(x) for x in a.expect.split(",")]
         ok = True

@@ -1,5 +1,30 @@
 # Next — ranked
 
+⛔⛔⛔⛔ **THE PAC INVESTIGATION IS OVER AND ITS ANSWER IS THE INSTRUMENT — READ THIS BEFORE TAKING
+ANY PAC UNIT (C470, 2026-09-15).** The emulation is CORRECT ON THE AIR. Measured through the pm3's
+comparator-free buffer, with predictions computed from the frame's own bits BEFORE the captures and
+a control chosen so it could fail: `CARD0001` duty predicted 42.2% / measured **42.3%**, longest run
+**2304us exactly**; `0000AAAA` predicted 40.6% / measured **40.5%**, with the **2560us run that
+CARD0001 cannot produce appearing 10 times**. Every bin within ~2 points on both. ⇒ **The emission
+tracks the DATA across two credentials. There is no emitter defect to explain.**
+⛔ C449's 85.7% duty, C450's pinned 83-88% and C452's +34.5 points were all read through the
+FLIPPER's comparator — the instrument C465 caught decoding nothing from a REAL PAC tag — and PAC is
+the longest-static-hold arm on the bench, exactly where such a comparator fails worst. Their
+interpretation is superseded in place; the readings stand only as Flipper readings.
+⛔ **DO NOT OPEN ANOTHER PAC EMITTER UNIT.** The buffer (C462), the clock (C455), the frame on the
+tag (C436), the hold capability (C469) and now the air itself (C470) are all verified.
+
+⭐ **WHAT IS ACTUALLY LEFT, and both need an operator:**
+1. **END-TO-END is still unverified, and cannot be done here.** Nothing on this bench decodes PAC
+   even from a genuine tag (C465), so "correct on the air" is as far as this hardware reaches. A
+   real PAC reader would settle it.
+2. ⚠ **ONE OPEN DISCREPANCY, left visible rather than buried**: C464's capture of the REAL T5577
+   reported 256us n=240, 512 n=31, 768 n=41 — shares near 73/9/12% — which does NOT match this
+   frame's predicted 48/29/10%, while our EMULATION does. Either that capture was partial (only its
+   top three bins were recorded) or the tag holds something other than what the bench note says. The
+   tag is on the Flipper's pad now and cannot be re-measured in this geometry. ⇒ operator-present.
+
+
 ⛔⛔⛔ **READ THIS BEFORE TAKING ANY PAC UNIT — THE FOUNDATION MOVED, 2026-09-15 (C465).** The whole
 PAC investigation rests on C431's *PAC emulate is SILENT to the Flipper*. **The Flipper does not
 decode a REAL PAC tag either** — 3 of 3 silent, on a tag the pm3 read byte-exact the same day and #2

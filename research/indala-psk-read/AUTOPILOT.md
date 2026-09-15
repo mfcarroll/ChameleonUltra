@@ -40,6 +40,18 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔⛔⛔ 2026-09-15 — PAC IS SOLVED, AND THE ANSWER IS THE INSTRUMENT (C470)
+
+**The PAC emulation is CORRECT ON THE AIR.** Through the pm3's comparator-free buffer, with
+predictions taken from the frame's own bits before the captures and a control that could fail:
+`CARD0001` duty 42.2% predicted / 42.3% measured, longest run 2304us exactly; `0000AAAA` 40.6% /
+40.5%, with the 2560us run CARD0001 cannot produce appearing 10 times. The emission tracks the DATA
+across two credentials. ⛔ The duty numbers that convicted it (C449/C450/C452) were read through the
+FLIPPER's comparator, which C465 caught decoding nothing from a real PAC tag. ⛔ **Do not open
+another PAC emitter unit** — buffer (C462), clock (C455), frame (C436), hold capability (C469) and
+air (C470) are all verified. What remains needs an operator: a real PAC reader for end-to-end, and
+the C464 real-tag discrepancy NEXT.md records.
+
 ### ⛔⛔⛔ 2026-09-15 — THE BENCH MOVED, AND THE INSTRUMENT OF RECORD CHANGED WITH IT
 
 **The bench is now: #1 ON ITS OWN (unpaired) · #2 ON THE PROXMARK'S PAD, nothing between them ·
