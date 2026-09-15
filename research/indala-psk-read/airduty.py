@@ -90,8 +90,35 @@ def capture(tag, seconds):
     return pulses, durs, meta
 
 
+def frame_stats(card):
+    """Everything the criterion needs, computed from pac.c's own bitstream builder.
+    ⚠ The frame is CYCLIC — it repeats without a gap — so the first and last runs merge
+    when they share a level. Forgetting that is what made C441's parity precondition
+    necessary in the first place."""
+    b = pacdiff.build(card)
+    runs, cur = [], 1
+    for i in range(1, len(b)):
+        if b[i] == b[i - 1]:
+            cur += 1
+        else:
+            runs.append((b[i - 1], cur)); cur = 1
+    runs.append((b[-1], cur))
+    if len(runs) > 1 and runs[0][0] == runs[-1][0]:
+        runs[0] = (runs[0][0], runs[0][1] + runs[-1][1]); runs = runs[:-1]
+    hi = [n for lv, n in runs if lv == 1]
+    return dict(bits=len(b), ones=sum(b) / len(b), nruns=len(runs),
+                himax_us=max(hi) * 256, hi3=sum(1 for n in hi if n >= 3),
+                longhi=sum(n for n in hi if n >= 3) / len(b))
+
+
 def report(tag, pulses, durs, meta, pred_max, pred_duty):
     n = len(pulses)
+    # ⛔ An EMPTY capture is not a duty of zero and must never be averaged into anything: a
+    # silent emitter and a reader that never listened produce the identical file (C373).
+    if n == 0 or sum(durs) == 0:
+        print("  %-6s ⛔ EMPTY CAPTURE — nothing on the air, or nothing captured. "
+              "Not a measurement; do not read it as one." % tag)
+        return None
     slips = meta.get("slips", 0)
     hi, tot = sum(pulses), sum(durs)
     duty = hi / tot
@@ -111,33 +138,60 @@ def report(tag, pulses, durs, meta, pred_max, pred_duty):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", nargs="*", default=["fdxb", "gprox", "pac"])
+    ap.add_argument("--cards", nargs="*", default=None,
+                    help="run the pac arm once per credential, to see whether the measured "
+                         "duty tracks the frame instead of sitting at one value")
     ap.add_argument("--card", default="1337BEEF",
                     help="PAC credential — EIGHT UPPERCASE HEX chars, so the Flipper's "
                          "`CIN: %%08lX` renderer can round-trip it")
     ap.add_argument("--seconds", type=float, default=4.0)
     a = ap.parse_args()
 
-    biases = {}
+    biases, pacrows = {}, []
     for tag in a.arms:
         typ, ec, pred_max, pred_duty = ARMS[tag]
-        if tag == "pac":
-            ec = ec % a.card
-            bits = pacdiff.build(a.card)
-            pred_duty = sum(bits) / len(bits)
-            print("\n  pac.c's frame for %s: %d bits, %d ones"
-                  % (a.card, len(bits), sum(bits)))
-        arm(typ, ec)
-        time.sleep(1.0)
-        biases[tag] = report(tag, *capture(tag, a.seconds), pred_max, pred_duty)
+        if tag != "pac":
+            arm(typ, ec)
+            time.sleep(1.0)
+            biases[tag] = report(tag, *capture(tag, a.seconds), pred_max, pred_duty)
+            continue
+        for card in (a.cards or [a.card]):
+            fs = frame_stats(card)
+            print("\n  pac.c's frame for %s: %d bits, duty %.1f%%, %d runs, "
+                  "%d HIGH runs >=3 bits, %.1f%% of the frame inside them"
+                  % (card, fs["bits"], 100 * fs["ones"], fs["nruns"], fs["hi3"],
+                     100 * fs["longhi"]))
+            arm(typ, ec % card)
+            time.sleep(1.0)
+            pulses, durs, meta = capture("pac_%s" % card, a.seconds)
+            b = report("pac", pulses, durs, meta, fs["himax_us"], fs["ones"])
+            if b is None:
+                pacrows.append((card, fs, None, None, None))
+                continue
+            biases["pac"] = b
+            pacrows.append((card, fs, sum(pulses) / sum(durs), max(pulses), b))
 
-    ctrl = [biases[c] for c in CONTROLS if c in biases]
-    if ctrl and "pac" in biases:
+    if len(pacrows) > 1:
+        print("\n  ⭐ DOES THE MEASURED DUTY TRACK THE FRAME? "
+              "(rows ordered by predicted time inside long HIGH runs)")
+        print("     card       pred duty  pred long-HIGH  pred runs | measured duty  excess  max run")
+        for card, fs, d, mx, b in sorted(pacrows, key=lambda r: r[1]["longhi"]):
+            if d is None:
+                print("     %-9s   %5.1f%%      %5.1f%%          %3d    |   EMPTY CAPTURE"
+                      % (card, 100 * fs["ones"], 100 * fs["longhi"], fs["nruns"]))
+                continue
+            print("     %-9s   %5.1f%%      %5.1f%%          %3d    |   %5.1f%%      %+5.1f   %6dus"
+                  % (card, 100 * fs["ones"], 100 * fs["longhi"], fs["nruns"],
+                     100 * d, 100 * (d - fs["ones"]), mx))
+
+    ctrl = [biases[c] for c in CONTROLS if biases.get(c) is not None]
+    if ctrl and biases.get("pac") is not None:
         lo, hi = min(ctrl), max(ctrl)
         print("\n  controls imply b in [%.0f, %.0f]us; pac needs %.0fus -> %s"
               % (lo, hi, biases["pac"],
                  "consistent" if lo - 50 <= biases["pac"] <= hi + 50
                  else "⛔ NOT a comparator bias"))
-    elif "pac" in biases:
+    elif biases.get("pac") is not None:
         print("\n  ⛔ no control in this run — the bias is unconstrained and pac's number is "
               "uninterpretable. Run the controls.")
     return 0

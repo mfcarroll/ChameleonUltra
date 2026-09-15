@@ -204,6 +204,21 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    256us, and carries an explicit `>= 9 bit periods` branch pair built to align PAC's 2304us sync run. That
    guard is also why the arm is SILENT rather than wrong: `duration > 4000us` drops the sample before a bit
    is pushed, and **p95 of our PAC high runs is 5954us**.
+   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS (C450): FIND THE SILENT/NON-SILENT
+   CREDENTIAL BOUNDARY.** `EEEEEEEE` produced a **20-byte capture — RIFL header, ZERO blocks** —
+   twice, with both controls passing either side, while `55555555` produced 1535 pairs. The slot is
+   not the explanation: the device returns `Raw: FF2049906D4551545515455154551403`, byte-identical
+   to `pacdiff.build`'s mirror (M45). ⇒ **a credential whose frame is provably correct on the device
+   and which emits nothing is the sharpest handle on the emitter this investigation has had.**
+   ⭐ Run `./airduty.py --cards ...` over credentials that walk from `EEEEEEEE` toward `55555555` one
+   character at a time, repeat each at least twice, and carry both controls at the head of every run.
+   ⛔⛔ **AND BREAK THE CONFOUND WHILE DOING IT.** C450's three data-producing credentials have
+   predicted duty and predicted time-inside-long-HIGH-runs **perfectly anti-correlated** (53.1%/7.8%,
+   45.3%/11.7%, 40.6%/26.6%), so its 4.5-point residual is equally well explained by *duty tracks the
+   frame weakly* and by *the excess grows with long static*, and C450 claims neither. Pick pairs that
+   hold one constant while the other moves — `frame_stats()` in `airduty.py` prints both.
+   ⚠ **Do not compare the pair count against a predicted run count**: it is block-quantised, 2048-byte
+   RIFL blocks at ~512 pairs each (512 / 1023 / 1535 measured). A zero-block file is still unambiguous.
    ⚠ `flipgrade.py`'s pac criterion could never have passed until this tick — it wanted `CARD0001` while
    Momentum renders `CIN: %08lX` from four bytes, and `CARD0001` contains an `R`. Fixed to `1337BEEF`;
    pac re-graded **SILENT** with NULL silent and fdxb PASS, so the verdict stands (C448).
