@@ -40,6 +40,29 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐⭐ 2026-09-14 19:45 — THE KNEE IS LOCATED (C423)
+
+Same run-8 frame, expected **45.5%** RF/10. Ratio, duty pattern and buffer held constant; only the rate moved.
+
+| tone geometry | modulator switches at | measured | long-tone peak |
+|---|---|---|---|
+| RF/8 + RF/10 | 15.6 / 12.5 kHz | **3.3%** | **none at all** |
+| RF/12 + RF/15 | 10.4 / 8.3 kHz | **20.2%** | present |
+| RF/16 + RF/20 | 7.8 / 6.25 kHz | **35.4%** | present |
+| RF/32 + RF/40 | 3.9 / 3.1 kHz | **36.4%** | present |
+
+⭐ Monotonic, **saturating by RF/16**, half-recovery near RF/12. ⭐⭐ The failure changes KIND across the knee:
+**absent** at RF/10, **present but attenuated** at RF/12. Only RF/8+RF/10 — what real AWID requires — is in the
+first regime, roughly a factor of two beyond where recovery begins. A gradual roll-off means first-order or
+Q-limited, not a digital cutoff.
+
+⚠ **NOT a dB measurement** — the observable is a count fraction of duration bins, not amplitude, so
+*half-recovery near RF/12* is not a -3dB corner. A corner frequency needs `rdrcap.py`, the only amplitude
+instrument here.
+
+⚠⚠ **A separate shortfall is exposed**: even fully recovered it saturates at ~36% against 45.5%, the SAME at
+RF/16 and RF/32, so slowing further does not close it. Unexplained, and not F12's cause.
+
 ### ⭐⭐⭐⭐ 2026-09-14 19:25 — F12'S CAUSE IS THE SWITCHING RATE (C422)
 
 One frame, one variable. The run-8 frame (48 ones / 48 zeros, expected **45.5%** RF/10):

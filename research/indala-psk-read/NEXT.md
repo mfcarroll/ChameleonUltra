@@ -13,18 +13,25 @@ would be the fourth encoding written against unchanged air, which C415 forbade.
 RF/8+RF/10 and **36.4% with two clean peaks** at RF/32+RF/40, with ratio, duty, pulse counts and buffer all held
 constant. The receiver is exonerated, so our emitter's **analog drive path** cannot switch at 15.6 kHz.
 
-⭐⭐ **NEXT UNIT (2026-09-14, C422): FIND THE KNEE, THEN FIND WHAT SETS IT.** Two questions, in order:
-1. **Where is the knee?** Sweep the tone period between RF/10 and RF/32 — 12, 16, 20, 24 — and find where the
-   minority tone starts surviving. A sharp knee names a filter corner; a gradual one points at Q or slew.
-   ⚠ Each point currently costs a firmware build and flash. ⭐ Worth considering FIRST: make the FSK2a tone
-   geometry settable at runtime through a debug command, which turns a day of flashing into one capture loop.
-2. **Which element sets it?** PWM output stage, coil drive, tank Q, antenna matching — C422 does not separate
-   them, and no work has been done on the drive path at all.
+✅ **THE KNEE IS LOCATED (C423)** — 3.3% at RF/8+RF/10 with no long-tone peak, 20.2% at RF/12, 35.4% at RF/16,
+36.4% at RF/32. Monotonic, saturating by RF/16, half-recovery near RF/12. AWID's required rate is ~2x beyond
+where recovery begins, and the roll-off is gradual: first-order or Q-limited, not a digital cutoff.
 
-⛔ **AWID ITSELF IS NOT FIXED BY THIS AND MAY NOT BE FIXABLE WITHOUT DRIVE-PATH WORK** — real AWID *is* RF/8 and
-RF/10, so slowing the tones is a diagnostic, never a shipping option. ⭐ It is not a hard physical bound though:
-C226 captured the Flipper emitting AWID at these rates well enough for our own reader to decode byte-exact.
-⛔ Pyramid's emitter stays QUEUED BEHIND all of this.
+⭐⭐ **NEXT UNIT: NAME THE ELEMENT THAT SETS THE LIMIT.** Candidates, none yet separated: the PWM output stage,
+the coil drive, the tank's Q, the antenna matching. Two routes, cheapest first:
+1. **Get an AMPLITUDE measurement.** `rdrcap.py` is the only instrument here that returns amplitude rather than
+   edges, and it turns *half-recovery near RF/12* into a real corner frequency — which names a filter. ⚠ It needs
+   the two Chameleons facing, which is a bench move and currently serves only this.
+2. **Read the drive circuit.** No work has been done on it at all; the schematic and the drive pin's output stage
+   may name the limit without any measurement.
+
+⚠ **A SECOND, SMALLER QUESTION IS NOW OPEN AND IS NOT F12**: even fully recovered the measurement saturates at
+~36% against an expected 45.5%, the SAME at RF/16 and RF/32, so rate does not close it. Candidates are our
+emitter's duty asymmetry (50% short, 40% long, by construction) and band-edge counting.
+
+⛔ **AWID IS STILL NOT FIXED AND MAY NEED DRIVE-PATH WORK** — real AWID *is* RF/8 and RF/10, so slowing the tones
+is a diagnostic and never a shipping option. ⭐ Not a hard bound: C226 caught the Flipper emitting AWID at these
+rates well enough for our own reader to decode byte-exact. ⛔ Pyramid's emitter stays QUEUED BEHIND all of this.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
