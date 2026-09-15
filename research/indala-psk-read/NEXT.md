@@ -17,6 +17,16 @@ rather than found**: `holdsweep.py` specifies `hw emuhold`, which fills a buffer
 static runs of N entries at PAC's own idiom (compare 33 / 0, counter_top 32), and sweeps N. No
 credential, no bench move — rig A already points the Flipper at #1.
 
+⭐⭐ **CROSS-PROJECT REFERENCE, AND IT SHARPENS THE RULE ABOVE**: the operator's T5577 deep-read work
+in `/Users/Shared/code/personal/rfid/Momentum-Firmware` (branch `t5577-deep-read`, whose entry point
+is retrieved with `git show t5577-deep-read:T5577_START_HERE.md` — it is on the branch, not checked out) records that **`lf t55xx detect` NEVER reads block 0 — it SYNTHESIZES the
+config word from the waveform**, and is therefore *structurally blind to any modulation PM3 cannot
+demodulate*. Two conclusions died of exactly that on 2026-08-31: PSK3's write *not accepted* and
+DIPHASE *bricked the tag* — **both writes had succeeded and PM3 simply could not read them back**.
+⇒ A pm3 DECODE failure is not evidence about the signal, which is precisely why our own
+2026-09-14 *the Proxmark does not read our LF emulation* is not a refutation of C464's raw-capture
+route. ⚠ That project is large; the entry point is deliberately short and is the thing to read.
+
 ⇒ **THE NEXT UNIT, and it is hands-free: implement `hw emuhold`** to the interface `holdsweep.py`
 already specifies, verify the installed buffer with `hw emuseq --raw` before trusting any air
 reading (C462), then run the sweep. ⛔ It MUST be reversible — re-arming a slot through the normal
