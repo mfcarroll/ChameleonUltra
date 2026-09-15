@@ -213,8 +213,31 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    with residuals **+1, 0, -5, +3 us** — and three pre-registered predictions off the walk came back
    4281 against 22131, 6867 against 1707, and 27866 against an **impossible -846**. A ±5us fit through
    four points of one structured credential family has **no reach outside it** (C440/M55).
-   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS (C451): RUN `airduty.py` ACROSS EVERY
-   EMULATE ARM.** Each arm's predicted duty comes from its own modulator — Manchester and biphase are
+   ✅✅ **C451'S QUEUED UNIT RAN — PAC IS ALONE (C452), do not re-run the sweep.** Nine arms,
+   predictions from each modulator's own source. Duty **excess** over prediction: em410x +11.7,
+   gproxii +12.2, jablotron +13.2, securakey +13.6, noralsy +13.7, fdxb +14.3, viking +14.5,
+   gallagher +14.7 — **eight inside 3.0 points** — against **PAC +34.5**. ⭐ **Rate-matched**:
+   viking, gallagher and noralsy are 32 carrier cycles per bit exactly like `pac.c`, so the only
+   difference left is **Manchester versus NRZ**. ⇒ the excess is not the instrument, the rate or
+   the bench.
+   ⚠⚠ **Read the POINTS column, never `b` in microseconds**: the excess is near-constant in points
+   while the implied absolute bias scales with the bit period (em410x 74us at 512us vs noralsy 42us
+   at 256us) ⇒ the comparator bias is **proportional, not fixed**, and C435's 93us and 151us were
+   never the same quantity. ⚠ Max run is a max-of-N and N ranges 1534-8766 — a within-arm statistic
+   only.
+   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS: PAC IS THE ONLY NRZ EMITTER, SO
+   INSTRUMENT THE EMITTER ITSELF.** Everything reachable from the air is now measured and every
+   candidate outside `pac.c` is eliminated (C442, C449, C451, C452). What has never been read back is
+   **the PWM sequence the peripheral actually plays** — `m_pac_pwm_seq_vals` after
+   `pac_modulator` runs, on the device, compared against the host mirror the same way C436 compared
+   the T5577 blocks and M45 compared the slot. ⛔ That needs a firmware build and a flash of #1, so
+   state the criterion first and keep the build minimal: a debug command that dumps N entries of the
+   armed sequence, nothing else. ⚠ #1 is on the Flipper's pad; a flash must leave it out of DFU and
+   back in reader mode (rig A is the only live rig for this work).
+   ⛔ **What C451 already refuted and must not be revived**: the frame's one-count is NOT the
+   governing variable — a +-5us straight line through four points predicted 22131 / 1707 / -846 and
+   measured 4281 / 6867 / 27866.
+   ⭐ **STILL OPEN AND STILL THE SHARPEST HANDLE: THE SILENT CREDENTIAL.** Each arm's predicted duty comes from its own modulator — Manchester and biphase are
    50% by construction, PAC's is its frame's one-fraction. If every other arm lands on its own
    prediction and **only PAC sits at 87.6%**, PAC is alone, and the emulate column gains an air-side
    grade that is quantitative rather than pass/fail. ⛔ `ARMS` in `airduty.py` currently holds three

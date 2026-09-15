@@ -46,10 +46,33 @@ EMU = "/dev/tty.usbmodemC3A1656543DE1"
 #             duty is the frame's own 1-fraction, computed live by pacdiff.build().
 #   fdxb.c  : counter_top 32, level flips every bit -> max static 384us, duty 50%.
 #   gproxii.c: counter_top 64, one entry per bit -> max static 512us, duty 50%.
+# ⭐ EVERY PREDICTION BELOW IS READ OFF THE EMITTER'S OWN MODULATOR, 2026-09-15, never from a
+# previous capture. The ASK family is all `compare = counter_top / 2` with the data bit carried
+# in channel_0's inversion bit — Manchester — so the duty is **50% by construction** and the
+# longest static level is TWO half-bits, one either side of a bit boundary:
+#     em410x   counter_top 64, compare 32 -> half-bit 256us, max static 512us
+#     viking   counter_top 32, compare 16 -> half-bit 128us, max static 256us
+#     gallagher counter_top 32, compare 16 -> 128us, 256us
+#     noralsy  counter_top 32, compare 16 -> 128us, 256us
+#     securakey counter_top 40, compare 20 -> 160us, 320us
+#     gproxii  counter_top 64, ONE entry per bit, optional mid-bit transition -> max static 512us
+#     fdxb     counter_top 32, one entry per bit, level flips every bit -> max static 384us
+#     jablotron two entries per bit at counter_top 31 (32 ticks = 256us each), whole-entry held
+#               levels -> max static 512us
+# ⛔ FSK (hidprox, ioprox, awid) and PSK1 (indala, idteck, keri, nexwatch) are NOT here and must
+# not be added: their envelope is constant by design — FSK is one amplitude at two rates, PSK1 a
+# continuous carrier with phase reversals — so a duty measured on the ASK channel is not a
+# statement about their data, and a number that means nothing is worse than no number.
 ARMS = {
     "pac":   ("PAC",     "lf pac econfig -s 8 --cn %s", 2304, None),
     "fdxb":  ("FDXB",    "lf fdxb econfig -s 8 --raw 00339a080402079f8040797788040201", 384, 0.5),
     "gprox": ("GProxII", "lf gproxii econfig -s 8 --raw fac2a38c2b081af0210b12c2", 512, 0.5),
+    "em410x": ("EM410X", "lf em 410x econfig -s 8 --id DEADBEEF88", 512, 0.5),
+    "viking": ("Viking", "lf viking econfig -s 8 --id 1A337195", 256, 0.5),
+    "jablotron": ("Jablotron", "lf jablotron econfig -s 8 --id 1122334455", 512, 0.5),
+    "gallagher": ("Gallagher", "lf gallagher econfig -s 8 --raw 7feaa31e76d86c6d868cc249", 256, 0.5),
+    "securakey": ("Securakey", "lf securakey econfig -s 8 --raw 7fcb400001adea5344300000", 320, 0.5),
+    "noralsy": ("Noralsy", "lf noralsy econfig -s 8 --raw bb0214ff0112402233670000", 256, 0.5),
 }
 CONTROLS = ("fdxb", "gprox")
 
@@ -134,9 +157,14 @@ def report(tag, pulses, durs, meta, pred_max, pred_duty):
           % (max(pulses), pred_max,
              "within" if max(pulses) <= pred_max + 300 else "⛔ OVER by %dus"
              % (max(pulses) - pred_max)))
-    print("     high-time    %6.1f%%     predicted %5.1f%%   b to reconcile = %.0fus"
-          % (100 * duty, 100 * pred_duty, b))
-    return b
+    print("     high-time    %6.1f%%     predicted %5.1f%%   excess %+5.1f pts "
+          "(b = %.0fus)" % (100 * duty, 100 * pred_duty, 100 * (duty - pred_duty), b))
+    # ⛔⛔ COMPARE THE EXCESS IN POINTS, NOT `b` IN MICROSECONDS. C452 measured eight ASK arms
+    # whose bit periods differ by 2x: the excess is near-constant at +11.7..+14.7 points while
+    # the implied b scales with the period (em410x 74us at a 512us bit, noralsy 42us at 256us).
+    # ⇒ the Flipper's comparator bias is PROPORTIONAL to the period, not a fixed time, so `b` is
+    # the wrong normalisation across rates and only the points column is comparable.
+    return 100 * (duty - pred_duty)
 
 
 def main():
@@ -191,10 +219,10 @@ def main():
     ctrl = [biases[c] for c in CONTROLS if biases.get(c) is not None]
     if ctrl and biases.get("pac") is not None:
         lo, hi = min(ctrl), max(ctrl)
-        print("\n  controls imply b in [%.0f, %.0f]us; pac needs %.0fus -> %s"
+        print("\n  controls' duty excess [%.1f, %.1f] pts; pac %.1f pts -> %s"
               % (lo, hi, biases["pac"],
-                 "consistent" if lo - 50 <= biases["pac"] <= hi + 50
-                 else "⛔ NOT a comparator bias"))
+                 "consistent" if lo - 5 <= biases["pac"] <= hi + 5
+                 else "⛔ NOT the instrument's bias"))
     elif biases.get("pac") is not None:
         print("\n  ⛔ no control in this run — the bias is unconstrained and pac's number is "
               "uninterpretable. Run the controls.")
