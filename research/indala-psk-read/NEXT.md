@@ -102,12 +102,14 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
 1. **Diagnose the PAC emulate arm.** It was never in C378's 11-protocol survey, so this is an unmeasured arm,
    not a regression. ⛔ It is NOT an F12 case: `pac.c` is **NRZ at RF/32** with a full modulator — 128
    entries, one per bit, `counter_top` 32 — the same shape and rate as FDX-B, which decodes byte-exact.
-   ✅ **(a) IS ALREADY REFUTED (C432)** — `pac_modulator` uses `counter_top + 1` for the held level and says
-   why, so PAC is NOT a C242-class held-level defect. ⭐ **What is left**: does PAC put ANYTHING on the air?
-   Use the size-guarded capture from C432 — copy a known file to the target, read, and confirm the SIZE
-   CHANGED before believing a byte of it. ⛔ `raw_read` now refuses after three loader failures; if it does,
-   the bench is down and nothing that run is a result. Then (b) whether the Flipper's PAC/Stanley decoder
-   wants a credential ours does not produce. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
+   ✅ **BOTH EMISSION HYPOTHESES ARE NOW CLOSED.** (a) `pac_modulator` already uses `counter_top + 1`, so it
+   is not a C242 held-level defect (C432); (b) **PAC DOES emit** — 1023 pairs, NRZ at RF/32 with every top
+   period bin a whole multiple of the 256us bit (C433). ⇒ **The remaining question is DECODE, not emission**:
+   why does the Flipper's PAC/Stanley decoder reject a structurally correct emission? ⭐ Look at framing and
+   credential — compare our `pac_build_bitstream` output against what `lf pac read` returns off a REAL
+   pm3-written PAC tag on rig B, which is the one comparison that separates "our bits are wrong" from "the
+   Flipper wants something else". ⛔ Do NOT grade this with our own reader against the emulation if PAC turns
+   out to be SAADC-family; check M52's list first. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
    payloads whose predictions are far apart, Flipper as reader.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 

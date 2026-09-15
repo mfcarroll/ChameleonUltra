@@ -137,3 +137,17 @@ now guard it, because the two failure modes differ in severity:
 before and after the read. A read that did not raise is NOT evidence that it read anything. Run the control
 emitter through the same guard — an unchanged size on a KNOWN-GOOD arm is what convicts the instrument rather
 than the protocol.
+
+## ⭐ `failed to load external command` is HEAP FRAGMENTATION — reboot the Flipper (C433)
+
+Three incidents before it was root-caused. It is **not** storage: `/ext` had 60GB free. `free` shows the real
+cause — plenty of free heap but no contiguous block big enough for the CLI plugin:
+
+| | max contiguous block |
+|---|---|
+| fragmented (loader failing) | **59976** of 127504 free |
+| after `power reboot` | **132176** |
+
+⚠ **Repeated app load/unload cycles fragment it**, which is exactly what a grading pass over 16 arms does —
+so expect it after `flipgrade.py` and reboot before trusting a later capture. ⭐ After any reboot, re-run the
+CONTROL arm before the unknown one, so the result is taken on a bench proven live.
