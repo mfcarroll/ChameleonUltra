@@ -222,10 +222,25 @@ class Flip:
                 else: time.sleep(0.05)
         return buf.decode("utf-8", "replace")
 
-    def raw_read(self, path, seconds):
-        out = self.cmd("rfid raw_read ask %s" % path, seconds, etx=True)
-        if "not RFID raw file" in out or "Usage" in out:
-            raise SystemExit("⛔ the Flipper refused raw_read: %r" % out[:200])
+    def raw_read(self, path, seconds, tries=3):
+        """⛔⛔ THE `rfid` COMMAND IS AN EXTERNAL APP AND ITS LOADER FAILS TRANSIENTLY.
+
+        When it does the CLI answers `failed to load external command`, NOTHING is captured, and
+        this method used to return normally — so `fetch()` then read whatever was already at
+        `path` and the caller scored a STALE CAPTURE as fresh data. That is worse than the same
+        trap in flipgrade.py (C431), which merely produced a wrong verdict: here it produces a
+        wrong verdict backed by a real, plausible histogram belonging to a DIFFERENT protocol.
+        Caught when a guarded probe found the file's size unchanged after a 'successful' read."""
+        for attempt in range(tries):
+            out = self.cmd("rfid raw_read ask %s" % path, seconds, etx=True)
+            if "not RFID raw file" in out or "Usage" in out:
+                raise SystemExit("⛔ the Flipper refused raw_read: %r" % out[:200])
+            if "failed to load external command" not in out:
+                return
+            time.sleep(3.0)
+        raise SystemExit("⛔ the Flipper's rfid app would not load after %d tries — the capture "
+                         "is EMPTY and any file at %s is stale. Nothing here is a result."
+                         % (tries, path))
 
     def fetch(self, path):
         """storage read_chunks, binary-safe. It prints `Ready?` and waits for ONE char per chunk."""

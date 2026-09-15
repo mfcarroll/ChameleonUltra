@@ -102,10 +102,12 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
 1. **Diagnose the PAC emulate arm.** It was never in C378's 11-protocol survey, so this is an unmeasured arm,
    not a regression. ⛔ It is NOT an F12 case: `pac.c` is **NRZ at RF/32** with a full modulator — 128
    entries, one per bit, `counter_top` 32 — the same shape and rate as FDX-B, which decodes byte-exact.
-   ⭐ First places to look, in order: (a) NRZ holds a level across runs of like bits, so this is the C242
-   held-level question again — check `counter_top + 1` vs `counter_top` in `pac_modulator`, which is exactly
-   what made held levels audible for gproxii/fdxb; (b) whether the Flipper's PAC/Stanley decoder wants a
-   credential ours does not produce. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
+   ✅ **(a) IS ALREADY REFUTED (C432)** — `pac_modulator` uses `counter_top + 1` for the held level and says
+   why, so PAC is NOT a C242-class held-level defect. ⭐ **What is left**: does PAC put ANYTHING on the air?
+   Use the size-guarded capture from C432 — copy a known file to the target, read, and confirm the SIZE
+   CHANGED before believing a byte of it. ⛔ `raw_read` now refuses after three loader failures; if it does,
+   the bench is down and nothing that run is a result. Then (b) whether the Flipper's PAC/Stanley decoder
+   wants a credential ours does not produce. ⭐ Grade it the C429/C430 way: predictions from the modulator, several
    payloads whose predictions are far apart, Flipper as reader.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 

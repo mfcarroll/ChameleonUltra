@@ -122,3 +122,18 @@ Chameleon #2 and M52 forbids that against an emulation, which left half the emul
 | Gating PASS on the protocol NAME | Securakey reads as *Radio Key* and scored a total failure. C177/C178's exact bug; **M28 says match the success PATH**. The credential is the gate; the name is printed, never tested |
 | Trusting the Flipper to answer | `failed to load external command` is a transient loader failure that reads NOTHING — scored as 15 protocol verdicts once. It now retries twice, then **voids the whole run** (C373) |
 | Trusting `success` from a command batch | A REFUSED econfig still left a slot armed with no credential, grading SILENT like a dead emitter. The econfig runs alone and is judged on its own output |
+
+## ⛔⛔ The Flipper's `rfid` app loader fails transiently — and a silent failure serves STALE data (C432)
+
+`failed to load external command` means the app never started and **nothing was captured**. Both entry points
+now guard it, because the two failure modes differ in severity:
+
+| | |
+|---|---|
+| `flipgrade.py` (`rfid read`) | an unguarded failure becomes a wrong VERDICT — once, 15 protocol failures from a reader that read nothing (C431) |
+| `flipraw.py` (`rfid raw_read`) | ⚠ **worse**: it returned normally and `fetch()` served whatever already sat at that path — a wrong verdict backed by a real, plausible histogram **belonging to another protocol** (C432) |
+
+⭐ **The guard that actually catches it**: copy a known file to the target, then compare the file's SIZE
+before and after the read. A read that did not raise is NOT evidence that it read anything. Run the control
+emitter through the same guard — an unchanged size on a KNOWN-GOOD arm is what convicts the instrument rather
+than the protocol.
