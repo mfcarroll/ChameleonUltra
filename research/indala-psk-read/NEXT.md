@@ -29,18 +29,16 @@ tag (C436), the hold capability (C469) and now the air itself (C470) are all ver
    ⛔ Both pre-registered raw criteria FAILED; the raw arm is inconclusive on its own terms and
    only the decode arm carries the verdict.
 
-✅✅ **AND THE RE-GRADE IS DONE — C473: THE EMULATE COLUMN IS 16 OF 16.**
-   `pm3grade.sh`, #2 alone on the pm3's pad, every arm scored byte-exact, null sweeps clean
-   before and after. **pm3 PASS (9)**: em410x, viking, **pac**, hidprox, ioprox, awid, gallagher,
-   securakey, noralsy. **pm3 SILENT (7)**: jablotron, indala, keri, nexwatch, idteck, gproxii,
-   fdxb. ⭐⭐ **C431's Flipper grade is the exact complement** — it passed all seven of those and
-   was silent on precisely the four the pm3 passes. ⇒ **union 16/16, intersection of silences
-   EMPTY.** An emitter defect cannot be reader-specific in opposite directions, so each
-   instrument's silences are its own gaps — and every arm is now positively verified by at least
-   one independent reader.
-
-⛔⛔ **THE "BROKEN EMITTER" CATEGORY IS CLOSED.** F12's FSK three, PAC's silence and the fifteen
-findings that chased it, and §9e's accusation against upstream were one error repeated.
+⛔⛔⛔ **THE RE-GRADE (C473) IS RETRACTED — READ C474 BEFORE TRUSTING ANY GRID CELL.**
+   `pm3grade.sh` produced nine byte-exact PASSes, which stand as measurements (PAC `CARD0042`
+   among them, so **PAC end-to-end is settled**). Its seven SILENT results do NOT mean what C473
+   said. The operator demonstrated the pm3 reads **Indala** from a real T5577 and from a Flipper
+   emulation, **KERI** and **IDTECK** from Flipper emulations, and **FDX-B** from both. ⇒ for
+   those four the pm3's decoder is proven good against an emulation, so OUR arm's silence points
+   at OUR EMITTER. ⛔ C473's argument — *an emitter defect cannot be reader-specific in opposite
+   directions* — is a fallacy, and it omitted the calibration row that C472 relied on.
+   ⇒ **NO ARM'S STATUS IS SETTLED.** The grid must be rebuilt with calibration as a structural
+   requirement. See ASSESSMENT-BRIEF.md.
 
 ⭐ **WHAT IS ACTUALLY LEFT, and both need hardware this bench does not have:**
 1. ✅ **PAC END-TO-END IS SETTLED (C473)** — `lf pac reader` recovers `CARD0042` from our
