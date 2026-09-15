@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Locate the knee: how long a STATIC level can this emitter hold before the air stops tracking it?
 
-    ./holdsweep.py                 # sweep 1..9 entries, Flipper as reader
+    ./holdsweep.py                 # sweep 1..9 entries, pm3 raw buffer as reader
     ./holdsweep.py --max 12
 
 ⭐⭐ `hw emuhold` NOW EXISTS AND MATCHES THIS SPEC ENTRY FOR ENTRY (C468) — N=3 installs 252
 entries in runs of 3 at compare 33/0, counter_top 32, and a normal re-arm puts PAC's own 128 back.
 The criterion below was written BEFORE that command was built, so it cannot have been fitted to
-what the device turned out to say. ⛔ THE SWEEP ITSELF IS STILL NOT IMPLEMENTED HERE: main() prints
-predictions and stops. What it must do is, for each N: `hw emuhold -n N`, confirm the install count,
-then capture with `pm3cap.py` and take the longest run.
+what the device turned out to say. ⭐ THE SWEEP IS IMPLEMENTED BELOW.
+
+⛔⛔ AND THE STATISTIC IS THE MODE, NOT THE MAXIMUM — DECIDED BEFORE ANY DATA WAS SEEN. The obvious
+reading of "how long a level can it hold" is the LONGEST run in the capture, and that statistic is
+WRONG here for a reason that has nothing to do with the emitter: the emulation plays in BURSTS
+(`m_frames_per_burst`, then a pause for field detection), and across a pause the line sits static
+for milliseconds. The longest run in any capture is therefore an inter-burst gap, and a sweep
+scored on it would report a flat ~ms ceiling for every N and look exactly like a knee at N=1.
+⇒ The buffer is pure alternating N-runs, so nearly every run inside a burst IS the run under test:
+the MODE is the measurement, its SHARE says whether the peak is real, and the max is printed
+alongside purely so the gap is visible rather than mistaken for a result.
 
 ⛔⛔ AND THE READER HAS CHANGED — DO NOT USE THE FLIPPER. This tool was written when rig A pointed
 the Flipper at #1. The bench moved on 2026-09-15, and C465 then disqualified the Flipper for PAC
@@ -78,7 +86,8 @@ fixed time. So:
     already reads the live buffer through the same `m_pwm_seq` pointer playback is handed (C462), so
     the shape under test is confirmed at the source rather than assumed.
 """
-import argparse, os, sys
+import argparse, os, re, subprocess, sys
+from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -86,6 +95,7 @@ sys.path.insert(0, HERE)
 ENTRY_US = 256.0          # pac.c: counter_top 32 at the 125 kHz base clock, 8us per tick
 PAC_MAX_ENTRIES = 9       # PAC's own longest static stretch: 9 bits, 2304us
 SHORT_CONTROL = (1, 2)    # the run lengths every working ASK arm already emits
+HOLD_BUFFER_ENTRIES = 256 # lf_tag_em.h: LF_TAG_EM_HOLD_MAX_ENTRIES
 
 
 def predict(n):
@@ -93,14 +103,44 @@ def predict(n):
     return n * ENTRY_US
 
 
+def sweep_one(port, n, samples, py, cu):
+    """Install a run of n entries, verify the install, then measure the air."""
+    import pm3cap
+
+    want_pairs = HOLD_BUFFER_ENTRIES // (2 * n)
+    want_entries = want_pairs * 2 * n
+
+    out = subprocess.run([py, cu, "-p", port, "hw emuhold -n %d" % n],
+                         capture_output=True, text=True).stdout
+    m = re.search(r"entries installed:\s*(\d+)", out)
+    if not m:
+        return {"n": n, "error": "emuhold refused or unparsed: %s" % out.strip()[-160:]}
+    got = int(m.group(1))
+    if got != want_entries:
+        return {"n": n, "error": "installed %d entries, spec says %d" % (got, want_entries)}
+
+    vals, err = pm3cap.capture(samples)
+    if vals is None:
+        return {"n": n, "error": "no pm3 trace: %s" % err}
+    rl, dropped, ptp = pm3cap.runs(vals)
+    us = [r * pm3cap.US_PER_SAMPLE for r in rl]
+    if not us:
+        return {"n": n, "error": "no run structure — nothing modulating"}
+    hist = Counter(us)
+    mode, count = hist.most_common(1)[0]
+    return {"n": n, "entries": got, "mode": mode, "share": count / len(us),
+            "runs": len(us), "max": max(us), "ptp": ptp, "predicted": predict(n)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max", type=int, default=9, help="longest run to request, in entries")
-    ap.add_argument("--port", default="/dev/tty.usbmodemC3A1656543DE1")
-    ap.add_argument("--seconds", type=float, default=7.0)
+    ap.add_argument("--port", default="/dev/tty.usbmodemF429364E46961",
+                    help="the Chameleon on the PROXMARK's pad — #2 (the bench moved 2026-09-15)")
+    ap.add_argument("--samples", type=int, default=40000)
+    ap.add_argument("--predict-only", action="store_true")
     a = ap.parse_args()
 
-    print("  ⛔ hw emuhold is not implemented yet — this tool states its criterion and stops.")
     print("  Sweep and predictions (pac.c: one entry = %.0fus):" % ENTRY_US)
     for n in range(1, a.max + 1):
         tag = ""
@@ -108,13 +148,69 @@ def main():
             tag = "   <- positive control: every working ASK arm emits this and decodes"
         if n == PAC_MAX_ENTRIES:
             tag = "   <- PAC's own longest static stretch"
-        print("    N=%-3d predicted max static run %7.0f us%s" % (n, predict(n), tag))
-    print("  PASS: slope 1 through the origin across the sweep.")
+        print("    N=%-3d predicted modal run %7.0f us%s" % (n, predict(n), tag))
+    print("  PASS: modal run = N * %.0fus across the sweep, slope 1 through the origin." % ENTRY_US)
     print("  KNEE: tracks to K then saturates -> K*%.0fus is the limit; any K < %d explains C451."
           % (ENTRY_US, PAC_MAX_ENTRIES))
-    print("  ⛔ A knee here is NOT attributed to the emitter: the Flipper's comparator is a")
-    print("     suspect too (C443). Attribution needs a second, comparator-free instrument.")
+    if a.predict_only:
+        return 0
+
+    py = os.path.join(HERE, "../../software/script/.venv/bin/python")
+    cu = os.path.join(HERE, "../../software/script/cu.py")
+
+    # ⛔ emuhold borrows the armed protocol's clock and is refused with nothing armed. PAC is the
+    # right arm to borrow from: it is the 125 kHz type whose idiom the buffer imitates.
+    subprocess.run([py, cu, "-p", a.port, "hw slot type -s 8 -t PAC", "hw slot enable -s 8 --lf",
+                    "hw slot change -s 8", "hw mode -e"], capture_output=True, text=True)
+
+    print("\n  measured (reader: pm3 raw sample buffer, no comparator in the chain — C464/C466):")
+    rows = []
+    try:
+        for n in range(1, a.max + 1):
+            r = sweep_one(a.port, n, a.samples, py, cu)
+            rows.append(r)
+            if "error" in r:
+                print("    N=%-3d ⛔ %s" % (n, r["error"]))
+                continue
+            hit = abs(r["mode"] - r["predicted"]) <= pm3cap_tolerance()
+            print("    N=%-3d predicted %7.0f   modal run %7.0f us (%4.1f%% of %d runs)   "
+                  "max %8.0f   %s"
+                  % (n, r["predicted"], r["mode"], 100 * r["share"], r["runs"], r["max"],
+                     "✓" if hit else "✗ MISS"))
+    finally:
+        # ⛔ Never leave a device emitting the synthetic buffer: re-arm through the normal path
+        # (which restores PAC's own modulator) and drop back to reader mode.
+        subprocess.run([py, cu, "-p", a.port, "hw slot type -s 8 -t PAC", "hw slot change -s 8",
+                        "hw mode -e"], capture_output=True, text=True)
+        subprocess.run([py, cu, "-p", a.port, "hw mode -r"], capture_output=True, text=True)
+        print("  (#2 re-armed through the normal path and returned to reader mode)")
+
+    good = [r for r in rows if "error" not in r]
+    ctrl = [r for r in good if r["n"] in SHORT_CONTROL]
+    if len(ctrl) < len(SHORT_CONTROL) or not all(
+            abs(r["mode"] - r["predicted"]) <= pm3cap_tolerance() for r in ctrl):
+        print("  ⛔ THE POSITIVE CONTROL FAILED — N=1/N=2 are what every working ASK arm emits, so")
+        print("     this run is measuring the harness and not the emitter. VOID (see the docstring).")
+        return 1
+    tracking = [r["n"] for r in good if abs(r["mode"] - r["predicted"]) <= pm3cap_tolerance()]
+    k = max(tracking) if tracking else 0
+    if k >= a.max:
+        print("  ⇒ SLOPE 1 HOLDS to N=%d (%.0fus). No knee in this range." % (k, predict(k)))
+    else:
+        print("  ⇒ KNEE at K=%d: tracks to %.0fus and saturates. PAC needs %d entries (%.0fus)."
+              % (k, predict(k), PAC_MAX_ENTRIES, predict(PAC_MAX_ENTRIES)))
+    print("  ⭐ This reader has no comparator (C464/C466), so a knee here is NOT the instrument's")
+    print("     — which is the caveat holdsweep.py was written with and the bench move dissolved.")
+    print("  ⛔ It still LOCATES a limit rather than attributing it to a stage; do not write")
+    print("     \"the emitter cannot hold DC\" from this alone.")
     return 0
+
+
+def pm3cap_tolerance():
+    """One pm3 sample. A run is an integer number of samples, so this is the finest the
+    instrument can resolve — not a fitted fudge factor."""
+    import pm3cap
+    return pm3cap.US_PER_SAMPLE
 
 
 if __name__ == "__main__":

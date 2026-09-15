@@ -56,13 +56,23 @@ proven rather than asserted. #2 runs `v2.2.0-875-g02fc2e2`. ⛔ `enterdfu.py` ga
 bootloader window is shorter than the gap between two shell commands, and the resulting silent
 no-op looks exactly like a flash failure — C459's trap with the sign flipped.
 
-⇒ **THE NEXT UNIT, and it is hands-free: RUN THE SWEEP.** `holdsweep.py` still only prints
-predictions. For each N in 1..9: `hw emuhold -n N` on #2, confirm the install count, capture with
-`pm3cap.py`, take the longest run. ⛔ The reader is `pm3cap.py`, NOT the Flipper — and because that
-path has no comparator (C464/C466), a knee it finds is NOT the instrument's, which dissolves the
-attribution caveat holdsweep.py was written with. ⭐ Criterion unchanged and already fixed in the
-tool: max static run = N * 256us, slope 1 through the origin, with N=1,2 as a positive control that
-can fail. ⛔ Leave #2 re-armed through the normal path and in reader mode when done.
+✅✅✅ **DONE 2026-09-15 — THE SWEEP RAN AND THE LONG-DC HYPOTHESIS IS REFUTED (C469).** N=1..9
+through `pm3cap.py`: modal run 256 -> 2304us, every point on N*256 within one sample, 84.5-97.6% of
+runs in the modal bin, positive control passing. **Slope 1 through the origin, no knee.** The path
+holds a static level for PAC's entire range. ⛔ C453's suspect is dead.
+
+⇒ **THE NEXT UNIT, and it is hands-free and now the sharpest question on the bench: PUT PAC's REAL
+EMISSION THROUGH THE COMPARATOR-FREE BUFFER.** Every stage from credential to air is individually
+verified — frame byte-exact on the tag (C436), slot contents (M45), descriptor (C454), clock (C455),
+buffer entry for entry (C462), and now the hold capability (C469) — and the emission is still
+reported wrong. ⭐ But the number that convicts it, duty 83-88% against a predicted 40-53%
+(C449/C450/C452), was measured through the FLIPPER's comparator, whose bias is real and not constant
+(C436/M54) and which C465 has since disqualified for this protocol entirely. **The same emission has
+never been put through the pm3's raw buffer.** ⇒ #2 emulates PAC `CARD0001`, `pm3cap.py`, compared
+with C464's capture of the REAL tag holding the SAME credential through the SAME instrument.
+⛔ State the predicted duty and run histogram from `pac.c` FIRST — the frame's own bits give both.
+⚠ `lf pac econfig --cid` is NOT the flag; find the right one before arming (it failed silently on
+2026-09-15 and left slot 8 holding default PAC data).
 
 
 ⛔⛔ **PARTLY REFUTED BY C466 — READ THAT FIRST. The Proxmark DOES read our LF emulation: raw run structure and a byte-exact `EM 410x ID DEADBEEF88` from #2 emulating. The mechanism this entry offered — *a reader expecting a passive tag may simply not decode a PWM-driven emitter* — is wrong as a general claim. What survives is the narrow INDALA observation below, and its named suspect is now PSK phase lock, not PWM drive.**
