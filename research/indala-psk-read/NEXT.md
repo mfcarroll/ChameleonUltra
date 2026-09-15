@@ -406,6 +406,15 @@ real diagnostic step, not a superstition — and it is one only a person can tak
 
 ## The grid — where we stand against the Flipper
 
+⛔⛔ **THE EMULATE COLUMN BELOW IS STALE AND HAS BEEN SINCE C431 — a small, hands-free unit for the
+next session, recorded here so it is not lost across a compact.** It still says **PAC emulate ✓**,
+which is false — the Flipper reads it SILENT (C431, re-confirmed C448 under a criterion that could
+pass) and the whole C433-C456 investigation is about why. It also carries C246-era 0/6 lines for HID
+Prox, ioProx and AWID without pointing at the six-protocol FSK2a retirement (C447), and it predates
+the air-side grades: eight ASK arms measured inside a 3.0-point duty band against PAC's +34.5
+(C452). ⇒ **Rewrite the emulate column from C431's pass/fail plus C452's air-side numbers**, and
+leave the read and write columns alone — they were re-measured in full on 2026-09-14 (C330/C331).
+
 ⚠ Flipper column is the **local Momentum firmware** (`/Users/Shared/code/personal/rfid/Momentum-Firmware`),
 not upstream — that is what this bench actually tests against, and it carries two protocols
 upstream's list does not. Every one of its 26 protocols has BOTH a decoder and an encoder.
