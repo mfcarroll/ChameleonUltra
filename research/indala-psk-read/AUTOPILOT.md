@@ -40,6 +40,35 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐⭐ 2026-09-14 20:08 — C424 SURVIVES THE OBJECTION THAT SHOULD HAVE KILLED IT (C425)
+
+⛔ **The objection, raised against my own finding**: our READER reads real AWID, Paradox and Pyramid tags
+byte-exact (C201 — 5/5, 4/4, 4/4 on real T5577s), and those tags emit exactly the RF/8 and RF/10 subcarriers
+C424 says the tank cannot pass. If bandwidth were the limit it should limit reading too.
+
+⭐⭐ **The resolution is structural, from the repo's own sources:**
+
+- `lf_125khz_radio.c:41` — `LF_ANT_DRIVER` is the **SELECT pin of the antenna's analog switch**, and the PWM
+  duty is *"the mark/space of the square wave that swings the coil terminal between GND and 3V3"*.
+- `rfid_main.c:57` — tag emulation **parks `LF_ANT_DRIVER` LOW**.
+
+⇒ **READ drives the tank from a low-impedance source at 125 kHz** — a forced resonator's amplitude is
+re-established every cycle, so loaded Q is LOW and bandwidth WIDE. **EMULATE parks the coil terminal at a rail
+and leaves the tank free-running** at its natural Q. Same L, same C34+C10, same Q3/R11 — **different loaded Q,
+and the sign is exactly the one C424 needs.**
+
+⭐ It also disposes of *a commercial AWID tag is a passive tank and manages RF/8*: it does, so the claim is not
+that passive tanks cannot, but that **ours has too high a Q** — an antenna tuned for read range, not for
+modulation bandwidth.
+
+⚠⚠ **Structural, NOT measured.** Neither loaded Q has been measured, and the switch's Ron is in series in
+BOTH modes, so the difference is the DRIVE, not the switch. The prediction now doubles: **tag-mode Q ≈ 6-8,
+reader-mode Q materially lower.**
+
+⭐⭐ **AND IT HANDS THE NEXT UNIT A ONE-DEVICE METHOD**: `lf_gap.c` cuts the field, `rdrcap.py` returns
+amplitude ⇒ ringdown gives Q = pi x f x tau, on a single Chameleon with no bench move. Criterion pre-registered:
+**reader-mode Q must come out under ~5; if it is above 10, C424 and C425 are both in trouble.**
+
 ### ⭐⭐⭐ 2026-09-14 19:58 — THE ELEMENT IS NAMED: THE LF ANTENNA TANK (C424)
 
 From `hardware/ultra/Chameleon_nrf52_ultra_V1.0.pdf` page 2, sheet `LF`:

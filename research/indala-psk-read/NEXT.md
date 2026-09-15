@@ -21,10 +21,19 @@ where recovery begins, and the roll-off is gradual: first-order or Q-limited, no
 behind series diode VD1 and tank caps C34 2.2nF + C10 5.6nF (L = 208 uH). The switch is retired at 2.2 us
 against a 32 us mark; a loaded Q of 6-8 reproduces C423's curve exactly.
 
-⭐⭐ **NEXT UNIT: MEASURE THE LOADED Q INDEPENDENTLY — the prediction is 6-8.** Quoting C423's knee back as
-proof of Q is circular, so this needs its own measurement: a ringdown, or a -3dB sweep of the tank. ⚠ Neither
-has been taken and the method on this bench is not yet worked out — `rdrcap.py` is the only amplitude
-instrument here and it needs the two Chameleons facing.
+✅ **C425 TESTED C424 AGAINST THE RESULT THAT SHOULD HAVE KILLED IT AND IT SURVIVED.** Our reader reads real
+AWID/Paradox/Pyramid byte-exact (C201) — the same RF/8 subcarriers C424 says the tank cannot pass. Resolution:
+`LF_ANT_DRIVER` is the analog switch's SELECT and *swings the coil terminal between GND and 3V3*
+(`lf_125khz_radio.c:41`), and tag mode **parks it LOW** (`rfid_main.c:57`). ⇒ READ drives the tank from a
+low-impedance source (low loaded Q, wide bandwidth); EMULATE leaves it free-running (natural Q, narrow).
+
+⭐⭐ **NEXT UNIT: MEASURE READER-MODE Q BY RINGDOWN — ONE DEVICE, EXISTING TOOLS, NO BENCH MOVE.** `lf_gap.c`
+already cuts the field on command and `rdrcap.py` already returns AMPLITUDE samples from our own SAADC, so the
+tank's decay after a field cut gives **Q = pi x f x tau** directly. ⭐ **Pre-register the criterion**: C425
+predicts reader-mode Q is materially LOW — **under about 5**. If it comes out HIGH (>10), the read path should
+not work either and **both C424 and C425 are in trouble**, which is exactly why this is worth taking first.
+⚠ It tests only half the prediction; tag-mode Q (predicted 6-8) needs the tank excited externally and the field
+cut by the OTHER device, which is a harder synchronisation and a bench move.
 
 ⛔⛔ **AND DECIDE WHAT F12 *IS* BEFORE SPENDING MORE ON IT.** If the Q confirms, FSK2a emulation is a HARDWARE
 limit on Ultra hw_v1 and no firmware change fixes it — which would make F12 a *documented constraint* rather
