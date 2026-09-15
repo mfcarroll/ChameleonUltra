@@ -66,6 +66,7 @@ cannot go stale the way the README table did. Add the row when you add the tool.
 | `momdemod.py` | Momentum's own FSK demodulator in Python, run over our emitter's ideal output |
 | `generality.py` | ⭐ Does the firmware decoder generalise past the one word this bench has ever seen? Synthetic |
 | `ctest/` | ⭐⭐ Host build of the **firmware** decoder. `make check` diffs it against `mfdemod.py` per capture **and runs the emitter round trip** (`roundtrip.c`) |
+| `pacdiff.py` ⭐ **A DIFFERENTIAL DECODER VALIDATOR, AND IT RETIRED THE NUMBER IT WAS BUILT TO CONFIRM.** Emits two PAC credentials and checks the recovered bits change EXACTLY as `pac_build_bitstream` says they must. Chooses a control that CAN fail: `0000AAAA` vs `CARD0001` differs in 38 positions with near-equal total ones, so no level-counting decoder passes by luck. ⛔ It fails today, and that is the finding (C435) — do not 'fix' it into passing. | ⭐⭐ Whether a decoder tracks the DATA, without needing it to be absolutely right. Prints the invariant-prefix violations separately: PAC's payload bytes 0..2 are constants, so any recovered difference in bits 0..37 is the decoder's and nothing else's |
 | `tonehist.py` | ⛔⛔⛔ **DO NOT TRUST — IT MEASURES NOISE (C401).** It printed *"ZERO long tones"* for an emission the receiver decoded correctly. Retained as evidence only. ⇒ Use `flipraw.py` |
 
 ## Measurement and sweeps — mostly historical, mostly Indala-era
@@ -151,3 +152,22 @@ cause — plenty of free heap but no contiguous block big enough for the CLI plu
 ⚠ **Repeated app load/unload cycles fragment it**, which is exactly what a grading pass over 16 arms does —
 so expect it after `flipgrade.py` and reboot before trusting a later capture. ⭐ After any reboot, re-run the
 CONTROL arm before the unknown one, so the result is taken on a bench proven live.
+
+## ⛔⛔ THE FLIPPER REPORTS EDGE POSITIONS, NOT LEVELS — SO IT CANNOT GRADE NRZ (C435/M54)
+
+PAC is NRZ at RF/32, so every run is a whole number of 256us bits **by construction**. In two fresh
+captures the **PERIODS** land within 0.15 bit of a multiple **99.6%** of the time and the **HIGH and LOW
+runs composing them do so 0.3-2.6%** of the time — the LOW runs sit at a near-fixed ~100-160us that
+does not scale with the data at all.
+
+⇒ A run-level decode of a Flipper capture scores a quantity the instrument does not measure. This is
+not a tuning problem and no better decoder fixes it.
+
+⚠ **And the run bias is not a constant.** C429/C430 measured ~96us; fitted per capture it is **93us and
+151us** in two captures taken minutes apart from the same emitter and pad. Fitting it removes the rounding
+error (2.6% bad runs in both) and changes the recovered bits **not at all** — which is exactly how a
+nuisance parameter is told apart from the real defect.
+
+⭐ Use the periods for anything distributional (C429/C430 both did, and both held up). For held-level
+protocols, grade the FRAME through the T5577 writer on rig B instead, and say that this tests the frame and
+not the modulator.

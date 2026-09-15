@@ -572,3 +572,24 @@ against the day C400 cost. ⚠ The stale claim that produced it was sitting in `
 believed rather than checked: **a plan-era note is not a source of fact about shipped code (M45's
 rule, applied to our own notes instead of to the hardware).**
 
+**M54 — AN EDGE-DETECTING CAPTURE CANNOT GRADE A HELD-LEVEL (NRZ) EMISSION, AND THE GIVEAWAY IS THAT
+ONLY THE SUMS QUANTISE.**
+
+⛔ The Flipper's RIFL capture reports (pulse, PERIOD) pairs. For PAC — NRZ at RF/32, bit 256us — the
+PERIODS land within 0.15 bit of a whole multiple **99.6%** of the time, while the individual HIGH and
+LOW runs they are made of do so **0.3-2.6%** of the time. A genuine NRZ waveform has no such asymmetry:
+both runs are integer multiples of the bit by construction, because a level is held for a whole number
+of bits. ⇒ **The instrument is reporting edge POSITIONS faithfully and levels not at all**, so any
+run-level decode of such a capture scores a quantity the instrument does not measure.
+
+⚠ The corollary that cost a tick: **the run bias is not a constant and cannot be corrected with one.**
+C429/C430 measured ~96us; fitting it per capture gives **93us and 151us** in two captures taken minutes
+apart from the same emitter and pad. Fitting it removes the rounding error (2.6% bad runs in both) and
+changes the recovered bits *not at all* — which is how you tell a nuisance parameter from the real
+defect.
+
+⇒ Before decoding a capture, ask which quantity the instrument actually measures, and check it on the
+invariant the protocol guarantees. Here the check is free: NRZ says every run is a whole bit.
+⛔ This sits alongside M52 rather than inside it. M52 bars the SAADC *family* from being read off an
+emulation; this bars an *edge-detecting capture* from grading a held-level emission, whatever family it
+belongs to.
