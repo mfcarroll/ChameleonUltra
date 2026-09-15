@@ -773,6 +773,26 @@ static data_frame_tx_t *cmd_processor_lf_radio_debug(uint16_t cmd, uint16_t stat
     lf_125khz_radio_debug_get(buf);
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(buf), buf);
 }
+
+/* ⭐ Instrumentation for the PAC emulation — return the live PWM wave-form entries. Takes an
+ * optional 4-byte window (start, count), both big-endian, so a 128-entry buffer can be read in
+ * one frame or in pieces; no payload means "from 0, as many as fit".
+ * ⚠ The output buffer is static: LF_TAG_EM_SEQ_DUMP_MAX is 2060 bytes and this runs on the
+ * command thread's stack. */
+static data_frame_tx_t *cmd_processor_lf_emu_seqdump(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[LF_TAG_EM_SEQ_DUMP_MAX];
+    uint16_t start = 0;
+    uint16_t count = LF_TAG_EM_SEQ_MAX_ENTRIES;
+
+    if (length == 4) {
+        start = ((uint16_t)data[0] << 8) | data[1];
+        count = ((uint16_t)data[2] << 8) | data[3];
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t n = lf_tag_em_seq_get(start, count, out);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, out);
+}
 #endif /* LF_RESEARCH_CMDS_ENABLED */
 
 static data_frame_tx_t *cmd_processor_indala224_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3987,6 +4007,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
 #if LF_RESEARCH_CMDS_ENABLED
     {    DATA_CMD_LF_EMU_DEBUG,                 NULL,                        cmd_processor_lf_emu_debug,                  NULL                   },
     {    DATA_CMD_LF_RADIO_DEBUG,               NULL,                        cmd_processor_lf_radio_debug,                NULL                   },
+    {    DATA_CMD_LF_EMU_SEQDUMP,               NULL,                        cmd_processor_lf_emu_seqdump,                NULL                   },
 #endif
     {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
     {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },

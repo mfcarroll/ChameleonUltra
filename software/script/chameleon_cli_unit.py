@@ -9390,6 +9390,35 @@ class HWEmuDebug(DeviceRequiredUnit):
         print(f"   frames per burst : {d['frames_per_burst']}")
 
 
+@hw.command("emuseq")
+class HWEmuSeqDump(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("⭐ instrumentation: dump the live PWM wave-form entries the LF "
+                              "emulation is playing. ⛔ VOID without a reader field (M56) — "
+                              "hold a reader on the tag while this runs; the header's "
+                              "`emulating` flag says whether it was.")
+        parser.add_argument("--start", type=int, default=0, help="first entry")
+        parser.add_argument("--count", type=int, default=256, help="entries to read")
+        parser.add_argument("--raw", action="store_true",
+                            help="one line per entry: index ch0 ch1 ch2 top")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        d = self.cmd.lf_emu_seqdump(args.start, args.count)
+        print(f"   tag type         : {d['tag_type']}")
+        print(f"   entries in buffer: {d['entries']}   (length/4)")
+        print(f"   emulating now    : {d['emulating']}"
+              + ("" if d["emulating"] else
+                 "   ⛔ NO READER FIELD — this dump is VOID (M56, C454)"))
+        print(f"   playbacks started: {d['playbacks']}")
+        print(f"   seq repeats      : {d['repeats']}")
+        print(f"   returned         : {d['count']} from index {d['start']}")
+        if args.raw:
+            for i, (c0, c1, c2, top) in enumerate(d["vals"]):
+                print(f"{d['start'] + i} {c0} {c1} {c2} {top}")
+
+
 @hw.command("lfdebug")
 class HWLfRadioDebug(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:

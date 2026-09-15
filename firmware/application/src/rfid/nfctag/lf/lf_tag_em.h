@@ -69,3 +69,17 @@ bool is_lf_field_exists(void);
 /** ⚠ §3 instrumentation: 12 bytes of LF emulation state. ⛔ Remove before upstreaming. */
 #define LF_TAG_EM_DEBUG_SIZE 14
 void lf_tag_em_debug_get(uint8_t *out);
+
+/** ⭐ §3 instrumentation: dump the LIVE PWM wave-form buffer through `m_pwm_seq` — the one step
+ * of the PAC path that no air-side measurement can reach (see DATA_CMD_LF_EMU_SEQDUMP).
+ *
+ * ⛔⛔ A DUMP TAKEN WITH NO READER FIELD IS VOID (M56). The modulator runs on field detection,
+ * so with the field off this returns whatever the last armed protocol left — and C454 is the
+ * precedent: a register read the same for all three arms and the constant was mistaken for an
+ * answer until the controls, which had to differ, caught it. The header therefore carries
+ * `emulating` and `playbacks` so a void dump is visible in its own output, and `entries`
+ * differs per arm (pac 128, gproxii 96) so the controls can still fail. */
+#define LF_TAG_EM_SEQ_HEADER_SIZE   12
+#define LF_TAG_EM_SEQ_MAX_ENTRIES   256
+#define LF_TAG_EM_SEQ_DUMP_MAX      (LF_TAG_EM_SEQ_HEADER_SIZE + LF_TAG_EM_SEQ_MAX_ENTRIES * 8)
+uint16_t lf_tag_em_seq_get(uint16_t start, uint16_t count, uint8_t *out);

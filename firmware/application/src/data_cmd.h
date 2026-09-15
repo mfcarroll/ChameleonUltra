@@ -296,6 +296,15 @@
  * raw samples. The tag answers in whatever modulation its config selects, so the demodulation
  * is host-side; for block 0 that config is exactly what is being asked for. */
 #define DATA_CMD_LF_T55XX_READ_CAPTURE          (3063)
+/* ⭐ INSTRUMENTATION for the PAC emulation (C451-C456). Every step of that path is now verified
+ * on hardware EXCEPT the per-entry PWM wave-form values themselves: the descriptor is right
+ * (SEQ[0].CNT 512, gproxii 384 as its control), the base clock is right, the burst arithmetic is
+ * right and the emitted bit PERIOD is right at 256us - yet the duty is pinned at 87.6% across 14
+ * credentials that predict 40.6-56.2%. Four air-side routes have been refuted, each by its own
+ * control, so the remaining question is not answerable from the air at all: it is what the
+ * modulator actually WROTE. This returns the live buffer through `m_pwm_seq`, so EVERY arm goes
+ * through the same command and gproxii can be carried as the control. */
+#define DATA_CMD_LF_EMU_SEQDUMP                 (3065)
 #endif
 #define DATA_CMD_FDXB_SCAN                      (3061)
 #define DATA_CMD_FDXB_WRITE_TO_T55XX            (3062)

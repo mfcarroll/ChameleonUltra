@@ -821,6 +821,44 @@ class ChameleonCMD:
         }
         return resp
 
+    @expect_response(Status.SUCCESS)
+    def lf_emu_seqdump(self, start=0, count=256):
+        """
+        ⭐ Instrumentation: read the LIVE PWM wave-form entries the LF emulation is playing.
+
+        Every other step of the PAC path is verified on hardware and the emission is still
+        wrong (C451/C452), and four air-side routes have each been refuted by their own
+        control (C440/C441/C451/C456) — because the air cannot see the buffer, only what the
+        peripheral made of it. This reads the buffer itself, through the same `m_pwm_seq`
+        pointer playback is handed, so every protocol answers through one path and gproxii can
+        be carried as a control.
+
+        ⛔⛔ VOID WITHOUT A READER FIELD (M56). The modulator runs on field detection; with no
+        field this returns whatever was left behind. `emulating` in the header is the guard —
+        C454 is the precedent for what happens without one: a register that read the same for
+        all three arms, mistaken for an answer until the controls caught it.
+
+        Returns a dict: entries, tag_type, start, count, emulating, playbacks, repeats, and
+        `vals`, a list of (channel_0, channel_1, channel_2, counter_top).
+        """
+        payload = struct.pack(">HH", start, count)
+        resp = self.device.send_cmd_sync(Command.LF_EMU_SEQDUMP, payload)
+        if resp.status == Status.SUCCESS:
+            d = resp.data
+            n = (d[6] << 8) | d[7]
+            vals = [struct.unpack_from(">HHHH", d, 12 + i * 8) for i in range(n)]
+            resp.parsed = {
+                "entries": (d[0] << 8) | d[1],
+                "tag_type": (d[2] << 8) | d[3],
+                "start": (d[4] << 8) | d[5],
+                "count": n,
+                "emulating": bool(d[8]),
+                "playbacks": (d[9] << 8) | d[10],
+                "repeats": d[11],
+                "vals": vals,
+            }
+        return resp
+
 
     @expect_response(Status.LF_TAG_OK)
     def indala224_scan(self):

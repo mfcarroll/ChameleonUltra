@@ -954,3 +954,59 @@ void lf_tag_em_debug_get(uint8_t *out) {
     out[12] = (uint8_t)(m_frames_per_burst >> 8);
     out[13] = (uint8_t)(m_frames_per_burst & 0xFF);
 }
+
+/* ⭐ §3 INSTRUMENTATION — the per-entry PWM wave-form values, read back off the live buffer.
+ *
+ * ⚠ Reads through `m_pwm_seq`, the SAME pointer nrfx_pwm_simple_playback() is handed, so this
+ * cannot drift from what is being played and every protocol answers through one code path —
+ * which is what lets gproxii be carried as a control rather than a second implementation.
+ * ⛔ Read-only and takes no lock: the PWM reads this buffer by EasyDMA while we copy it, and a
+ * torn read would be a wrong ANSWER rather than a crash. The buffer is written once per
+ * modulator call and not touched during playback, so a tear can only happen across a field
+ * re-detect — take two dumps and compare if one ever looks impossible.
+ * ⛔ A dump with `emulating` false is VOID; see the header. */
+uint16_t lf_tag_em_seq_get(uint16_t start, uint16_t count, uint8_t *out) {
+    const nrf_pwm_values_wave_form_t *v = NULL;
+    uint16_t total = 0;
+
+    if (m_pwm_seq != NULL && m_pwm_seq->values.p_wave_form != NULL) {
+        total = (uint16_t)(m_pwm_seq->length / 4u);
+        v = m_pwm_seq->values.p_wave_form;
+    }
+    if (start > total) {
+        start = total;
+    }
+    if (count > (uint16_t)(total - start)) {
+        count = (uint16_t)(total - start);
+    }
+    if (count > LF_TAG_EM_SEQ_MAX_ENTRIES) {
+        count = LF_TAG_EM_SEQ_MAX_ENTRIES;
+    }
+
+    uint16_t n = 0;
+    out[n++] = (uint8_t)(total >> 8);
+    out[n++] = (uint8_t)(total & 0xFF);
+    out[n++] = (uint8_t)((uint16_t)m_tag_type >> 8);
+    out[n++] = (uint8_t)((uint16_t)m_tag_type & 0xFF);
+    out[n++] = (uint8_t)(start >> 8);
+    out[n++] = (uint8_t)(start & 0xFF);
+    out[n++] = (uint8_t)(count >> 8);
+    out[n++] = (uint8_t)(count & 0xFF);
+    out[n++] = m_is_lf_emulating ? 1u : 0u;
+    out[n++] = (uint8_t)(m_dbg_playbacks >> 8);
+    out[n++] = (uint8_t)(m_dbg_playbacks & 0xFF);
+    out[n++] = (uint8_t)(m_pwm_seq != NULL ? m_pwm_seq->repeats : 0u);
+
+    for (uint16_t i = 0; i < count; i++) {
+        const nrf_pwm_values_wave_form_t *e = &v[start + i];
+        out[n++] = (uint8_t)(e->channel_0 >> 8);
+        out[n++] = (uint8_t)(e->channel_0 & 0xFF);
+        out[n++] = (uint8_t)(e->channel_1 >> 8);
+        out[n++] = (uint8_t)(e->channel_1 & 0xFF);
+        out[n++] = (uint8_t)(e->channel_2 >> 8);
+        out[n++] = (uint8_t)(e->channel_2 & 0xFF);
+        out[n++] = (uint8_t)(e->counter_top >> 8);
+        out[n++] = (uint8_t)(e->counter_top & 0xFF);
+    }
+    return n;
+}
