@@ -378,6 +378,11 @@ mixed FSK2a and our emitter may be fine; ~45% confirms the emitter is at fault.
 
 ⚠ Nothing else is blocked — C400 is fully reachable on rig B exactly as it stands.
 
+⚠ **SUPERSEDED IN PART — read the grid's own banner first. C378's survey below is 11 protocols and PAC IS NOT
+ONE OF THEM**, so "the emulate column is done" was true of the arms it measured and not of the column. C431
+re-graded 16 arms against the Flipper and found PAC SILENT — a fourth gap, in a protocol that is not FSK.
+The FSK three below are now six (C447). Everything else here still holds.
+
 ✅✅ **THE EMULATE COLUMN IS DONE AND NOTHING HERE NEEDS HANDS (C378).** 8 of 11 protocols emulate **6 of 6**:
 PSK1 (Indala, IDTECK, Keri, NexWatch) and ASK/biphase (Gallagher, Securakey, Noralsy, GProxII), each with its
 wrong-modulation arm at 0/6 as a built-in control and clean nulls either side. **FSK — HID Prox, ioProx, AWID —
@@ -423,14 +428,16 @@ real diagnostic step, not a superstition — and it is one only a person can tak
 
 ## The grid — where we stand against the Flipper
 
-⛔⛔ **THE EMULATE COLUMN BELOW IS STALE AND HAS BEEN SINCE C431 — a small, hands-free unit for the
-next session, recorded here so it is not lost across a compact.** It still says **PAC emulate ✓**,
-which is false — the Flipper reads it SILENT (C431, re-confirmed C448 under a criterion that could
-pass) and the whole C433-C456 investigation is about why. It also carries C246-era 0/6 lines for HID
-Prox, ioProx and AWID without pointing at the six-protocol FSK2a retirement (C447), and it predates
-the air-side grades: eight ASK arms measured inside a 3.0-point duty band against PAC's +34.5
-(C452). ⇒ **Rewrite the emulate column from C431's pass/fail plus C452's air-side numbers**, and
-leave the read and write columns alone — they were re-measured in full on 2026-09-14 (C330/C331).
+✅ **THE EMULATE COLUMN BELOW WAS REWRITTEN FROM C431'S FLIPPER SWEEP, 2026-09-15.** It had been
+stale since C431 and said **PAC emulate ✓** — a cell that had never been measured at all, because
+C378's survey was 11 protocols and PAC was not among them. Every cell now names the run it comes
+from. ⭐ **C431 graded 16 arms against the Flipper with a silent NULL before every pass: 12 PASS
+(11 by name and value, Securakey by VALUE under Momentum's own name for it, `Radio Key`), 4 SILENT
+— hidprox, ioprox, awid and PAC.** The three FSK gaps reproduce C246 and C378 independently and are
+now retired as part of C447's **six**-protocol FSK2a class, not the four this file used to name.
+⚠ **Four rows were NOT in C431's 16 and say so in the cell** — Indala 224-bit, InstaFob, and the
+two FSK2a protocols with no emitter at all. ⛔ The read and write columns are untouched: they were
+re-measured in full on 2026-09-14 (C330/C331), and this rewrite edited the emulate field only.
 
 ⚠ Flipper column is the **local Momentum firmware** (`/Users/Shared/code/personal/rfid/Momentum-Firmware`),
 not upstream — that is what this bench actually tests against, and it carries two protocols
@@ -440,28 +447,28 @@ registered `TAG_TYPE_*`.
 
 | protocol | read | write | emulate | Momentum |
 |---|---|---|---|---|
-| EM410x (+16/32, Electra) | ✓ | ✓ | ✓ | ✓ |
-| HID Prox (H10301, generic, ex-generic) | ✓ **96/96 exact — C45 is CLOSED, it was a BLE advertising burst and `cf745fb`'s guard fixes it (C250)** | ✓ | ⛔ **0/6 — FSK2a emulation does not work on this device (C246)** | ✓ |
-| ioProx (IOProxXSF) | ✓ | ✓ | ⛔ **0/6 — same as HID Prox (C246)** | ✓ |
-| PAC/Stanley | ✓ **fixed (C144)** | ✓ | ✓ | ✓ |
-| Viking | ✓ | ✓ | ✓ | ✓ |
-| Jablotron | ✓ | ✓ | ✓ | ✓ |
-| **Indala 64-bit** | ✓ | ✓ | ✓ | ✓ |
-| **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** | ✓ |
-| **IDTECK** | ✓ | ✓ | ✓ | ✓ |
+| EM410x (+16/32, Electra) | ✓ | ✓ | ✅ **Flipper PASS — `EM4100 DEADBEEF88`, and it is the GPIO family's reference arm (C431)** | ✓ |
+| HID Prox (H10301, generic, ex-generic) | ✓ **96/96 exact — C45 is CLOSED, it was a BLE advertising burst and `cf745fb`'s guard fixes it (C250)** | ✓ | ⛔ **SILENT to the Flipper (C431), reproducing C246 and C378 independently — and RETIRED: C447 puts HID Prox in the FSK2a class, which is SIX protocols, not four, and unreachable on Ultra hw_v1** | ✓ |
+| ioProx (IOProxXSF) | ✓ | ✓ | ⛔ **SILENT to the Flipper (C431) — RETIRED with the FSK2a six (C447)** | ✓ |
+| PAC/Stanley | ✓ **fixed (C144)** | ✓ | ⛔⛔ **SILENT — and this row said ✓ for months on no measurement at all. C378's survey was 11 protocols and PAC was not one of them; the Flipper reads it SILENT (C431, re-confirmed C448 under a criterion that could pass). ⛔ It is NOT an FSK gap: `pac.c` is NRZ at RF/32, one entry per bit at `counter_top` 32 — the same shape and rate as FDX-B, which decodes byte-exact. Air-side it is alone: +34.5 points of duty excess against eight ASK arms inside a 3.0-point band (C452), duty pinned 87.6% across 14 credentials predicting 40.6-56.2% (C451). The buffer read-back that would settle it is written and unflashable (C459)** | ✓ |
+| Viking | ✓ | ✓ | ✅ **Flipper PASS — `Viking 1A337195` (C431)** | ✓ |
+| Jablotron | ✓ | ✓ | ✅ **Flipper PASS — `Card: 42E576F7` (C431)** | ✓ |
+| **Indala 64-bit** | ✓ | ✓ | ✅ **Flipper PASS — `Indala26 CD7A1D30` FC 52 Card 63612 (C431)** | ✓ |
+| **Indala 224-bit** | ✓ | ✓ **VERIFIED on tag** | ✓ **11/11 exact (C152)** — ⚠ NOT among C431's 16 arms, so this grade predates the Flipper re-grade and is the oldest cell in the column | ✓ |
+| **IDTECK** | ✓ | ✓ | ✅ **Flipper PASS — `4944544B55667788` (C431)** | ✓ |
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
-| **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **0/6 — and so are the two SHIPPED FSK2a emitters, so this is the device, not our emitter (C246)** | ✓ |
-| **FDX-A** | ✓ **A — 10/10 on a REAL TAG, 2 credentials (C338)** | ✓ **A — 4/4, blocks identical to the pm3 clone (C340)** | ✗ | ✓ |
-| **FDX-B** | ✓ **6/6 on device (C214, C215), re-confirmed 15/15 (C337)** — ⚠ one unreproduced failure episode | ✓ **4/4, the PROXMARK reads our write (C215)** | ✅ **the FLIPPER decodes our emulation — `ID: 999-000000001337` (C430)** | ✓ |
-| **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
-| **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
-| **Keri** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, ROTATION verified against a reference clone (C234)** | ✓ **6/6 via Flipper (C160)** | ✓ |
-| **Gallagher** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C174)** | ✓ |
-| **NexWatch** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C234)** | ✓ **10/10 via Flipper, null 0/4 (C167)** | ✓ |
-| **Securakey** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag (C233)** | ✓ **10/10 via Flipper, null 0/4 (C178)** | ✓ |
-| **Noralsy** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✓ **10/10 via Flipper, null 0/4 (C184)** | ✓ |
-| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✅ **the FLIPPER decodes our emulation byte-exact — `FAC2A38C2B081AF0210B12C2` FC 123 Card 1337 (C429)**; ⛔ C242's *impossible as designed* is REFUTED, killed by a 92-held-level frame | ✓ |
-| **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter | ✓ (ASK, RF/32, **225-bit frame**) |
+| **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **SILENT to the Flipper (C431), reproducing C246 — RETIRED with the FSK2a six (C447); C422/C423 located the bandwidth knee and C427 exhausted the firmware surface** | ✓ |
+| **FDX-A** | ✓ **A — 10/10 on a REAL TAG, 2 credentials (C338)** | ✓ **A — 4/4, blocks identical to the pm3 clone (C340)** | ✗ no emitter — and it would not help: FDX-A is one of the FSK2a six (C447) | ✓ |
+| **FDX-B** | ✓ **6/6 on device (C214, C215), re-confirmed 15/15 (C337)** — ⚠ one unreproduced failure episode | ✓ **4/4, the PROXMARK reads our write (C215)** | ✅ **the FLIPPER decodes our emulation — `ID: 999-000000001337` (C430), re-confirmed in the C431 sweep. One of the eight ASK arms in C452's 3.0-point duty band** | ✓ |
+| **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ no emitter — one of the FSK2a six (C447) | ✓ |
+| **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ no emitter — one of the FSK2a six (C447) | ✓ |
+| **Keri** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, ROTATION verified against a reference clone (C234)** | ✅ **Flipper PASS — `Keri 80003039` (C431), and 6/6 earlier (C160)** | ✓ |
+| **Gallagher** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✅ **Flipper PASS — FC 4321 Card 6789 (C431); 10/10 with null 0/4 earlier (C174). In C452's 3.0-point ASK band** | ✓ |
+| **NexWatch** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C234)** | ✅ **Flipper PASS — `ID: 87654321` Mode 2 (C431); 10/10 with null 0/4 earlier (C167)** | ✓ |
+| **Securakey** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag (C233)** | ✅ **Flipper PASS BY VALUE — facility 53 card 64169, decoded as `Radio Key` because that is Momentum's name for it (C431). ⛔ M28: the name is printed, never tested — gating on it is what made C177 report a working arm as a total failure. In C452's 3.0-point ASK band** | ✓ |
+| **Noralsy** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, wiped tag + changed credential (C233)** | ✅ **Flipper PASS — `BB0214FF0112402233670000` Card 0112233 (C431); 10/10 with null 0/4 earlier (C184). In C452's 3.0-point ASK band** | ✓ |
+| **GProxII** | ✓ **12/12 exact on device, 0 wrong, nulls clean (C213)** | ✓ **4/4, the PROXMARK reads our write (C207)** | ✅ **the FLIPPER decodes our emulation byte-exact — `FAC2A38C2B081AF0210B12C2` FC 123 Card 1337 (C429), re-confirmed in the C431 sweep; C242's *impossible* is refuted. In C452's 3.0-point ASK band** | ✓ |
+| **InstaFob** | ✓ **5/5 on device, null 0/4 (C187)** | ⛔ **unverifiable here — no writer ships** | ◐ needs a terminator-aware emitter — ⚠ NOT among C431's 16 arms, never graded against the Flipper | ✓ (ASK, RF/32, **225-bit frame**) |
 
 ⇒ **Twelve protocols absent, two readers unreliable. Every Indala and IDTECK read path
 works, and every one of them now emulates too.**
