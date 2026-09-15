@@ -59,10 +59,18 @@ unbuilt emulate arm left that F12 does not block** — it is biphase, not FSK2a.
 control. **C242 is refuted**, so the emulate column above is corrected. ⚠ Two criteria in a row were wrong
 here — see C429; the method that worked was three frames whose predictions span 90 points, not a peak location.
 
-1. **Build the FDX-B emitter.** It needs a `TagSpecificType` as well as a modulator. It is biphase at a
-   rate the tank passes comfortably, so nothing in C422-C427 blocks it. ⭐ **Grade it the way C429 did**:
-   predictions computed from the modulator, several frames chosen so their predictions are far apart, and
-   the FLIPPER as the reader — never our own SAADC reader against an emulation (M52).
+✅ **DONE — FDX-B EMULATION IS BUILT AND WORKS (C430).** The Flipper reads our emulation as
+`ID: 999-000000001337`, country 999, animal yes. `TAG_TYPE_FDXB` = 309, cmds 5032/5033, `lf fdxb econfig`.
+⛔ It is INVERTED relative to GProxII — a mid-bit transition means ZERO — which `lf_ask_biphase.h` already
+recorded and I did not apply until the air said so.
+
+⭐⭐ **NEXT UNIT — and the emulate column is now the question, not the protocols:**
+1. **Re-grade the emulate column end to end against the FLIPPER.** C428/C429/C430 each found the emulate
+   status of a protocol was stale, wrong, or untested, and two of the three were wrong in the notes rather
+   than in the firmware. ⭐ The grid at §9d lists every emulate arm; `emugrade.sh` is the harness but
+   ⛔ its reader is Chameleon #2, which M52 forbids for the SAADC family (indala, gallagher, securakey,
+   noralsy, gproxii). ⇒ The unit is a Flipper-based emugrade arm, then one pass.
+2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
@@ -179,7 +187,7 @@ registered `TAG_TYPE_*`.
 | EM4x05 | ✓ | ✗ | ✗ | — (not an lfrfid protocol) |
 | **AWID** | ✓ **5/5 on a REAL TAG (C201)** | ✓ **5/5, the PROXMARK reads our write (C203)** | ⛔ **0/6 — and so are the two SHIPPED FSK2a emitters, so this is the device, not our emitter (C246)** | ✓ |
 | **FDX-A** | ✓ **A — 10/10 on a REAL TAG, 2 credentials (C338)** | ✓ **A — 4/4, blocks identical to the pm3 clone (C340)** | ✗ | ✓ |
-| **FDX-B** | ✓ **6/6 on device (C214, C215), re-confirmed 15/15 (C337)** — ⚠ one unreproduced failure episode | ✓ **4/4, the PROXMARK reads our write (C215)** | ✗ | ✓ |
+| **FDX-B** | ✓ **6/6 on device (C214, C215), re-confirmed 15/15 (C337)** — ⚠ one unreproduced failure episode | ✓ **4/4, the PROXMARK reads our write (C215)** | ✅ **the FLIPPER decodes our emulation — `ID: 999-000000001337` (C430)** | ✓ |
 | **Paradox** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Pyramid** | ✓ **4/4 on a REAL TAG (C201)** | ✓ **4/4, the PROXMARK reads our write (C203)** | ✗ | ✓ |
 | **Keri** | ✓ **5/5 on a REAL TAG (C235)** | ✓ **4/4, ROTATION verified against a reference clone (C234)** | ✓ **6/6 via Flipper (C160)** | ✓ |
@@ -463,7 +471,7 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Pyramid | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | FDX-A | **A** 10/10 real tag, 2 credentials (C338) | **A** 4/4, blocks identical to the reference clone (C340) | ⛔ **not built** |
 | GProxII | **A** 12/12, 0 wrong, nulls clean (C213) | **A** **4/4** re-graded (C330) | **A** **byte-exact on the Flipper (C429)** — C242 refuted |
-| FDX-B | **A** 6/6 (C214/C215), **re-confirmed 15 of 15 (C337)** — ⚠ one unreproduced 0-of-4 episode, instrumented and unexplained | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | ⛔ **not built** |
+| FDX-B | **A** 6/6 (C214/C215), **re-confirmed 15 of 15 (C337)** — ⚠ one unreproduced 0-of-4 episode, instrumented and unexplained | **A** **4/4** re-graded (C331) — judged on `lf fdxb reader` | **A** **byte-exact on the Flipper (C430)** |
 
 ⭐ **The write column was re-measured wholesale on 2026-09-14 (C330), and the numbers above are that
 measurement.** Every write arm had been scored while our own HID writer had the tag password-locked

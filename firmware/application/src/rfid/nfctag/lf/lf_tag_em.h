@@ -22,6 +22,9 @@
 #define LF_GALLAGHER_TAG_ID_SIZE 12
 #define LF_AWID_TAG_ID_SIZE 12
 #define LF_GPROXII_TAG_ID_SIZE 12
+/* ⚠ SIXTEEN bytes — the largest LF frame here bar Indala224, and the shared LF buffer is
+ * sized at LF_INDALA224_TAG_ID_SIZE (28), so it fits. Checked, not assumed (F13's class). */
+#define LF_FDXB_TAG_ID_SIZE 16
 #define LF_SECURAKEY_TAG_ID_SIZE 12
 #define LF_NORALSY_TAG_ID_SIZE 12
 
@@ -55,6 +58,8 @@ int lf_tag_awid_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer)
 bool lf_tag_awid_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_gproxii_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_gproxii_data_factory(uint8_t slot, tag_specific_type_t tag_type);
+int lf_tag_fdxb_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
+bool lf_tag_fdxb_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_securakey_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_securakey_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_noralsy_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);

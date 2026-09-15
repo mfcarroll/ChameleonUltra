@@ -93,3 +93,20 @@ reported **100.0% against a true 48.8%**, raising no error at all. `flipraw.py -
 peak at X* and twice it was wrong. ⭐ What works instead: compute the expected distribution from the modulator
 source, and pick SEVERAL payloads whose predictions are far apart — a constant tone cannot track three
 different data-matched distributions, and no single capture can rule one out.
+
+## ⛔⛔ The SECOND flipraw.py parser trap, and it corrupted 40% of a capture (C430)
+
+**RIFL's pair stream is continuous across blocks, and one inserted or lost varint at a block boundary swaps
+pulse and duration for EVERY pair after it.** No error is raised and the histogram still looks plausible.
+
+⭐ **The invariant that catches it**: a pulse is the HIGH part of its own period, so `pulse < duration`
+ALWAYS. One FDX-B capture had **4127 of 10296 pairs** violating that. `parse()` now resyncs on it and reports
+the count; a healthy capture needs ~1% of pairs dropped.
+
+⛔ **Parsing each block independently is WRONG** — it was tried first and made previously-clean captures
+57-78% violating. That is also the evidence the stream really is continuous: a fix that only helps the broken
+case is not a diagnosis.
+
+⚠ **And pairing runs into periods has TWO phases.** A period is a HIGH run plus the LOW run after it, so the
+pairing depends on the modulator's polarity. Only MIXED-run frames distinguish them — which is why extreme
+frames can pass while the realistic one fails. `--biphase` reports both and names the one it used.

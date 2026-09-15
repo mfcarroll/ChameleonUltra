@@ -8060,6 +8060,51 @@ class LFFdxbRead(ReaderRequiredUnit):
               f"{tries} capture{'' if tries == 1 else 's'} taken{' (inverted)' if inv else ''}")
 
 
+@lf_fdxb.command("econfig")
+class LFFDXBEconfig(SlotIndexArgsAndGoUnit, DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = ("Get or set the FDX-B frame emulated on a slot. Provide --raw "
+                              "to set; omit it to read the current value.")
+        self.add_slot_args(parser)
+        parser.add_argument("--raw", type=str, required=False, metavar="<32 hex>",
+                            help="the 128-bit frame, e.g. 00339a080402079f8040797788040201")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        selected = SlotNumber.from_fw(self.cmd.get_active_slot())
+        lf_tag_type = TagSpecificType(slotinfo[selected - 1]["lf"])
+
+        if args.raw is not None:
+            hexs = args.raw.strip().lower().removeprefix("0x")
+            if len(hexs) != 32 or any(c not in "0123456789abcdef" for c in hexs):
+                print(f"{color_string((CR, 'Need exactly 32 hex digits (128 bits)'))}")
+                return
+            frame = bytes.fromhex(hexs)
+            if lf_tag_type != TagSpecificType.FDXB:
+                print(f"{color_string((CR, 'WARNING'))}: Slot LF type is not FDXB. "
+                      f"Set it with: hw slot type -s <n> -t FDXB")
+            self.cmd.fdxb_set_emu_id(frame)
+            country, national, animal, crc_ok = _fdxb_fields(frame)
+            if country is not None:
+                flag = "ok" if crc_ok else color_string((CY, "BAD"))
+                print(f" - FDX-B emu set to country {country} national {national} "
+                      f"animal {animal}, CRC {flag}")
+            else:
+                # ⚠ A warning, not a refusal: a raw write is the escape hatch for testing
+                # exactly this — and C429's method needs frames chosen for their BIT pattern,
+                # not for being valid. But no FDX-B reader will accept it, so say so.
+                print(f" - FDX-B emu set to {hexs}, but "
+                      f"{color_string((CY, 'its group-control bits are not all set'))} — no "
+                      f"FDX-B reader will accept it.")
+        else:
+            if lf_tag_type != TagSpecificType.FDXB:
+                print(f"{color_string((CR, 'Slot LF type is not FDXB'))}")
+                return
+            print(f" - FDX-B emu: {color_string((CY, self.cmd.fdxb_get_emu_id().hex()))}")
+
+
 @lf_fdxb.command("write")
 class LFFdxbWrite(_LFFskWrite):
     PROTOCOL = "FDX-B"

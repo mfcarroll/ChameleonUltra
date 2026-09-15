@@ -1220,9 +1220,12 @@ class ChameleonCMD:
     def gproxii_set_emu_id(self, id: bytes):
         """Set the 96-bit GProxII frame emulated on the active slot.
 
-        ⚠ Biphase: the emitter holds ONE level per half-bit, two entries per bit, at
-        `counter_top` 32 — the magnitude the working ASK emitters use, against AWID's 8 and 10
-        (C221).
+        ⚠ Biphase: ONE PWM entry per bit at `counter_top` 64 — the whole bit — with the
+        mid-bit transition carried by channel_0's inversion bit. ⛔ This docstring used to say
+        *one level per half-bit, two entries per bit, counter_top 32*; that was the old design
+        and C428 corrected the same sentence in gproxii.c without catching this copy or the one
+        in tag_base_type.h. C429 confirmed the emitter on the air: the Flipper decodes it
+        byte-exact.
 
         :param id: 12 bytes, MSB first on air, preamble included.
         """
@@ -1234,6 +1237,27 @@ class ChameleonCMD:
     def gproxii_get_emu_id(self):
         """Get the emulated GProxII 96-bit frame."""
         resp = self.device.send_cmd_sync(Command.GPROXII_GET_EMU_ID)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def fdxb_set_emu_id(self, id: bytes):
+        """Set the 128-bit FDX-B frame emulated on the active slot.
+
+        ⚠ Biphase, like GProxII, but at `counter_top` 32 rather than 64 — RF/32, a 256us bit.
+        Both sit far above the RF/8-RF/10 band where emission collapses (C422/C423).
+
+        :param id: 16 bytes, MSB first on air, header and control bits included.
+        """
+        if len(id) != 16:
+            raise ValueError("The id bytes length must equal 16")
+        return self.device.send_cmd_sync(Command.FDXB_SET_EMU_ID, id)
+
+    @expect_response(Status.SUCCESS)
+    def fdxb_get_emu_id(self):
+        """Get the emulated FDX-B 128-bit frame."""
+        resp = self.device.send_cmd_sync(Command.FDXB_GET_EMU_ID)
         if resp.status == Status.SUCCESS:
             resp.parsed = resp.data
         return resp

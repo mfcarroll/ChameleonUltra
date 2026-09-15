@@ -73,7 +73,24 @@ def parse(raw):
             vals += varints(raw[i:])
             break
         vals += varints(raw[i:i + blen]); i += blen
-    return vals[0::2], vals[1::2], dict(version=ver, freq=freq, duty=duty, block=maxblk)
+    # ⛔⛔ DO NOT SPLIT BY GLOBAL PARITY. The pair stream runs continuously across blocks, but
+    # a value is occasionally inserted or lost at a block boundary, and a SINGLE such slip swaps
+    # pulse and duration for EVERYTHING after it. On one FDX-B capture that corrupted 40% of the
+    # pairs and the scorer reported a confident wrong number (C430).
+    #
+    # ⭐ The invariant that heals it: a pulse is the HIGH part of its own period, so pulse <
+    # duration always. Walk the stream and resync on that. Parsing each block independently was
+    # tried and is WRONG — it breaks captures that were previously fine, which is how we know
+    # the stream really is continuous.
+    pulses, durs, slips = [], [], 0
+    i = 0
+    while i + 1 < len(vals):
+        a, b = vals[i], vals[i + 1]
+        if a < b:
+            pulses.append(a); durs.append(b); i += 2
+        else:
+            slips += 1; i += 1
+    return pulses, durs, dict(version=ver, freq=freq, duty=duty, block=maxblk, slips=slips)
 
 
 # ⭐⭐ THE PASS CRITERION, FIXED BEFORE ANY NUMBER IS LOOKED AT (this is the whole point).
@@ -130,10 +147,20 @@ def frac_expected(hexframe, short_pulses=6, long_pulses=5):
 # ⛔ RIFL's second value is the PERIOD — a high run PLUS the low run after it — not one run.
 # Checked on real data: 587+156=743 and 354+157=511 are the recorded durations themselves (C429).
 # A criterion written in run lengths scores the wrong quantity and reads 100% against a true 49%.
-BIPHASE_PERIODS = (512, 768, 1024)
+# ⭐ Parameterised by the HALF-BIT, because the two biphase emitters differ only in scale:
+# GProxII RF/64 -> half-bit 256us -> periods 512/768/1024; FDX-B RF/32 -> 128us -> 256/384/512.
+BIPHASE_HALFBIT = 256
 
 
-def periods_expected_biphase(hexframe, reps=40):
+def biphase_periods(halfbit=BIPHASE_HALFBIT):
+    return (2 * halfbit, 3 * halfbit, 4 * halfbit)
+
+
+BIPHASE_PERIODS = biphase_periods()
+
+
+def periods_expected_biphase(hexframe, reps=40, halfbit=BIPHASE_HALFBIT, invert=False,
+                             phase=0):
     """Biphase (gproxii): EVERY bit carries a boundary transition and a 1 bit adds a mid-bit one,
     so a 0 bit is ONE 512 us run and a 1 bit TWO 256 us runs. Derived from gproxii_modulator,
     not from the protocol's name. Pairing consecutive runs into periods gives 512/768/1024."""
@@ -141,16 +168,24 @@ def periods_expected_biphase(hexframe, reps=40):
     runs = []
     for _ in range(reps):
         for b in bits:
-            runs += [512] if b == "0" else [256, 256]
-    per = [runs[i] + runs[i + 1] for i in range(0, len(runs) - 1, 2)]
+            held = (b == "1") if invert else (b == "0")
+            runs += [2 * halfbit] if held else [halfbit, halfbit]
+    # ⚠ PHASE IS A PROPERTY OF THIS MODEL, NOT OF THE EMITTER. A period is a HIGH run plus the
+    # LOW run after it; which run is high depends on the polarity the modulator picks, so there
+    # are two pairings and only frames with MIXED run lengths can tell them apart. Both are
+    # reported (C430) rather than one being chosen to fit.
+    per = [runs[i] + runs[i + 1] for i in range(phase, len(runs) - 1, 2)]
     n = len(per) or 1
-    return {k: per.count(k) / n for k in BIPHASE_PERIODS}, bits.count("1"), bits.count("0")
+    ks = biphase_periods(halfbit)
+    return {k: per.count(k) / n for k in ks}, bits.count("1"), bits.count("0")
 
 
-def periods_measured(durations, tol=0.15):
+# ⚠ tol 0.12, not 0.15: at 0.15 the 3h and 4h bands OVERLAP (384*1.15 > 512*0.85) and a
+# period lands in two bands at once, pushing coverage over 100%.
+def periods_measured(durations, halfbit=BIPHASE_HALFBIT, tol=0.12):
     n = len(durations) or 1
     out = {}
-    for k in BIPHASE_PERIODS:
+    for k in biphase_periods(halfbit):
         lo, hi = k * (1 - tol), k * (1 + tol)
         out[k] = sum(1 for d in durations if lo <= d <= hi) / n
     return out
@@ -230,13 +265,14 @@ def arm(emu, proto, slot=8, raw=None):
         "hidprox": ("HIDProx", "lf hid prox econfig -s %d -f H10301 --fc 123 --cn 4567" % slot),
         "ioprox":  ("IOProx",  "lf ioprox econfig -s %d --ver 1 --fc 83 --cn 1337" % slot),
         "gproxii": ("GProxII", "lf gproxii econfig -s %d --raw f84602a46119d4a114211046" % slot),
+        "fdxb":    ("FDXB",    "lf fdxb econfig -s %d --raw 00339a080402079f8040797788040201" % slot),
     }
     if proto not in ECFG:
         raise SystemExit("no econfig for %s" % proto)
     t, ec = ECFG[proto]
     if raw is not None:
-        if proto not in ("awid", "gproxii"):
-            raise SystemExit("--raw is only wired for awid and gproxii")
+        if proto not in ("awid", "gproxii", "fdxb"):
+            raise SystemExit("--raw is only wired for awid, gproxii and fdxb")
         ec = "lf %s econfig -s %d --raw %s" % (proto, slot, raw)
     cmds = ["hw connect -p %s" % emu, "hw slot type -s %d -t %s" % (slot, t),
             "hw slot enable -s %d --lf" % slot, ec,
@@ -259,6 +295,10 @@ def main():
     c.add_argument("--raw", default=None, help="12-byte AWID frame in hex, overrides the econfig")
     c.add_argument("--bands", default=None,
                    help="lo,split,hi in us for --frac; default 54,72,92 (RF/8 vs RF/10)")
+    c.add_argument("--halfbit", type=int, default=BIPHASE_HALFBIT,
+                   help="biphase half-bit in us: 256 for gproxii (RF/64), 128 for fdxb (RF/32)")
+    c.add_argument("--invert", action="store_true",
+                   help="fdxb's sense: a mid-bit transition means ZERO, not one")
     c.add_argument("--biphase", action="store_true",
                    help="score the measured whole-bit share against the share the frame implies")
     c.add_argument("--frac", action="store_true",
@@ -278,8 +318,8 @@ def main():
     out = a.out or "/tmp/%s.ask.raw" % a.proto
     open(out, "wb").write(data)
     pulses, durs, hdr = parse(data)
-    print("  %s: %d bytes, %d pulse/duration pairs, carrier %.0f Hz"
-          % (a.proto, len(data), len(durs), hdr["freq"]))
+    print("  %s: %d bytes, %d pulse/duration pairs, carrier %.0f Hz, %d resyncs"
+          % (a.proto, len(data), len(durs), hdr["freq"], hdr["slips"]))
     if not durs:
         print("  ⛔ NOTHING CAPTURED — the emitter was silent or the pad is not coupled.")
         return 1
@@ -288,17 +328,22 @@ def main():
     if a.biphase:
         if not a.raw:
             raise SystemExit("--biphase needs --raw: the expectation comes from the frame bits")
-        exp, ones, zeros = periods_expected_biphase(a.raw)
-        got = periods_measured(durs)
-        print("    frame %s -> %d one-bits, %d zero-bits" % (a.raw, ones, zeros))
-        worst = 0.0
-        for k in BIPHASE_PERIODS:
-            delta = abs(got[k] - exp[k])
-            worst = max(worst, delta)
+        got = periods_measured(durs, halfbit=a.halfbit)
+        best = None
+        for ph in (0, 1):
+            exp, ones, zeros = periods_expected_biphase(a.raw, halfbit=a.halfbit,
+                                                        invert=a.invert, phase=ph)
+            worst = max(abs(got[k] - exp[k]) for k in biphase_periods(a.halfbit))
+            if best is None or worst < best[0]:
+                best = (worst, ph, exp, ones, zeros)
+        worst, ph, exp, ones, zeros = best
+        print("    frame %s -> %d one-bits, %d zero-bits%s"
+              % (a.raw, ones, zeros, " (inverted sense)" if a.invert else ""))
+        for k in biphase_periods(a.halfbit):
             print("    %4d us: expected %5.1f%%   measured %5.1f%%   (%+.1f points)"
                   % (k, 100 * exp[k], 100 * got[k], 100 * (got[k] - exp[k])))
-        print("    covered %.1f%% of all periods; worst band error %.1f points"
-              % (100 * sum(got.values()), 100 * worst))
+        print("    covered %.1f%%; worst band error %.1f points (model pairing phase %d)"
+              % (100 * sum(got.values()), 100 * worst, ph))
     if a.frac:
         if not a.raw:
             raise SystemExit("--frac needs --raw: the expectation comes from the frame bits")

@@ -190,6 +190,8 @@ class Command(enum.IntEnum):
     AWID_GET_EMU_ID = 5029
     GPROXII_SET_EMU_ID = 5030
     GPROXII_GET_EMU_ID = 5031
+    FDXB_SET_EMU_ID = 5032
+    FDXB_GET_EMU_ID = 5033
     SECURAKEY_SET_EMU_ID = 5024
     SECURAKEY_GET_EMU_ID = 5025
     NORALSY_SET_EMU_ID = 5026
@@ -400,6 +402,7 @@ class TagSpecificType(enum.IntEnum):
     # ⭐ The first FSK2a protocol to emulate — the block above it is PSK1 and ASK.
     AWID = 307
     GProxII = 308
+    FDXB = 309
     IDTECK = 310
 
     # Reader-Talk-First       400
@@ -506,6 +509,8 @@ class TagSpecificType(enum.IntEnum):
             return "AWID"
         elif self == TagSpecificType.GProxII:
             return "GProxII"
+        elif self == TagSpecificType.FDXB:
+            return "FDXB"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

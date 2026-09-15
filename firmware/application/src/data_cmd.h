@@ -224,6 +224,8 @@
  * the counter_top magnitude (C221). */
 #define DATA_CMD_GPROXII_SET_EMU_ID             (5030)
 #define DATA_CMD_GPROXII_GET_EMU_ID             (5031)
+#define DATA_CMD_FDXB_SET_EMU_ID                (5032)
+#define DATA_CMD_FDXB_GET_EMU_ID                (5033)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

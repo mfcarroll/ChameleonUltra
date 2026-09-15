@@ -19,6 +19,7 @@
 #include "protocols/gallagher.h"
 #include "protocols/awid.h"
 #include "protocols/gproxii.h"
+#include "protocols/fdxb.h"
 #include "protocols/securakey.h"
 #include "protocols/noralsy.h"
 #include "protocols/pac.h"
@@ -489,6 +490,15 @@ static int lf_tag_data_loadcb_inner(tag_specific_type_t type, tag_data_buffer_t 
         return LF_GPROXII_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_FDXB && buffer->length >= LF_FDXB_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = fdxb.alloc();
+        m_pwm_seq = fdxb.modulator(codec, buffer->buffer);
+        fdxb.free(codec);
+        NRF_LOG_INFO("load lf fdxb data finish.");
+        return LF_FDXB_TAG_ID_SIZE;
+    }
+
     if (type == TAG_TYPE_SECURAKEY && buffer->length >= LF_SECURAKEY_TAG_ID_SIZE) {
         m_tag_type = type;
         void *codec = securakey.alloc();
@@ -851,6 +861,24 @@ bool lf_tag_gproxii_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0xF8, 0x46, 0x02, 0xA4,
         0x61, 0x19, 0xD4, 0xA1,
         0x14, 0x21, 0x10, 0x46,
+    };
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+/** @brief FDX-B data save callback. */
+int lf_tag_fdxb_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_FDXB ? LF_FDXB_TAG_ID_SIZE : 0;
+}
+
+/** @brief FDX-B default: the bench clone `00339a080402079f8040797788040201`, the frame
+ * `lf_ask_biphase.h` records as verified against a real tag — its 11-bit header and all
+ * thirteen group-control bits check out, so it passes this branch's own accept() gate. */
+bool lf_tag_fdxb_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[LF_FDXB_TAG_ID_SIZE] = {
+        0x00, 0x33, 0x9A, 0x08,
+        0x04, 0x02, 0x07, 0x9F,
+        0x80, 0x40, 0x79, 0x77,
+        0x88, 0x04, 0x02, 0x01,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
