@@ -159,18 +159,29 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    constrains every answer: it repeats at the **correct ~128-bit frame period**, and its run count **tracks the
    payload** (17/31/61 single-bit runs → 32/28/18 measured runs). Frame-synchronous and data-dependent,
    but not the frame.
-   ⭐ **THE NEXT UNIT IS TO READ THE EMISSION ON ITS OWN TERMS AND TEST IT AGAINST SIMPLE
-   MISINTERPRETATIONS OF THE SAME BUFFER**, all of which are frame-length-preserving and data-dependent by
-   construction: the PWM consuming the wrong number of 16-bit words per entry (`.length` in WaveForm mode is
-   **4 uint16 per entry** — check `NRF_PWM_VALUES_LENGTH` against `m_pac_pwm_seq_vals` and compare with
-   what gproxii and fdxb pass, since those WORK), a wrong `counter_top`/`channel_0` pairing, or the bitstream
-   consumed at the wrong rate. ⚠ **Read the macro from source and compare the three protocols before
-   testing anything on the bench** — fdxb has PAC's exact geometry and works (C439), so any proposed
-   mechanism must explain why fdxb is unaffected, and one that cannot is already refuted.
-   ⛔ **Carry a null (M55)**: candidate waveforms will be compared by some best-fit, so permutation-test
-   the comparison, and state in advance what a match would have to beat.
-   ⚠ Do not propose a mechanism in the notes until a control supports it — three mechanism-shaped
-   claims in six ticks (C435, C438, C440) did not survive their own rechecks.
+   ✅✅ **FOUR CANDIDATES ELIMINATED (C442) — do not re-open any of them.** `.length` /
+   `NRF_PWM_VALUES_LENGTH` is the **identical idiom** in pac, fdxb and gproxii on identically-typed 128-entry
+   arrays; `load_mode` is `NRF_PWM_LOAD_WAVE_FORM` with **no per-type branch**; bursting computes the **same
+   16 frames per burst** for PAC and EM410X and the long periods fall ~4 per frame, not once per 524ms burst;
+   and the **emulation slot holds the right bits** — hardware reports `BBGFGXP0 | Raw:
+   FF2049906C8721DC7315C70D41706CFF`, byte-identical to the mirror (M45).
+   ⭐⭐ **ONE PROPERTY IS LEFT AND IT HAS NEVER BEEN TESTED: LONG DC ON THE MODULATION PIN.** PAC is
+   the only protocol here that holds the pin static across up to **8 consecutive entries (2048us)**; every
+   working protocol is transition-guaranteed and tops out at **384-512us** (fdxb 384, em410x 512, gproxii
+   512). PAC emits 291/1023 and 284/512 periods >10 bits where its frame's longest run is 8; EM410X emits
+   **zero**, matching its own 2-bit maximum.
+   ⭐ **THE NEXT UNIT TESTS THAT PROPERTY WITHOUT TOUCHING PAC, USING A PROTOCOL ALREADY GRADED PASS.**
+   `jablotron.c` holds levels too (`channel_0` 32 or 0, `counter_top` 31, two entries per bit) and is a PASS
+   arm. Pick a Jablotron credential whose frame maximises its longest static stretch, predict its run
+   structure from source, capture, and compare against a Jablotron credential with short stretches.
+   ⚠ **State in advance what each way means**: the long-stretch credential degrading the same way PAC
+   does ⇒ long DC is the cause and it is protocol-independent, which also explains PAC without any
+   PAC-specific fault; both Jablotron credentials emitting cleanly ⇒ long DC is NOT sufficient, and the
+   fault is specific to PAC after all. ⚠ First check from source whether Jablotron's framing can even
+   produce a long static stretch — if its longest reachable run is ~512us, it **cannot discriminate** and
+   is the wrong control; say so and find another rather than running it anyway.
+   ⛔ Carry a null (M55) for any best-fit comparison, and do not propose a mechanism in the notes until a
+   control supports it — three mechanism-shaped claims in seven ticks (C435, C438, C440) did not survive.
    ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
    no PAC read-side question needs a re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
