@@ -91,3 +91,36 @@ partly because nothing that long gets re-read before writing.
 | `METHOD.md` | the rules | add a 10-line preamble naming the rules that actually bite. Nobody reads 639 lines mid-unit |
 | `AUTOPILOT.md` | 1734 lines | **audit for deletion.** Most of it is superseded process |
 ⭐ Everything deleted stays in git history. "Kept for its reasoning" is what produced 1541 lines.
+
+## 6. ⭐ The assessment is SPUN OUT — see `rfid-tools`
+
+The operator's decision (2026-09-15): the capability assessment does not belong in this project at
+all. It is now **`/Users/Shared/code/personal/rfid/rfid-tools`** — a standalone repo (`0c1cb8f`),
+outside both this project and the T5577 work, holding the bench harness and the cross-firmware
+capability database.
+
+| file | what it settles |
+|---|---|
+| `rfid-tools/README.md` | why it exists; the one rule — **no calibration row ⇒ no verdict**, enforced in code, no `--no-calibration` flag |
+| `rfid-tools/SCOPE.md` | the three-way protocol reconciliation (see below) |
+| `rfid-tools/DESIGN.md` | SOURCE × READER matrix, the four outcomes incl. `UNGRADED`, topology cues + radio-identity check adapted from `t5577_campaign.py`, the cross-firmware gap register, build order |
+
+⭐ **Scope headline.** The Flipper (`lfrfid_protocols.c`) implements **26** LF protocols; the pm3
+(`cmdlf.c` `CommandTable[]`) has **29** LF tag commands. Our 16 arms are **exactly the three-way
+intersection** — reached by accident, not by plan. Ten Flipper protocols are uncovered here:
+EM4100/16, EM4100/32, Electra, Indala224, Paradox, Pyramid, FDX-A (pm3 `destron`), HidGeneric,
+HidExGeneric, InstaFob. Three of those ten are variants of modulation we already emit. Nine further
+protocols exist on the pm3 alone (motorola, nedap, presco, trovan, visa2000 as plain ID protocols;
+cotag, hitag, pcf7931, ti as interactive chips — a different class of work).
+
+⛔ **Tier 0 is not "done", it is unmeasured.** The first bench run is the full matrix over the
+existing 16 arms with calibration rows enforced — the run C473 should have been. Adding protocols
+on top of an unmeasured Tier 0 would repeat C473 at larger scale.
+
+⭐ **What stays here.** The reasoning, the firmware, and the notes. When `rfid-tools` produces a
+verdict this project cites it by run id and does not re-argue it. The deliverable is unchanged and
+two-fold: firmware the operator can actually use across as many tag types as possible, and whatever
+of it upstream will take, as separate tracked PRs. A gap-register row with a capture attached is the
+strongest form an upstream bug report takes.
+
+⛔ **No autopilot loop** until the assessment is done properly.
