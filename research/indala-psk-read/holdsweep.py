@@ -4,9 +4,19 @@
     ./holdsweep.py                 # sweep 1..9 entries, Flipper as reader
     ./holdsweep.py --max 12
 
-⛔⛔ THIS TOOL CANNOT RUN YET. It needs a firmware command that does not exist — `hw emuhold`,
-specified at the bottom of this docstring. The criterion is written HERE, before that command is
-built, so it cannot be fitted to whatever the device turns out to say.
+⭐⭐ `hw emuhold` NOW EXISTS AND MATCHES THIS SPEC ENTRY FOR ENTRY (C468) — N=3 installs 252
+entries in runs of 3 at compare 33/0, counter_top 32, and a normal re-arm puts PAC's own 128 back.
+The criterion below was written BEFORE that command was built, so it cannot have been fitted to
+what the device turned out to say. ⛔ THE SWEEP ITSELF IS STILL NOT IMPLEMENTED HERE: main() prints
+predictions and stops. What it must do is, for each N: `hw emuhold -n N`, confirm the install count,
+then capture with `pm3cap.py` and take the longest run.
+
+⛔⛔ AND THE READER HAS CHANGED — DO NOT USE THE FLIPPER. This tool was written when rig A pointed
+the Flipper at #1. The bench moved on 2026-09-15, and C465 then disqualified the Flipper for PAC
+outright: it decodes nothing from a REAL PAC tag. The reader is now `pm3cap.py` against #2 on the
+Proxmark's pad — raw samples, no comparator in the chain (C464), proven end to end on a known
+emission (C466). ⭐ That also dissolves the attribution caveat at the bottom of this docstring: a
+knee measured through a comparator-free instrument is not the instrument's comparator.
 
 ⭐ WHY A SYNTHETIC ARM IS NECESSARY, AND WHY IT IS NEW. C443 established, from source, that the
 long-DC property cannot be tested with the arms that ship:

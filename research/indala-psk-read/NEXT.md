@@ -49,15 +49,20 @@ DIPHASE *bricked the tag* — **both writes had succeeded and PM3 simply could n
 2026-09-14 *the Proxmark does not read our LF emulation* is not a refutation of C464's raw-capture
 route. ⚠ That project is large; the entry point is deliberately short and is the thing to read.
 
-⇒ **THE NEXT UNIT, and it is hands-free: implement `hw emuhold`** to the interface `holdsweep.py`
-already specifies, verify the installed buffer with `hw emuseq --raw` before trusting any air
-reading (C462), then run the sweep. ⛔ It MUST be reversible — re-arming a slot through the normal
-path restores that protocol's own modulator, so no tick can leave the device emitting a synthetic
-buffer. ⛔⛔ **And the conclusion is bounded in advance**: a knee locates a limit, it does not
-attribute one. A proportional bias cannot manufacture a knee, so the knee's LOCATION survives the
-Flipper — but emitter-vs-instrument needs a comparator-free second instrument (C443's real T5577 on
-the Flipper's pad, or the SAADC amplitude path), and both need hands. Do not write "the emitter
-cannot hold DC" from the sweep alone.
+✅✅ **DONE 2026-09-15 — `hw emuhold` IS BUILT AND VERIFIED ENTRY FOR ENTRY (C468).** N=3 installs
+252 entries in runs of 3 at compare 33/0, counter_top 32, read back through the same `m_pwm_seq`
+pointer playback is handed; a normal re-arm puts PAC's own 128 entries back, so reversibility is
+proven rather than asserted. #2 runs `v2.2.0-875-g02fc2e2`. ⛔ `enterdfu.py` gained `--program`: the
+bootloader window is shorter than the gap between two shell commands, and the resulting silent
+no-op looks exactly like a flash failure — C459's trap with the sign flipped.
+
+⇒ **THE NEXT UNIT, and it is hands-free: RUN THE SWEEP.** `holdsweep.py` still only prints
+predictions. For each N in 1..9: `hw emuhold -n N` on #2, confirm the install count, capture with
+`pm3cap.py`, take the longest run. ⛔ The reader is `pm3cap.py`, NOT the Flipper — and because that
+path has no comparator (C464/C466), a knee it finds is NOT the instrument's, which dissolves the
+attribution caveat holdsweep.py was written with. ⭐ Criterion unchanged and already fixed in the
+tool: max static run = N * 256us, slope 1 through the origin, with N=1,2 as a positive control that
+can fail. ⛔ Leave #2 re-armed through the normal path and in reader mode when done.
 
 
 ⛔⛔ **PARTLY REFUTED BY C466 — READ THAT FIRST. The Proxmark DOES read our LF emulation: raw run structure and a byte-exact `EM 410x ID DEADBEEF88` from #2 emulating. The mechanism this entry offered — *a reader expecting a passive tag may simply not decode a PWM-driven emitter* — is wrong as a general claim. What survives is the narrow INDALA observation below, and its named suspect is now PSK phase lock, not PWM drive.**
