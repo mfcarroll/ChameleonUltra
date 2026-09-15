@@ -40,6 +40,35 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔⛔ 2026-09-15 — THE BENCH MOVED, AND THE INSTRUMENT OF RECORD CHANGED WITH IT
+
+**The bench is now: #1 ON ITS OWN (unpaired) · #2 ON THE PROXMARK'S PAD, nothing between them ·
+the T5577 (PAC `CARD0001`, raw `FF2049906D8541C9511C1B06C1B46551`) ON THE FLIPPER'S PAD.**
+`./autopilot.sh bench` was taught this topology (L430) and all three arms read correctly — so a
+DEAD arm from here on is a real probe result, not a stale map. ⛔ Every mention of *rig A = Flipper
++ #1* or *rig B = pm3 + T5577 + #2* below this line is a DATED ENTRY describing the bench as it was.
+
+⛔⛔ **THE FLIPPER IS NO LONGER A JUDGE FOR PAC (C465).** It decodes nothing from a REAL PAC tag,
+3 of 3, while coupled to it and with Momentum's `LFRFIDProtocolPACStanley` present. C443 fixed that
+reading in advance: both silent ⇒ the deficit is the instrument's. ⇒ **C431's *PAC emulate is
+SILENT* is a fact about the Flipper on this protocol, not about our emitter, and any unit whose
+evidence is *the Flipper did not decode it* is void as evidence about the emitter.** ⚠ The
+CAPTURE-based air measurements are untouched — C452's +34.5 duty points never needed a decoder.
+
+⭐⭐ **THE INSTRUMENT OF RECORD IS NOW `pm3cap.py` — the Proxmark's raw sample buffer, no
+comparator anywhere in the chain (C464), proven end to end on a known emission (C466):** with #2
+emulating EM410X it resolves 256us at 54.2% and 512us at 11.9% — the half-bit and whole bit that
+`em410x.c:129`'s `clock_per_bit = 64` Manchester predicts — against an inert control that is a
+featureless decay at p-p 22. The pm3 also DECODED it byte-exact (`EM 410x ID DEADBEEF88`), which
+refutes the 2026-09-14 dead end's *a reader expecting a passive tag may simply not decode a
+PWM-driven emitter*. ⛔ The narrow Indala observation survives; its suspect is PSK phase lock, and
+that is a suspect, not a cause.
+
+⇒ **NEXT UNIT (NEXT.md has the detail): implement `hw emuhold`, verify the installed buffer with
+`hw emuseq --raw` before any air reading, then sweep with `pm3cap.py` against #2 — NOT the
+Flipper, which holdsweep.py still names from when it faced #1.**
+
+
 ### ⛔⛔ 2026-09-14 20:34 — F12'S FIRMWARE SURFACE IS EXHAUSTED; IT BECOMES A CONSTRAINT (C427)
 
 Two criteria fixed before looking, both answered by the schematic:
