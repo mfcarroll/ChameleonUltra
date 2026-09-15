@@ -17,13 +17,21 @@ constant. The receiver is exonerated, so our emitter's **analog drive path** can
 36.4% at RF/32. Monotonic, saturating by RF/16, half-recovery near RF/12. AWID's required rate is ~2x beyond
 where recovery begins, and the roll-off is gradual: first-order or Q-limited, not a digital cutoff.
 
-⭐⭐ **NEXT UNIT: NAME THE ELEMENT THAT SETS THE LIMIT.** Candidates, none yet separated: the PWM output stage,
-the coil drive, the tank's Q, the antenna matching. Two routes, cheapest first:
-1. **Get an AMPLITUDE measurement.** `rdrcap.py` is the only instrument here that returns amplitude rather than
-   edges, and it turns *half-recovery near RF/12* into a real corner frequency — which names a filter. ⚠ It needs
-   the two Chameleons facing, which is a bench move and currently serves only this.
-2. **Read the drive circuit.** No work has been done on it at all; the schematic and the drive pin's output stage
-   may name the limit without any measurement.
+✅ **THE ELEMENT IS NAMED (C424): the LF ANTENNA TANK.** `LF_MOD` gates Q3 switching R11 220R onto `LF_OA`,
+behind series diode VD1 and tank caps C34 2.2nF + C10 5.6nF (L = 208 uH). The switch is retired at 2.2 us
+against a 32 us mark; a loaded Q of 6-8 reproduces C423's curve exactly.
+
+⭐⭐ **NEXT UNIT: MEASURE THE LOADED Q INDEPENDENTLY — the prediction is 6-8.** Quoting C423's knee back as
+proof of Q is circular, so this needs its own measurement: a ringdown, or a -3dB sweep of the tank. ⚠ Neither
+has been taken and the method on this bench is not yet worked out — `rdrcap.py` is the only amplitude
+instrument here and it needs the two Chameleons facing.
+
+⛔⛔ **AND DECIDE WHAT F12 *IS* BEFORE SPENDING MORE ON IT.** If the Q confirms, FSK2a emulation is a HARDWARE
+limit on Ultra hw_v1 and no firmware change fixes it — which would make F12 a *documented constraint* rather
+than an open defect, and would retire U11's FSK2a emitters (AWID, Paradox, Pyramid, FDX-A) as unreachable on
+this board. ⭐ The one firmware idea left is **PRE-EMPHASIS** — the load switch is binary but its timing is
+ours, so shaping transitions to fight the ring is possible in principle and completely unexplored. ⚠ Cheap to
+try only AFTER the Q is known; before that it is another blind emitter rebuild, which C415 forbade.
 
 ⚠ **A SECOND, SMALLER QUESTION IS NOW OPEN AND IS NOT F12**: even fully recovered the measurement saturates at
 ~36% against an expected 45.5%, the SAME at RF/16 and RF/32, so rate does not close it. Candidates are our

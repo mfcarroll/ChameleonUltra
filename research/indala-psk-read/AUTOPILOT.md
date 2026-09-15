@@ -40,6 +40,37 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐⭐ 2026-09-14 19:58 — THE ELEMENT IS NAMED: THE LF ANTENNA TANK (C424)
+
+From `hardware/ultra/Chameleon_nrf52_ultra_V1.0.pdf` page 2, sheet `LF`:
+
+- **LF Ant Load** — `LF_MOD` (P1.13, `hw_connect.c:124`) gates **Q3** (WNM3013-3 N-MOSFET), which switches
+  **R11 = 220 ohm** from `LF_OA` to ground.
+- **LF Ant Resonance** — `LF_OA` is NOT the coil: the tank is `P_LF_ANT_RAW` + **C34 2.2nF + C10 5.6nF**
+  (C33 NC), then a SERIES rectifier **VD1 1N4148**. Q3 loads the tank *through the diode*.
+- 7.8 nF at 125 kHz ⇒ **L = 208 uH**, an ordinary LF coil — so this is really the 125 kHz tank.
+
+⭐⭐ **The switch is eliminated, the tank is not.** R11 x C28 (10nF) = **2.2 us** against a 32 us mark, ~15x
+faster than needed. A resonant tank *must* band-limit: BW = fc/Q, and a subcarrier at fs needs **Q ≤ fc/2fs**.
+
+| tone | fs | Q required | C423 measured |
+|---|---|---|---|
+| RF/32 | 3.9 kHz | ≤ 16 | 36.4% ✓ |
+| RF/16 | 7.8 kHz | ≤ 8 | 35.4% ✓ |
+| RF/12 | 10.4 kHz | ≤ 6 | 20.2% half |
+| RF/10 | 12.5 kHz | ≤ 5 | 3.3% ✗ |
+| RF/8 | 15.6 kHz | ≤ 4 | 3.3% ✗ |
+
+⇒ **A loaded Q of 6-8 reproduces the measured curve exactly**, and the knee was measured before the schematic
+was opened.
+
+⚠⚠ **Mechanism established, VALUE inferred — do not quote the knee as proof of Q, that is circular.** The
+falsifiable prediction is an independent ringdown or -3dB sweep returning Q = 6-8. VD1 also makes the load
+half-wave and is not separated from the tank here.
+
+⛔ **If it confirms, F12 is a HARDWARE limit** — damping is a board change, not a commit. ⭐ The only firmware
+route left is **pre-emphasis**: the load switch is binary, but its timing is ours, and that is unexplored.
+
 ### ⭐⭐⭐ 2026-09-14 19:45 — THE KNEE IS LOCATED (C423)
 
 Same run-8 frame, expected **45.5%** RF/10. Ratio, duty pattern and buffer held constant; only the rate moved.
