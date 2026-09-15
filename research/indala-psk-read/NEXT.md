@@ -149,17 +149,28 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    ✅ What the control did establish: the measured run sequence in its true order aligns no better than a
    shuffle of itself ⇒ **no evidence the emission is a position-preserving sub-sampling of the frame**,
    which is the shape C438 implicitly assumed.
-   ⭐⭐ **THE NEXT UNIT IS ALIGNMENT-FREE BY CONSTRUCTION: CAN THE MEASURED RUNS BE A MERGE OF THE
-   PREDICTED ONES AT ALL?** A dropped transition merges two adjacent runs, so under any drop-only model every
-   measured run must be a **sum of CONSECUTIVE predicted runs**, and one cycle must tile the 128-bit frame
-   exactly. That is a dynamic-programming question over the predicted run list — no offsets, no maxima,
-   nothing to overfit — and it either tiles or it does not.
-   ⚠ State the reading in advance: **tiles ⇒ drop-only survives and the merge pattern is the next
-   thing to characterise; does NOT tile ⇒ the emission is not the frame with transitions removed**, and
-   C438's whole framing goes with it.
-   ✅ Costs no bench time: three cycles are already resolved (32 / 28 / 18 runs) at /tmp/pacdiff_*.raw and
-   /tmp/pac_ELTIWRQ5.raw. ⚠ Measured runs come from a per-capture fitted bias — carry the rounding
-   tolerance into the tiling test rather than demanding exact integers.
+   ✅✅ **THE TILING UNIT RAN AND DROP-ONLY IS REFUTED (C441) — do not re-run it.** A missed
+   transition merges **three** runs, not two (polarity must alternate), so every observed run must be a sum of
+   an ODD number of consecutive predicted runs tiling 128 bits. **None of the three credentials tiles**, and
+   both controls were run: synthetic drop-only accepted **90/90**, shuffles **0/600**. ⇒ the test is
+   sensitive and specific and the negative is real. **C438's framing is retired** — the emission is not a
+   filtered or degraded version of the intended waveform, which also agrees with C440.
+   ⭐⭐ **THE QUESTION IS NOW: WHAT WAVEFORM IS ACTUALLY BEING EMITTED?** What is established and
+   constrains every answer: it repeats at the **correct ~128-bit frame period**, and its run count **tracks the
+   payload** (17/31/61 single-bit runs → 32/28/18 measured runs). Frame-synchronous and data-dependent,
+   but not the frame.
+   ⭐ **THE NEXT UNIT IS TO READ THE EMISSION ON ITS OWN TERMS AND TEST IT AGAINST SIMPLE
+   MISINTERPRETATIONS OF THE SAME BUFFER**, all of which are frame-length-preserving and data-dependent by
+   construction: the PWM consuming the wrong number of 16-bit words per entry (`.length` in WaveForm mode is
+   **4 uint16 per entry** — check `NRF_PWM_VALUES_LENGTH` against `m_pac_pwm_seq_vals` and compare with
+   what gproxii and fdxb pass, since those WORK), a wrong `counter_top`/`channel_0` pairing, or the bitstream
+   consumed at the wrong rate. ⚠ **Read the macro from source and compare the three protocols before
+   testing anything on the bench** — fdxb has PAC's exact geometry and works (C439), so any proposed
+   mechanism must explain why fdxb is unaffected, and one that cannot is already refuted.
+   ⛔ **Carry a null (M55)**: candidate waveforms will be compared by some best-fit, so permutation-test
+   the comparison, and state in advance what a match would have to beat.
+   ⚠ Do not propose a mechanism in the notes until a control supports it — three mechanism-shaped
+   claims in six ticks (C435, C438, C440) did not survive their own rechecks.
    ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
    no PAC read-side question needs a re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
