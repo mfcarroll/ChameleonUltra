@@ -40,6 +40,35 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⭐ 2026-09-14 20:22 — THE TANK'S Q IS NOT MEASURABLE HERE (C426)
+
+`lf_reader_capture_probe()` takes a `settle_ms` — field-ON time BEFORE the window opens — and `rdrcap.py`
+already defaults it to **0**, so an ordinary capture already contains the field-start transient. It is a clean
+decay: 8560, 7180, 5496, 4544, 4108, 3500, 2840 ... to a floor by sample 17.
+
+| device | antenna loading | fitted tau | implied bound |
+|---|---|---|---|
+| #1 | facing the Flipper | **30.5 us** | Q ≤ 12.0 |
+| #2 | on the Proxmark's pad | **29.3 us** | Q ≤ 11.5 |
+
+⭐⭐ **The control is the result.** Two radically different antenna loadings give the SAME tau within 4%. A
+tank-dominated transient must move when coupling changes — coupling is what damps a tank. This does not move.
+⇒ **It is the FILTER CHAIN**, and the magnitude agrees: the schematic's second filter stage is a 3k/10nF pair,
+which is 30 us.
+
+⭐ **The pre-registered criterion is honoured** — I wrote before capturing that tau above ~25 us means
+filter-dominated and INCONCLUSIVE rather than a refutation. The only extractable result is a one-sided,
+non-discriminating bound: reader-mode Q ≤ 12, where C425 predicted *materially under 5*.
+
+⛔⛔ **AND THE NEGATIVE CLOSES AN UNBOUNDED CHASE.** Every ADC path sits behind that chain — the envelope
+detector into two op-amp stages, and `LF_RSSI` behind R12 470k + VD2, slower still. Its pole (~30 us) is LARGER
+than the tank's whole predicted time constant (13-18 us at Q = 6-8), so the quantity is masked by construction.
+Measuring it needs a **scope on a test point**. ⛔ Do not retry with on-board captures.
+
+⚠⚠ **C424/C425 are therefore CONSISTENT-BUT-UNCONFIRMED, not established.** They predict C423's knee, explain
+read-vs-emulate, and name an element — but their central prediction is untestable here, and saying so beats
+leaving an open action nothing on this bench can close.
+
 ### ⭐⭐⭐ 2026-09-14 20:08 — C424 SURVIVES THE OBJECTION THAT SHOULD HAVE KILLED IT (C425)
 
 ⛔ **The objection, raised against my own finding**: our READER reads real AWID, Paradox and Pyramid tags

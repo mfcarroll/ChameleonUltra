@@ -27,13 +27,22 @@ AWID/Paradox/Pyramid byte-exact (C201) — the same RF/8 subcarriers C424 says t
 (`lf_125khz_radio.c:41`), and tag mode **parks it LOW** (`rfid_main.c:57`). ⇒ READ drives the tank from a
 low-impedance source (low loaded Q, wide bandwidth); EMULATE leaves it free-running (natural Q, narrow).
 
-⭐⭐ **NEXT UNIT: MEASURE READER-MODE Q BY RINGDOWN — ONE DEVICE, EXISTING TOOLS, NO BENCH MOVE.** `lf_gap.c`
-already cuts the field on command and `rdrcap.py` already returns AMPLITUDE samples from our own SAADC, so the
-tank's decay after a field cut gives **Q = pi x f x tau** directly. ⭐ **Pre-register the criterion**: C425
-predicts reader-mode Q is materially LOW — **under about 5**. If it comes out HIGH (>10), the read path should
-not work either and **both C424 and C425 are in trouble**, which is exactly why this is worth taking first.
-⚠ It tests only half the prediction; tag-mode Q (predicted 6-8) needs the tank excited externally and the field
-cut by the OTHER device, which is a harder synchronisation and a bench move.
+⛔ **THE RINGDOWN WAS TAKEN AND IT CANNOT MEASURE THE TANK (C426).** `rdrcap.py --settle 0` already captures the
+field-start transient, but it decays with **tau = 30.5 us** on #1 and **29.3 us** on #2 — the same within 4% under
+radically different antenna coupling, so it is the **FILTER CHAIN**, not the tank (the schematic's 3k/10nF second
+stage is 30 us). The pre-registered criterion called >25 us inconclusive and that is honoured: the only result is
+a non-discriminating bound, reader-mode Q ≤ 12. ⇒ **Every ADC path sits behind that chain, whose pole exceeds the
+tank's whole predicted tau, so the quantity is masked by construction.** Measuring it needs a SCOPE on a test
+point (`LF_OA_OUT`, `LF_ANT_DRV`, `LF_RSSI`, `LF_MOD`, `LF_AMP_PWR` are all brought out) — external
+instrumentation this run does not have. ⛔ **Do not retry this with on-board captures.**
+
+⭐⭐ **NEXT UNIT: PRE-EMPHASIS — the one avenue that needs no Q value.** If the tank rings, the ring is fought by
+shaping the drive TIMING, and the load switch's timing is entirely ours even though its amplitude is binary.
+⭐ It is measurable by exactly the method that produced C420 through C423: `flipraw.py --raw --frac` on a 50/50
+frame at the stock RF/8+RF/10 geometry, where the current answer is **3.3%**. ⭐ **Pre-register before building**:
+any shaping that does not lift that number above ~10% has failed. ⚠ And keep C415's bar in view — this is a
+FIFTH emitter change, so it is justified only because it tests a NEW variable (transition shaping) rather than
+re-running encoding or duty, both of which are already falsified on the air.
 
 ⛔⛔ **AND DECIDE WHAT F12 *IS* BEFORE SPENDING MORE ON IT.** If the Q confirms, FSK2a emulation is a HARDWARE
 limit on Ultra hw_v1 and no firmware change fixes it — which would make F12 a *documented constraint* rather
