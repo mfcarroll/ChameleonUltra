@@ -572,24 +572,24 @@ against the day C400 cost. ⚠ The stale claim that produced it was sitting in `
 believed rather than checked: **a plan-era note is not a source of fact about shipped code (M45's
 rule, applied to our own notes instead of to the hardware).**
 
-**M54 — AN EDGE-DETECTING CAPTURE CANNOT GRADE A HELD-LEVEL (NRZ) EMISSION, AND THE GIVEAWAY IS THAT
-ONLY THE SUMS QUANTISE.**
+**M54 — COMPARE LIKE WITH LIKE: A CORRECTED QUANTITY AGAINST AN UNCORRECTED ONE MANUFACTURES THE
+ASYMMETRY YOU ARE LOOKING FOR.**
 
-⛔ The Flipper's RIFL capture reports (pulse, PERIOD) pairs. For PAC — NRZ at RF/32, bit 256us — the
-PERIODS land within 0.15 bit of a whole multiple **99.6%** of the time, while the individual HIGH and
-LOW runs they are made of do so **0.3-2.6%** of the time. A genuine NRZ waveform has no such asymmetry:
-both runs are integer multiples of the bit by construction, because a level is held for a whole number
-of bits. ⇒ **The instrument is reporting edge POSITIONS faithfully and levels not at all**, so any
-run-level decode of such a capture scores a quantity the instrument does not measure.
+⛔ **This entry replaces a false one written in the tick before (C435, retracted by C436).** It claimed the
+Flipper reports edge positions and not levels, on the strength of PAC's PERIODS landing on a multiple of the
+256us bit 99.6% of the time while the HIGH and LOW runs composing them did so 0.3-2.6% of the time. The
+invariant was right — NRZ holds a level for a whole number of bits, so every run must be an integer
+multiple of it. The comparison was not: **the periods were bias-corrected and the runs were not.** With the
+per-capture bias fitted the runs quantise at **83-89% within 0.15 bit and ~97% within 0.25 bit**. The
+instrument was never the problem, and a mechanism was published on the gap between two differently-processed
+numbers.
 
-⚠ The corollary that cost a tick: **the run bias is not a constant and cannot be corrected with one.**
-C429/C430 measured ~96us; fitting it per capture gives **93us and 151us** in two captures taken minutes
-apart from the same emitter and pad. Fitting it removes the rounding error (2.6% bad runs in both) and
-changes the recovered bits *not at all* — which is how you tell a nuisance parameter from the real
-defect.
+⚠ **What made it convincing is what should have made it suspect: the asymmetry was enormous** — 99.6%
+against 0.3%. A real physical effect rarely arrives that clean. ⇒ When two numbers differ by two orders of
+magnitude, check that the same corrections were applied to both **before** reaching for a mechanism.
 
-⇒ Before decoding a capture, ask which quantity the instrument actually measures, and check it on the
-invariant the protocol guarantees. Here the check is free: NRZ says every run is a whole bit.
-⛔ This sits alongside M52 rather than inside it. M52 bars the SAADC *family* from being read off an
-emulation; this bars an *edge-detecting capture* from grading a held-level emission, whatever family it
-belongs to.
+⭐ The nuisance parameter behind it earns its own line: the Flipper's run bias is **not a constant**.
+C429/C430 measured ~96us; fitted per capture it is **93us and 151us** in two captures taken minutes apart from
+the same emitter and the same pad. ⇒ Fit it per capture, and report what changes when you do — here it
+fixed the rounding and changed the recovered bits **not at all**, which is exactly how a nuisance parameter is
+told apart from the defect.

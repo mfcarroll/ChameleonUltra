@@ -153,21 +153,20 @@ cause — plenty of free heap but no contiguous block big enough for the CLI plu
 so expect it after `flipgrade.py` and reboot before trusting a later capture. ⭐ After any reboot, re-run the
 CONTROL arm before the unknown one, so the result is taken on a bench proven live.
 
-## ⛔⛔ THE FLIPPER REPORTS EDGE POSITIONS, NOT LEVELS — SO IT CANNOT GRADE NRZ (C435/M54)
+## ⛔⛔ THE FLIPPER'S RUN BIAS IS NOT A CONSTANT — FIT IT PER CAPTURE (C436/M54)
 
-PAC is NRZ at RF/32, so every run is a whole number of 256us bits **by construction**. In two fresh
-captures the **PERIODS** land within 0.15 bit of a multiple **99.6%** of the time and the **HIGH and LOW
-runs composing them do so 0.3-2.6%** of the time — the LOW runs sit at a near-fixed ~100-160us that
-does not scale with the data at all.
+C429/C430 measured the comparator bias at ~96us: HIGH runs long by that, LOW runs short by it, PERIODS
+unbiased. **The magnitude is not stable.** Fitted per capture by minimising rounding residual against the bit
+period, it is **93us in one capture and 151us in another taken minutes apart** from the same emitter and the
+same pad.
 
-⇒ A run-level decode of a Flipper capture scores a quantity the instrument does not measure. This is
-not a tuning problem and no better decoder fixes it.
+✅ Fitting it matters and is cheap: for PAC it took the runs from essentially never landing on a multiple
+of the 256us bit to **83-89% within 0.15 bit and ~97% within 0.25 bit**. ⚠ It also changed the recovered
+bits **not at all**, which is how you tell a nuisance parameter from the defect — report both.
 
-⚠ **And the run bias is not a constant.** C429/C430 measured ~96us; fitted per capture it is **93us and
-151us** in two captures taken minutes apart from the same emitter and pad. Fitting it removes the rounding
-error (2.6% bad runs in both) and changes the recovered bits **not at all** — which is exactly how a
-nuisance parameter is told apart from the real defect.
-
-⭐ Use the periods for anything distributional (C429/C430 both did, and both held up). For held-level
-protocols, grade the FRAME through the T5577 writer on rig B instead, and say that this tests the frame and
-not the modulator.
+⛔⛔ **AN EARLIER VERSION OF THIS SECTION SAID THE FLIPPER CANNOT MEASURE NRZ LEVELS AT ALL. THAT WAS
+FALSE AND IS RETRACTED (C435 -> C436).** It compared bias-CORRECTED periods (99.6% quantised) against
+bias-UNCORRECTED runs (0.3-2.6%) and read the gap as a property of the instrument. The invariant was sound
+— NRZ holds a level a whole number of bits — but the two sides had different corrections applied.
+⭐ The lesson is M54: when two numbers differ by two orders of magnitude, check they were processed the
+same way before reaching for a mechanism.
