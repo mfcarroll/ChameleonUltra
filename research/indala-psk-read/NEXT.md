@@ -127,20 +127,29 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    with C436's frame proven the defect is the **MODULATOR or the AIR PATH**.
    ⛔ Refuted, do not re-try: short held levels being swallowed predicts 18.0/22.1 runs per frame against
    the measured 28/32 at every threshold.
-   ⭐⭐ **THE NEXT UNIT IS TO SPLIT MODULATOR FROM AIR PATH, AND THE NUMBERS ALREADY CONSTRAIN IT.**
-   The measured periods/frame are **exact integers** (14.0 and 32/2), so the emission is a **stable repeating
-   waveform**, not randomly dropped edges — whatever is wrong is deterministic and reproducible.
-   ⭐ The cheapest discriminator is **a PAC credential chosen to have NO short runs**: pick an 8-char card
-   ID whose bitstream's runs are all >= 2 bits if one exists, or maximise the minimum run, predict its
-   runs/frame from source, and capture it. A deterministic modulator fault should track the predicted run
-   structure; an air-path limit should track the SHORTEST runs present. ⚠ State which of those two the
-   chosen credential can distinguish BEFORE capturing — if its prediction is close to CARD0001's, it
-   discriminates nothing.
-   ⚠ The air-path hypothesis is C425's mechanism (the tank free-running while the driver is parked at a
-   rail) and it is **the same never-measured claim the queued F12 adversarial review targets** — if this
-   unit implicates the air path, say so there rather than treating it as new.
-   ✅ Free and already paid for: the T5577 on rig B currently holds a known-good PAC CARD0001 credential
-   (C436), so any PAC read-side question needs no re-write.
+   ✅✅ **SPLIT DONE — THE AIR PATH IS EXONERATED AND THE MODULATOR IS THE DEFECT (C438).**
+   EM410X emits **78 single-256us runs per frame and all survive** (104 measured vs 103 true), on the same
+   pad and the same 32768us frame ⇒ 256us is not too short for the air path. The difference is PWM
+   geometry: EM410X's 256us run is **half an entry** (`counter_top 64`, duty 1/2 — an in-entry toggle),
+   PAC's is **one whole entry held** (`counter_top 32`, `channel_0` 0 or 33). ⇒ **what PAC loses is a
+   single-entry HELD LEVEL**, and the emission tracks it: single-bit runs 17/31/61 give measured runs per
+   frame 32/28/18.
+   ⛔ Do not re-open as air path or bandwidth — and **C425's loaded-Q claim is NOT implicated here**;
+   leave it to the queued F12 review.
+   ⚠ Known limits: rests on **3 resolved points, not 4** (BBGFGXP0's cycle is unresolved on a half-length
+   capture), and the exact law is open — `runs >= 2` is exact once and short twice.
+   ⭐⭐ **THE NEXT UNIT IS A DIRECT FIRMWARE TEST OF THE SINGLE-ENTRY HELD LEVEL, AND IT NEEDS NO NEW
+   INSTRUMENT.** Re-emit PAC with the modulator changed to spend **TWO entries per bit at `counter_top 16`**
+   instead of one at 32 — same bit period, same held level, but no run is ever a single entry. If the
+   lost transitions come back, the single-entry held level is proven the cause and the fix is structural.
+   ⚠ State in advance what *no change* would mean: it would refute the single-entry reading and leave the
+   held level itself (any length) as the suspect — in which case compare against `jablotron.c`, which
+   holds levels and is graded PASS.
+   ⭐ Cheaper still if it comes first: **`pac_build_bitstream` is already proven correct (C436)**, so this
+   unit may change ONLY `pac_modulator` — any diff touching the bitstream is out of scope.
+   ⚠ A firmware change means a build and a flash: re-verify FUNCTIONALLY, not by version string (M45).
+   ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
+   no PAC read-side question needs a re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
