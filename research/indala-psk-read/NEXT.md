@@ -225,15 +225,28 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    at 256us) ⇒ the comparator bias is **proportional, not fixed**, and C435's 93us and 151us were
    never the same quantity. ⚠ Max run is a max-of-N and N ranges 1534-8766 — a within-arm statistic
    only.
-   ⭐⭐ **THE NEXT AUTOPILOT UNIT, AND IT NEEDS NO HANDS: PAC IS THE ONLY NRZ EMITTER, SO
-   INSTRUMENT THE EMITTER ITSELF.** Everything reachable from the air is now measured and every
-   candidate outside `pac.c` is eliminated (C442, C449, C451, C452). What has never been read back is
-   **the PWM sequence the peripheral actually plays** — `m_pac_pwm_seq_vals` after
-   `pac_modulator` runs, on the device, compared against the host mirror the same way C436 compared
-   the T5577 blocks and M45 compared the slot. ⛔ That needs a firmware build and a flash of #1, so
-   state the criterion first and keep the build minimal: a debug command that dumps N entries of the
-   armed sequence, nothing else. ⚠ #1 is on the Flipper's pad; a flash must leave it out of DFU and
-   back in reader mode (rig A is the only live rig for this work).
+   ✅✅ **THE SOURCE SIDE IS NOW EXHAUSTED TOO (C453) — do not re-diff it.** `pac.c`'s buffer
+   declaration, sequence descriptor (`.repeats = 0`, `.end_delay = 0`, `NRF_PWM_VALUES_LENGTH`),
+   clock and burst arithmetic are **identical** to fdxb, gproxii, gallagher and jablotron.
+   ⛔ `channel_1`/`channel_2` — the one real asymmetry, written by fdxb/gproxii/gallagher and NOT by
+   pac — **is exonerated by jablotron, which omits them too and emulates correctly.** Jablotron also
+   shares the `{0, counter_top+1}` held-level idiom. ⇒ **the only surviving source difference is that
+   PAC holds one level across MORE than two consecutive entries.**
+   ⭐ **And the emission is DETERMINISTIC**: `55555555` gives max HIGH run 4306 / 4305 / 4303us and
+   duty 87.7 / 87.6 / 87.6% across three separate sessions — better repeatability than the controls.
+   So C440/C441/C451 did not fail to a moving target.
+   ⭐⭐ **THE NEXT AUTOPILOT UNIT: READ `m_pac_pwm_seq_vals` OFF THE DEVICE.** It is the one step in
+   the chain never verified on hardware — C436 did exactly this for the T5577 blocks and M45 does it
+   for slot contents. ⛔ **State the criterion first**: for `1337BEEF`, `pacdiff.build()` gives the
+   128 bits, so entry *i* must be `channel_0 = bits[i] ? 33 : 0`, `counter_top = 32`, and
+   `.length` = 512 uint16 words. All 128 match ⇒ the buffer is right and the fault is in playback or
+   downstream; any mismatch ⇒ located byte-exact.
+   ⛔⛔ **CARRY A CONTROL: dump fdxb's sequence with the SAME command** against a host mirror of
+   `fdxb_modulator`. A dump that cannot disagree with anything is not a dump.
+   ⚠ **FLASH #2, NOT #1.** #1 is on the Flipper's pad and rig A is the only live rig for this work;
+   #2 has no tag on its pad (bench, 2026-09-15) so it costs nothing in use. Keep the build minimal —
+   one debug command that returns N entries of the armed sequence — and leave #2 out of DFU and in
+   reader mode when done.
    ⛔ **What C451 already refuted and must not be revived**: the frame's one-count is NOT the
    governing variable — a +-5us straight line through four points predicted 22131 / 1707 / -846 and
    measured 4281 / 6867 / 27866.
