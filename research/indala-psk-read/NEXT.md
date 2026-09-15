@@ -170,20 +170,30 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    working protocol is transition-guaranteed and tops out at **384-512us** (fdxb 384, em410x 512, gproxii
    512). PAC emits 291/1023 and 284/512 periods >10 bits where its frame's longest run is 8; EM410X emits
    **zero**, matching its own 2-bit maximum.
-   ⭐ **THE NEXT UNIT TESTS THAT PROPERTY WITHOUT TOUCHING PAC, USING A PROTOCOL ALREADY GRADED PASS.**
-   `jablotron.c` holds levels too (`channel_0` 32 or 0, `counter_top` 31, two entries per bit) and is a PASS
-   arm. Pick a Jablotron credential whose frame maximises its longest static stretch, predict its run
-   structure from source, capture, and compare against a Jablotron credential with short stretches.
-   ⚠ **State in advance what each way means**: the long-stretch credential degrading the same way PAC
-   does ⇒ long DC is the cause and it is protocol-independent, which also explains PAC without any
-   PAC-specific fault; both Jablotron credentials emitting cleanly ⇒ long DC is NOT sufficient, and the
-   fault is specific to PAC after all. ⚠ First check from source whether Jablotron's framing can even
-   produce a long static stretch — if its longest reachable run is ~512us, it **cannot discriminate** and
-   is the wrong control; say so and find another rather than running it anyway.
-   ⛔ Carry a null (M55) for any best-fit comparison, and do not propose a mechanism in the notes until a
-   control supports it — three mechanism-shaped claims in seven ticks (C435, C438, C440) did not survive.
-   ✅ Free and already paid for: the T5577 on rig B holds a known-good PAC CARD0001 credential (C436), so
-   no PAC read-side question needs a re-write.
+   ⛔⛔ **JABLOTRON IS REFUTED AS THAT CONTROL, FROM SOURCE (C443) — do not run it.**
+   `jablotron_modulator` is inverted diphase with `level = !level` at the start of **every** bit, so a run
+   never exceeds one bit period (**512us**) and **no credential can change it**. Equal to EM410X and GProxII,
+   nowhere near PAC's 2048us.
+   ⛔⛔ **AND NO OTHER ARM CAN DO IT EITHER.** `T5577_PAC_CONFIG` is the **only** config built on
+   `T5577_MODULATION_DIRECT` — PAC is the sole NRZ arm — while fdxb, jablotron and gproxii all carry
+   the guaranteed boundary transition and em410x toggles inside every entry. ⇒ long DC cannot be tested
+   by choosing another protocol or another credential. **C442's elimination is untestable with the arms that
+   exist.**
+   ⭐⭐ **⚠ BENCH REQUEST — THIS IS THE NEXT UNIT AND IT NEEDS HANDS, SO IT IS NOT AN
+   AUTOPILOT UNIT UNTIL THE MOVE IS MADE: PUT THE T5577 ON THE FLIPPER'S PAD.**
+   Then capture the **real T5577 PAC tag with the Flipper**. C436 left a known-good `CARD0001` on it, so it
+   carries the **same 128-bit frame with the same 2048us static stretches** as the emulation — same
+   protocol, same frame, same instrument, same suspect property, differing only in **emitter**.
+   ⭐ **State the reading in advance, both ways**: real tag captures at full run count while the emulation
+   does not ⇒ **long DC is exonerated and the fault is the emulator**; both show the same deficit ⇒
+   **the deficit is the Flipper's capture of long-DC waveforms**, and PAC emulate is ungradeable on this bench
+   — record that rather than inventing an instrument.
+   ⚠ The rigs are **mutually exclusive** (C405): moving the T5577 to rig A costs rig B, which is where
+   C400's real-tag Gallagher/Securakey unit lives. ⚠ Predict the real tag's run structure from
+   `pac_build_bitstream` BEFORE capturing, and fit the bias per capture (M54); carry a null for any best-fit
+   (M55).
+   ✅ Until the move is made, the autopilot-reachable work is **C400 on rig B** and the Flipper-based
+   emulate re-grade of arms that are NOT PAC.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
