@@ -246,7 +246,24 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    answer, so a pac-only run would have published a stale register as a result.
    ⚠ **Do not quote `PWM0 COUNTERTOP`**: it reads **1000**, the reader's carrier, for every arm even
    with the field up. ⚠ `playbacks started` deltas are uncontrolled unless the read window is equal.
-   ⭐⭐ **WHAT IS LEFT OF THE UNIT: THE PER-ENTRY `channel_0` VALUES.** Criterion: for `1337BEEF`,
+   ✅✅ **AND THE CLOCK IS RIGHT TOO (C455) — do not re-fit it.** `quantum.py` finds the emitted
+   PERIODS are integer multiples of **256us**, PAC's own bit period, at residual **0.033** and
+   **0.018** for two credentials — **tighter than the gproxii control at the same quantum** (0.056),
+   with fdxb landing on its predicted 128us and a uniform-random null scoring 0.234-0.239 in every
+   capture. ⚠ Any divisor fits as well and a loose band passes at small n: **the minimum is the
+   reading, not the band**.
+   ⇒ **Descriptor right (C454), burst arithmetic right (C454), base clock 125kHz (C439/C454), bit
+   period right (C455). Every TIMING property of PAC's emission is correct.** The only thing that can
+   be wrong is **which level is emitted in each bit period** — `channel_0` and nothing else.
+   ⭐⭐⭐ **THE NEXT AUTOPILOT UNIT NEEDS NO HARDWARE AT ALL: RECOVER THE EMITTED BITSTREAM.**
+   Every run is an integer number of 256us bit periods, so divide the measured runs by 256, read off
+   the levels, and compare the recovered sequence with `pacdiff.build()`. ⛔ This is a **recovery, not
+   a fit** — no alignment search, no threshold, no maximisation, so M55 does not apply and C440's trap
+   is avoided by construction. ⭐ Criterion: the recovered sequence must be 128 bits per frame
+   (C441 already established the frame period is right); print it beside the predicted frame and the
+   difference names the fault. ⛔ Carry fdxb and gproxii through the same recovery — a recovery that
+   cannot disagree with anything is not a recovery.
+   ⭐⭐ **STILL OPEN IF THAT FAILS: THE PER-ENTRY `channel_0` VALUES ON THE DEVICE.** Criterion: for `1337BEEF`,
    `pacdiff.build()` gives the 128 bits, so entry *i* must be `channel_0 = bits[i] ? 33 : 0` and
    `counter_top = 32`. All 128 match ⇒ the buffer is right and the fault is in playback or downstream;
    any mismatch ⇒ located byte-exact. ⛔ The dump must be taken **with a reader field present**, or
