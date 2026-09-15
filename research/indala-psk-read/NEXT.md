@@ -64,6 +64,37 @@ here — see C429; the method that worked was three frames whose predictions spa
 ⛔ It is INVERTED relative to GProxII — a mid-bit transition means ZERO — which `lf_ask_biphase.h` already
 recorded and I did not apply until the air said so.
 
+⛔⛔ **NOT FOR THE AUTOPILOT — QUEUED FOR AN OPERATOR-PRESENT BURN WINDOW: A FULL ADVERSARIAL REVIEW OF F12.**
+Requested 2026-09-14. F12 was closed as *cause EXPLAINED, not PROVEN* (C427), retiring four emitters. Before that
+retirement is treated as settled, it deserves a deliberate attempt to BREAK it rather than another tick that
+assumes it. ⚠ This is a reasoning audit, not a bench unit, and it should NOT be taken as an autopilot compute
+unit — it needs a long uninterrupted window and a willingness to reopen a closed finding.
+
+⭐ **The load-bearing claim, and it is a single one**: C425's assertion that READ and EMULATE see a different
+loaded Q on the SAME tank — reader mode driving it from a low-impedance source, tag mode parking
+`LF_ANT_DRIVER` at a rail and leaving it free-running. Everything rests on that asymmetry, because without it
+C201's byte-exact reads of real AWID/Paradox/Pyramid tags at RF/8-RF/10 REFUTE the bandwidth explanation
+outright. ⚠ **It has never been measured**, and C426 established it cannot be measured with anything on this
+board — so it is currently believed on a structural argument from two firmware sources and a schematic.
+
+⭐ **What the review should actually attack**, in rough order of how much it would cost us to be wrong:
+  1. ⛔ **Read still works and is grade A — is that really consistent, or is it the refutation we explained
+     away?** All four retired protocols read AND write at grade A against real tags with the Proxmark as
+     independent judge (C201, C203, C330/C331, C338, C340). Only emulate is dead.
+  2. **C423's knee is a COUNT fraction of duration bins, not an amplitude** — it was never a dB measurement,
+     and C423 says so. Does a Q of 6-8 really follow, or was the curve fitted to a number chosen from it?
+     C424 flags its own circularity risk explicitly; check whether the flag was honoured.
+  3. **C426's ringdown control** — two devices, radically different coupling, 30.5us vs 29.3us. Is
+     *filter-dominated* the only reading of that, or would a tank swamped by the SAME filter also produce it?
+  4. **C427's enumeration claims the firmware surface is COMPLETE.** Completeness claims are the easiest thing
+     to get wrong. Is there a modulation leg, a clock, or a drive mode the schematic walk missed?
+  5. ⚠ **Three pre-registered criteria in a row were wrong (C428/C429/C430)** and each would have shipped as a
+     result. The F12 chase ran on the same kind of criteria for far longer. Which of C387-C427's measurements
+     would not survive the scrutiny C429/C430 got?
+⭐ **What would settle it outright**: a scope on `LF_OA_OUT` or `LF_ANT_DRV` — external instrumentation this
+bench does not have. If the review cannot break the argument, the honest outcome is that F12 stays closed and
+the reason is written down, not that it is proven.
+
 ⭐⭐ **NEXT UNIT — and the emulate column is now the question, not the protocols:**
 1. **Re-grade the emulate column end to end against the FLIPPER.** C428/C429/C430 each found the emulate
    status of a protocol was stale, wrong, or untested, and two of the three were wrong in the notes rather
