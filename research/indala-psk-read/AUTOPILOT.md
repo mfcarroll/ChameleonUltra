@@ -40,6 +40,34 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐ 2026-09-14 18:55 — F12: THE MINORITY TONE IS LOST, NOT "ANY MIXED FRAME" (C420)
+
+Six AWID frames, each scored against an expectation **computed from its own bits** (`flipraw.py --raw --frac`):
+
+| long-tone content | expected RF/10 | measured | survival |
+|---|---|---|---|
+| 100% (all ones) | 100.0% | 73.1% | 73% |
+| 92% | 90.2% | 48.4% | 54% |
+| 67% | 62.5% | 36.2% | 58% |
+| 50% (run-8) | 45.5% | **3.3%** | 7% |
+| 8%, at the HEAD | 7.0% | **0.0%** | 0% |
+| 8%, at the TAIL | 7.0% | **0.0%** | 0% |
+
+⭐ Roughly flat while the long tone is the **majority**, then a cliff between 67% and 50% — where the majority
+changes hands. ⛔ C411's *cliff the moment the frame contains both lengths, flat after that* is corrected in both
+halves, and its rate-independence is **explained**: run-8/4/2/1 were all 50/50 frames, so rate varied and
+composition did not. Position is not a variable either — head and tail both return zero.
+
+⭐⭐⭐ **C415's fork is resolved: the PLAYBACK PATH is exonerated, the ANALOG side is convicted.** A logic defect
+cannot produce a loss that depends on frame composition when the buffer is structurally identical for every
+composition and `SEQ[0].CNT` is right for all of them (C414). ⇒ The bar C415 set before allowing another emitter
+rebuild is met, and the rebuild is C414's: `fsk2a_mod.c` holds the mark at 4 carrier cycles, making RF/8 **50%**
+duty and RF/10 **40%**, and the weaker-duty tone is exactly the one that dies in the minority.
+
+⚠ **THE NEXT UNIT IS THAT FIX, AND IT IS NOT FREE**: mark = half the tone period needs `counter_top` 8 instead of
+16, worst case **4800** entries, so `LF_FSK2A_MAX_ENTRIES` rises and **F13's guards must be re-pinned against the
+new bound** before any of it goes near hardware.
+
 ### ✅ 2026-09-14 18:20 — BOTH DEVICES ARE ON HEAD AND THE FIX LEDGER IS RE-VERIFIED (C419)
 
 ✅ #2 was `v2.2.0-712-gba7e722`, #1 was `v2.2.0-740-g4aba1a2`; **both now run `v2.2.0-769-g3a0e687`**, `status`'s

@@ -45,7 +45,7 @@ cannot go stale the way the README table did. Add the row when you add the tool.
 |---|---|
 | `cu.py` *(in `software/script/`)* | ⭐⭐ **The only way to drive a Chameleon from a script.** See the trap table |
 | `flipper.py` | ⭐ The Flipper's `lfrfid` CLI: `read` (with its ASK control), `emulate`, `heap`, `reboot`. ⛔ It **aborts** rather than scoring 0 when the `rfid` plugin will not load — that refusal cost a whole unit (C373) |
-| `flipraw.py` | ⭐⭐ What a Chameleon emulation **actually puts on the coil**, through the Flipper's raw reader. Parses the `RIFL` file (pulse/duration varints, microseconds) and applies a **peak test whose criterion is fixed before the numbers are seen** — a band counts only as a local maximum, never as a bin with counts in it (C401's exact failure) |
+| `flipraw.py` ⭐ **`--raw <12 hex bytes> --frac` scores the captured RF/10 share against the share the frame's OWN BITS imply**, instead of against a remembered expectation — which is how C414 and C411 came to report the same 6.2% for two different frames (C420). Use it for any tone-composition question. | ⭐⭐ What a Chameleon emulation **actually puts on the coil**, through the Flipper's raw reader. Parses the `RIFL` file (pulse/duration varints, microseconds) and applies a **peak test whose criterion is fixed before the numbers are seen** — a band counts only as a local maximum, never as a bin with counts in it (C401's exact failure) |
 | `rdrcap.py` | Capture through **our own reader's** path, saved like `lf sniff --bits 16` |
 | `t55rdcap.py` | Send a T5577 regular-read into a live capture and keep the raw samples |
 | `pm3monitor.py` | Live fc/2 amplitude on the Proxmark, for sliding an emulating device around |

@@ -107,6 +107,33 @@ def peaks(durations, expect, tol=0.15, floor=0.02):
     return found, hist
 
 
+# ⭐⭐ THE SECOND PASS CRITERION, ALSO FIXED BEFORE ANY NUMBER IS LOOKED AT.
+# Every earlier RF/10 measurement on this question was scored against a REMEMBERED expectation
+# ("the real AWID frame should be 30.4%"). That is how C414 and C411 came to report the same
+# 6.2% for what may have been two different frames, with no way to tell afterwards which frame
+# produced it. ⇒ The expected fraction is COMPUTED FROM THE FRAME BITS here, so a capture
+# carries its own expectation and no run can be confused with another.
+#
+# ⚠ The bands do not overlap and are not tuned: RF/8 is 64 us and RF/10 is 80 us, so the
+# boundary is their midpoint, 72. Anything outside 54..92 is neither tone and is not counted.
+TONE_LO, TONE_SPLIT, TONE_HI = 54, 72, 92
+
+
+def frac_expected(hexframe, short_pulses=6, long_pulses=5):
+    """RF/10 share this frame SHOULD emit: a 1 bit is five long tones, a 0 bit six short ones."""
+    bits = bin(int(hexframe, 16))[2:].zfill(len(hexframe) * 4)
+    ones, zeros = bits.count("1"), bits.count("0")
+    lng, sht = ones * long_pulses, zeros * short_pulses
+    return (lng / (lng + sht) if (lng + sht) else 0.0), ones, zeros
+
+
+def frac_measured(durations):
+    """RF/10 share actually captured, counting only durations that are one tone or the other."""
+    sht = sum(1 for d in durations if TONE_LO <= d < TONE_SPLIT)
+    lng = sum(1 for d in durations if TONE_SPLIT <= d <= TONE_HI)
+    return (lng / (lng + sht) if (lng + sht) else 0.0), sht, lng
+
+
 class Flip:
     def __init__(self, port=FLIPPER):
         self.s = serial.Serial(port, BAUD, timeout=0.3)
@@ -161,7 +188,7 @@ class Flip:
         return data[:size]
 
 
-def arm(emu, proto, slot=8):
+def arm(emu, proto, slot=8, raw=None):
     """Put ONE protocol on the emulator, all four things M46 requires."""
     import subprocess, os
     here = os.path.dirname(os.path.abspath(__file__))
@@ -176,6 +203,10 @@ def arm(emu, proto, slot=8):
     if proto not in ECFG:
         raise SystemExit("no econfig for %s" % proto)
     t, ec = ECFG[proto]
+    if raw is not None:
+        if proto != "awid":
+            raise SystemExit("--raw is only wired for awid")
+        ec = "lf awid econfig -s %d --raw %s" % (slot, raw)
     cmds = ["hw connect -p %s" % emu, "hw slot type -s %d -t %s" % (slot, t),
             "hw slot enable -s %d --lf" % slot, ec,
             "hw slot change -s %d" % slot, "hw mode -e"]
@@ -194,11 +225,14 @@ def main():
     c.add_argument("--out", default=None)
     c.add_argument("--expect", default=None, help="comma-separated periods in us")
     c.add_argument("--no-arm", action="store_true")
+    c.add_argument("--raw", default=None, help="12-byte AWID frame in hex, overrides the econfig")
+    c.add_argument("--frac", action="store_true",
+                   help="score measured RF/10 share against the share the frame implies")
     a = ap.parse_args()
 
     path = "/ext/lfrfid/%s.ask.raw" % a.proto
     if not a.no_arm:
-        arm(a.emu, a.proto)
+        arm(a.emu, a.proto, raw=a.raw)
         time.sleep(1.0)
     f = Flip()
     try:
@@ -216,6 +250,16 @@ def main():
         return 1
     top = Counter((d // 4) * 4 for d in durs).most_common(8)
     print("  top duration bins (us): " + ", ".join("%d:%d" % (b, c) for b, c in top))
+    if a.frac:
+        if not a.raw:
+            raise SystemExit("--frac needs --raw: the expectation comes from the frame bits")
+        exp, ones, zeros = frac_expected(a.raw)
+        got, sht, lng = frac_measured(durs)
+        print("    frame %s -> %d one-bits, %d zero-bits" % (a.raw, ones, zeros))
+        print("    RF/10 share: expected %.1f%%   measured %.1f%%   (%d long, %d short in band)"
+              % (100 * exp, 100 * got, lng, sht))
+        print("    verdict: %s" % ("WITHIN 3 points" if abs(got - exp) <= 0.03
+                                   else "SHORT BY %.1f points" % (100 * (exp - got))))
     if a.expect:
         exp = [int(x) for x in a.expect.split(",")]
         found, _ = peaks(durs, exp)

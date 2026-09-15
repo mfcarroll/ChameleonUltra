@@ -4,6 +4,15 @@
 
 ✅ **CLOSED — the banner here said *OPEN DEFECT (C305): the raw-frame T5577 writers do not land*, and it was wrong in its entirety.** Nothing was wrong with those writers. Our own `lf hid prox write` had password-locked the tag with a key the other writers do not carry, so they were refused and landed nothing (C325). C305's *lands iff the config matches* rule was a pattern fitted to 14 observations of one locked tag. ⇒ The password defect is fixed (F1/C326), the write path is confirmed restored (C329), and **all 18 write arms have since been re-graded 4 of 4, 72 writes, 0 failures** (C330, C331). ⛔ Left visible rather than deleted: this was the most confidently wrong thing in these notes, and it sat at the top of the file as a warning to the next reader for a whole session after it was disproved.
 
+⭐⭐ **NEXT UNIT (2026-09-14, C420): the FSK2a DUTY FIX — and it is unblocked for the first time.** C415 forbade
+another emitter rebuild until the playback path and the analog side were told apart; C420 tells them apart
+(long-tone survival depends on frame COMPOSITION, which no logic defect can do). ⇒ Make the mark **half the tone
+period** at both tones, as a real subcarrier is: `counter_top` 8 instead of 16, mark 4/gap 4 for RF/8 and mark
+5/gap 5 for RF/10. ⚠ Worst case doubles to **4800** entries, so `LF_FSK2A_MAX_ENTRIES` rises with it and **F13's
+two guards must be re-pinned against the new bound** — in `ctest/roundtrip.c` BEFORE it reaches hardware. ⛔ Pyramid's
+emitter stays QUEUED BEHIND this: adding a fifth FSK2a emitter while the first four do not reach the air is exactly
+the breadth-on-a-broken-foundation this file's rule forbids.
+
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
 ⛔ **The rule that produced everything below, and it still binds:** fix what exists before
