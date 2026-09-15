@@ -119,16 +119,28 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    ✅ Still standing: the differential FAILS (R != D in both polarities, 12 violations inside the
    invariant prefix), so C434's 97/128 stays void; the dead-time model is refuted; PAC's T5577 config has no
    inversion bit, so C430's fix does not transfer.
-   ⭐⭐ **THE NEXT UNIT IS THE INTERVAL-COUNT LEAD, AND IT IS THE ONLY THING LEFT UNEXPLAINED**:
-   the capture shows **~14 periods per frame where `pac_build_bitstream` implies ~30**, while the intervals
-   still sum to exactly 128 bits. Something is merging roughly half the transitions. ⚠ State in advance
-   what a merge would do to the SUM — if merging preserved the 128-bit total that is a strong constraint
-   on the mechanism. ⭐ The natural control is **EM410X**, which the Flipper decodes byte-exact and whose
-   emitter is one entry per bit at `counter_top` 64: capture it, fit the bias the same way, and compare its
-   measured periods-per-frame against what its own bitstream implies. If EM410X also shows half the expected
-   transitions, the merging is in the capture path and PAC is exonerated; if it does not, the merging is
-   PAC-specific and the modulator is the suspect. ⛔ That control costs one capture on rig A and needs no
-   firmware change — take it before touching `pac.c`.
+   ✅✅ **THE INTERVAL-COUNT LEAD IS ANSWERED AND IT CONVICTS THE EMITTER (C437).** The EM410X
+   control — same instrument, same arithmetic, frame also 32768us — measures **52.2 periods/frame
+   against 51.5 predicted, ratio 1.01**, all mass on the predicted 2/3/4 x 256us bins. PAC measured the same
+   way is **14.0 vs 31.5 (0.44)** and **16.0 vs 24.5 (0.65)**. ⇒ the capture sees ~100% of EM410X's
+   transitions and ~half of PAC's, so **PAC emits roughly half the transitions its own frame requires**, and
+   with C436's frame proven the defect is the **MODULATOR or the AIR PATH**.
+   ⛔ Refuted, do not re-try: short held levels being swallowed predicts 18.0/22.1 runs per frame against
+   the measured 28/32 at every threshold.
+   ⭐⭐ **THE NEXT UNIT IS TO SPLIT MODULATOR FROM AIR PATH, AND THE NUMBERS ALREADY CONSTRAIN IT.**
+   The measured periods/frame are **exact integers** (14.0 and 32/2), so the emission is a **stable repeating
+   waveform**, not randomly dropped edges — whatever is wrong is deterministic and reproducible.
+   ⭐ The cheapest discriminator is **a PAC credential chosen to have NO short runs**: pick an 8-char card
+   ID whose bitstream's runs are all >= 2 bits if one exists, or maximise the minimum run, predict its
+   runs/frame from source, and capture it. A deterministic modulator fault should track the predicted run
+   structure; an air-path limit should track the SHORTEST runs present. ⚠ State which of those two the
+   chosen credential can distinguish BEFORE capturing — if its prediction is close to CARD0001's, it
+   discriminates nothing.
+   ⚠ The air-path hypothesis is C425's mechanism (the tank free-running while the driver is parked at a
+   rail) and it is **the same never-measured claim the queued F12 adversarial review targets** — if this
+   unit implicates the air path, say so there rather than treating it as new.
+   ✅ Free and already paid for: the T5577 on rig B currently holds a known-good PAC CARD0001 credential
+   (C436), so any PAC read-side question needs no re-write.
 2. **C400** — Gallagher 0/6 and Securakey 0/5 on REAL pm3-written tags, still unattributed, retestable on rig B.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
