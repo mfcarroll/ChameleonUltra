@@ -7,12 +7,25 @@ and also matches, both under a field verified by `playbacks` rising. **So every 
 credential to the PWM buffer is now verified on hardware, and the fault is downstream of the
 buffer.**
 
-⭐ **THE NEXT QUESTION IS THEREFORE PLAYBACK OR THE ANALOG DRIVE, AND C453 ALREADY NAMES THE
-SUSPECT**: PAC is the only emitter that holds one level across MANY consecutive entries, and it sits
-+34.5 points of duty clear of eight ASK arms inside a 3.0-point band (C452). ⇒ The buffer is
-exonerated; what to measure next is what the peripheral DOES with a long static level — which is the
-C242 held-level question, now asked of a buffer known to be right. ⚠ Not started, and no criterion
-has been written for it yet.
+⭐ **THE NEXT QUESTION IS PLAYBACK OR THE ANALOG DRIVE, AND THE CRITERION IS NOW WRITTEN (C463).**
+PAC is the only emitter that holds one level across MANY consecutive entries, and it sits +34.5 duty
+points clear of eight ASK arms inside a 3.0-point band (C452). ⛔ **C443 refuted every shipping arm
+as a control from source** — jablotron's `level = !level` is structural, every other arm is
+transition-guaranteed, and PAC is the only NRZ config in `t55xx.h` — so the property cannot be tested
+by choosing a protocol or a credential. ⭐ **But flashing now works (L426), so the arm can be BUILT
+rather than found**: `holdsweep.py` specifies `hw emuhold`, which fills a buffer with alternating
+static runs of N entries at PAC's own idiom (compare 33 / 0, counter_top 32), and sweeps N. No
+credential, no bench move — rig A already points the Flipper at #1.
+
+⇒ **THE NEXT UNIT, and it is hands-free: implement `hw emuhold`** to the interface `holdsweep.py`
+already specifies, verify the installed buffer with `hw emuseq --raw` before trusting any air
+reading (C462), then run the sweep. ⛔ It MUST be reversible — re-arming a slot through the normal
+path restores that protocol's own modulator, so no tick can leave the device emitting a synthetic
+buffer. ⛔⛔ **And the conclusion is bounded in advance**: a knee locates a limit, it does not
+attribute one. A proportional bias cannot manufacture a knee, so the knee's LOCATION survives the
+Flipper — but emitter-vs-instrument needs a comparator-free second instrument (C443's real T5577 on
+the Flipper's pad, or the SAADC amplitude path), and both need hands. Do not write "the emitter
+cannot hold DC" from the sweep alone.
 
 
 ⛔ **DEAD END, 2026-09-14: the Proxmark does NOT read our LF emulation.** Tried #2 emulating slot 1 (Indala) on the pm3 antenna, tag removed. Control clean (`lf search` finds nothing with no emulation) and coupling confirmed (`hw tune` 18.79 V with #2 on the pad vs 21.05 V bare) — but both `lf search` and `lf indala reader` find nothing. ⚠ **Inconclusive between "pm3 cannot hear it" and "the emulation is silent"**, and the two cannot be separated without a second reader. ⇒ **§2 already said this**: *the only reader that can hear rig A is the Flipper*. Our emulators DRIVE their coil with PWM rather than load-modulating, so a reader expecting a passive tag may simply not decode them. ⭐ **The emulate-arm re-grade therefore needs the Flipper and a bench session, not a pm3 and ten minutes.** Do not retry it with the Proxmark.
