@@ -36,28 +36,24 @@ tank's whole predicted tau, so the quantity is masked by construction.** Measuri
 point (`LF_OA_OUT`, `LF_ANT_DRV`, `LF_RSSI`, `LF_MOD`, `LF_AMP_PWR` are all brought out) — external
 instrumentation this run does not have. ⛔ **Do not retry this with on-board captures.**
 
-⭐⭐ **NEXT UNIT: PRE-EMPHASIS — the one avenue that needs no Q value.** If the tank rings, the ring is fought by
-shaping the drive TIMING, and the load switch's timing is entirely ours even though its amplitude is binary.
-⭐ It is measurable by exactly the method that produced C420 through C423: `flipraw.py --raw --frac` on a 50/50
-frame at the stock RF/8+RF/10 geometry, where the current answer is **3.3%**. ⭐ **Pre-register before building**:
-any shaping that does not lift that number above ~10% has failed. ⚠ And keep C415's bar in view — this is a
-FIFTH emitter change, so it is justified only because it tests a NEW variable (transition shaping) rather than
-re-running encoding or duty, both of which are already falsified on the air.
+⛔ **PRE-EMPHASIS IS ELIMINATED TOO (C427), AND SO IS SWITCH DAMPING.** Pre-emphasis needs headroom above the
+steady state; the LF section has exactly ONE binary modulation leg (R11 220R + Q3), so the deepest load is
+already applied and there is no *harder*. Switch damping fails on the part: the antenna switch is SPDT with no
+high-Z and its throws are GND and 3V3, both AC ground through the same Ron. ⇒ **With encoding, duty and buffer
+already eliminated, the firmware surface for F12 is exhausted.**
 
-⛔⛔ **AND DECIDE WHAT F12 *IS* BEFORE SPENDING MORE ON IT.** If the Q confirms, FSK2a emulation is a HARDWARE
-limit on Ultra hw_v1 and no firmware change fixes it — which would make F12 a *documented constraint* rather
-than an open defect, and would retire U11's FSK2a emitters (AWID, Paradox, Pyramid, FDX-A) as unreachable on
-this board. ⭐ The one firmware idea left is **PRE-EMPHASIS** — the load switch is binary but its timing is
-ours, so shaping transitions to fight the ring is possible in principle and completely unexplored. ⚠ Cheap to
-try only AFTER the Q is known; before that it is another blind emitter rebuild, which C415 forbade.
+✅⛔ **F12 IS NOW A DOCUMENTED CONSTRAINT, NOT A LIVE DEFECT — and this is the decision this file asked for.**
+Cause EXPLAINED (the LF tank's bandwidth, C422-C425), not PROVEN (C426: unconfirmable with on-board
+instruments), firmware surface EXHAUSTED (C427). ⇒ **U11's four FSK2a emitters — AWID, Paradox, Pyramid,
+FDX-A — are RETIRED as unreachable on Ultra hw_v1.** Do not open another emitter rebuild. ⭐ **What reopens
+everything**: a scope on `LF_OA_OUT` or `LF_ANT_DRV` returning a loaded Q far from 6-8.
 
-⚠ **A SECOND, SMALLER QUESTION IS NOW OPEN AND IS NOT F12**: even fully recovered the measurement saturates at
-~36% against an expected 45.5%, the SAME at RF/16 and RF/32, so rate does not close it. Candidates are our
-emitter's duty asymmetry (50% short, 40% long, by construction) and band-edge counting.
-
-⛔ **AWID IS STILL NOT FIXED AND MAY NEED DRIVE-PATH WORK** — real AWID *is* RF/8 and RF/10, so slowing the tones
-is a diagnostic and never a shipping option. ⭐ Not a hard bound: C226 caught the Flipper emitting AWID at these
-rates well enough for our own reader to decode byte-exact. ⛔ Pyramid's emitter stays QUEUED BEHIND all of this.
+⭐⭐ **NEXT UNIT: GO BACK TO THE GOAL, WHICH IS NOT BLOCKED.** AUTOPILOT.md:1170 lists six protocols that write
+but do not emulate: **AWID, Paradox, Pyramid, FDX-A** (the FSK2a four, now retired) and **GProxII, FDX-B**. The
+last two are **NOT FSK2a** — biphase/ASK at RF/32, the same rate as Gallagher, Securakey and Noralsy, all of
+which emulate 6/6. ⇒ They sit comfortably inside the tank's bandwidth and nothing in C422-C427 blocks them.
+⚠ **VERIFY BEFORE BUILDING**: `emugrade.sh` already carries a `gproxii` econfig line, so that list may be stale
+— ask the flashed firmware what it actually emulates (M45) before writing anything.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 

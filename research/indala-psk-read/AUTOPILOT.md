@@ -40,6 +40,30 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⛔⛔ 2026-09-14 20:34 — F12'S FIRMWARE SURFACE IS EXHAUSTED; IT BECOMES A CONSTRAINT (C427)
+
+Two criteria fixed before looking, both answered by the schematic:
+
+- **Pre-emphasis needs HEADROOM above the steady state.** The LF section has exactly ONE modulation leg —
+  **R11 220R with Q3** (every other resistor there is RSSI, bias or filter) — and Q3 is BINARY. The deepest
+  load is already applied whenever the load is applied, so **there is no *harder***. PWM-ing Q3 faster than the
+  carrier buys relative overshoot only by surrendering absolute depth, and depth was closed by C387/C388/C416.
+- **Switch damping fails on the part.** `LF_ANT_DRIVER` is the antenna switch's SELECT, the switch is **SPDT
+  with no high-Z**, and the throws are **GND and 3V3** — both AC ground, same Ron. Parking LOW or HIGH damps
+  identically, so there is no knob. Leaving the PWM running is not damping but transmitting.
+
+⇒ **With encoding (C415), duty (C226/C380/C421) and buffer (F13) already eliminated, the firmware surface is
+complete and empty.** If C424/C425's tank explanation holds, no firmware change fixes F12.
+
+✅⛔ **DISPOSITION**: cause EXPLAINED, not PROVEN (C426), firmware surface EXHAUSTED. **F12 is a documented
+constraint, and U11's four FSK2a emitters — AWID, Paradox, Pyramid, FDX-A — are RETIRED as unreachable on
+Ultra hw_v1.** ⛔ Do not open another emitter rebuild. ⭐ Reopens only on a scope measurement of loaded Q far
+from 6-8.
+
+⭐⭐ **AND THE GOAL IS NOT BLOCKED**: of the six protocols that write but do not emulate (§ line 1170),
+**GProxII and FDX-B are not FSK2a** — biphase/ASK at RF/32, the rate Gallagher, Securakey and Noralsy all
+emulate 6/6 at. ⚠ Verify against the flashed firmware before building; that list may be stale.
+
 ### ⛔⭐ 2026-09-14 20:22 — THE TANK'S Q IS NOT MEASURABLE HERE (C426)
 
 `lf_reader_capture_probe()` takes a `settle_ms` — field-ON time BEFORE the window opens — and `rdrcap.py`
