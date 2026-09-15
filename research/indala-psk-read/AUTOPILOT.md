@@ -65,6 +65,10 @@ with two clean peaks. ⇒ It is **our emitter's analog DRIVE PATH** that cannot 
 ⛔⛔ **THIS DOES NOT GIVE US A WORKING AWID EMITTER** — real AWID *is* RF/8 and RF/10. It names the cause and
 moves the fix to the drive path. ⚠ WHICH element limits the rate is not separated yet.
 
+✅ **BOTH UNITS REFLASHED FROM THE CLEAN TREE AND THE BENCH RE-VERIFIED** — #1 and #2 both run
+`v2.2.0-779-g0200694`, no `-dirty`, so a version string identifies the build again. `./autopilot.sh bench`:
+rig A LIVE, rig B LIVE, `#1 ↔ #2` DEAD as it should be.
+
 ### ⛔ 2026-09-14 19:05 — THE DUTY FIX IS REFUTED BY OUR OWN NOTES (C421)
 
 C420 queued a 50%-duty rebuild of the FSK2a emitter. **It had already been tried and it was 0 of 6.** C226: our
