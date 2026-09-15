@@ -1,6 +1,12 @@
 #!/bin/zsh
 # ⭐⭐ THE EMULATE COLUMN, GRADED IN ONE COMMAND — ready for the next hands session.
 #
+# ⛔⛔ THE PARAGRAPH BELOW IS WRONG AND IS KEPT ONLY SO THE ERROR IS VISIBLE. *The Proxmark
+# cannot hear our emulation at all* was refuted by C466 (pm3 reads our EM410X byte-exact) and
+# comprehensively by C472/C473: the pm3 decodes NINE emulate arms byte-exact, including four the
+# Flipper cannot hear at all. ⇒ USE `pm3grade.sh` AS THE SECOND JUDGE. Neither reader alone sees
+# more than 12 of 16, and this assumption is why the column was graded three times by one
+# instrument. Original text follows.
 # ⛔ THIS NEEDS A BENCH CHANGE AND WILL NOT WORK WITHOUT IT: Chameleon **#2** must be on the
 # FLIPPER's pad, and the T5577 out. The Proxmark cannot hear our emulation at all — it is PWM
 # on the coil, not load modulation — so the Flipper is the only reader for rig A. That is why

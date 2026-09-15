@@ -29,28 +29,33 @@ tag (C436), the hold capability (C469) and now the air itself (C470) are all ver
    ⛔ Both pre-registered raw criteria FAILED; the raw arm is inconclusive on its own terms and
    only the decode arm carries the verdict.
 
-⭐⭐ **WHAT THE REFUTATION OPENS, in order:**
-1. ⛔⛔ **THE EMULATE GRID'S FSK COLUMN IS A FLIPPER-GRADING ARTEFACT AND MUST BE RE-GRADED.**
-   C378/C431 scored the emulate column with the Flipper as judge and returned FSK 0/6. That grade
-   is now known to measure the JUDGE. ⇒ re-grade every FSK arm against the pm3, and re-examine
-   whether any non-FSK arm graded SILENT was the same error. **Hands-free** with a Chameleon on
-   the pm3's pad and nothing between.
-2. ⛔ **§9d's "DO NOT SHIP" ON AWID, AND §9e ENTIRELY, REST ON F12 AND MUST BE REWRITTEN.**
-   §9e says *FSK2a emulation does not work on this device* and names `hidprox.c` and `ioprox.c` as
-   upstream's broken emitters. The pm3 decodes both byte-exact. ⚠ This is a claim about UPSTREAM's
-   code in a PR-facing section — it must not go to a reviewer in its current form.
-3. ⚠ **THE REAL QUESTION THAT REPLACES F12: is our emission robust to a REAL reader?** The pm3
-   tolerates the fixed-mark shape and the Flipper does not, so a real HID reader could fall either
-   side. ⇒ needs a real HID Prox reader — the same hardware gap as the PAC item below.
-4. ⚠ **Optional and cheap**: fix the mark shape anyway. `LF_FSK2A_MARK_CYCLES` is one constant and
-   a real tag's 50/50 duty is the target. ⛔ C414 notes this needs `counter_top` to divide 4 AND 5
-   carrier cycles — 8 ticks instead of 16 — which doubles the worst-case buffer. Not urgent now
-   that nothing is broken, but it is the difference between our waveform and a real tag's.
+✅✅ **AND THE RE-GRADE IS DONE — C473: THE EMULATE COLUMN IS 16 OF 16.**
+   `pm3grade.sh`, #2 alone on the pm3's pad, every arm scored byte-exact, null sweeps clean
+   before and after. **pm3 PASS (9)**: em410x, viking, **pac**, hidprox, ioprox, awid, gallagher,
+   securakey, noralsy. **pm3 SILENT (7)**: jablotron, indala, keri, nexwatch, idteck, gproxii,
+   fdxb. ⭐⭐ **C431's Flipper grade is the exact complement** — it passed all seven of those and
+   was silent on precisely the four the pm3 passes. ⇒ **union 16/16, intersection of silences
+   EMPTY.** An emitter defect cannot be reader-specific in opposite directions, so each
+   instrument's silences are its own gaps — and every arm is now positively verified by at least
+   one independent reader.
 
-⭐ **AND THE PAC ITEM:**
-1. **END-TO-END is still unverified, and cannot be done here.** Nothing on this bench decodes PAC
-   even from a genuine tag (C465), so "correct on the air" is as far as this hardware reaches. A
-   real PAC reader would settle it. ⇒ operator is looking into one.
+⛔⛔ **THE "BROKEN EMITTER" CATEGORY IS CLOSED.** F12's FSK three, PAC's silence and the fifteen
+findings that chased it, and §9e's accusation against upstream were one error repeated.
+
+⭐ **WHAT IS ACTUALLY LEFT, and both need hardware this bench does not have:**
+1. ✅ **PAC END-TO-END IS SETTLED (C473)** — `lf pac reader` recovers `CARD0042` from our
+   emulation. Armed, emitted, received, decoded by an independent reader.
+2. ⚠ **THE ONLY REAL QUESTION LEFT: does a REAL reader accept our emulation?** Two hobbyist front
+   ends agreeing is not a field test, and our FSK2a waveform is still measurably unlike a real
+   tag's (C472: 48us runs at 16.4% vs 0.01%, duty 52.9/47.1 vs 50.0/50.0). ⇒ needs a real HID,
+   ioProx or PAC reader.
+3. ⚠ **Optional and cheap**: fix the FSK2a mark shape. `LF_FSK2A_MARK_CYCLES` is one constant and
+   a real tag's 50/50 duty is the target. ⛔ C414 notes it needs `counter_top` to divide 4 AND 5
+   carrier cycles — 8 ticks instead of 16 — doubling the worst-case buffer. Nothing is broken, so
+   this is polish, not a fix.
+4. ⚠ **The pm3's seven silences are unexplained and are NOT emitter defects.** Four are the whole
+   PSK1 family (indala, keri, nexwatch, idteck), which is what M52 predicts of a phase-locked
+   subcarrier; gproxii, fdxb and jablotron have no such explanation. Curiosity, not a blocker.
 
 ✅ 2. **CLOSED 2026-09-15 BY C471 — and the answer was our own analysis stage.** C464's real-tag
    shares (73/9/12%, longest 2280us) are refuted. Measured through `pm3cap.py` in the restored
@@ -868,7 +873,7 @@ and a changed-plaintext control. **B** = verified on hardware against ONE indepe
 | Securakey | **A** 6/6 | **A** **4/4** (C330) | ⛔ **0/6 on current firmware (C366)**; was B 10/10 |
 | Noralsy | **A** 6/6 | **A** **4/4** (C330) | ⛔ **0/6 on current firmware (C366)**; was B 10/10 |
 | InstaFob | **B** 5/5 | ⛔ **not shipped** | ⛔ **not built** |
-| AWID | **A** 5/5 real tag (C201) | **A** **4/4** re-graded (C330) | ⛔ **0/6 — DO NOT SHIP (C246, §9d)** |
+| AWID | **A** 5/5 real tag (C201) | **A** **4/4** re-graded (C330) | ✅ **pm3 decodes it BYTE-EXACT (C472)** — the 0/6 was the Flipper's. DO-NOT-SHIP withdrawn; see §9e |
 | Paradox | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | Pyramid | **A** 4/4 real tag (C201) | **A** **4/4** re-graded (C331) | ⛔ **not built** |
 | FDX-A | **A** 10/10 real tag, 2 credentials (C338) | **A** 4/4, blocks identical to the reference clone (C340) | ⛔ **not built** |
@@ -951,32 +956,41 @@ project exists downstream of (C185).
 | ✅ ~~**Two formats have no payload check**~~ **HALF OF THIS WAS WRONG AND IS FIXED (2026-09-14)** | ~~Securakey's gate is 19 preamble bits~~ — it was, and the reason given here ("both references are the same") was not checked. It is false: `protocol_securakey_can_be_decoded` rejects any frame whose 9-bit groups do not open with a zero spacer, and we did not. `securakey_accept()` now enforces exactly those ten spacers (C253), and the reader REPORTS the Wiegand parity without gating on it, which is what the reference does (C261). ⭐ **InstaFob's `NULL` hook is confirmed CORRECT**: its reference checks the 32-bit block-1 constant and nothing else (C256) — so that half of the row stands, now measured rather than assumed. ⇒ **The lesson is the row itself**: "both references are the same" was written without reading either one's `can_be_decoded` |
 | ⚠ **ASK reads sweep field strength** | `lf_ask_read` divides the caller's timeout across drive steps {4,7,6,2}. Noralsy decodes at drive 7 and NO other setting (C182), so it is required; but it changes the latency profile of every ASK read and a reviewer should be told why rather than discovering it |
 
-### 9e. ⛔⛔ THIS ENTIRE SECTION RESTS ON F12 AND IS WITHDRAWN PENDING A REWRITE (C472)
+### 9e. ✅ A DEFECT THAT WAS WITHDRAWN — AND THE CAVEAT IN ITS OWN LAST PARAGRAPH IS WHY
 
-⛔⛔ **DO NOT SHOW THIS TO A REVIEWER AS IT STANDS.** It asserts that FSK2a emulation does not work on this device and names `hidprox.c` and `ioprox.c` — UPSTREAM's code — as broken. The Proxmark decodes both byte-exact, on two devices and two firmware builds (C472). The 0-of-6 grade it cites was the FLIPPER's, and the Flipper is the instrument C465 caught failing on a real PAC tag. ⚠ A false public claim about upstream's code is the worst failure mode available to this branch, which exists downstream of exactly that kind of error (`idteck.c`, C185). ⇒ Rewrite from the pm3 re-grade before any PR. Original text follows.
+⛔⛔ **THIS SECTION PREVIOUSLY TOLD A REVIEWER THAT FSK2a EMULATION DOES NOT WORK ON THIS DEVICE
+AND THAT TWO OF UPSTREAM'S EMITTERS ARE BROKEN. THAT IS FALSE AND IS WITHDRAWN (C472,
+2026-09-15).** The Proxmark decodes `hidprox.c`, `ioprox.c` and this branch's AWID emitter
+**byte-exact**, on two devices and two firmware builds — 6 of 6, five different credentials,
+every raw identical to what was armed.
 
-### 9e. ⛔ A PRE-EXISTING DEFECT THIS BRANCH FOUND AND DID NOT CAUSE
+⭐ **The 0-of-6 that convicted them was the FLIPPER's**, and it measured the judge. C245/C246
+graded three FSK2a emitters silent against a Flipper reading Gallagher 4/4 on the same slot, and
+the inference — *the emitters are broken* — required the Flipper's FSK2a read path to be sound.
+It is not: C465 later caught the same instrument decoding nothing from a REAL PAC tag the pm3
+read byte-exact. ⚠ The Flipper is not broken in general — C413 shows it reads a real FSK2a tag
+at 44.4% — it cannot tolerate OUR emission's shape, which is a narrower and much less
+interesting fact than the one this section published.
 
-**FSK2a emulation does not work on this device, and two of the three broken emitters are
-upstream's.** `hidprox.c` and `ioprox.c` ship in this firmware; both use `counter_top` 8 and 10
-with duty `top/2` and several entries per bit; both read **0 of 6** on a Flipper that reads
-Gallagher **4 of 4** on the same slot seconds later (C245, C246).
+⭐⭐ **THE CAVEAT THIS SECTION ALREADY CARRIED WAS CORRECT, AND IGNORING IT COST FIFTEEN
+FINDINGS.** Its own last paragraph read: *no real HID or ioProx tag can be presented to the
+Flipper from this bench, so its read path for those protocols is not independently confirmed.
+Three FSK2a emitters failing while six non-FSK2a ones succeed is strong, and it is not proof.*
+That is exactly the gap, named in advance, in the section that went on to state the conclusion
+as fact anyway. ⇒ **A caveat is not discharged by being written down.** When the missing control
+is nameable, it is a TODO, not a footnote.
 
-⚠ **A reviewer needs this stated plainly for two reasons.** First, the AWID emitter this
-branch adds sits on that broken path — which is why §9d marks it DO NOT SHIP, and why shipping
-it would look like our bug. Second, upstream's own feature table claims HID Prox and ioProx
-emulate; on this hardware they do not, and this branch's grid is the only place that has ever
-been measured rather than inherited.
+⚠ **WHAT WAS REAL AND STILL IS — the waveform differs from a real tag's, and it is now measured
+on a comparator-free instrument.** `fsk2a_mod.c` holds `LF_FSK2A_MARK_CYCLES = 4`, one 32us mark
+on BOTH tones, so our long tone's gap runs 48us where a real tag's runs 40. Through the pm3's
+raw buffer: ours carries 48us runs at **16.4%** where the real tag has **0.01%**, and duty
+**52.9/47.1** against the tag's exact **50.0/50.0**. ⇒ C414/C420's mark-shape mechanism is
+CONFIRMED as a description of the waveform and REFUTED as an explanation of undecodability.
 
-✅ **Ten hypotheses were eliminated by measurement before this was found** — counter_top
-magnitude, entries per bit, AC coupling, duty shape, the emitter design (checked against
-Momentum's own demodulator AND its own encoder), the buffer plumbing, the emulation engine,
-held levels, the tone value, and varying counter_top per entry. The eleventh test was to try a
-shipped emitter, and it should have been the first.
-
-⚠ **What is NOT established**: no real HID or ioProx tag can be presented to the Flipper from
-this bench, so its read path for those protocols is not independently confirmed. Three FSK2a
-emitters failing while six non-FSK2a ones succeed is strong, and it is not proof.
+⛔ **WHAT IS STILL NOT ESTABLISHED, and it is the honest replacement for this section's claim**:
+whether a REAL HID or ioProx reader tolerates our mark shape. The pm3 does and the Flipper does
+not, so a real reader could fall either side. That needs hardware this bench does not have —
+and it is a question about OUR waveform, not an accusation against upstream's code.
 
 ### 9f. ⛔ A PRE-EXISTING DEFECT — an unpinned HID read cannot identify half the format table
 
