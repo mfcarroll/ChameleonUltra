@@ -50,7 +50,7 @@ everything**: a scope on `LF_OA_OUT` or `LF_ANT_DRV` returning a loaded Q far fr
 
 ✅ **THE LIST WAS CHECKED, NOT TRUSTED (C428).** Of AUTOPILOT § line 1170's six, **GProxII IS already built**
 (`TagSpecificType.GProxII = 308`, a full emitter, an `emugrade.sh` arm) and **FDX-B genuinely is not** (command
-ids 3061/3062 only, **no `TagSpecificType`**). ⇒ With the FSK2a four retired by C427, **FDX-B is the only
+ids 3061/3062 only, **no `TagSpecificType`**). ⇒ With the FSK2a class retired by C427 — **SIX arms, not four: AWID, Paradox, Pyramid, FDX-A **and HID Prox and ioProx**, whose silence C447 attributed from source** —, **FDX-B is the only
 unbuilt emulate arm left that F12 does not block** — it is biphase, not FSK2a.
 
 ⭐⭐ **NEXT UNIT, and it is two small ones in order:**
@@ -78,7 +78,9 @@ outright. ⚠ **It has never been measured**, and C426 established it cannot be 
 board — so it is currently believed on a structural argument from two firmware sources and a schematic.
 
 ⭐ **What the review should actually attack**, in rough order of how much it would cost us to be wrong:
-  1. ⛔ **Read still works and is grade A — is that really consistent, or is it the refutation we explained
+  ✅ **EMULATE COLUMN NOW FULLY ATTRIBUTED EXCEPT PAC (C447).** C431's four SILENT arms are hidprox, ioprox, awid and pac; **hidprox and ioprox are FSK2a from source** (`LF_FSK2a_PWM_*` geometry, `fsk_alloc(FSK_BITRATE_HID/IOPROX)`), so they belong to the retired class and the old *FSK2a four* wording undercounted by two. ⚠ The class shares a modulation, not a clock: `IS_FSK2A_1MHZ_TYPE` is **HID_PROX or AWID only**. ⛔ Membership only — F12 stays closed.
+
+1. ⛔ **Read still works and is grade A — is that really consistent, or is it the refutation we explained
      away?** All four retired protocols read AND write at grade A against real tags with the Proxmark as
      independent judge (C201, C203, C330/C331, C338, C340). Only emulate is dead.
   2. **C423's knee is a COUNT fraction of duration bins, not an amplitude** — it was never a dB measurement,
