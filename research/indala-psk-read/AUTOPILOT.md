@@ -40,6 +40,31 @@ fan-out mid-flight corrupts captures and duplicates bench work on shared hardwar
 
 ## 1. STATE
 
+### ⭐⭐⭐⭐ 2026-09-14 19:25 — F12'S CAUSE IS THE SWITCHING RATE (C422)
+
+One frame, one variable. The run-8 frame (48 ones / 48 zeros, expected **45.5%** RF/10):
+
+| tone geometry | modulator switches at | measured RF/10 | peaks |
+|---|---|---|---|
+| RF/8 + RF/10 | 15.6 / 12.5 kHz | **3.3%** | one, at 60-64us — no long tone |
+| RF/32 + RF/40 | 3.9 / 3.1 kHz | **36.4%** | **two, 256us and 320us** |
+
+⭐ Held constant on purpose: tone RATIO (4:5), duty pattern (50% / 40%, the identical entry pattern), pulse
+counts, and worst-case entries (2400, so F13's bounds are untouched). **Only the time scale moved, 4x.**
+Criterion pre-registered at ≥30% before the firmware was edited. Controls: pure-ones **100.0%** with a clean
+320us peak and correctly NO 256us peak; EM410X 512/1024 either side; #1 re-verified **functionally** after the
+restore, peaks back at 64/80us.
+
+⚠ **AND THAT FUNCTIONAL CHECK WAS NECESSARY** — `hw version` read `v2.2.0-777-g23fd786-dirty` for BOTH the
+diagnostic build and the restored one, because `git describe` sees the whole tree and an unrelated uncommitted
+`flipraw.py` kept it dirty. ⛔ A version string could not tell the two apart; the tone periods could.
+
+⭐⭐ **The receiver is exonerated by a control already in hand**: C413 read a REAL tag at 44.4% on this same pad
+with two clean peaks. ⇒ It is **our emitter's analog DRIVE PATH** that cannot switch at 15.6 kHz.
+
+⛔⛔ **THIS DOES NOT GIVE US A WORKING AWID EMITTER** — real AWID *is* RF/8 and RF/10. It names the cause and
+moves the fix to the drive path. ⚠ WHICH element limits the rate is not separated yet.
+
 ### ⛔ 2026-09-14 19:05 — THE DUTY FIX IS REFUTED BY OUR OWN NOTES (C421)
 
 C420 queued a 50%-duty rebuild of the FSK2a emitter. **It had already been tried and it was 0 of 6.** C226: our

@@ -127,10 +127,11 @@ def frac_expected(hexframe, short_pulses=6, long_pulses=5):
     return (lng / (lng + sht) if (lng + sht) else 0.0), ones, zeros
 
 
-def frac_measured(durations):
+def frac_measured(durations, bands=None):
     """RF/10 share actually captured, counting only durations that are one tone or the other."""
-    sht = sum(1 for d in durations if TONE_LO <= d < TONE_SPLIT)
-    lng = sum(1 for d in durations if TONE_SPLIT <= d <= TONE_HI)
+    lo, split, hi = bands or (TONE_LO, TONE_SPLIT, TONE_HI)
+    sht = sum(1 for d in durations if lo <= d < split)
+    lng = sum(1 for d in durations if split <= d <= hi)
     return (lng / (lng + sht) if (lng + sht) else 0.0), sht, lng
 
 
@@ -226,6 +227,8 @@ def main():
     c.add_argument("--expect", default=None, help="comma-separated periods in us")
     c.add_argument("--no-arm", action="store_true")
     c.add_argument("--raw", default=None, help="12-byte AWID frame in hex, overrides the econfig")
+    c.add_argument("--bands", default=None,
+                   help="lo,split,hi in us for --frac; default 54,72,92 (RF/8 vs RF/10)")
     c.add_argument("--frac", action="store_true",
                    help="score measured RF/10 share against the share the frame implies")
     a = ap.parse_args()
@@ -254,7 +257,8 @@ def main():
         if not a.raw:
             raise SystemExit("--frac needs --raw: the expectation comes from the frame bits")
         exp, ones, zeros = frac_expected(a.raw)
-        got, sht, lng = frac_measured(durs)
+        bands = tuple(int(x) for x in a.bands.split(",")) if a.bands else None
+        got, sht, lng = frac_measured(durs, bands)
         print("    frame %s -> %d one-bits, %d zero-bits" % (a.raw, ones, zeros))
         print("    RF/10 share: expected %.1f%%   measured %.1f%%   (%d long, %d short in band)"
               % (100 * exp, 100 * got, lng, sht))

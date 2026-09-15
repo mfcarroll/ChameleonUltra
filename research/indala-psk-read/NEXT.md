@@ -9,14 +9,22 @@
 as *the fourth hypothesis to fall*. C420's composition MEASUREMENT stands; the duty MECHANISM does not. Building it
 would be the fourth encoding written against unchanged air, which C415 forbade.
 
-⭐⭐ **NEXT UNIT (2026-09-14, C421): the SWITCHING-RATE EXPERIMENT — C380's question, never tested.** Every emitter
-that WORKS on this device runs a tone or bit period of 32, 40 or 64 carrier cycles (Gallagher 32, Securakey 40,
-Noralsy 32, EM410X 64); the FSK2a family runs 8 and 10, switching the modulator at **15.6 kHz against ASK RF/32's
-3.9 kHz**. ⇒ Scale the FSK2a tone periods up 4x to **RF/32 and RF/40**: same 4:5 tone ratio, same duty pattern,
-**only the switching rate changes**. ⚠ It emits no valid AWID frame and no reader will decode it — it does not need
-to, because `flipraw.py --raw --frac` measures tone composition and that is the observable. A band-limited analog
-path predicts C420's majority-takes-all curve without the duty asymmetry, and unlike duty it has not been falsified
-on the air. ⛔ Pyramid's emitter stays QUEUED BEHIND this.
+✅ **THE SWITCHING-RATE EXPERIMENT IS DONE AND IT ANSWERED (C422): the rate IS the cause.** Same frame, 3.3% at
+RF/8+RF/10 and **36.4% with two clean peaks** at RF/32+RF/40, with ratio, duty, pulse counts and buffer all held
+constant. The receiver is exonerated, so our emitter's **analog drive path** cannot switch at 15.6 kHz.
+
+⭐⭐ **NEXT UNIT (2026-09-14, C422): FIND THE KNEE, THEN FIND WHAT SETS IT.** Two questions, in order:
+1. **Where is the knee?** Sweep the tone period between RF/10 and RF/32 — 12, 16, 20, 24 — and find where the
+   minority tone starts surviving. A sharp knee names a filter corner; a gradual one points at Q or slew.
+   ⚠ Each point currently costs a firmware build and flash. ⭐ Worth considering FIRST: make the FSK2a tone
+   geometry settable at runtime through a debug command, which turns a day of flashing into one capture loop.
+2. **Which element sets it?** PWM output stage, coil drive, tank Q, antenna matching — C422 does not separate
+   them, and no work has been done on the drive path at all.
+
+⛔ **AWID ITSELF IS NOT FIXED BY THIS AND MAY NOT BE FIXABLE WITHOUT DRIVE-PATH WORK** — real AWID *is* RF/8 and
+RF/10, so slowing the tones is a diagnostic, never a shipping option. ⭐ It is not a hard physical bound though:
+C226 captured the Flipper emitting AWID at these rates well enough for our own reader to decode byte-exact.
+⛔ Pyramid's emitter stays QUEUED BEHIND all of this.
 
 **GOAL: support as many LF encodings as the Flipper Zero does, in read, write AND emulate.**
 
