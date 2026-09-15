@@ -248,7 +248,8 @@ bench)
             "lf em 410x econfig -s 8 --id DEADBEEF88" "hw slot change -s 8" "hw mode -e" >/dev/null 2>&1
         sleep 1
     }
-    echo "  bench links (EM410X probe — proven at both ends, GPIO family so legal from an emulation)"
+    echo "  bench links (EM410X across the emulation links — proven at both ends and GPIO-family,"
+    echo "  so legal from an emulation (M52); the tag arm probes em410x, hidprox and pac — C458)"
     cu2 "hw mode -r" >/dev/null 2>&1
     emu "$P1"
     flip=DEAD
@@ -261,12 +262,24 @@ bench)
     emu "$P2"
     c21=DEAD; cu1 "hw mode -r" "lf em 410x read" 2>&1 | grep -qi deadbeef88 && c21=LIVE
     cu2 "hw mode -r" >/dev/null 2>&1
-    tag=DEAD
-    { cu2 "hw mode -r" "lf hid prox read"; cu2 "lf em 410x read"; } 2>&1 | grep -qiE "FC:|EM410X/" && tag=LIVE
+    # ⛔⛔ THIS ARM ACCEPTED A NARROWER SET OF PROTOCOLS THAN THE pm3 ARM BELOW, AND THAT
+    # PRODUCED A FALSE TOPOLOGY REPORT FOR A WHOLE SESSION (C458). The tag held PAC — the
+    # previous tick had deliberately restored `CARD0001` onto it — so `lf hid prox read` and
+    # `lf em 410x read` both returned nothing and this printed DEAD, while the pm3 arm's
+    # `valid.*found` matched *Valid PAC/Stanley ID found!* and printed LIVE. The two arms
+    # disagreed about the SAME tag, and the disagreement was reported as "rig B has come
+    # apart". ⇒ **probe the protocols the tag might actually hold, and name the one that
+    # answered**; a silent null here is never a topology verdict (C402/C404/C408).
+    tag=DEAD; tagvia=""
+    for pr in "lf em 410x read" "lf hid prox read" "lf pac read"; do
+        if cu2 "hw mode -r" "$pr" 2>&1 | grep -qiE "FC:|EM410X/|PAC/Stanley"; then
+            tag=LIVE; tagvia=" (via ${pr#lf })"; break
+        fi
+    done
     pm3tag=DEAD; "$PM3" -c "lf search" 2>&1 | grep -qiE "valid.*found|H10301|EM 410" && pm3tag=LIVE
     printf "  %-28s %s\n" "Flipper <-> #1 (rig A)"      "$flip"
     printf "  %-28s %s\n" "#1 <-> #2"                   "$c12 / $c21"
-    printf "  %-28s %s\n" "#2 <-> a tag on its pad"     "$tag"
+    printf "  %-28s %s\n" "#2 <-> a tag on its pad"     "$tag$tagvia"
     printf "  %-28s %s\n" "pm3 <-> T5577 (separate)"    "$pm3tag"
     echo ""
     [ "$flip" = LIVE ] || echo "  ⛔ BLOCKED without rig A: the emulate column (8 of 11), and U11's FSK capture"
@@ -274,6 +287,9 @@ bench)
     [ "$flip" = LIVE ] || echo "     tone structure (C387's peaks). ⇒ ASK FOR: Flipper + #1 on one pad."
     [ "$tag" = LIVE ]  || echo "  ⛔ BLOCKED without rig B: every real-tag READ arm, including C400's open"
     [ "$tag" = LIVE ]  || echo "     Gallagher/Securakey failure. ⇒ ASK FOR: pm3 + T5577 + #2 sandwiched."
+    [ "$tag" = LIVE ]  || echo "     ⚠ DEAD here means em410x, hidprox AND pac all returned nothing. It still"
+    [ "$tag" = LIVE ]  || echo "     cannot tell a missing tag from one holding a protocol not probed — check"
+    [ "$tag" = LIVE ]  || echo "     what the pm3 says is on the tag before calling this a bench change (C458)."
     if [ "$flip" = LIVE ] && [ "$tag" = LIVE ]; then
         echo "  ✅ Both rigs live — every open unit is reachable. This is the setup to keep."
     else

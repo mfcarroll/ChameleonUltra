@@ -271,8 +271,10 @@ via the new `flipgrade.py`. hidprox/ioprox/awid are silent as F12 predicts.
    snapshotted inside `pac_modulator` — a later USB query reads a peripheral that is not playing.
    ⛔⛔ **CARRY A CONTROL: dump fdxb's sequence with the SAME command** against a host mirror of
    `fdxb_modulator`. A dump that cannot disagree with anything is not a dump.
-   ⚠ **FLASH #2, NOT #1.** #1 is on the Flipper's pad and rig A is the only live rig for this work;
-   #2 has no tag on its pad (bench, 2026-09-15) so it costs nothing in use. Keep the build minimal —
+   ⚠⚠ **FLASH #2, NOT #1 — but #2 is NOT idle (C458 corrects this).** #1 is on the Flipper's pad and
+   rig A is the only live rig for the air-side work; **#2 is part of a live rig B** — the earlier claim
+   that its pad was empty was a false report from `bench`'s tag arm, which probed only em410x and
+   hidprox against a tag holding PAC. Flashing #2 therefore costs rig B for the duration. Keep the build minimal —
    one debug command that returns N entries of the armed sequence — and leave #2 out of DFU and in
    reader mode when done.
    ⛔ **What C451 already refuted and must not be revived**: the frame's one-count is NOT the
