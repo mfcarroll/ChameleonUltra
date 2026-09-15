@@ -14,40 +14,55 @@ interpretation is superseded in place; the readings stand only as Flipper readin
 ⛔ **DO NOT OPEN ANOTHER PAC EMITTER UNIT.** The buffer (C462), the clock (C455), the frame on the
 tag (C436), the hold capability (C469) and now the air itself (C470) are all verified.
 
-⭐ **WHAT IS ACTUALLY LEFT, and all of it needs an operator:**
-0. ⛔⛔ **C470 UNDERMINES THE INSTRUMENT BEHIND F12's CLOSURE, AND THAT IS AN OPERATOR DECISION, NOT
-   AN AUTOPILOT ONE.** F12 (FSK emulation emits a constant tone) was closed on two legs: a SCHEMATIC
-   argument (C427 — R11/Q3 is binary, the antenna switch has no high-Z, so the firmware surface is
-   empty) and an EMPIRICAL one (C387's rate curve, C422/C423's bandwidth knee). The schematic leg is
-   instrument-independent and stands. **The empirical leg was measured through the Flipper's raw
-   capture — the same instrument that just invented a PAC defect that does not exist (C470) and that
-   decodes nothing from a real PAC tag (C465).** ⇒ *"FSK emulation emits a constant tone"* has never
-   been checked against a comparator-free instrument, and `pm3cap.py` against #2 would cost about two
-   commands. ⛔ **I did not run it**: the standing rule says F12 reopens ONLY on a scope measurement
-   of loaded Q, and that rule exists because this project has reopened closed questions on weak
-   grounds before. This is a recommendation to the operator, not a finding, and not a reopening.
-   ⚠ Note what it would and would not settle: a comparator-free capture could refute *constant tone*,
-   but C427's schematic argument would still stand on its own, so the two legs must be judged
-   separately.
+⭐ **WHAT IS ACTUALLY LEFT:**
+0. ⚠⚠ **MY EARLIER FRAMING OF THIS ITEM WAS TOO BROAD AND IS CORRECTED HERE.** I wrote that C470
+   *undermines the instrument behind F12's closure*. That is wrong about F12's strongest leg, and
+   the correction matters because it changes whether anything should be reopened at all.
+   • **C413 is NOT undermined.** It put a pm3-written HID Prox tag — the SAME credential our
+     emulator was arming — on the Flipper's pad and read **44.4%** with two clean peaks at 60 and
+     76us, against our emulation's **7.0%** and one peak, on the same chain. That is a REAL-TAG
+     CALIBRATION, not an absolute duty reading, and it is exactly the kind of control C470 itself
+     demands. C470 convicted the Flipper on ABSOLUTE duty over long static holds; C413 is a
+     relative comparison at a rate the receiver demonstrably resolves from a genuine source.
+   • **C422 is NOT undermined either.** One frame, one variable: RF/8+RF/10 gives 3.3% and no
+     long-tone peak, RF/32+RF/40 gives 36.4% with two clean peaks, ratio and duty and entry count
+     all held constant, criterion pre-registered at >=30% pass / <10% fail. C413's real tag is the
+     control that exonerates the receiver at the fast rate.
+   • What IS comparator-exposed is the MAGNITUDES in C409/C420 — absolute tone fractions read off
+     the Flipper. Those should be quoted as Flipper readings.
+   ⇒ **F12's cause stands and there is no case for reopening it on C470's account.** The reopen
+   rule is unchanged: a scope measurement of loaded Q far from 6-8.
+   ⭐ **What IS worth doing is different and better, and it is not a reopening**: run the C413
+   experiment on the INSTRUMENT OF RECORD. `pm3cap.py` is comparator-free, and unlike the Flipper
+   **the pm3 DECODES HID Prox** — an arm C465's PAC problem never offered. Write HID Prox to the
+   T5577 with the pm3, capture the real tag, then swap to #2 emulating the same credential and
+   capture that. ⛔ **Two pad states, and each needs the OTHER party off the pm3's pad**: the tag
+   alone for the reference (a T5577 left in the sandwich answers the pm3's carrier and superimposes
+   its own PAC frame), then #2 alone for the emulation — C466/C469/C470's geometry. ⚠ It cannot
+   refute C427's schematic argument, which stands on its own; it tests the OBSERVATION on an
+   independent instrument, with a decode arm as a bonus. Either outcome is publishable.
 
-⭐ **AND THE TWO PAC ITEMS:**
+⭐ **AND THE PAC ITEM:**
 1. **END-TO-END is still unverified, and cannot be done here.** Nothing on this bench decodes PAC
    even from a genuine tag (C465), so "correct on the air" is as far as this hardware reaches. A
-   real PAC reader would settle it.
-2. ⚠ **ONE OPEN DISCREPANCY, left visible rather than buried**: C464's capture of the REAL T5577
-   reported 256us n=240, 512 n=31, 768 n=41 — shares near 73/9/12% — which does NOT match this
-   frame's predicted 48/29/10%, while our EMULATION does. Either that capture was partial (only its
-   top three bins were recorded) or the tag holds something other than what the bench note says. The
-   tag is on the Flipper's pad now and cannot be re-measured in this geometry. ⇒ operator-present.
+   real PAC reader would settle it. ⇒ operator is looking into one.
 
-⛔⛔ **THE HANDS-FREE QUEUE IS EMPTY, AND THAT IS A REPORT, NOT A FAILURE.** With the T5577 on the
-Flipper's pad, every write arm and every real-tag read arm is out of reach — that is the geometry the
-operator chose and it is correct for the work that has just finished. What remains reachable is #2
-emulating into the pm3's buffer, and the only emulate arms the Flipper ever judged FAILING are the
-FSK family, which item 0 above places with the operator. ⇒ A tick that finds nothing takeable should
-say so in one line and stop, rather than manufacture a unit. ⭐ The bench becomes productive again on
-any ONE of: the T5577 back on the pm3's pad (re-opens the write/read column), a real PAC reader
-(settles end-to-end), or the operator releasing item 0.
+✅ 2. **CLOSED 2026-09-15 BY C471 — and the answer was our own analysis stage.** C464's real-tag
+   shares (73/9/12%, longest 2280us) are refuted. Measured through `pm3cap.py` in the restored
+   sandwich the real T5577 gives **48.0 / 28.7 / 9.7 / 7.9%, longest exactly 2304us, split 42.3%** —
+   matching the prediction computed from `pac.c` AND our own emulation, to within half a point on
+   every bin. C464 predates `pm3cap.py`'s hysteresis; re-running today's capture with `--hyst 0`
+   destroys the long-run tail (2304 -> 792us) and reproduces C464's shape. ⇒ **The real tag and the
+   emulation are the same signal. There is no discrepancy left.**
+
+✅ **THE BENCH WAS RESTORED TO THE STANDARD TWO-RIG CONFIGURATION ON 2026-09-15 (operator).**
+    Rig A: Flipper + Chameleon #1.   Rig B: Chameleon #2 – T5577 – Proxmark, sandwiched.
+⭐ **The write column and the real-tag read column are open again**, and item 2 was closed the same
+hour (C471). ⛔ **`autopilot.sh bench` was rewritten for the OLD topology and has been rewritten
+again for this one** — a stale bench map is what produced C402/C404 and C458, so when the pads move,
+that block moves with them.
+⚠ **What is still NOT hands-free**: item 0's two-capture experiment needs the pm3's pad cleared of
+the other party between its two halves, and item 1 needs hardware this bench does not have.
 
 
 ⛔⛔⛔ **READ THIS BEFORE TAKING ANY PAC UNIT — THE FOUNDATION MOVED, 2026-09-15 (C465).** The whole
