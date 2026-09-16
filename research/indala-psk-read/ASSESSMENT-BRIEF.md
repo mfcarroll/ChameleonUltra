@@ -105,13 +105,30 @@ capability database.
 | `rfid-tools/SCOPE.md` | the three-way protocol reconciliation (see below) |
 | `rfid-tools/DESIGN.md` | SOURCE × READER matrix, the four outcomes incl. `UNGRADED`, topology cues + radio-identity check adapted from `t5577_campaign.py`, the cross-firmware gap register, build order |
 
-⭐ **Scope headline.** The Flipper (`lfrfid_protocols.c`) implements **26** LF protocols; the pm3
-(`cmdlf.c` `CommandTable[]`) has **29** LF tag commands. Our 16 arms are **exactly the three-way
-intersection** — reached by accident, not by plan. Ten Flipper protocols are uncovered here:
-EM4100/16, EM4100/32, Electra, Indala224, Paradox, Pyramid, FDX-A (pm3 `destron`), HidGeneric,
-HidExGeneric, InstaFob. Three of those ten are variants of modulation we already emit. Nine further
-protocols exist on the pm3 alone (motorola, nedap, presco, trovan, visa2000 as plain ID protocols;
-cotag, hitag, pcf7931, ti as interactive chips — a different class of work).
+⭐ **Scope headline (CORRECTED — the first version undercounted our own firmware).** The Flipper
+(`lfrfid_protocols.c`) implements **26** LF protocols; the pm3 (`cmdlf.c`) has **29** LF tag
+commands. ⛔ The first draft read our scope off `pm3grade.sh`'s 16-arm `ORDER` and treated one test
+script's arm list as the firmware's capability. It is not. From source:
+
+| capability | source of truth | count | of Flipper's 26 |
+|---|---|---|---|
+| **emulate** | `lf_tag_em.c` dispatch | **18** | 69% |
+| **read / clone to T55xx** | `data_cmd.h` `*_SCAN` / `*_WRITE_TO_T55XX` | **22** | 85% |
+| **tested** | `pm3grade.sh` `ORDER` | **16** | 62% |
+
+⭐ **`em410x_electra` and `indala224` are BUILT AND EMULATABLE and simply absent from the grid** —
+two rows of configuration, not two features. `fdxa`, `paradox` and `pyramid` have reader **and**
+T55xx-write paths but no emitter, which is a different ROW SHAPE (`(t55.cu, rd.pm3)` is testable
+today, `(emu.cu, *)` is not) rather than a missing protocol; `instafob` has `_SCAN` only. Genuinely
+absent: **EM4100/16, EM4100/32, HidGeneric, HidExGeneric — four, not ten.**
+
+⛔ **`LF_RESEARCH_CMDS_ENABLED` defaults to 0 and only this branch's `application/Makefile` sets
+it.** `LF_EMU_DEBUG` (3037), `LF_RADIO_DEBUG` (3038), `LF_EMU_SEQDUMP` (3065), `LF_EMU_SEQHOLD`
+(3066), `LF_READER_CAPTURE` and `LF_T55XX_READ_CAPTURE` exist in OUR builds alone. Any harness step
+using one must be marked research-build-only, or a cross-firmware run reports a TOOL gap as a
+FIRMWARE gap. ⚠ `hw emuhold` is **not a protocol** — a synthetic square wave of alternating N-entry
+runs (N x 256us) for the long-DC question C443 showed no shipping arm can ask. Instrument
+qualification, never a grid row.
 
 ⛔ **Tier 0 is not "done", it is unmeasured.** The first bench run is the full matrix over the
 existing 16 arms with calibration rows enforced — the run C473 should have been. Adding protocols
