@@ -991,6 +991,99 @@ capture, rather than in the write-up.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K22 — THE 20-40 ms REGION, WHICH NOTHING HAS EVER MEASURED (written before its capture)
+
+`rfid-tools` `QUEUE.md`'s third hands-off unit. **K14/K15/K16 stopped at a 40 ms primer and K19/K20
+started at 85, so 20-40 ms has never been looked at on either arm** — and the two ladders only just
+meet. It is the last unmeasured region under the burst ceiling.
+
+⭐⭐ **AND IT IS THE FIRST BAND IN THIS PROJECT WHOSE REFERENCE REGION IS JUSTIFIED BY INDEPENDENT
+PRIOR MEASUREMENT** — which is exactly what M67 demanded and what K19 could only answer by
+abandoning wings altogether. The 40 and 45 ms cells were measured in **two independent sessions on
+both arms**, and all eight readings are at or below 17%:
+
+| cap | `indala` 40 / 45 | `keri` 40 / 45 |
+|---|---|---|
+| `k15_indala_keri_s91` | 12% / 17% | 0% / 8% |
+| `k16_indala_keri_s137` | 8% / 12% | 12% / 8% |
+
+⇒ **a FLOOR of 0-17%, four readings per arm, from captures this band is not scored on.** That is a
+wing with a warrant, not a wing at an edge.
+
+### ⛔ THE POWER COMPUTATION, BEFORE THE BAND (M68), AND IT KILLS THE SHARPEST PREDICTION
+
+**The frame-locked notch is the prediction this region exists to test, and it CANNOT BE TESTED.**
+`gproxii`'s 5 ms notch sits at 60 ms = **1.22 of its 6144-sample frame**; 1.22 frames of the
+2048-sample frame `indala` and `keri` share is **20 ms**, the bottom of this ladder. ⛔ **But a
+notch needs a BODY to be notched out of, and the measured body there is the 0-17% floor above.** On
+`keri`, *median − 25* would land below zero — K20's own power table, in a new place. ⇒ **the
+frame-locked notch is declared UNTESTABLE here, in advance, rather than measured and mis-read as
+absent.** ⚠ C520 already refuted the frame reading for the HUMP on `nexwatch`; this says the bench
+cannot extend that to the NOTCH, and a null at 20 ms must not be quoted as if it had.
+
+⭐ **The FORWARD detector does have power, and it is the floor above that gives it that.** Anything
+elevated between 20 and 40 ms stands against 0-17% measured four times per arm. ⇒ K22 asks the one
+question this region can answer.
+
+⇒ ⭐ **AND Z1's OWN POWER, SIMULATED BEFORE THE CAPTURE (M70), 20,000 draws:**
+
+| the truth in 20-35 ms | Z1 fires |
+|---|---|
+| the measured floor everywhere (p = 0.10) | **0.00%** |
+| the floor at the top of its measured range (p = 0.17) | **0.00%** |
+| ONE cell at 90%, the rest floor | **0.01%** |
+| two adjacent cells at 50% | 16% |
+| two adjacent cells at 60% | 47% |
+| two adjacent cells at **80%** | **96%** |
+
+⭐ **Its specificity is as good as a band here has ever had** — the absolute threshold against a
+measured floor gives a false-fire rate of zero to three decimal places, and a lone 90% cell fires
+it 0.01% of the time, which is M62's disease designed out rather than warned about.
+⛔⛔ **BUT ITS POWER IS A CLIFF: 96% at 80%, 47% at 60%, 16% at 50%.** ⇒ **A REFUTED Z1 means
+*there is no feature here as strong as the hump at 50-65 ms* (which reaches 75-96%), and it does
+NOT mean the region is flat.** That sentence is the verdict's whole content and it must be carried
+with it; a weaker feature would be missed more often than not.
+
+### THE BANDS
+
+**The ladder**: **20..80 ms in 5 ms steps** (13 cells), the top five of which (60-80) overlap
+K15/K16 and act as a continuity check, plus the usual no-primer control. Two fresh seeds
+(**131** and **149**), `--reps 8`, **`--per-arm-shuffle`** (M69), both arms.
+
+  **Z1 — IS THERE ANY STRUCTURE BELOW 40 ms?** ⇒ a maximal contiguous run of **>= 2 cells among
+  20,25,30,35 each at or above 40%**, present in **BOTH seeds** and overlapping in at least one
+  cell. ⛔ **The 40% threshold is ABSOLUTE and is taken from the prior floor, not from this
+  ladder's median** — a median reference here would be dragged up by the 50-65 ms hump the ladder
+  deliberately contains, and that is M68's disease with the sign flipped. **Z1 REFUTED** ⇒ no such
+  run. between ⇒ reported.
+
+  **Z2 — THE CONTINUITY CHECK, AND IT IS A GATE ON Z1 RATHER THAN A FINDING.** The hump K15/K16
+  measured must be there: **at least two of 50, 55, 60, 65 at or above 50% in both seeds.** ⛔ If
+  Z2 fails, the session does not reproduce a result taken twice already and **Z1 is not read at
+  all** — a new region measured on a bench that cannot repeat a known one is not evidence.
+  ⚠ Z2 is NOT a claim; it is this ladder's version of the anchors rule M63 withdrew, and it is safe
+  here only because the anchor cells are ones prior runs measured HIGH rather than ones this band
+  assumes are quiet.
+
+  **Z3 — WHERE THE FLOOR ACTUALLY STARTS.** Reported, never tested: the lowest cell at or above
+  40% and the highest cell below it, in each seed. ⛔ **A boundary read off a ladder is an argmax
+  (M64/C504), so it is carried as a RANGE across the two seeds and never as a number.**
+
+  ⛔ Gates unchanged and any one ends it: pooled over every cell **< 15%** is NO POWER; split-half
+  over the rounds **> 15 points** is a drifted run; **P1 > 0.6** in any cell means a cell restarted
+  its burst. ⚠ **P1 is the one to watch at the bottom of this ladder** — a 20 ms primer is the
+  shortest field-up this design has ever asked for, and if it is too short to hold the burst the
+  arrivals control is what says so. **A P1 failure at 20-25 ms is a result about the instrument's
+  floor**, not a nuisance, and it must be reported as the reason the region stayed unmeasured.
+
+  ⛔⛔ **NO PERIODICITY, AGAIN.** Extending each arm's ~45-50 ms region spacing downward is
+  forbidden here for the reasons K19/K20 give, and there is a new one: it does not even work
+  descriptively — `indala`'s notches extrapolate down to 65-80 ms, where it is measured at
+  **83-96%**. ⛔ That is a reason not to quote the spacing, not a refutation of anything, because
+  no band ever tested it.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse

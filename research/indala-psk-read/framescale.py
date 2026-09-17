@@ -849,6 +849,92 @@ def k21(paths):
     print("")
 
 
+K22_LADDER = [str(x) for x in range(20, 81, 5)]
+K22_LOW_CELLS = ["20", "25", "30", "35"]     # Z1: the region nothing has ever measured
+K22_Z1 = 40.0        # ABSOLUTE, from the 0-17% floor K15/K16 measured at 40/45 — not a median
+K22_Z1_RUN = 2       # adjacent cells, in BOTH seeds, overlapping in >= 1
+K22_ANCHOR = ["50", "55", "60", "65"]        # Z2: K15/K16 measured the hump here
+K22_Z2 = 50.0
+K22_Z2_CELLS = 2
+
+
+def k22(paths):
+    """Z1/Z2/Z3 — the 20-40 ms region, which no ladder has reached.
+
+    ⛔ Z2 is a GATE on Z1, not a finding: a session that cannot reproduce the hump two prior
+    runs measured is not evidence about a region nobody has measured."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K22 — is there any structure below 40 ms?")
+    print("   ⭐ The reference is a FLOOR measured in two prior independent sessions on both arms")
+    print("   (k15/k16, 40 and 45 ms at 0-17%%), so the %.0f%% threshold is absolute, not a "
+          "median." % K22_Z1)
+    print("   ⛔ The frame-locked notch this region would test is UNTESTABLE — a notch needs a")
+    print("   body, and the measured body here is that floor.")
+    print("")
+    arms = sorted({a for _, d in runs for a in d})
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        if len(per) < 2:
+            print("### %s ⛔ needs two seeds — %d supplied\n" % (arm, len(per)))
+            continue
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K22_LADDER if k in cells]
+        if len(ladder) < len(K22_LADDER):
+            print("### %s ⛔ partial ladder — not scored\n" % arm)
+            continue
+        rate_ofs = []
+        for name, c in per:
+            rate_ofs.append(lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0]
+                            / len(c[k]["scores"]))
+        print("### %s" % arm)
+        for k in ladder:
+            print("   %5s %s %s"
+                  % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                     "".join("▲" if f(k) >= K22_Z1 else "·" for f in rate_ofs)))
+        gated = False
+        for i, (name, c) in enumerate(per):
+            g, line = _gate(name, c, cells)
+            print(line)
+            gated = gated or not g
+        if gated:
+            print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm)
+            continue
+        z2 = [[k for k in K22_ANCHOR if f(k) >= K22_Z2] for f in rate_ofs]
+        z2_ok = all(len(h) >= K22_Z2_CELLS for h in z2)
+        print("   Z2 continuity (the hump K15/K16 measured, >= %.0f%% in >= %d of %s): %s ⇒ %s"
+              % (K22_Z2, K22_Z2_CELLS, ",".join(K22_ANCHOR),
+                 " | ".join(",".join(h) or "none" for h in z2),
+                 "the session reproduces it" if z2_ok else
+                 "⛔⛔ IT DOES NOT — Z1 is NOT READ for this arm"))
+        if not z2_ok:
+            print("   ⇒ ⛔ NO VERDICT for %s — Z2 is a gate and it failed.\n" % arm)
+            continue
+        seed_runs = [_runs(K22_LOW_CELLS, f, K22_Z1) for f in rate_ofs]
+        found = []
+        for f1 in seed_runs[0]:
+            for f2 in seed_runs[1]:
+                if set(f1) & set(f2):
+                    found.append(sorted(set(f1) | set(f2), key=int))
+        print("   Z1 (>= %d adjacent cells of %s at >= %.0f%%, in BOTH seeds): %s"
+              % (K22_Z1_RUN, ",".join(K22_LOW_CELLS), K22_Z1,
+                 [",".join(f) for f in found] or "none"))
+        print("   ⇒ **Z1 %s for %s**%s"
+              % ("FIRES — there is structure below 40 ms" if found else "REFUTED",
+                 arm,
+                 "" if found else " — no elevated run below 40 ms in both seeds. ⛔ That is a"
+                 " statement\n     about 20-35 ms only, and NOT about the frame-locked notch,"
+                 " which has no power here."))
+        bounds = []
+        for f in rate_ofs:
+            hi = [k for k in ladder if f(k) >= K22_Z1]
+            bounds.append(hi[0] if hi else None)
+        print("   Z3 reported, never tested: the lowest cell at or above %.0f%% is %s ⇒ carry the"
+              % (K22_Z1, " / ".join(b or "none" for b in bounds)))
+        print("      RANGE across seeds, never a single boundary (M64).\n")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -859,11 +945,16 @@ def main():
                     help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
     ap.add_argument("--k19", nargs="+", metavar="CAP",
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
+    ap.add_argument("--k22", nargs="+", metavar="CAP",
+                    help="⭐ K22: the 20-80 ms ladder, two seeds, both arms")
     ap.add_argument("--k21", nargs="+", metavar="CAP",
                     help="⭐ K21: runs carrying BOTH arms, captured with --per-arm-shuffle")
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k22:
+        k22(a.k22)
+        return 0
     if a.k21:
         k21(a.k21)
         return 0
