@@ -48,8 +48,35 @@ compare index 0-1 against index >= 4.
     intermittency, whatever K1 says.** K1 measures the premise; K2 measures the effect.
 
 **K3 — null control.** `--null`, nothing armed, the same commands on the same tagless rig: every
-decode count must be 0. ⚠ The playbacks counter is not readable with no slot armed, so K3's
-counter half is reported as unavailable rather than as a zero.
+decode count must be 0. ⭐ **Measured 2026-09-16 and it did BETTER than this criterion asked**:
+the counter is readable while disarmed and it does not move, so the null pins BOTH halves — 0 of 12
+decodes and Δ = 0 on all three arms. The prediction written here was that the counter would be
+unavailable; it is not, and the run is the stronger for it.
+
+## ⭐⭐ K5 — THE REPLICATION OF K2's SURPRISE, WRITTEN BEFORE ITS CAPTURE (added after run 1)
+
+K2 refuted starvation and did it **in the opposite direction**: on the first armed run (n=5
+sessions x 12 reads) `indala` decoded **2/10 at index 0-1 against 24/40 at index >= 4** — late is
+three times better, where starvation predicts early better. `gproxii` agreed in sign (-12.5 pts)
+and `keri` did not (+15.0 pts, 3/10 against 6/40, comfortably inside noise).
+
+⚠ **That is one arm, n=10 in the early cell, p ~ 0.04.** M58 was earned on exactly this — a
+`nexwatch` rate read off n=9 that moved at n=24 — so it is a hypothesis until it replicates.
+
+**K5, balanced by construction**: `--reads 6` makes index 0-1 and index 4-5 two reads EACH per
+session, so the two cells have equal n and neither is a pooled tail.
+  - **replicated** ⇒ late - early >= 20 points on `indala`, same sign as run 1.
+  - **it was n**  ⇒ the gap is under 10 points, or it reverses.
+  - between ⇒ report as unreplicated and leave it as a hypothesis.
+
+⭐ **AND THE CONTROL THAT CAN REFUTE THE EXPLANATION, not just the effect.** The reading that
+suggests itself is a start-up latency: a burst begins when the field ARRIVES, so a read that is
+over quickly catches proportionally less of it, and `indala`'s probe is 33 ms against `gproxii`'s
+98 ms. ⇒ **`gproxii` must show a SMALLER gap than `indala`.** An equal or larger gap refutes the
+read-duration explanation even if the effect itself replicates.
+⚠ M59 forbids comparing two arms' absolute RATES measured one after the other. It does not bear
+on this: early and late come from inside the SAME session, so a slow wander between the two arms'
+blocks moves each arm's overall rate and not its within-session position profile.
 
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
@@ -62,6 +89,7 @@ as if it had. What it can do is tell us whether an instrument artifact has been 
 read-length figure this round produced.
 """
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -149,6 +177,10 @@ def main():
     ap.add_argument("--reads", type=int, default=12, help="identical probes per session (N)")
     ap.add_argument("--sessions", type=int, default=4)
     ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--out", help="⛔ write the per-read scores here BEFORE anything formats "
+                                  "them. The first armed run lost its entire per-index "
+                                  "breakdown to a format-string bug after every read had "
+                                  "already been taken.")
     ap.add_argument("--null", action="store_true",
                     help="⛔ K3: nothing armed. Every decode count must be 0.")
     a = ap.parse_args()
@@ -214,8 +246,21 @@ def main():
         out = seqdump.disarm(a.port)
         print("\ndisarm: %s" % ("ok" if "success" in out.lower() else out.strip()[-160:]))
 
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump({k: {"d0": v["d0"], "deltas": v["deltas"],
+                           "per_session": v["per_session"]}
+                       for k, v in results.items()}, fh, indent=1)
+        print("\nraw scores → %s" % a.out)
+
     print("\n=== K1 — arrivals per read ===")
-    for key, r in results.items():
+    if a.null:
+        # ⛔ Δ IS ZERO BY CONSTRUCTION WITH NOTHING ARMED, and reading that as "the field
+        # persists" would be the tool confirming its own hypothesis out of its own control. K1 is
+        # only meaningful on an armed run; the null's job is K3 and nothing else.
+        print("n/a on a NULL run — nothing is playing back, so \u0394=0 is the control passing "
+              "and\n      carries no information about arrivals. K1 needs an armed arm.")
+    for key, r in (results.items() if not a.null else []):
         ds = [d for d in r["deltas"] if d is not None]
         if not ds or r["d0"] is None:
             print("%-9s counter unavailable" % key)
@@ -240,12 +285,12 @@ def main():
             continue
         ep, lp = 100.0 * eh / en, 100.0 * lh / ln
         print("%-9s %2d/%-2d %5.1f%%   %2d/%-2d %5.1f%%   %+.1f pts"
-              % (key, eh, en, ep, lh, ln, ep - lp))
+              % (key, eh, en, ep, lh, ln, lp, ep - lp))
     print("\n⇒ starvation is REFUTED by K2 if every gap is within 15 points; SUPPORTED if an arm's "
           "early rate is\n  at least twice its late rate. Read K1 as the premise and K2 as the "
           "effect.")
     if a.null:
-        print("\nC3: this was the NULL run — every count above must be 0.")
+        print("\nK3: this was the NULL run — every count above must be 0.")
     return 0
 
 
