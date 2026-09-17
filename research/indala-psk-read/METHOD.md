@@ -637,3 +637,46 @@ cannot fail* wearing different clothes.
 for all three arms even with the field up, because in WaveForm mode the decoder writes COUNTERTOP per entry and
 a USB query lands between bursts. `SEQ[0].CNT` works, `COUNTERTOP` does not; find out which is which by making
 the arms disagree, not by assuming.
+
+**M57 — THE PSK RUN-STRUCTURE CRITERION, WRITTEN BEFORE THE CAPTURE. C471's method does not
+transfer to PSK unchanged, and the arithmetic is different enough to get wrong afterwards.**
+
+C471 predicted a run histogram from the frame's own bits and matched it, on PAC — which is NRZ, one
+run per bit at `counter_top` 32 (256us). It transfers to `gproxii` directly. It does **not** transfer
+to the five PSK arms, because there the subcarrier runs continuously and the data is in its PHASE.
+
+The scale, derived rather than assumed. `lf read` samples at 125 kHz, so one sample is 8us (the
+identity C464 cross-checked against a real PAC tag). The PSK arms run a 1 MHz PWM base clock with
+`counter_top` 16 and duty 8 — a 62.5 kHz square, 8us high and 8us low. ⇒ **one sample per half
+period: the ordinary run is ONE sample.** A bit is held for `repeats`+1 = 16 subcarrier periods,
+so a bit is 256us = **32 samples**, and a 64-bit frame is 2048 samples.
+
+⇒ **A 180-degree phase flip cannot shorten a run, it can only DOUBLE one.** `...HLHL|LHLH...` — the
+two like samples either side of the flip abut into a single 16us run. So:
+
+| what the capture shows | what it means |
+|---|---|
+| runs of 1 sample throughout, with N doubled runs at multiples of 32 samples | the subcarrier and its phase are both on the air |
+| runs of 1 sample throughout, **no doubled runs at all** | the subcarrier is emitted and the INVERSION BIT IS INERT — the data never reaches the air |
+| no 1-sample alternation | the subcarrier itself is not reaching the air; a different defect |
+
+⛔ **N IS THE PREDICTION AND IT IS PER-CREDENTIAL, so the arms disagree and cannot cover for each
+other** (M56's rule). For PSK1 the phase telescopes to `phase[k] = bit[k] XOR bit[N-1]`, so a flip
+falls wherever the frame's bits change, counted cyclically:
+
+| arm | frame | flips per frame | flip gaps (bits) |
+|---|---|---|---|
+| `indala` | `a0000000e6bd0e92` | **22** | 1, 2, 3, 4, 29 |
+| `idteck` | `4944544b55667788` | **40** | 1, 2, 3, 4 |
+| `keri` | `00000004000181cf` | **8** | 1, 2, 3, 4, 6, 17, 29 |
+| `nexwatch` | `560000000012776a2f202800` | **30** | 1, 2, 3, 4, 7, 12, 36 |
+
+⛔⛔ **`pm3cap.py --min-run` DEFAULTS TO 2 AND WOULD DELETE THIS ENTIRE SIGNAL.** The default was
+right for PAC, whose runs are 32 samples; here the signal IS the 1-sample run and 2 samples is the
+anomaly. Pass `--min-run 1`. A tool's defaults are calibrated to the last protocol it was pointed
+at, which is not a property of the protocol in front of it.
+
+⚠ Two samples per subcarrier period is exactly Nyquist, so the sample phase decides how cleanly the
+alternation resolves and a null result needs the third row above ruled out before it is read as the
+second. ⚠ And `PWM0 COUNTERTOP` reading 1000 under every arm is already explained in M56 — the
+reader's carrier value, because WaveForm mode writes the top per entry. It is not evidence.
