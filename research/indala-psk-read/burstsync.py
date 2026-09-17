@@ -555,6 +555,75 @@ is what confirms that rather than the arithmetic (C516).
 
 ⚠ Ungraded — no null sweep, no calibration row, no licence, moves no cell.
 
+
+## ⛔⛔⛔ K16 — K15's CONTROL FAILED FOR THE WRONG REASON, AND WHAT IT GLIMPSED IS BIGGER THAN K15
+
+**K15 ran (seed 91, reps 24, both arms, K14's ladder) and BOTH arms hit the anchors branch, so by
+the rule written before the capture BOTH RUNS ARE UNINTERPRETABLE.** That verdict stands and is not
+being argued away. ⛔ **But the control was ill-designed, and the way it failed is the finding**:
+
+| cell | `gproxii` (K14) | `indala` (K15) | `keri` (K15) |
+|---|---|---|---|
+| 40 | 100% | 12% | 0% |
+| 45 | 100% | 17% | 8% |
+| 50 | 92% | 62% | 54% |
+| 55 | 100% | 79% | 54% |
+| 60 | **0%** ⛔ | 83% | 79% |
+| 65 | 100% | **96%** ⭐ | **92%** ⭐ |
+| 70 | 75% | 38% | 25% |
+| 75 | 100% | 42% | 21% |
+| 80 | 100% | 17% | 8% |
+
+⭐ **`indala` and `keri` have near-identical HUMPS where `gproxii` has a HOLE** — a peak at 65 ms
+with both wings collapsing to 0-17%, against `gproxii` sitting near 100% everywhere but 60.
+
+⛔⛔ **M63 — A BENCH-MOVED CONTROL THAT COMPARES THE ANCHORS TO THE MEDIAN PRESUMES THE PROFILE IS
+FLAT, WHICH IS THE THING UNDER TEST.** K15's control asked that cells 40 and 80 land within 20
+points of the arm's median. On a hump those cells ARE the wings, so a perfectly healthy run reads
+as a moved bench — **the control cannot separate *the bench moved* from *the profile has structure
+at the anchors*.** It is M62's disease in a control rather than in a statistic: a criterion whose
+failure mode is ambiguous tells you nothing when it fires. ⚠ And it was written in the same round
+that learned M62, one unit later.
+
+⚠⚠ **POST-HOC, AND LABELLED: THE RUN DID NOT DRIFT.** Split-half over the rounds (first 12 against
+last 12): **`indala` pooled 49% → 50% (Δ +1 point)** and **`keri` 41% → 35% (Δ −6)**, with
+`keri`'s pooled 38% sitting **exactly on its known ~38% baseline**. Per cell, most are within ±8
+points across the halves. ⇒ the structure is probably real. ⛔ **It is a LEAD, not a finding** —
+the pre-registered control failed and this split-half was not pre-registered.
+
+⭐⭐⭐ **WHY IT MATTERS MORE THAN C515 DID.** If it replicates, a single lead time near **65 ms**
+takes `gproxii` 100%, `indala` 96% and `keri` 92% — against baselines of roughly 50%, 50% and 33%
+(C512, C514). That is not a notch to avoid; it is **a working point to aim at, on three arms at
+once, free and reader-side.** ⛔ Which is exactly why it gets a control that can fail before it gets
+believed.
+
+**K16 — the same ladder, both arms, a FRESH seed, and two things K15 lacked.**
+
+  ⭐ **THE CONTROL, REPLACING THE ANCHORS RULE (which is WITHDRAWN as ill-designed).** Shape-
+  agnostic, so it cannot be confounded by the profile it is policing: **split-half over the rounds
+  — the arm's pooled rate across the ladder must agree between the first and second halves within
+  15 points, AND the peak cell's own rate within 25 points.** ⛔ Both can fail, and neither
+  presumes anything about the profile's shape. ⚠ It certifies *this run did not drift*, which is
+  what licenses within-run structure; it does NOT certify an absolute level, and on a bench that
+  wandered 88/60/38/75% in one evening (C497) **no absolute-level control can certify a session.**
+
+  **T1 — THE SHAPE REPRODUCES** ⇒ for each arm, the peak cell is **60 or 65 ms**, that cell is
+  **>= 75%**, and **both** the 40 ms and 80 ms cells are **<= 30%**. ⇒ the hump is real and located.
+  **T2 — IT DOES NOT** ⇒ either wing is **>= 50%**, or the peak cell is below 60 or above 65.
+  ⇒ K15's profile was the wander after all and the lead is withdrawn.
+  between ⇒ report per arm and claim no location.
+
+  **T3 — THE CROSS-ARM CLAIM, AND IT IS THE PRACTICAL ONE.** At **65 ms** all three arms are
+  **>= 75%** (`gproxii` from K14, `indala` and `keri` from this run). ⚠ M59 applies and is
+  respected: this is not a comparison of the arms' rates with each other, it is each arm against
+  **its own** pre-stated threshold, and `gproxii`'s number comes from a different session so it is
+  quoted as a separate measurement rather than pooled in.
+
+⛔⛔ **AND IT STILL LICENSES NOTHING IN THE HARNESS.** A fitted lead time in the graded path
+re-bases every past cell, exactly as C499's read length would, and remains the operator's decision.
+What this can do is hand them a number with a control attached. ⚠ Ungraded, no null sweep, no
+calibration row, moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -1033,15 +1102,53 @@ def k12(a, arms, primers):
                       "INFORMATIONAL — C514 measured that %s does NOT collapse on a fresh "
                       "burst,\n     so the <=15%% band is `gproxii`'s and does not apply here."
                       % (ch, cn, cr, key))
-                med_all = sorted(cell_rate(c)[0] for c in primers)[len(primers) // 2]
-                anch = [c for c in (primers[0], primers[-1])]
-                ok_a = all(abs(cell_rate(c)[0] - med_all) <= 20.0 for c in anch)
-                print("      anchors %s at %s against a median of %.0f%% ⇒ %s"
-                      % (anch, ", ".join("%.0f%%" % cell_rate(c)[0] for c in anch), med_all,
-                         "the bench-moved check PASSES"
-                         if ok_a else "⛔ anchors off the median — this arm's run is NOT "
-                                      "interpretable"))
-                ctl_ok = ok_a
+                # ⛔⛔ THE ANCHORS RULE IS WITHDRAWN (M63). It asked that the first and last
+                # cells sit near the arm's median, which PRESUMES A FLAT PROFILE — the very
+                # thing under test. On `indala` and `keri` those cells are the wings of a hump,
+                # so a healthy K15 run read as a moved bench and both arms were declared
+                # uninterpretable by a control that could not tell the two apart.
+                # ⭐ Replaced by a SHAPE-AGNOSTIC drift check: does this run agree with itself
+                # across its own rounds? That is what licenses within-run structure, and on a
+                # bench that wandered 88/60/38/75% in one evening (C497) it is the only thing
+                # any control here can honestly certify.
+                def half_rate(sel):
+                    v = [s for c in primers for s in sel(sc[c])]
+                    h, n = rate(v)
+                    return (100.0 * h / n if n else float("nan")), n
+
+                fh, fn = half_rate(lambda v: v[:len(v) // 2])
+                lh, ln = half_rate(lambda v: v[len(v) // 2:])
+                pk = max(primers, key=lambda c: cell_rate(c)[0])
+                pf, _ = rate(sc[pk][:len(sc[pk]) // 2])
+                pl, _ = rate(sc[pk][len(sc[pk]) // 2:])
+                npk = max(1, len(sc[pk]) // 2)
+                pfr, plr = 100.0 * pf / npk, 100.0 * pl / npk
+                ok_pool = abs(lh - fh) <= 15.0
+                ok_peak = abs(plr - pfr) <= 25.0
+                ctl_ok = ok_pool and ok_peak
+                print("      drift (split-half, shape-agnostic): pooled %.0f%% → %.0f%% "
+                      "(Δ %+.0f, n=%d/%d), peak cell %d ms %.0f%% → %.0f%% (Δ %+.0f) ⇒ %s"
+                      % (fh, lh, lh - fh, fn, ln, pk, pfr, plr, plr - pfr,
+                         "the run agrees with itself — within-run structure is interpretable"
+                         if ctl_ok else
+                         "⛔ THIS RUN DRIFTED — its structure is not interpretable"))
+
+            # ⭐ T1/T2 — does the hump reproduce, and is it where K15 put it?
+            if 60 in primers and 65 in primers and 40 in primers and 80 in primers:
+                pk2 = max(primers, key=lambda c: cell_rate(c)[0])
+                wings = [cell_rate(40)[0], cell_rate(80)[0]]
+                if pk2 in (60, 65) and cell_rate(pk2)[0] >= 75.0 and max(wings) <= 30.0:
+                    t = ("⇒ **T1 — THE HUMP REPRODUCES AND IS LOCATED** at %d ms" % pk2)
+                elif max(wings) >= 50.0 or pk2 not in (60, 65):
+                    t = ("⇒ **T2 — IT DOES NOT.** K15's profile was the wander and the lead is "
+                         "withdrawn for this arm")
+                else:
+                    t = "⇒ between the bands — no location claimed"
+                print("   T1/T2 hump: peak %d ms at %.0f%%, wings 40/80 ms at %.0f%%/%.0f%%  %s"
+                      % (pk2, cell_rate(pk2)[0], wings[0], wings[1], t))
+                print("   T3 cross-arm: this arm at 65 ms is %.0f%% (needs >= 75%%); "
+                      "`gproxii` was 100%% in K14 — quoted as a SEPARATE session, not pooled (M59)"
+                      % cell_rate(65)[0])
 
             # ⭐ S1 — is the notch at the SAME lead time as `gproxii`'s? Only asked when the
             # ladder actually contains that cell.
