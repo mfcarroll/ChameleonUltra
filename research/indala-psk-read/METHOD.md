@@ -1185,3 +1185,31 @@ and what changes is the next band's QUESTION.**
 back positive. ⇒ **anti-alignment is excluded**, which the first pair could only suggest. **A band
 whose middle is unusable can still have a decisive end**, and the write-up must separate the two
 rather than reporting *no verdict* and stopping.
+
+**M75 — M74's REPLACEMENT STEP NEEDS ITS OWN PRECISION COMPUTED, OR THE ESTIMATION BAND IS JUST THE
+DICHOTOMY'S NO-VERDICT WITH A NUMBER ON IT.**
+
+M74 prescribes: dichotomous band returns NO VERDICT twice ⇒ replace it with an **estimation** band.
+⛔ **That step is not automatically available, and the same simulation that kills a bad threshold
+kills a bad interval.** For Y1's shared weight `w`, inverting the simulated mapping gives:
+
+| evidence used | 90% range on `w` (scale is 0..1) |
+|---|---|
+| one run (r = +0.603) | 0.35 .. 0.90 — **width 0.55** |
+| one run (r = +0.490) | 0.00 .. 0.80 — **width 0.80** |
+| **all four runs jointly** | **0.20 .. 0.85 — width 0.65**, and not contiguous on the grid |
+
+The joint likelihood does have a clean shape — it peaks at **w = 0.70**, is 1/70th of that at
+w = 1.00 and 1/11th at w = 0.00 — so **the extremes are genuinely disfavoured and the middle is
+simply not resolvable.** ⇒ **An interval two-thirds as wide as its own scale is not an estimate.**
+
+⇒ **Report the LIKELIHOOD RATIOS the data does support** (here: fully shared is ~70x less likely
+than the peak, independent ~11x) **and refuse the point estimate**, rather than quoting the peak as
+though it were the answer. ⛔ Quoting an argmax of a likelihood is M64 in a new costume: the same
+error as reading a peak off a noisy ladder.
+
+⚠ And the general lesson about the sequence: **M74's step 3 can fail too, and when it does the line
+is exhausted rather than pending.** Say so. Here both bands failed for one reason — a 24-cell rank
+correlation at 8-12 reps per cell is blunt for this question — so the honest next move is a
+different STATISTIC (one using cell levels rather than ranks) or far more reps, and both are new
+designs and not re-runs.
