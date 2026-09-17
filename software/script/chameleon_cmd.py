@@ -838,7 +838,7 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
-    def lf_emu_seqhold(self, entries_per_run):
+    def lf_emu_seqhold(self, entries_per_run, counter_top=0):
         """
         ⭐ Instrumentation: install a SYNTHETIC wave-form of alternating static runs.
 
@@ -863,8 +863,14 @@ class ChameleonCMD:
         :param entries_per_run: 1..64
         :return: entries actually installed (2 * entries_per_run * pairs), or 0 if refused.
         """
-        resp = self.device.send_cmd_sync(Command.LF_EMU_SEQHOLD,
-                                         struct.pack(">H", entries_per_run))
+        # ⭐ `counter_top` 0 sends the original 2-byte request and means exactly what it always
+        # did (125 kHz arms, 32 ticks an entry). Non-zero sends 4 bytes and is the caller stating
+        # what a tick is worth on the armed clock, which is what admits the 1 MHz types — it
+        # is how C482's assumption gets tested (can the modulator switch level every 8us?) without
+        # rewriting a shipping emitter around it.
+        payload = (struct.pack(">H", entries_per_run) if not counter_top
+                   else struct.pack(">HH", entries_per_run, counter_top))
+        resp = self.device.send_cmd_sync(Command.LF_EMU_SEQHOLD, payload)
         if resp.status == Status.SUCCESS:
             resp.parsed = struct.unpack(">H", resp.data)[0]
         return resp

@@ -104,8 +104,26 @@ uint16_t lf_tag_em_seq_get(uint16_t start, uint16_t count, uint8_t *out);
  * 1 MHz a `counter_top` of 32 is 32us, not 256us, and the whole criterion above silently
  * becomes eight times wrong — the exact shape of trap this project keeps paying for.
  *
+ * ⭐⭐ `counter_top` 0 KEEPS EVERY WORD ABOVE TRUE: 125 kHz arms only, 32 ticks an entry.
+ * A NON-ZERO `counter_top` is the caller saying it knows which clock is armed and what a tick is
+ * worth there, and THAT is what admits the 1 MHz types — the refusal above is about a
+ * hardcoded 32 silently meaning 32us instead of 256us, not about the clock itself.
+ *
+ * ⭐⭐⭐ WHAT IT IS FOR (C479/C482). The PSK arms emit NRZ: the air carries one HELD
+ * LEVEL per entry and the 62.5 kHz square the duty asks for inside each entry never appears. The
+ * proposed fix is FSK2a's — stop using duty, spend alternating full-on/full-off entries —
+ * and it rests on an assumption NOTHING on this bench has tested: that the modulator can switch
+ * level every **8us**. FSK2a proves only 16us entries (`counter_top` 16 at 1 MHz). ⇒ With a
+ * 1 MHz arm loaded, `entries_per_run` 1 and `counter_top` 8 emits exactly that 62.5 kHz square
+ * out of held levels, and `pm3cap` says whether it reached the air. **Instrumentation answers it
+ * before a shipping emitter is rewritten around it.**
+ *
+ * ⛔ Minimum 3 — the Nordic PS floor for COUNTERTOP in WaveForm mode (psk1.h, fsk2a_mod.h).
+ *
  * @param entries_per_run 1..LF_TAG_EM_HOLD_MAX_RUN
+ * @param counter_top     0 = the 125 kHz-only legacy behaviour at 32 ticks; else 3..32767
  * @return entries actually installed, 0 if refused. */
 #define LF_TAG_EM_HOLD_MAX_RUN      64
 #define LF_TAG_EM_HOLD_MAX_ENTRIES  256
-uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run);
+#define LF_TAG_EM_HOLD_MIN_TOP      3
+uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run, uint16_t counter_top);

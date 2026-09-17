@@ -1041,13 +1041,22 @@ static nrf_pwm_sequence_t m_hold_seq = {
     .end_delay = 0,
 };
 
-uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run) {
+uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run, uint16_t counter_top) {
     if (entries_per_run < 1u || entries_per_run > LF_TAG_EM_HOLD_MAX_RUN) {
         return 0;
     }
+    /* ⭐ A caller that names `counter_top` has taken responsibility for what a tick is worth
+     * on the armed clock, which is the whole content of the 1 MHz refusal below — so naming
+     * it lifts that refusal and nothing else. Zero keeps the original behaviour exactly, which is
+     * what holdsweep.py and every reading it has taken still mean. */
+    const bool top_given = (counter_top != 0u);
+    if (top_given && counter_top < LF_TAG_EM_HOLD_MIN_TOP) {
+        return 0;       /* below the Nordic WaveForm floor; the peripheral would not play it */
+    }
+    const uint16_t top = top_given ? counter_top : PAC_HOLD_RF_PER_BIT;
     /* ⛔ An arm must already be loaded: this borrows its clock, and with m_pwm_seq NULL there is
      * nothing to restore by re-arming either. */
-    if (m_pwm_seq == NULL || IS_1MHZ_PWM_TYPE(m_tag_type)) {
+    if (m_pwm_seq == NULL || (IS_1MHZ_PWM_TYPE(m_tag_type) && !top_given)) {
         return 0;
     }
 
@@ -1062,17 +1071,17 @@ uint16_t lf_tag_em_seq_hold(uint16_t entries_per_run) {
     uint16_t n = 0;
     for (uint16_t p = 0; p < pairs; p++) {
         for (uint16_t i = 0; i < entries_per_run; i++) {
-            m_hold_vals[n].channel_0 = (uint16_t)(PAC_HOLD_RF_PER_BIT + 1u);
+            m_hold_vals[n].channel_0 = (uint16_t)(top + 1u);
             m_hold_vals[n].channel_1 = 0;
             m_hold_vals[n].channel_2 = 0;
-            m_hold_vals[n].counter_top = PAC_HOLD_RF_PER_BIT;
+            m_hold_vals[n].counter_top = top;
             n++;
         }
         for (uint16_t i = 0; i < entries_per_run; i++) {
             m_hold_vals[n].channel_0 = 0;
             m_hold_vals[n].channel_1 = 0;
             m_hold_vals[n].channel_2 = 0;
-            m_hold_vals[n].counter_top = PAC_HOLD_RF_PER_BIT;
+            m_hold_vals[n].counter_top = top;
             n++;
         }
     }

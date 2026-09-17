@@ -9404,17 +9404,34 @@ class HWEmuSeqHold(DeviceRequiredUnit):
                               "⭐ Check it with `hw emuseq --raw` before trusting the air.")
         parser.add_argument("-n", "--entries", type=int, required=True,
                             help="entries per static run, 1..64")
+        parser.add_argument("--top", type=int, default=0,
+                            help="counter_top per entry (min 3). 0 keeps the 125kHz-only "
+                                 "behaviour at 32 ticks. Naming it says you know what a tick is "
+                                 "worth on the armed clock, and that is what allows a 1MHz arm: "
+                                 "--top 8 on a PSK arm emits a 62.5kHz square built from HELD "
+                                 "LEVELS, which is the C482 question (can the modulator switch "
+                                 "every 8us?) asked without rewriting an emitter.")
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        n = self.cmd.lf_emu_seqhold(args.entries)
+        n = self.cmd.lf_emu_seqhold(args.entries, args.top)
         if n == 0:
-            print("   ⛔ REFUSED — nothing armed, or the armed type runs the 1 MHz clock where")
-            print("      counter_top 32 would be 32us, not 256us. Arm a 125 kHz protocol first.")
+            print("   ⛔ REFUSED — nothing armed; or --top was below 3 (the Nordic WaveForm")
+            print("      floor); or the armed type runs the 1 MHz clock and no --top was given,")
+            print("      where counter_top 32 would be 32us and not 256us.")
             return
+        # ⛔ THE TICK IS NOT ALWAYS 8us. At the 125 kHz clock one tick is one carrier cycle
+        # (8us); at 1 MHz it is 1us. Printing 256us for every arm is how a criterion silently goes
+        # eight times wrong, which is the exact trap lf_tag_em.h refuses by default.
+        top = args.top or 32
+        us_per_tick = 1.0 if args.top else 8.0
+        run_us = args.entries * top * us_per_tick
         print(f"   entries installed: {n}   ({n // (2 * args.entries)} run pairs of "
               f"{args.entries} high + {args.entries} low)")
-        print(f"   predicted static run: {args.entries * 256} us")
+        print(f"   counter_top {top}, {us_per_tick:g}us per tick "
+              f"({'1 MHz — named by --top' if args.top else '125 kHz default'})")
+        print(f"   predicted static run: {run_us:g} us   "
+              f"(square at {1e6 / (2 * run_us):.4g} Hz)")
         print("   ⭐ verify with `hw emuseq --raw` under a reader field before believing the air")
 
 

@@ -800,11 +800,16 @@ static data_frame_tx_t *cmd_processor_lf_emu_seqdump(uint16_t cmd, uint16_t stat
  * ⛔ A zero response is a REFUSAL, not an empty buffer: nothing is armed, or the armed type runs
  * the 1 MHz clock where counter_top 32 would be 32us instead of 256us. */
 static data_frame_tx_t *cmd_processor_lf_emu_seqhold(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length != 2) {
+    /* ⭐ 2 bytes is the original request and still means exactly what it did — 125 kHz
+     * arms, 32 ticks an entry. 4 bytes adds `counter_top`, which is the caller stating what a
+     * tick is worth on the armed clock and is what admits the 1 MHz types (see lf_tag_em.h).
+     * Kept as a length check rather than a new command id so holdsweep.py needs no change. */
+    if (length != 2 && length != 4) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     uint16_t per_run = ((uint16_t)data[0] << 8) | data[1];
-    uint16_t n = lf_tag_em_seq_hold(per_run);
+    uint16_t top = (length == 4) ? (uint16_t)(((uint16_t)data[2] << 8) | data[3]) : 0u;
+    uint16_t n = lf_tag_em_seq_hold(per_run, top);
     uint8_t out[2] = { (uint8_t)(n >> 8), (uint8_t)(n & 0xFF) };
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
 }
