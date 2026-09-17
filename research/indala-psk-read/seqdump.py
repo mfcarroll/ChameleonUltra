@@ -45,6 +45,25 @@ so with the field down this reads whatever the last arm left behind. The Flipper
 `rfid read` for the whole query and the field is verified from the device's own counters before
 a single entry is compared.
 
+⛔⛔ "IT ARMS 1 OF 5 STEPS" IS WRONG AND IS RETRACTED HERE (2026-09-16). TOOLS.md L442 and the
+work queue both said this tool ran only the econfig, and that every `VOID` it printed was the
+missing four steps rather than the field. `arm()` below has done all five, in order, since it was
+written — compare it with `rfid-tools benchmatrix/devices.py:589`, which is the sequence it was
+accused of not following. Measured on cu2 the same day: all five steps answer `success`, and an
+armed slot 8 then plays back under a Proxmark field. The diagnosis was read off the wrong thing.
+
+⛔ WHAT WAS ACTUALLY BROKEN — and it is why a cu2 dump voided: THE ONLY FIELD SOURCE WAS THE
+FLIPPER, which is on Rig A with cu1. Pointing this tool at cu2 (Rig B, whose reader is the
+Proxmark) held a field on the other rig, so nothing ever reached the device being dumped. The
+field now comes from the rig the port belongs to, `--field` overrides it, and `--field none` is
+for an operator holding one by hand.
+
+⭐ `playbacks started` COUNTS FIELD ARRIVALS, NOT REPEATS (measured 2026-09-16). Armed cu2 under
+`lf tune`: 46 -> 47 within 4s, then 47 for the remaining 25s while the field held 19V throughout.
+So the guard must straddle the field COMING UP — read it with the field down, raise the field,
+read it again, which is the order below. Sampling twice under a field already up sees no rise and
+would void a working arm.
+
 ⛔⛔ THE GUARD IS `playbacks` RISING, NOT THE `emulating` FLAG — and that correction came from a
 measurement, not from taste. Driving a Chameleon with the Proxmark's field moved `playbacks
 started` from 0 to 2 while `emulating now` read False on all three samples taken during it:
@@ -52,7 +71,7 @@ playback is BURSTY, so the instantaneous flag is False most of the time even whi
 working perfectly. A guard on that flag would have scored a live emulation VOID and sent the
 whole unit back to the air-side routes that are already exhausted.
 """
-import argparse, os, subprocess, sys, threading, time
+import argparse, os, signal, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -61,7 +80,14 @@ import pacdiff
 
 PY = os.path.join(HERE, "../../software/script/.venv/bin/python")
 CU = os.path.join(HERE, "../../software/script/cu.py")
+PM3 = "/Users/Shared/code/personal/rfid/proxmark3/pm3"
 SLOT = 8
+
+# ⭐ THE RIG DECIDES THE FIELD, so a `--port` alone cannot point the tool at the wrong reader.
+# Rig A is Flipper-T5577-cu1; Rig B is Proxmark-cu2 and is deliberately TAGLESS.
+CU1_PORT = "/dev/tty.usbmodemC3A1656543DE1"
+CU2_PORT = "/dev/tty.usbmodemF429364E46961"
+FIELD_FOR_PORT = {CU1_PORT: "flipper", CU2_PORT: "pm3"}
 
 # name -> (slot type, econfig, expected-entry builder)
 ARMS = {}
@@ -153,6 +179,60 @@ class Field:
         self.t.join(timeout=self.seconds + 10)
 
 
+class Pm3Field:
+    """Hold the Proxmark's 125kHz field up for Rig B, where the Proxmark IS the reader.
+
+    ⛔ KILL THE PROCESS GROUP, NOT THE WRAPPER. `pm3` is a shell script that execs
+    `client/proxmark3`; `terminate()` reaps the script and orphans the client, which then holds
+    /dev/tty.usbmodemiceman1 forever and every later pm3 command dies with `serial port is
+    claimed by another process`. Measured 2026-09-16 — it stranded the port mid-round.
+    """
+
+    def __init__(self, seconds):
+        self.seconds = seconds
+        self.p = None
+        self.out = ""
+
+    def __enter__(self):
+        n = max(20, int(self.seconds * 2))
+        self.p = subprocess.Popen([PM3, "-c", "lf tune -n %d --value" % n],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, start_new_session=True)
+        time.sleep(4.0)                             # the client connects, then raises the field
+        return self
+
+    def __exit__(self, *a):
+        if not self.p:
+            return
+        try:
+            os.killpg(os.getpgid(self.p.pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            self.out = self.p.communicate(timeout=20)[0] or ""
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(self.p.pid), signal.SIGKILL)
+            self.out = self.p.communicate()[0] or ""
+
+
+class NoField:
+    """`--field none`: the operator is holding a reader themselves. The playbacks guard still
+    runs, so a dump taken with no field is still refused rather than graded."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+
+def disarm(port):
+    """⛔ ALWAYS, IN A `finally`, NEVER ONLY ON THE HAPPY PATH. A Chameleon left in emulator mode
+    jams the Proxmark's pad for every later read — including its reads of a tag, measured (L442).
+    A tick that crashed mid-arm used to leave the rig disabled for every tick after it."""
+    return cu(port, "hw mode -r")
+
+
 def dump(port, entries):
     """Read the whole buffer as `hw emuseq --raw` and parse the header plus entries."""
     out = cu(port, "hw emuseq --count %d --raw" % entries)
@@ -194,7 +274,26 @@ def main():
                     help="PAC credential: eight ASCII chars (%%08lX hex is what a Flipper renders)")
     ap.add_argument("--gprox-raw", default="fac2a38c2b081af0210b12c2")
     ap.add_argument("--seconds", type=float, default=12.0)
+    ap.add_argument("--field", choices=("auto", "pm3", "flipper", "none"), default="auto",
+                    help="reader that raises the field. `auto` takes it from the port's rig: "
+                         "cu1 -> flipper (Rig A), cu2 -> pm3 (Rig B).")
     a = ap.parse_args()
+
+    field = a.field
+    if field == "auto":
+        field = FIELD_FOR_PORT.get(a.port)
+        if field is None:
+            print("⛔ --port %s is not a rig this tool knows, so it cannot pick the field for it. "
+                  "Pass --field explicitly." % a.port)
+            return 2
+    print("port %s, field from %s" % (a.port, field))
+
+    def field_ctx():
+        if field == "pm3":
+            return Pm3Field(a.seconds)
+        if field == "flipper":
+            return Field(a.seconds)
+        return NoField()
 
     arms = {
         "pac":   ("PAC", "lf pac econfig -s %d --cn " + a.card, 128,
@@ -209,26 +308,35 @@ def main():
             print("  unknown arm %r" % name)
             return 2
         typ, ec, entries, expect_fn = arms[name]
-        ok, msg = arm(a.port, typ, ec)
-        if not ok:
-            print("  %s ARM-FAIL: %s" % (name, msg))
-            rc = 2
-            continue
-        before = dump(a.port, 0)[0].get("playbacks started", "?")
-        with Field(a.seconds):
-            hdr, got, raw = dump(a.port, entries)
-            after = dump(a.port, 0)[0].get("playbacks started", "?")
-        moved = (before.isdigit() and after.isdigit() and int(after) > int(before))
-        live = moved or hdr.get("emulating now") == "True"
-        print("  %s: playbacks %s -> %s%s" % (name, before, after, "" if moved else " (no rise)"))
-        if not live:
-            print("  %s: ⛔ VOID — no reader field reached the device while the buffer was read, "
-                  "so this is whatever the last arm left behind (M56, C454). Not graded." % name)
-            print("     header: %s" % hdr)
-            rc = 2
-            continue
-        if not grade(name, expect_fn(), got, hdr):
-            rc = 1
+        try:
+            ok, msg = arm(a.port, typ, ec)
+            if not ok:
+                print("  %s ARM-FAIL: %s" % (name, msg))
+                rc = 2
+                continue
+            # ⭐ THE ORDER IS THE GUARD: this read is taken with the field DOWN, because
+            # `playbacks started` counts field ARRIVALS and not repeats (measured 2026-09-16).
+            before = dump(a.port, 0)[0].get("playbacks started", "?")
+            with field_ctx():
+                hdr, got, raw = dump(a.port, entries)
+                after = dump(a.port, 0)[0].get("playbacks started", "?")
+            moved = (before.isdigit() and after.isdigit() and int(after) > int(before))
+            live = moved or hdr.get("emulating now") == "True"
+            print("  %s: playbacks %s -> %s%s" % (name, before, after,
+                                                  "" if moved else " (no rise)"))
+            if not live:
+                print("  %s: ⛔ VOID — no reader field reached the device while the buffer was "
+                      "read, so this is whatever the last arm left behind (M56, C454). Not "
+                      "graded." % name)
+                print("     field was %s; if that is the wrong rig for %s, no field could have "
+                      "reached it." % (field, a.port))
+                print("     header: %s" % hdr)
+                rc = 2
+                continue
+            if not grade(name, expect_fn(), got, hdr):
+                rc = 1
+        finally:
+            disarm(a.port)                          # ⛔ every path, including the exception one
     return rc
 
 
