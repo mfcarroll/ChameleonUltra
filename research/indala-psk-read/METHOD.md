@@ -1304,3 +1304,28 @@ could this defect produce?*, not *is the band perfect?*
 than taking it away**, which is worth noticing: five were over-reaches walked back, and this one is
 an under-reach walked forward. **Both directions are errors of the same kind — a conclusion drawn
 without checking which way the evidence could bend.**
+
+**M79 — MEASURE A KNOB'S TRANSFER FUNCTION BEFORE BUILDING A BAND ON IT, NOT AFTER. A NOMINAL
+FACTOR AND A MEASURED ONE DIFFERED BY ENOUGH TO PUT EVERY PREDICTED CELL OUTSIDE ITS REGION.**
+
+`lf config --dec 2` nominally doubles a read's duration. **Measured — five sample counts timed at
+both settings, slope-fitted so the constant overhead drops out — the ratio is 1.653.** And the dec-1
+slope is **0.0118 ms/sample where 125 kHz predicts 0.0080**, which names the missing term: the
+**USB readback** of the stored samples. Acquisition doubles at dec 2; readback does not, because
+the stored count is unchanged. A 2x term plus a 1x term lands at 1.65.
+
+⇒ **A band written against the nominal 2.0 would have predicted its cells 25-45 ms away from where
+they are — wider than the regions themselves, so every cell would have missed and the verdict would
+have been a confident *fixed samples*.** The knob would have refuted the truth.
+
+⇒ ⭐ **Two rules, and the second is the one that generalises:**
+1. **Measure the transfer function** — over a RANGE and slope-fitted, not at one point, so the
+   constant overhead separates from the marginal cost.
+2. ⭐⭐ **Then design the band so it does not depend on the factor.** Ask whether the feature moves
+   **at all**, report where it moved to, and never test the landing cell (M64). A measured constant
+   with unmeasured jitter is exactly what C535 caught being optimistic by 10 ms, and a band that
+   needs it to be exact inherits that risk for nothing.
+
+⚠ **And the general form of the missing term is worth naming: a host-visible duration is
+acquisition PLUS transfer, and only one of them responds to the knob.** Any instrument where the
+host times something it also has to fetch has this shape.
