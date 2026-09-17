@@ -49,6 +49,26 @@ arm's OWN frame length in samples, plus its reader's own count, deduped, sorted,
 64 bits x RF/32 for the PSK64 arms, 128 x RF/32 for NexWatch, 224 x RF/32 for Indala224,
 96 x RF/64 for GProxII. At 125 kHz one sample is one carrier cycle, so samples/125000 = seconds.
 
+⛔⛔⛔ **ITS RATES ARE SCHEDULE STATISTICS, NOT INDEPENDENT SAMPLES — ADDED AFTER C507/M61, AND IT
+QUALIFIES EVERY NUMBER THIS TOOL HAS EVER PRINTED.** Every rung runs inside ONE pm3 session, back
+to back, which is the whole point of the design (one arming, one field). ⛔ But six IDENTICAL reads
+in one session return the same decode pattern in **16 of 16 sessions** — `gproxii` gave `.X.XX.`
+every time, index 1/3/4 decoding and 0/2/5 never — because each read lands at its own phase of
+C486's ~61-80 ms beat and the cadence is deterministic. A host-side `msleep`, touching no device
+and raising no field, moves both the pattern and the rate (29.2% → 70.8%).
+
+⇒ **A rung's n/24 is not 24 independent trials.** It is one schedule sampled 24 times, and the
+shuffling that M60 added does not fix this — shuffling decorrelates LENGTH from position and leaves
+the position effect itself intact, spread evenly, looking exactly like ordinary variance. That is
+very likely a large part of "the hit rate wanders" (C497).
+✅ **WHAT STILL STANDS**: zero-versus-non-zero. A rung that decoded at all decoded, and no
+scheduling artifact manufactures a byte-exact credential — the `--null` control is 0 throughout.
+⛔ **WHAT DOES NOT**: the LEVELS, and any ordering of two rungs by rate. ⚠ C499's best-length
+argmax was already retracted on its own evidence (C504, four of five arms moved); this is the
+mechanism for why.
+⭐ If independent trials are ever wanted from this tool, the fix is `benchmatrix`' — a drawn pause
+between repeats, not a constant one, since a constant pause is merely another fixed cadence.
+
 ⛔⛔ THIS GRADES NOTHING. No null sweep, no calibration row, no licence — a manual observation
 like C487/C488/C490. It cannot move a cell in the matrix and must never be reported as if it had.
 
