@@ -738,7 +738,23 @@ class ChameleonCMD:
         new_key = new_key if new_key is not None else globals()["new_key"]
         old_keys = old_keys or globals()["old_keys"]
         data = struct.pack(f'!28s4s{4*len(old_keys)}s', raw28, new_key, b''.join(old_keys))
-        return self.device.send_cmd_sync(Command.INDALA224_WRITE_TO_T55XX, data)
+        # ⛔⛔ THE TIMEOUT IS EXPLICIT BECAUSE THE 3s DEFAULT IS TOO SHORT FOR THIS ONE
+        # COMMAND, AND THAT LOOKED EXACTLY LIKE A FIRMWARE HANG (C481). `CMD 3039 exec timeout`
+        # was reported and logged as a handler that never responds. It responds: measured on cu2,
+        # a fresh link per call, this returns STATUS_LF_TAG_OK in **3.42s and 3.71s**, against
+        # **1.34s** for the 64-bit write next door.
+        #
+        # The arithmetic says why, and it is structural rather than bad luck. `write_t55xx()`
+        # makes one pass per old key plus a final open pass — 4 with the default `old_keys`
+        # — and `t55xx_write_blocks()` sends every block TWICE for reliability. So the cost is
+        # 4 x blocks x 2 sends: **64 for this writer against 24 for the 64-bit one**, a ratio of
+        # 2.67 that the measured 2.6 matches. Indala224 is the only EIGHT-block writer in the tree
+        # (config plus all seven data blocks of page 0), so it is the only one that crosses 3s.
+        #
+        # ⚠ THE 3s DEFAULT IS A LATENT TRAP FOR ANY FUTURE MULTI-BLOCK WRITER, not a fact
+        # about this protocol. A writer that hangs and a writer that is merely slow are
+        # indistinguishable from the host, which is how this one was misfiled for a day.
+        return self.device.send_cmd_sync(Command.INDALA224_WRITE_TO_T55XX, data, timeout=30)
 
     @expect_response(Status.LF_TAG_OK)
     def indala_scan(self):
