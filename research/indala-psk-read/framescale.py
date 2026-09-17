@@ -1513,7 +1513,15 @@ def k29(paths):
 
 K30_LADDER = ["10", "15", "20", "25", "30", "35", "40", "45", "60", "65",
               "90", "95", "100", "105", "110", "115", "120"]
-K30_HIGH = 62.5        # ABSOLUTE (5 of 8) — a 17-cell targeted ladder has no honest median
+# ⛔⛔ K31 MOVED THIS FROM 62.5 TO 50.0, AND `--reps` FROM 8 TO 16 (C542/M80). 62.5 came from
+# the dec-1 level; the dec-2 profile runs ~30% lower pooled, cell medians 12% and 25%, so the bar
+# asked for a height this condition rarely reaches and K30 returned NO VERDICT with every gate
+# passing. ⭐ Simulated against the MEASURED level, reps 16 at 50% is the only setting good in
+# every row: 0.00-0.03% at those medians, 0.42% against a ONE-cell spike (at reps 8 that is 10%,
+# because a 25% background reaches 50% by noise 11% of the time) and 97% power at a 75% region.
+# ⛔ MORE REPS, not a lower bar, is what fixed it: the problem was quantisation at n=8.
+# ⚠ K30's own caps are the PILOT and are scored at 62.5 by the git history, not by this constant.
+K30_HIGH = 50.0        # ABSOLUTE — a 17-cell targeted ladder has no honest median
 K30_RUN = 2            # the regions NARROW by 1.653 when decimated: 1.6-2.2 cells, so not 3
 K30_ELAPSED = ["30", "35", "40"]      # R2 moved (33-39)
 K30_SAMPLES = ["100", "105"]          # R3 unmoved

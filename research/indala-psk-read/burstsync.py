@@ -1565,6 +1565,43 @@ verified two ways in C539 — and its stretch is **1.653x, not 2x** (C540/M79).
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K31 — K30's RE-RUN, WITH THE THRESHOLD AND THE n TAKEN FROM THE CONDITION (M80)
+
+K30 returned **NO VERDICT — regions at NEITHER** on both arms with every gate passing (C542). The
+fault was the threshold: **62.5% came from the dec-1 level and the dec-2 profile runs ~30% lower
+pooled**, with cell medians of **12% (`keri`)** and **25% (`idteck`)**. ⇒ **K30 is the PILOT and its
+product is that level.** K31 is the claim, on fresh seeds, with the detector derived from it.
+
+⛔ **THE BANDS, THE LADDER, THE ARMS AND THE PREDICTIONS ARE UNCHANGED FROM K30** — same 17-cell
+targeted ladder, same `--dec 2`, same `keri`+`idteck`, same D1 with its two discriminating cells and
+both no-verdict meanings. **Only the threshold and `--reps` move, and both are set by arithmetic
+against the measured level.** Fresh seeds: **313**, **317**.
+
+### ⛔ CHOOSING THEM, SIMULATED BEFORE THE CAPTURE (12,000 draws, both seeds required)
+
+| truth | reps 8, thr 50% | reps 8, thr 56% | **reps 16, thr 50%** |
+|---|---|---|---|
+| `keri`'s measured median, 12% | 0.00% | 0.00% | **0.00%** |
+| `idteck`'s measured median, 25% | 2.94% | 0.02% | **0.03%** |
+| a uniform 38% (pessimistic) | 67.7% | 6.7% | 27.3% |
+| a 2-cell region at 62% | 62.9% | 18.3% | **64.3%** |
+| a 2-cell region at 75% | 91.9% | 63.3% | **97.1%** |
+| ⛔ a ONE-cell spike at 100% | **10.1%** | 0.31% | **0.42%** |
+
+⇒ ⭐⭐ **`--reps 16` with an ABSOLUTE 50% threshold**, because it is the only column that is good in
+every row: **0.00-0.03% at the levels actually measured, 0.42% against a one-cell spike** (the
+2-cell rule collapses at reps 8 — a 25% background reaches 50% by noise 11% of the time, so a lone
+spike plus a noisy neighbour fires it) **and 97% power against a 75% region.**
+⚠ **The 27% at a uniform 38% is the honest residual**, and it is pessimistic: 38% is above both
+arms' measured dec-2 medians. ⭐ **The gates print the run's actual pooled level, so this row is
+checkable after the fact rather than assumed.**
+⛔ **More reps, not a lower threshold, is what fixed it** — the low-level condition's problem was
+quantisation at n=8, not the bar's height.
+
+⚠ Cost: 17 cells x 16 reps x 2 arms ≈ 544 sessions, ~25 min per seed.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
