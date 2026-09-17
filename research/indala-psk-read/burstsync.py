@@ -78,6 +78,33 @@ read-duration explanation even if the effect itself replicates.
 on this: early and late come from inside the SAME session, so a slow wander between the two arms'
 blocks moves each arm's overall rate and not its within-session position profile.
 
+## ⭐⭐⭐ K6 — WHOSE PATTERN IS IT? (written before its capture; the K5 run forced it)
+
+The K5 run produced something K5 was not asking about and that matters more than K5 did.
+`gproxii`, six identical reads per session, sixteen sessions: **the pattern `.X.XX.` in 16 of 16**
+— index 1, 3 and 4 decoded EVERY time, index 0, 2 and 5 NEVER. `indala` in the same run: index 5
+**16/16**, index 4 **0/16**, adjacent reads of the identical command. ⇒ **Within a session the
+decode is not a coin, it is a function of POSITION**, and at a 50% base rate one fixed six-bit
+pattern repeating sixteen times is not something a rate can produce.
+
+⛔ **SO A "HIT RATE" MAY BE MEASURING THE HARNESS'S READ CADENCE AND NOT THE EMITTER.** Before
+any of that is claimed, the pattern has to be shown to belong to the AIR rather than to the client.
+
+  **H_beat**   — it is C486's free-running beat, sampled at the session's fixed read cadence:
+                 each read lands at its own phase of a ~61-80 ms null cycle, deterministic
+                 because the cadence is.
+  **H_client** — the nth read of a pm3 session is intrinsically different from the (n+1)th, and
+                 our emission's timing has nothing to do with it.
+
+**K6**: repeat the session with `msleep -t D` before every read, D over a range spanning the beat
+period, the DELAYS SHUFFLED across sessions so D is not confounded with time (M60).
+  - H_beat ⇒ the pattern MOVES with D. **Pre-registered: at least two D values give a pattern
+    other than the baseline's.**
+  - H_client ⇒ every D reproduces the baseline pattern, because the nth read is still the nth.
+    ⚠ That outcome would be the more alarming of the two and is the reason this runs at all.
+  - patterns not repeatable WITHIN a D ⇒ no verdict; report that the determinism is itself
+    D-dependent.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
@@ -126,7 +153,7 @@ def playbacks(port):
         return None
 
 
-def session(arm_key, reads, timeout):
+def session(arm_key, reads, timeout, delay=0):
     """One pm3 invocation issuing `reads` IDENTICAL probes. Returns the per-read scores in order.
 
     ⛔ `reads == 0` is the instrument control and is not a degenerate case: the client still
@@ -135,6 +162,10 @@ def session(arm_key, reads, timeout):
     probe = PROBES[arm_key]
     cmds = []
     for _ in range(reads):
+        if delay:
+            # ⭐ K6's independent variable. `msleep` is AlwaysAvailable in the client
+            # (cmdmain.c:365), so it costs no field and no device round trip.
+            cmds.append("msleep -t %d" % delay)
         if probe is None:
             cmds.append(a.reader)
         else:
@@ -170,6 +201,57 @@ def rate(pairs):
     return sum(1 for _, e in pairs if e), len(pairs)
 
 
+def pattern(scores):
+    """A session's outcome as one string — `X` decoded ours, `.` did not."""
+    return "".join("X" if e else "." for _, e in scores)
+
+
+def k6(a, arms, delays):
+    """⭐ K6. Sessions grouped by delay, the DELAYS SHUFFLED so D is not confounded with time."""
+    import collections
+    import random as _r
+    plan = [d for d in delays for _ in range(a.reps)]
+    _r.Random(a.seed).shuffle(plan)
+    print("K6 — %d sessions x %d reads, delays %s, shuffled (seed %d)"
+          % (len(plan), a.reads, delays, a.seed))
+    out = {}
+    try:
+        for key in arms:
+            arm = shortread.ARMS[key]
+            ok, why = seqdump.arm(a.port, arm.typ, arm.econfig)
+            if not ok:
+                print("%-9s ⛔ ARM FAILED: %s" % (key, why))
+                continue
+            pats = collections.defaultdict(list)
+            for d in plan:
+                sc = session(key, a.reads, a.timeout, delay=d)
+                pats[d].append(pattern(sc))
+                time.sleep(0.5)
+            out[key] = {d: v for d, v in pats.items()}
+            print("\n%-9s probe %r" % (key, PROBES[key] or arm.reader))
+            base = None
+            for d in delays:
+                c = collections.Counter(pats[d])
+                top, n = c.most_common(1)[0]
+                if base is None:
+                    base = top
+                print("   msleep %-4d  modal %-10s %d/%d sessions   %s"
+                      % (d, top, n, len(pats[d]),
+                         "= baseline" if top == base else "⭐ MOVED"))
+            moved = sum(1 for d in delays
+                        if collections.Counter(pats[d]).most_common(1)[0][0] != base)
+            print("   ⇒ %d of %d delays moved the pattern — H_beat needs at least 2; "
+                  "0 means H_client" % (moved, len(delays) - 1))
+    finally:
+        o = seqdump.disarm(a.port)
+        print("\ndisarm: %s" % ("ok" if "success" in o.lower() else o.strip()[-160:]))
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump({k: {str(d): v for d, v in x.items()} for k, x in out.items()}, fh, indent=1)
+        print("raw patterns → %s" % a.out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ORDER))
@@ -181,6 +263,10 @@ def main():
                                   "them. The first armed run lost its entire per-index "
                                   "breakdown to a format-string bug after every read had "
                                   "already been taken.")
+    ap.add_argument("--delays", help="⭐ K6: comma-separated msleep values in ms, run as "
+                                     "shuffled session groups")
+    ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
+    ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
     ap.add_argument("--null", action="store_true",
                     help="⛔ K3: nothing armed. Every decode count must be 0.")
     a = ap.parse_args()
@@ -193,6 +279,8 @@ def main():
 
     print("⛔ UNGRADED — a manual observation, no null sweep and no calibration row. "
           "It moves no cell.")
+    if a.delays:
+        return k6(a, arms, [int(x) for x in a.delays.split(",")])
     print("criteria K1/K2/K3/K4 are in this file's docstring and were committed before this run.\n")
 
     # K4 costs nothing and is stated whatever else happens.
