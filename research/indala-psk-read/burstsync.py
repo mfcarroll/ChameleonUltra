@@ -1779,6 +1779,8 @@ K12_PAIR_LAG_MS = 120         # the ladder's own approximation to it — 1.6 ms,
 # Only the arrivals counter distinguishes the two, and the first version of this file used the
 # host number. It shifts the phase COLUMN and the floor; P3 is a difference, so it cancels there.
 K12_OVERHEAD_MS = 192
+# `LF_TAG_BURST_TARGET_MS` in `lf_tag_em.c` (K4, confirmed from the air by C516).
+LF_BURST_MS = 500
 
 
 def k12(a, arms, primers):
@@ -1817,6 +1819,28 @@ def k12(a, arms, primers):
           % (", ".join("%s=seed %d" % (k, seeds[k]) for k in arms) if a.per_arm_shuffle
              else "⛔ ONE SHARED PLAN — this cap carries no cross-arm correlation (M69)"))
     print("   probe is fixed and at a fixed index; the primer's LENGTH is the only variable")
+    # ⭐⭐ M77: THE PROBE IS INSIDE THE SAME BURST, so the reachable top is
+    # `LF_TAG_BURST_TARGET_MS - overhead - probe_ms` and it is PER ARM. `nexwatch`'s 98 ms probe
+    # puts a 200 ms primer over the edge (arrivals 0.94, twice) where `idteck`'s 49 ms probe
+    # leaves the same cell clean — the term that was missing from K19's "~200 ms is the reachable
+    # maximum", which was `keri`'s number quoted as the bench's. Printed, not enforced: P1 is the
+    # gate, and a warning that could be silenced is worth less than a control that fails.
+    for _k in arms:
+        _p = PROBES.get(_k) or ""
+        _m = re.search(r"-s\s+(\d+)", _p)
+        _pm = (int(_m.group(1)) * 8.0 / 1000.0) if _m else 0.0
+        _top = LF_BURST_MS - K12_OVERHEAD_MS - _pm
+        _over = [c for c in primers if c > _top]
+        print("   %-9s probe %-18s = %5.1f ms  ⇒ computed primer top ~%.0f ms%s"
+              % (_k, _p or "(its own reader)", _pm, _top,
+                 ("   ⛔ %d cell(s) ABOVE it: %s — expect P1 to fail there (M77)"
+                  % (len(_over), ",".join(str(c) for c in _over))) if _over else ""))
+    # ⚠⚠ AND THE COMPUTED TOP IS OPTIMISTIC. It puts `nexwatch` at ~210 ms, and its 200 ms cell
+    # FAILED P1 twice while 195 held at exactly 0.50 — so the ~192 ms overhead is an
+    # underestimate, or it jitters, and nothing has measured which. ⇒ treat the number above as
+    # an UPPER BOUND and P1 as the arbiter.
+    print("   ⚠ that top is an UPPER BOUND — `nexwatch` computes to ~210 and measured a FAILURE")
+    print("     at 200 (195 clean, twice), so the overhead constant is optimistic. P1 decides.")
     print("   elapsed(probe) ~ primer + ~%d ms measured FIELD-UP overhead; one full beat cycle "
           "is %.1f ms\n" % (K12_OVERHEAD_MS, K12_CYCLE_MS))
     out = {}

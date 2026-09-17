@@ -1244,3 +1244,38 @@ from the **WRITE-UPS** instead of the data. ⇒ **Every one is a reference or a 
 wrong place, and every one was caught by a check added in the same round.** The checks work; the
 instinct does not. **Derive references from the data mechanically, and name the configuration beside
 every number** (M73).
+
+**M77 — A LADDER'S REACHABLE TOP IS `BURST − OVERHEAD − PROBE`, AND THE PROBE IS PART OF IT. A TOP
+QUOTED WITHOUT NAMING THE ARM IS ANOTHER ARM'S NUMBER.**
+
+K19 recorded *~200 ms is the reachable maximum on this rig*, computed for `keri`. `idteck` then ran
+a full 10-200 ms ladder and its 200 ms cell **passed P1 on both seeds**. `nexwatch` ran the
+identical ladder and **both seeds failed P1 on exactly one cell — 200 ms — while 195 ms held at
+exactly 0.50.**
+
+⭐ **The only difference between the two arms is the probe**: `lf read -s 6144` (49 ms) against
+`lf read -s 12288` (98 ms). Same primer, 49 ms more probe, and the burst restarts mid-read. ⇒ the
+emission's 500 ms burst has to cover **primer + field-up overhead + THE PROBE ITSELF**, and the
+probe is the term that was never in the arithmetic.
+
+⇒ **Compute the top per arm before building the ladder**, and prefer the measured boundary to the
+nominal 500: `nexwatch`'s 195 ms cell is clean and its 200 ms cell is not, twice.
+
+⚠ **And the airtight form of this is the arm-to-arm comparison, not the elapsed arithmetic.** The
+failing probe ends ~490 ms into the burst and the passing one ~485, but those numbers lean on the
+~192 ms overhead constant whose **jitter nothing has measured** — so quote *same primer, +49 ms of
+probe, restarts* and leave the absolute out of it.
+
+⭐⭐ **WHAT MAKES THIS WORTH A RULE RATHER THAN A NOTE: THE CONTROL CAUGHT IT AND I DID NOT.** K27's
+pre-capture note flagged that the *pooled* gate might fire on this weak arm; it did not anticipate
+P1. **P1 was written for K12 to police a different worry entirely** — that a cell's elapsed axis
+might not exist — and it landed exactly on the arm and exactly on the cell where a term was missing
+from the design's arithmetic. ⇒ **A control aimed at one failure mode is the cheapest detector you
+will ever have for the failure modes you have not thought of.** Keep them even when they seem
+redundant.
+
+⚠⚠ **AND THE COMPUTED TOP IS OPTIMISTIC — DO NOT TRUST IT AS THE BOUNDARY.** `500 − 192 − 98` puts
+`nexwatch` at **~210 ms**, and its **200 ms cell failed P1 twice** while 195 held at exactly 0.50.
+⇒ either the ~192 ms overhead is an underestimate or it jitters, and **nothing has measured which**.
+**Treat the arithmetic as an upper bound and P1 as the arbiter**, which is the same relationship
+C516 established between a host-side number and the air.
