@@ -1356,3 +1356,29 @@ tempts you to do. **The remedy is to treat the first run as a PILOT whose produc
 and to derive the threshold for a fresh-seed re-run from it, with the power recomputed against that
 level. ⇒ **When a band changes the condition, budget two runs: one to measure the level and one to
 test the claim.** K30 paid for that lesson with one capture and it is cheap at the price.
+
+**M81 — A REQUIREMENT COMPUTED IN THE DESIGN NOTE HAS TO SURVIVE INTO THE IMPLEMENTATION. THE ONLY
+ERROR THIS ROUND THAT WAS ALREADY WRITTEN DOWN AND THEN NOT CARRIED.**
+
+C541 worked out the moved predictions for the decimation test and stated, in the same paragraph,
+that they **need a 2.5 ms grid and not a 5 ms one**. The design then evolved from a full sweep into
+a **targeted 17-cell ladder** — a better idea, for good reasons — and **the grid requirement was
+silently left behind at 5 ms.**
+
+⇒ K30 and K31 both returned NO VERDICT, and the elevated cells that survive both seeds land
+**precisely in the two zones the same arithmetic had named as non-discriminating**: the 55-65
+collision and the 105/110 boundary. At 2.5 ms, R3-unmoved and R5-moved are separated by a cell at
+107.5 and become distinguishable. **At 5 ms they are adjacent, so a real region in either place
+reads as the boundary and the band cannot fire.**
+
+⚠⚠ **The other seven corrections this round were things I got wrong. This one I got RIGHT and then
+did not carry**, which is a different failure and needs a different guard:
+
+⇒ ⭐ **When a design changes shape, re-read the note that produced its numbers and check each
+requirement individually against the new shape.** A requirement derived for design A is not
+inherited by design B just because B is better. ⛔ The dangerous case is exactly this one — the new
+design was an improvement on every other axis, which is what made the dropped constraint invisible.
+
+⭐ **And the cost was two full captures**, which is the most expensive single lesson of the round —
+more than any of the seven over-reaches, because those were caught by simulation and this one could
+only be caught by the bench.
