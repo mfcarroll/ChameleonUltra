@@ -941,3 +941,33 @@ different questions and only the run clause is robust to a feature narrower than
 presumes the shape it polices (M63), a criterion reading a shape off its argmax (M64), a refutation
 inheriting its one contrast arm's every difference (M65), and now a pooled window presuming the
 feature fills it. **All five were pre-registered.**
+
+**M67 — WINGS FIXED BY POSITION ARE ONLY SAFE IF THE POSITION IS KNOWN TO BE OUTSIDE THE
+STRUCTURE.**
+
+K18 was written to escape M66. M66's disease is a window whose contents are chosen after the data
+arrives, so K18 fixed its wing cells by POSITION — the four cells at the ladder's two edges, named
+in the criterion before the capture. That felt like the principled fix. It is not one.
+
+⛔ **An edge is not outside anything. It is wherever the ladder happened to stop.** `keri`'s
+100 and 105 ms cells came back at 62-88%, so the low wing landed on an elevated region, and the
+band's inner-minus-wings gap went **negative** on an arm with a reproducing three-cell feature at
+140-150 ms. It returned *no second feature here* about a profile that plainly has one.
+
+⚠ **This is M63 arriving by a different route, in the round that cited M63 while writing the
+band.** K15's anchors control compared the ladder's end cells to the median and failed because on
+a hump those cells ARE the wings. M63's lesson was recorded as *do not presume the profile is
+flat*. K18 presumed something narrower and just as unwarranted: *the profile is flat AT THE
+EDGES*.
+
+⇒ **A wing has to be justified, not merely located.** Either (i) it is low by INDEPENDENT prior
+measurement — a different run, not the one being scored — or (ii) the ladder is wide enough that
+the profile has demonstrably returned to a floor, which is a thing the run has to SHOW rather than
+a thing the design may assume. ⛔ When neither holds, the comparison to make is not
+window-against-wings at all: score the run against **the rest of the ladder excluding the run**,
+and report that the reference is the ladder's own body rather than a baseline.
+
+⚠ **And when a band misfires this way, the conjunct that would have fired is not the answer.**
+K18's clause (c) fired for both arms. Promoting it after V1 failed would be M62 — a verdict chosen
+from the statistic that happened to agree. The band did not fire; the finding is that the band was
+mis-built, and the measurement is banked for a ladder that is not.
