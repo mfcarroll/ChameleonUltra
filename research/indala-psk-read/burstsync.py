@@ -1602,6 +1602,53 @@ quantisation at n=8, not the bar's height.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K32 — THE SAME TEST AT 2.5 ms, WHICH IS WHAT C541 ASKED FOR AND K30/K31 DID NOT DO
+
+K30 and K31 both returned **NO VERDICT — regions at NEITHER** with every gate passing, and the
+elevated cells that survive both seeds landed **exactly in the two zones the arithmetic had already
+called non-discriminating** (C543): `idteck` at **105 AND 110**, straddling the R3-unmoved /
+R5-moved boundary, and `keri` at **60**, inside the R2/R3 collision. ⇒ **the signal is real and the
+discriminating power was in the wrong cells.** ⛔ **And C541 had already said the predictions *need a
+2.5 ms grid and not a 5 ms one* — the requirement was dropped when the design became a targeted
+ladder (M81).** This carries it out.
+
+### ⭐ WHAT 2.5 ms BUYS, CELL BY CELL
+
+    high zone   R3-unmoved 100-105          R5-moved 108.9-114.9
+                100  102.5  105   |  107.5 EMPTY UNDER BOTH  |  110  112.5
+    low zone    R2-unmoved 55-65            R3-moved 60.5-63.5
+                55  57.5  (R2 only)  |  60  62.5 (BOTH)  |  65 (R2 only)
+
+⇒ **107.5 is the separator the 5 ms grid did not have**, and in the low zone **55-57.5 is R2-only
+against 60-62.5 being shared**, which 5 ms could not split either.
+
+**The ladder**: **52.5, 55, 57.5, 60, 62.5, 65, 97.5, 100, 102.5, 105, 107.5, 110, 112.5, 115,
+117.5** (15 cells), `--dec 2`, `--arms keri,idteck`, **`--reps 16`**, `--per-arm-shuffle`, two fresh
+seeds (**331**, **337**). ⛔ **The threshold stays at 50% and the reps at 16, exactly as K31 set
+them** — the dec-2 level is now measured twice and nothing about it has changed, so re-deriving
+them would be fitting.
+
+  **E1 — WHICH PREDICTION DOES THE HIGH ZONE MATCH?** A region is **>= 2 adjacent cells at
+  >= 50%** in **BOTH** seeds.
+  - a region inside **100-105** and none inside **110-112.5** ⇒ **SAMPLES**
+  - a region inside **110-112.5** and none inside **100-105** ⇒ **ELAPSED**
+  - **both, or neither, or any region covering 107.5** ⇒ **NO VERDICT** — and a region covering
+    107.5 is specifically *the two predictions are not separated even at 2.5 ms*, which would
+    close this approach rather than leave it open.
+  **E2 — THE LOW ZONE, SUPPORTING AND NOT DECIDING.** A region in **55-57.5** is R2-unmoved and so
+  supports SAMPLES; one in **60-62.5** supports neither (it is the collision) and is reported.
+  ⛔ E2 never overrides E1; if they disagree, that is a NO VERDICT and is said so.
+
+  ⭐ **POWER at 15 cells, reps 16, thr 50% (15,000 draws, both seeds):** **0.02%** at the measured
+  25% median, **0.37%** against a ONE-cell spike, **97.1%** against a 2-cell region at 75% and 64.8%
+  at 62%. ⚠ The pessimistic uniform-38% row is **23%**, and the gates print the run's real pooled
+  level so it stays checkable.
+  ⛔ Gates unchanged. ⚠ P1 is comfortable here: the top cell is 117.5 nominal ≈ 194 ms of decimated
+  primer, well inside `keri`'s 138 ms nominal limit... **⛔ NO — 117.5 is UNDER 138, so it is
+  inside; stated explicitly because that limit is the one M77 exists for.**
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -2436,7 +2483,11 @@ def main():
     if a.k8:
         return k8(a, arms, list(range(0, 241, 15)))
     if a.k12:
-        pr = ([int(x) for x in a.primers.split(",")] if a.primers else K12_PRIMERS_MS)
+        # ⭐ K32's ladder is at 2.5 ms, so a primer may be fractional. ⛔ An INTEGRAL value must
+        # still render as "100" and not "100.0", or every banked cap's cell keys and every
+        # scorer's ladder matching would break.
+        pr = ([(int(float(x)) if float(x).is_integer() else float(x))
+               for x in a.primers.split(",")] if a.primers else K12_PRIMERS_MS)
         return k12(a, arms, pr)
     if a.k9:
         gaps = ([int(x) for x in a.gaps.split(",")] if a.gaps else [0, 300, 600, 900])

@@ -173,7 +173,9 @@ def pooled(cells, keys):
 
 def numeric_cells(cells):
     # `_`-prefixed keys are burstsync metadata (`_plan`, M69), never ladder cells.
-    return sorted((k for k in cells if k != "none" and not k.startswith("_")), key=int)
+    # ⭐ `key=float`, not `int`: K32's ladder is at 2.5 ms, so a cell key can be "52.5".
+    # Strictly safer than `int` for every existing caller — float("100") sorts identically.
+    return sorted((k for k in cells if k != "none" and not k.startswith("_")), key=float)
 
 
 def table():
@@ -1627,6 +1629,96 @@ def k30(paths):
     print("")
 
 
+K32_LADDER = ["52.5", "55", "57.5", "60", "62.5", "65",
+              "97.5", "100", "102.5", "105", "107.5", "110", "112.5", "115", "117.5"]
+K32_SAMPLES = ["100", "102.5", "105"]      # R3 unmoved
+K32_ELAPSED = ["110", "112.5"]             # R5 moved (108.9-114.9)
+K32_SEP = "107.5"                          # empty under BOTH — the separator 5 ms lacked
+K32_LOW_SAMPLES = ["55", "57.5"]           # R2 unmoved, supporting only
+K32_LOW_BOTH = ["60", "62.5"]              # the R2/R3 collision, reported only
+
+
+def k32(paths):
+    """E1/E2 — at 2.5 ms, which prediction does the decimated profile match?
+
+    ⛔ The threshold and reps are K31's, unchanged: the dec-2 level is measured twice and
+    nothing about it moved, so re-deriving them would be fitting. ⛔ A region covering the
+    separator cell closes this approach rather than leaving it open — say so, do not retry."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K32 — the decimation test at 2.5 ms (C541's requirement, dropped by K30/K31 — M81)")
+    print("   SAMPLES ⇒ a region in %s and none in %s. ELAPSED ⇒ the reverse."
+          % (",".join(K32_SAMPLES), ",".join(K32_ELAPSED)))
+    print("   ⛔ %s is EMPTY under BOTH predictions — a region covering it means the two are not"
+          % K32_SEP)
+    print("   separated even at 2.5 ms, which CLOSES this approach.")
+    print("")
+    if len(runs) != 2:
+        print("   ⛔ needs exactly two seeds — %d supplied\n" % len(runs)); return
+    for arm in sorted({a for _, d in runs for a in d}):
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        if len(per) < 2:
+            print("### %s ⛔ needs both seeds\n" % arm); continue
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K32_LADDER if k in cells]
+        if ladder != K32_LADDER:
+            print("### %s ⛔ not the K32 ladder (%d of %d) — not scored\n"
+                  % (arm, len(ladder), len(K32_LADDER))); continue
+        rate_ofs = [(lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"]))
+                    for _, c in per]
+        print("### %s" % arm)
+        for k in ladder:
+            print("   %7s %s %s"
+                  % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                     "".join("▲" if f(k) >= K30_HIGH else "·" for f in rate_ofs)))
+        bad = False
+        for name, c in per:
+            g, line = _gate(name, c, ladder)
+            print(line); bad = bad or not g
+        if bad:
+            print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm); continue
+        hot = [{k for k in ladder if f(k) >= K30_HIGH} for f in rate_ofs]
+        regions = []
+        for f1 in _runs2(ladder, hot[0], 2):
+            for f2 in _runs2(ladder, hot[1], 2):
+                if set(f1) & set(f2):
+                    regions.append(sorted(set(f1) | set(f2), key=float))
+        print("   regions (>= 2 adjacent at %.0f%% in BOTH seeds): %s"
+              % (K30_HIGH, [",".join(r) for r in regions] or "none"))
+        straddles = [r for r in regions if K32_SEP in r]
+        s1 = [r for r in regions if set(r) & set(K32_SAMPLES) and K32_SEP not in r]
+        e1 = [r for r in regions if set(r) & set(K32_ELAPSED) and K32_SEP not in r]
+        lo_s = [r for r in regions if set(r) & set(K32_LOW_SAMPLES)]
+        lo_b = [r for r in regions if set(r) & set(K32_LOW_BOTH)]
+        if straddles:
+            v = ("⛔⛔ **NO VERDICT — a region COVERS the separator %s** (%s). That is the "
+                 "pre-registered\n     outcome meaning *the two predictions are not separated "
+                 "even at 2.5 ms*, and it\n     **CLOSES this approach** rather than leaving it "
+                 "open. ⛔ Do not retry at a finer grid." % (K32_SEP, straddles[0]))
+        elif s1 and not e1:
+            v = ("**E1 — SAMPLES. The regions sit at a fixed `-s N`.** ⛔ This does NOT by itself "
+                 "make\n     the line client-side: only the PRIMER's knob was tested and the "
+                 "probe's own read is\n     untouched.")
+        elif e1 and not s1:
+            v = ("**E1 — ELAPSED. The lead time is a DURATION.** ⇒ a purely CLIENT-side reading "
+                 "of this\n     line is excluded.")
+        elif e1 and s1:
+            v = "⛔ **NO VERDICT — regions in BOTH windows**, which neither prediction allows."
+        else:
+            v = ("⛔ **NO VERDICT — no region in either window.** ⚠ Read the gates first: at this "
+                 "n the\n     detector is 97% sure of a 2-cell region at 75% and only 65% sure "
+                 "at 62%.")
+        print("   ⇒ %s" % v)
+        print("   E2 low zone (supporting, never deciding): R2-unmoved %s ⇒ %s | collision %s ⇒ %s"
+              % (",".join(K32_LOW_SAMPLES), "region" if lo_s else "none",
+                 ",".join(K32_LOW_BOTH), "region (reported, supports neither)" if lo_b else "none"))
+        if lo_s and e1 and not s1:
+            print("      ⚠⚠ E2 and E1 DISAGREE — E2 never overrides E1, so this is a NO VERDICT "
+                  "and is\n      said so rather than resolved.")
+        print("")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1639,6 +1731,8 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--k32", nargs="+", metavar="CAP",
+                    help="⭐ K32: two dec-2 caps on the 2.5 ms 15-cell ladder")
     ap.add_argument("--k30", nargs="+", metavar="CAP",
                     help="⭐ K30: two dec-2 caps on the targeted 17-cell ladder")
     ap.add_argument("--k29", nargs="+", metavar="CAP",
@@ -1661,6 +1755,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k32:
+        k32(a.k32)
+        return 0
     if a.k30:
         k30(a.k30)
         return 0
