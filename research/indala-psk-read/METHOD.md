@@ -1213,3 +1213,34 @@ is exhausted rather than pending.** Say so. Here both bands failed for one reaso
 correlation at 8-12 reps per cell is blunt for this question — so the honest next move is a
 different STATISTIC (one using cell levels rather than ranks) or far more reps, and both are new
 designs and not re-runs.
+
+**M76 — *THE REGIONS A BAND TESTED* IS NOT *THE REGIONS THE BENCH MEASURED*, AND A REFERENCE LIST
+BUILT FROM THE FIRST IS WRONG IN A WAY NOTHING SHOWS UNTIL A BAND SCORES AGAINST IT.**
+
+K26's A2 asked whether a third arm's structure sits where the other two arms' does. Its named list
+was **10-30, 50-65, 95-105, 140-150 ms** — every region that a previous band had *tested and
+fired on*. `idteck` came back with three regions, two of them inside that list and one at
+**180-195 ms**, which A2 scored as an orphan and read as *this arm's structure is its own*.
+
+⛔ **`indala` measures 75-100% at 180-195 ms across SIX independent seeds, and `keri` 25-92%.** The
+region was simply never a *named feature* — and the reason is almost funny: **it is where C522's W2
+FAILED** (*the profile does not return to a floor by 200 ms*) **and where K20's X2 PASSED** (*195 ms
+is 100%/88%, so the profile returns*). Two bands reported that region as high, and neither of them
+turned it into a feature, because each was asking a different question about it.
+
+⇒ **A2's verdict is withdrawn in both directions**, and the cost was a whole capture's
+interpretation.
+
+⇒ ⭐ **THE RULE: build a reference list by sweeping the banked caps for the property the list is
+about, not by re-reading the findings.** A list of *where the arms are high* must come from every
+cell of every cap, mechanically — which is a three-line query against `caps/` and would have caught
+this before the ladder ran. ⛔ Reading it off the write-ups inherits every question those write-ups
+happened to be asking.
+
+⚠⚠ **FIFTH INSTANCE OF ONE DISEASE IN A SINGLE ROUND, AND THE FAMILY IS NOW COMPLETE ENOUGH TO
+NAME**: M71 a gate justified on the wrong **ARM** · C526 a level from one session **PAIR** · C530 a
+rate from one **LADDER** · C532 a point estimate quoted for an **INTERVAL** · M76 a reference list
+from the **WRITE-UPS** instead of the data. ⇒ **Every one is a reference or a scope taken from the
+wrong place, and every one was caught by a check added in the same round.** The checks work; the
+instinct does not. **Derive references from the data mechanically, and name the configuration beside
+every number** (M73).
