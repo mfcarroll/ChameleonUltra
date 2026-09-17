@@ -116,6 +116,56 @@ def gproxii_expect(raw):
     return out
 
 
+# ── the PSK family ───────────────────────────────────────────
+# Five of the six protocols the Proxmark will not decode from our emulation are PSK, and four of
+# them reach the air through ONE builder: `utils/psk1.c:lf_psk1_build_sequence`. So the prediction
+# below is shared too — if it is wrong it is wrong for all of them at once, which is worth more
+# than four separately-derived guesses.
+PSK1_TOP = 16       # LF_PSK1_SUBCARRIER_TOP  (psk1.h:15)
+PSK1_DUTY = 8       # LF_PSK1_SUBCARRIER_DUTY (psk1.h:16)
+
+
+def psk1_expect(raw, bits, differential):
+    """psk1.c:25-89 — ONE ENTRY PER BIT, each a 16us subcarrier period at duty 8, carrying
+    only its phase in channel_0's top bit. So every entry is 0x8008 or 0x0008 at counter_top 16
+    and the whole prediction is the PHASE WALK.
+
+    DIRECT (PSK1, Indala26/IDTECK/KERI): phase flips wherever the frame CHANGES, seeded from the
+    frame's LAST bit so the buffer wraps continuously — the telescoping identity
+    phase[k] = bit[k] XOR bit[N-1], which is periodic whatever the parity.
+
+    DIFFERENTIAL (PSK2, Indala224/NexWatch): phase flips on every 1. ⛔ AND AN ODD-PARITY FRAME
+    DOES NOT REPEAT AT THE FRAME PERIOD — psk1.c:58-86 appends a whole INVERTED copy, so the
+    buffer is 2N entries, not N. That is not a detail: a single-copy buffer was decoded 6 of 6 as a
+    confident WRONG credential (C152). ⇒ the entry COUNT is itself a prediction here, and the
+    parity of the credential decides it before the device is asked.
+    """
+    frame = bytes.fromhex(raw)
+    if len(frame) * 8 < bits:
+        raise ValueError("frame %s is %d bits, short of the %d this arm transmits"
+                         % (raw, len(frame) * 8, bits))
+
+    def bit(i):
+        return (frame[i // 8] >> (7 - (i % 8))) & 1
+
+    phase = False
+    last = bit(bits - 1)
+    out = []
+    for i in range(bits):
+        cur = bit(i)
+        if differential:
+            if cur:
+                phase = not phase
+        else:
+            if cur != last:
+                phase = not phase
+            last = cur
+        out.append(((0x8000 if phase else 0) | PSK1_DUTY, 0, 0, PSK1_TOP))
+    if differential and phase:
+        out += [(e[0] ^ 0x8000, 0, 0, PSK1_TOP) for e in out]
+    return out
+
+
 def cu(port, *cmds):
     """⛔⛔ THE PORT IS SELECTED WITH `hw connect -p`, NOT A `-p` FLAG ON cu.py — cu.py HAS NO SUCH
     FLAG. Passing `-p <path>` hands cu.py two unparseable COMMANDS: it prints its help for each,
@@ -233,26 +283,68 @@ def disarm(port):
     return cu(port, "hw mode -r")
 
 
-def dump(port, entries):
-    """Read the whole buffer as `hw emuseq --raw` and parse the header plus entries."""
-    out = cu(port, "hw emuseq --count %d --raw" % entries)
+# ⛔⛔ THE TRANSPORT CAPS ONE READ AT 256 ENTRIES — `LF_TAG_EM_SEQ_MAX_ENTRIES`
+# (lf_tag_em.h:83), because the response buffer is 2060 bytes and an entry costs 8. A longer
+# buffer MUST be paged with `--start` or it comes back short, and `grade` reports that as
+# "⛔ LENGTH MISMATCH — the buffer is not the one this arm should own", which reads exactly
+# like an emitter defect. It nearly was recorded as one: indala224's 448-entry buffer returned 256
+# on the first run of that arm, and 448-vs-256 is only a transport limit once you know the number.
+SEQ_DUMP_MAX_ENTRIES = 256
+
+
+def _dump_window(port, start, count):
+    """One `hw emuseq` call. Returns (header dict, entry list, raw text)."""
+    out = cu(port, "hw emuseq --start %d --count %d --raw" % (start, count))
     hdr, vals = {}, []
     for line in out.splitlines():
-        s = line.strip()
-        if ":" in s and not s[0].isdigit():
-            k, _, v = s.partition(":")
+        t = line.strip()
+        if ":" in t and not t[0].isdigit():
+            k, _, v = t.partition(":")
             hdr[k.strip()] = v.strip()
         else:
-            p = s.split()
-            if len(p) == 5 and all(x.lstrip("-").isdigit() for x in p):
-                vals.append(tuple(int(x) for x in p[1:]))
+            f = t.split()
+            if len(f) == 5 and all(x.lstrip("-").isdigit() for x in f):
+                vals.append(tuple(int(x) for x in f[1:]))
     return hdr, vals, out
+
+
+def dump(port, entries):
+    """The whole buffer, paged over the 256-entry transport limit.
+
+    ⚠ The windows are read at different instants. That is sound only because the buffer is
+    static once the slot is armed — the modulator builds it at arm time and playback only
+    replays it — but it is the reason the header is kept from the FIRST window: the playbacks
+    counter must be sampled at one known point, not smeared across several.
+    """
+    if entries <= SEQ_DUMP_MAX_ENTRIES:
+        return _dump_window(port, 0, entries)
+    hdr, vals, raw = {}, [], ""
+    start = 0
+    while start < entries:
+        want = min(SEQ_DUMP_MAX_ENTRIES, entries - start)
+        h, v, o = _dump_window(port, start, want)
+        if not hdr:
+            hdr, raw = h, o
+        if not v:
+            break                                   # a short window: stop, let grade say so
+        vals.extend(v)
+        start += len(v)
+    return hdr, vals, raw
 
 
 def grade(name, expect, got, hdr):
     print("  %s: %d entries expected, %d returned, emulating %s, playbacks %s"
           % (name, len(expect), len(got), hdr.get("emulating now", "?"),
              hdr.get("playbacks started", "?")))
+    # ⭐ THE DEVICE'S OWN COUNT IS A SECOND, INDEPENDENT STATEMENT OF THE BUFFER LENGTH, and
+    # for a PSK2 arm it is the one that tests the odd-parity doubling: `entries in buffer` is read
+    # off the live sequence, not off however many entries this tool managed to transfer. Paging a
+    # buffer short would otherwise be indistinguishable from the firmware having built a short one.
+    held = hdr.get("entries in buffer", "").split()[0] if hdr.get("entries in buffer") else ""
+    if held.isdigit() and int(held) != len(expect):
+        print("    ⛔ THE DEVICE HOLDS %s ENTRIES, THE SOURCE PREDICTS %d — the buffer "
+              "the firmware BUILT is the wrong length, which no transfer limit can explain."
+              % (held, len(expect)))
     if len(got) != len(expect):
         print("    ⛔ LENGTH MISMATCH — the buffer is not the one this arm should own.")
         return False
@@ -273,6 +365,12 @@ def main():
     ap.add_argument("--card", default="1337BEEF",
                     help="PAC credential: eight ASCII chars (%%08lX hex is what a Flipper renders)")
     ap.add_argument("--gprox-raw", default="fac2a38c2b081af0210b12c2")
+    # The registry's credentials (rfid-tools benchmatrix/registry.py), so a buffer dumped here and
+    # a cell graded on the bench are the same arm rather than two similar ones.
+    ap.add_argument("--indala-id", default="a0000000e6bd0e92")
+    ap.add_argument("--idteck-id", default="4944544b55667788")
+    ap.add_argument("--indala224-id",
+                    default="80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5")
     ap.add_argument("--seconds", type=float, default=12.0)
     ap.add_argument("--field", choices=("auto", "pm3", "flipper", "none"), default="auto",
                     help="reader that raises the field. `auto` takes it from the port's rig: "
@@ -295,11 +393,21 @@ def main():
             return Field(a.seconds)
         return NoField()
 
+    # ⛔ THE ENTRY COUNT IS DERIVED FROM THE PREDICTION, NEVER KEPT BY HAND. An arm whose
+    # buffer legitimately doubles (an odd-parity PSK2 frame) would otherwise be read short and
+    # graded a LENGTH MISMATCH against a hand-typed constant that was simply out of date.
+    # Credentials are the registry's, so a dump and a graded cell are the same arm.
     arms = {
-        "pac":   ("PAC", "lf pac econfig -s %d --cn " + a.card, 128,
-                  lambda: pac_expect(a.card)),
-        "gprox": ("GProxII", "lf gproxii econfig -s %d --raw " + a.gprox_raw, 96,
-                  lambda: gproxii_expect(a.gprox_raw)),
+        "pac":       ("PAC", "lf pac econfig -s %d --cn " + a.card,
+                      lambda: pac_expect(a.card)),
+        "gprox":     ("GProxII", "lf gproxii econfig -s %d --raw " + a.gprox_raw,
+                      lambda: gproxii_expect(a.gprox_raw)),
+        "indala":    ("Indala", "lf indala econfig -s %d --id " + a.indala_id,
+                      lambda: psk1_expect(a.indala_id, 64, False)),
+        "idteck":    ("IDTECK", "lf idteck econfig -s %d --id " + a.idteck_id,
+                      lambda: psk1_expect(a.idteck_id, 64, False)),
+        "indala224": ("Indala224", "lf indala econfig -s %d --id " + a.indala224_id + " --224",
+                      lambda: psk1_expect(a.indala224_id, 224, True)),
     }
 
     rc = 0
@@ -307,7 +415,9 @@ def main():
         if name not in arms:
             print("  unknown arm %r" % name)
             return 2
-        typ, ec, entries, expect_fn = arms[name]
+        typ, ec, expect_fn = arms[name]
+        expect = expect_fn()
+        entries = len(expect)
         try:
             ok, msg = arm(a.port, typ, ec)
             if not ok:
@@ -333,7 +443,7 @@ def main():
                 print("     header: %s" % hdr)
                 rc = 2
                 continue
-            if not grade(name, expect_fn(), got, hdr):
+            if not grade(name, expect, got, hdr):
                 rc = 1
         finally:
             disarm(a.port)                          # ⛔ every path, including the exception one
