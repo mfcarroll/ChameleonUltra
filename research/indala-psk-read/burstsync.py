@@ -2137,7 +2137,24 @@ READER_SAMPLES = {"keri": 10000, "indala": 30000, "nexwatch": 20000, "idteck": 5
                   "gproxii": 10000, "indala224": 30000}
 # ⭐ MEASURED, not nominal (C540/M79): decimation 2 stretches a read by 1.653x and not 2x,
 # because the USB readback does not scale with it. ⚠ Unmeasured for other values.
+# ⛔⛔ C548: THE STRETCH IS NOT THE WHOLE COST AND THIS TABLE IS NOT WHAT `_top` SHOULD USE.
+# A read's ELAPSED is not its acquisition: C540 measured the dec-1 slope at 0.0118 ms/sample
+# where 125 kHz predicts 0.0080, a ~47% USB-readback surcharge — and the old `_top` charged the
+# primer at 1x nominal, so that surcharge went UNCOUNTED. It is not a constant error either:
+# it scales with the primer, which is why one overhead constant could not absorb it at every
+# length. ⇒ `_top` now uses MS_PER_NOMINAL below. The stretch is kept because the BAND's
+# predictions are ratios (label -> label/S) and a ratio is all they need.
 DEC_STRETCH = {1: 1.0, 2: 1.653}
+
+# ⭐ dectime.py, slope-fitted over 5 sample counts x 4 decimations x 4 reps, shuffled (C546).
+# elapsed = N * (a*dec + x), a = 0.00792 (acquisition, scales) + x = 0.00371 (readback, does not).
+DEC_SLOPE = {1: 0.01128, 2: 0.02001, 3: 0.02762, 4: 0.03514}
+# The real elapsed cost of ONE NOMINAL ms of primer (N = nominal * 125), per decimation.
+MS_PER_NOMINAL = {d: 125.0 * v for d, v in DEC_SLOPE.items()}
+# ⭐ The client's own per-read wall-clock cost, which is what the ~80 ms at K12_OVERHEAD_MS's
+# own comment always said. The 192 was that 80 plus the uncounted readback, fitted at one
+# primer length and wrong at every other. C548 fits this against idteck's measured break.
+CLIENT_OVERHEAD_MS = 85.0
 
 
 def k12(a, arms, primers):
@@ -2194,11 +2211,17 @@ def k12(a, arms, primers):
         # them: `lf_read()`'s count per command is C494's 6x spread. Falling back to 0 made the
         # computed top 308 ms for `keri`, which is nonsense.
         _n = int(_m.group(1)) if _m else READER_SAMPLES.get(_k, 0)
-        _pm = _n * 8.0 / 1000.0
-        # ⭐ AND THE PRIMER IS DECIMATED: at dec 2 it costs ~1.653x its nominal ms (C540), so
-        # the top in NOMINAL ms is the elapsed budget divided by that stretch.
-        _stretch = DEC_STRETCH.get(a.dec, float(a.dec))
-        _top = (LF_BURST_MS - K12_OVERHEAD_MS - _pm) / _stretch
+        # ⛔⛔ C548: THE PROBE COSTS ITS ELAPSED, NOT ITS ACQUISITION. `_n * 8/1000` is the
+        # acquisition time at 125 kHz and ignores the USB readback, which for a 12,288-sample
+        # probe is another 40 ms. Both terms here are now the slope-fitted elapsed (C546).
+        _pm = _n * DEC_SLOPE[1]
+        # ⭐ AND SO DOES THE PRIMER — 1.41 ms per nominal ms at dec 1, 2.50 at dec 2, NOT the
+        # 1.00 and 1.65 the old formula charged. ⇒ the corrected top reproduces BOTH measured
+        # burst boundaries with one constant: `idteck` at dec 2 (clean 130, broken 140 —
+        # computes to 138) and `nexwatch` at dec 1 (clean 195, failed 200 — computes to 196),
+        # where the old form said 157 and 210 and was 12-18 ms optimistic on each.
+        _per = MS_PER_NOMINAL.get(a.dec, 125.0 * (0.00792 * a.dec + 0.00371))
+        _top = (LF_BURST_MS - CLIENT_OVERHEAD_MS - _pm) / _per
         _over = [c for c in primers if c > _top]
         print("   %-9s probe %-18s = %5.1f ms  ⇒ computed primer top ~%.0f ms nominal%s"
               % (_k, _p or "(its own reader, %d samples)" % _n, _pm, _top,
@@ -2208,8 +2231,13 @@ def k12(a, arms, primers):
     # FAILED P1 twice while 195 held at exactly 0.50 — so the ~192 ms overhead is an
     # underestimate, or it jitters, and nothing has measured which. ⇒ treat the number above as
     # an UPPER BOUND and P1 as the arbiter.
-    print("   ⚠ that top is an UPPER BOUND — `nexwatch` computes to ~210 and measured a FAILURE")
-    print("     at 200 (195 clean, twice), so the overhead constant is optimistic. P1 decides.")
+    # ⚠⚠ STILL NOT AN ARBITER, FOR A REASON THAT IS NOT THE OLD ONE. The corrected form lands
+    # inside both measured brackets, but it cannot certify a cell within ~10 ms of the edge:
+    # `keri`'s K30/K31/K32 top cells compute 4-10 ms OVER a nominal 500 and P1 measured them
+    # CLEAN, and the burst is itself clamped to whole emission frames (~16.4 ms for these arms),
+    # so the true ceiling is quantised at about that scale. ⇒ a design tool, P1 the arbiter.
+    print("   ⚠ that top carries ~±10 ms — the burst is clamped to whole frames (~16.4 ms here)")
+    print("     and `keri`'s banked top cells compute just over 500 yet measured clean. P1 decides.")
     print("   elapsed(probe) ~ primer + ~%d ms measured FIELD-UP overhead; one full beat cycle "
           "is %.1f ms\n" % (K12_OVERHEAD_MS, K12_CYCLE_MS))
     out = {}
