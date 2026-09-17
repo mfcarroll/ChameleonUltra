@@ -833,3 +833,59 @@ and Q3 failed, **K12's P2 is withdrawn**. Both happened, so it is withdrawn.
 its own?** If one can, the criterion needs the shape as well as the level. ⭐ And the cheap general
 form: **a contrast says how far apart two bins are; only a monotonicity check says there is a
 trend.** They are different claims and the second is usually the one being made.
+
+
+**M63 — A BENCH-MOVED CONTROL MUST NOT PRESUME THE SHAPE IT IS POLICING, OR A HEALTHY RUN READS AS
+A BROKEN BENCH.**
+
+K12's no-primer control is checked against **<= 15%**, because C512 measured `gproxii` at 0% on a
+fresh burst. ⛔ Carrying that band to `indala` and `keri` would have been wrong on its face — C514
+had already measured that those arms do **not** collapse on a fresh burst (50% → 67%, 33% → 54%) —
+so K15 gave them a different check: **cells 40 and 80 must sit within 20 points of the arm's own
+median.**
+
+⛔⛔ **Both arms failed it, and both runs were declared uninterpretable by a control that was
+measuring the result.** Those arms have a **hump**: the profile peaks in the middle of the ladder
+and collapses at both ends, so cells 40 and 80 **are the wings** and sit 30-50 points below the
+median **because the effect is real**. The control could not distinguish *the bench moved* from
+*the profile has structure at the anchors*, which are opposite conclusions.
+
+⇒ **A control has to be independent of the hypothesis.** "The ends look like the middle" is a
+flatness assumption, and flatness was the null being tested.
+
+⭐ **What replaced it, and why that one is legitimate: a SHAPE-AGNOSTIC drift check.** Does the run
+agree with **itself** across its own rounds — pooled rate between the first and second halves
+within 15 points, and the peak cell within 25? It can fail, it presumes nothing about the profile,
+and it certifies the thing that actually licenses within-run structure. Both arms passed it in K16.
+
+⚠ **And note what no control here can do.** On a bench that gave the same arm 88%, 60%, 38% and
+75% in one evening (C497), **no absolute-level control can certify a session.** Drift within a run
+is certifiable; the level is not. ⇒ Which is also why M59's interleaving is not optional here: it
+is the only thing that makes a comparison survive the wander.
+
+**M64 — A CRITERION THAT TESTS A SHAPE BY ITS ARGMAX FIRES ON ONE CELL OF NOISE. SPECIFY THE
+SHAPE.**
+
+K16's T1 required three things at once: the peak cell must be **60 or 65 ms**, that cell must be
+**>= 75%**, and both wings must be **<= 30%**. `keri` met all three and fired T1. `indala` met the
+second and third — its wings were **tighter** than in the run that generated the hypothesis (max
+29% against 42%) — and **failed only because its argmax moved one 5 ms cell, to 55.**
+
+⇒ **Two arms whose shape reproduced equally well got opposite verdicts on a difference of one
+cell.**
+
+⭐ **C504 had already learned this in a different variable.** Sweeping read length, a second
+session moved the argmax for **four of the five** arms that decode, and the conclusion written then
+was *carry the range, not the number*. T1 re-imported the error as a location clause, one round
+later, in the same file.
+
+⭐ **The fix is to say what a shape IS**: wings below X, a contiguous run of Y cells above Z, a
+peak anywhere inside a named **window** rather than at a named cell. All of those reproduce when
+the shape reproduces, and none of them turns on a single cell.
+
+⚠ **M62, M63 and M64 are one disease in three places** — a statistic whose value is decided by a
+single cell (M62), a control that presumes the shape it is policing (M63), and a criterion that
+reads a shape off its argmax (M64). ⛔ All three were pre-registered before their captures, and
+**being pre-registered did not make any of them right.** ⇒ Pre-registration protects against
+fitting a criterion to the data; it does nothing about a criterion that was badly built in the
+first place. **Ask of every band: what single cell could decide this?**
