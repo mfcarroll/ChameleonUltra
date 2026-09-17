@@ -913,3 +913,31 @@ compares — not only the one under test — and say which further arm would bre
 what it would show.** C519's is `nexwatch`: PSK like the humped arms, but a 4096-sample frame, so
 the two readings put its peak **66 ms apart** (65 ms against ~131 ms). That sentence belongs in the
 criterion, not in the write-up.
+
+**M66 — A POOLED BAND OVER A WINDOW PRESUMES THE FEATURE FILLS THE WINDOW.**
+
+K17's U2 asked for a 30-point gap pooled over five cells, 120-140 ms, built around H_frame's
+point prediction of 3.97 frames. The data put a reproducing rise at **135 and 140 ms only** —
+62-88% in both seeds — and the other three cells of the window sat at 0-25%. Pooled, that is
++22.5 and +33.8 points, and U2 did not fire.
+
+⛔ **The band did not fail because the feature was absent. It failed because the feature occupied
+two cells of a five-cell window and the other three diluted it below the threshold.** U1's window
+had low cells in it too (70 ms at 25%, 75 ms at 0%) and fired only because its rise was three
+cells wide rather than two.
+
+⚠ **And the window was built from the wrong statistic I already had.** `indala` and `keri` peak
+at 3.97 frames but their hump SPANS 3.05-4.27 (C517). C504's rule is *carry the range, not the
+number* — and U2's window was centred on the number, then pooled as though the feature would fill
+it. Having the range and building the window from the point estimate is the same error C504 named,
+one level up: it moved from the peak I report to the window I test.
+
+⇒ **State the window from the known RANGE, and score a CONTIGUOUS RUN inside it rather than the
+whole of it**: *k adjacent cells above the wings* fires on a narrow feature and on a broad one, and
+does not reward a feature merely for being wide. ⛔ A pooled window and a run clause answer
+different questions and only the run clause is robust to a feature narrower than the window.
+
+⚠ This is the fifth member of M62's family — a statistic decided by one cell (M62), a control that
+presumes the shape it polices (M63), a criterion reading a shape off its argmax (M64), a refutation
+inheriting its one contrast arm's every difference (M65), and now a pooled window presuming the
+feature fills it. **All five were pre-registered.**
