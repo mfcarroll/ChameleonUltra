@@ -1084,6 +1084,99 @@ K15/K16 and act as a continuity check, plus the usual no-primer control. Two fre
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K23 — WHERE DOES THE 20-30 ms REGION START? (written before its capture)
+
+K22's **Z3 is what forces this**: the lowest cell at or above 40% was **the ladder's FIRST cell,
+20 ms, in every seed on both arms** (C525). The profile is already elevated where the measurement
+begins, so the region's downward extent is unknown and **no wing at the bottom edge of any ladder
+is licensed for these arms** — W2's teeth (C522) earned at the other end.
+
+⭐ **The top edge IS known and is not what this asks about**: `indala` is 100/88/100% and
+100/75/62% at 20/25/30 and 25/38% at 35, so the region ends between 30 and 35 ms. **K23 asks only
+about the other side.**
+
+### ⛔ WHAT THE INSTRUMENT ACTUALLY ALLOWS, CHECKED MECHANICALLY AND NOT ASSUMED
+
+⭐ `lf read -s N` was run directly at N = 1250, 625, 250 and **125** with nothing armed: all four
+return (`Got 125 samples`), so a primer of **1 ms** is reachable and the ladder is not bounded by
+the client. ⚠ That check raised a field with nothing emulating and therefore carries **no rate
+information at all** — it is an instrument check, not a pilot.
+
+⛔⛔ **BUT THE AXIS HAS A FLOOR THAT THE PRIMER CANNOT REACH BELOW, AND IT IS NOT 1 ms.**
+`K12_OVERHEAD_MS` = **192**: elapsed-at-probe ≈ primer + 192 ms of measured field-up overhead. So
+this whole ladder spans **193 to 257 ms** of elapsed time, and 1 ms of primer is 193 ms of
+elapsed. ⇒ **"below 20 ms" means "below 212 ms of elapsed", and the design cannot go below 192
+whatever the primer is.** ⚠ Nothing has measured that overhead's JITTER, so **the step stays at
+K22's 5 ms** rather than being refined — a 2.5 ms grid would presume a stability nobody has
+measured, and C516 is the standing reason not to trust a host-side number about the air.
+
+⛔⛔ **AND THE NO-PRIMER CONTROL IS NOT `primer = 0`.** It is a FRESH BURST — arrivals 1.0 against
+0.50 — a different burst identity, not the bottom of this axis (C512 measured it as its own
+condition). It is printed, it is informational, and **it may not be used as this ladder's lowest
+cell.**
+
+### THE BANDS
+
+**The ladder**: **1, 5, 10, 15, 20, 25, 30** ms — the new region plus the three cells K22 measured
+high, so the known part has to reappear — then **50, 55, 60, 65** as the continuity anchor, plus
+the no-primer control. Two fresh seeds (**151** and **167**), `--reps 8`, `--per-arm-shuffle`
+(M69), both arms. ⚠ The 1→5 ms step is 4 ms and the rest are 5; said here rather than implied.
+
+  **V1 — DOES THE PROFILE COME DOWN INSIDE THIS LADDER?** ⇒ at least one of **1, 5, 10** ms at or
+  below **40%** in **BOTH** seeds. ⛔ The 40% threshold is the ABSOLUTE one K22 used, carried
+  unchanged so the two ladders are commensurable, and it is justified by the same independent
+  floor (`k15`/`k16` at 40-45 ms, 0-17%).
+  - **V1 fires** ⇒ the region has a bottom edge inside this design. Its LOCATION is reported and
+    never tested (M64).
+  - ⭐⭐ **V1 FAILS ⇒ THAT IS THE MORE INTERESTING RESULT AND IT RETIRES THIS KNOB DOWNWARD.** The
+    profile would be elevated at every lead time the primer can reach, down to 1 ms — and since
+    1 ms is 193 ms of elapsed against the design's own 192 ms floor, **it would mean the region's
+    bottom is not below 20 ms at all but inside the field-up overhead, where no primer can go.**
+    ⇒ The next move would then be to attack the overhead, not the ladder. Said before the capture
+    so the null is not read as *nothing there*.
+
+  ⛔ **V1's POWER, SIMULATED BEFORE THE CAPTURE (M70), and the relevant null is *the region
+  continues at the level K22 measured*:**
+
+  | the truth at 1, 5 and 10 ms | V1 fires |
+  |---|---|
+  | 100% (the ceiling `indala` shows at 20 ms) | **0.000** |
+  | 95% | **0.000** |
+  | 88% (`indala`'s 25 ms level) | **0.000** |
+  | 75% | 0.006 |
+  | 62% | 0.139 |
+  | a real edge — 20% / 50% / 88% | **0.930** |
+  | a real edge — 10% / 10% / 50% | **1.000** |
+
+  ⭐ **Against the null that matters it is zero to three decimal places, and its power at a real
+  edge is 93-100%.** ⚠⚠ **ITS ONE WEAKNESS, STATED RATHER THAN DISCOVERED: at a true level of 62%
+  it fires 14% of the time from counting noise alone.** V1 is a claim about the **measured** level
+  reaching 40%, and on a profile that has merely sagged it will sometimes say *edge*. ⇒ **A firing
+  V1 licenses *the profile comes down*, never *it reaches a floor*.**
+
+  **V2 — THE CONTINUITY GATE, K22's Z2 UNCHANGED.** At least two of 50, 55, 60, 65 at or above
+  **50%** in both seeds, or **V1 is not read at all**. ⚠ Not a claim; it is safe as an anchor only
+  because prior runs measured those cells HIGH (M63's distinction).
+
+  **V2b — AND THE NEW-REGION CELLS MUST REAPPEAR TOO.** At least two of **20, 25, 30** at or above
+  **50%** in both seeds. ⛔ **If V2b fails, V1 is not read either**: a ladder that cannot reproduce
+  C525's own region, measured twice an hour earlier, is not evidence about what lies below it.
+  ⭐ This is the first continuity gate here that checks the finding the run is EXTENDING rather
+  than only an older one, and K22 should have had it.
+
+  **V3 — reported, never tested**: the lowest cell at or above 40%, as a RANGE across the two
+  seeds and never as a number (M64, C504).
+
+  ⛔ Gates unchanged and any one ends it: pooled over every cell **< 15%** is NO POWER; split-half
+  over the rounds **> 15 points** is a drifted run; **P1 > 0.6** in any cell. ⚠⚠ **P1 IS THE ONE
+  TO WATCH AND IT IS LOAD-BEARING HERE.** A 1 ms primer is by far the shortest field-up this
+  design has ever asked for, and if it is too short to keep the probe inside one burst the
+  arrivals rise toward 1.0. **A P1 failure at 1 or 5 ms is a RESULT about the instrument's floor**
+  — it would say the primer stops being a primer down there — and it must be reported as the
+  reason those cells cannot be measured, not as a nuisance.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse

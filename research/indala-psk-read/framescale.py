@@ -136,6 +136,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FRAME_SAMPLES = {"indala": 2048, "keri": 2048, "idteck": 2048,
                  "nexwatch": 4096, "gproxii": 6144, "indala224": 7168}
 SAMPLE_US = 8.0
+# `burstsync.K12_OVERHEAD_MS` — the measured field-up overhead a primer sits on top of.
+K12_OVERHEAD_MS = 192
 
 RUNS = [("k12_gproxii_s17", 17), ("k13_gproxii_s41", 41), ("k14_gproxii_s73", 73),
         ("k15_indala_keri_s91", 91), ("k16_indala_keri_s137", 137)]
@@ -939,6 +941,104 @@ def k22(paths):
     print("")
 
 
+K23_LADDER = ["1", "5", "10", "15", "20", "25", "30", "50", "55", "60", "65"]
+K23_EDGE = ["1", "5", "10"]          # V1: the cells below anything ever measured
+K23_LOW = 40.0                       # V1: ABSOLUTE, carried unchanged from K22's Z1
+K23_ANCHOR = ["50", "55", "60", "65"]        # V2: the hump k15/k16 measured
+K23_REGION = ["20", "25", "30"]              # V2b: the region C525 measured, an hour earlier
+K23_HIGH = 50.0
+K23_HIGH_CELLS = 2
+
+
+def k23(paths):
+    """V1/V2/V2b/V3 — where does C525's 20-30 ms region start?
+
+    ⛔ V2 AND V2b are GATES, not findings. V2 asks the older hump to reappear and V2b asks
+    C525's own region to reappear; either failing means V1 is not read for that arm."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K23 — where does the 20-30 ms region start?")
+    print("   ⛔ The axis floor is the design's own ~%d ms field-up overhead, NOT 1 ms: this"
+          % K12_OVERHEAD_MS)
+    print("   ladder spans %d-%d ms of ELAPSED time. And the no-primer control is a FRESH BURST,"
+          % (1 + K12_OVERHEAD_MS, 65 + K12_OVERHEAD_MS))
+    print("   not primer=0, so it is informational and is not this ladder's lowest cell.")
+    print("")
+    arms = sorted({a for _, d in runs for a in d})
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        if len(per) < 2:
+            print("### %s ⛔ needs two seeds — %d supplied\n" % (arm, len(per)))
+            continue
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K23_LADDER if k in cells]
+        if len(ladder) < len(K23_LADDER):
+            print("### %s ⛔ partial ladder — not scored\n" % arm)
+            continue
+        rate_ofs = [(lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"]))
+                    for _, c in per]
+        print("### %s" % arm)
+        for k in ladder:
+            print("   %5s %s %s"
+                  % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                     "".join("▽" if f(k) <= K23_LOW else "▲" if f(k) >= K23_HIGH else "·"
+                             for f in rate_ofs)))
+        ctl = [c["none"] for _, c in per if "none" in c]
+        if ctl:
+            print("   %5s %s  (informational — a FRESH burst, arrivals %s)"
+                  % ("none",
+                     "  ".join("%-11s" % ("%.0f%%" % (100.0 * cell_rate(x["scores"])[0]
+                                                      / len(x["scores"]))) for x in ctl),
+                     "/".join("%.2f" % (sum(x["arrivals"]) / len(x["arrivals"])) for x in ctl)))
+        gated = False
+        for name, c in per:
+            g, line = _gate(name, c, ladder)
+            print(line)
+            gated = gated or not g
+        if gated:
+            print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm)
+            continue
+        ok = True
+        for lbl, sel in (("V2  (the k15/k16 hump)", K23_ANCHOR),
+                         ("V2b (C525's own region)", K23_REGION)):
+            hits = [[k for k in sel if f(k) >= K23_HIGH] for f in rate_ofs]
+            good = all(len(h) >= K23_HIGH_CELLS for h in hits)
+            ok = ok and good
+            print("   %s: >= %.0f%% in >= %d of %s ⇒ %s ⇒ %s"
+                  % (lbl, K23_HIGH, K23_HIGH_CELLS, ",".join(sel),
+                     " | ".join(",".join(h) or "none" for h in hits),
+                     "reproduces" if good else "⛔⛔ DOES NOT — V1 is NOT READ for this arm"))
+        if not ok:
+            print("   ⇒ ⛔ NO VERDICT for %s — a continuity gate failed.\n" % arm)
+            continue
+        edge = [[k for k in K23_EDGE if f(k) <= K23_LOW] for f in rate_ofs]
+        v1 = all(e for e in edge)
+        print("   V1 (any of %s at <= %.0f%% in BOTH seeds): %s"
+              % (",".join(K23_EDGE), K23_LOW,
+                 " | ".join(",".join(e) or "none" for e in edge)))
+        if v1:
+            print("   ⇒ **V1 FIRES for %s — the region HAS a bottom edge inside this ladder.**"
+                  % arm)
+            print("      ⛔ Its location is reported, never tested. ⛔ And a firing V1 licenses"
+                  " *the profile\n      comes down*, never *it reaches a floor*: at a true level"
+                  " of 62%% this detector fires\n      14%% of the time from counting noise"
+                  " alone.")
+        else:
+            print("   ⇒ **V1 FAILS for %s — AND THAT IS THE RESULT WITH TEETH.** The profile is"
+                  % arm)
+            print("      elevated at every lead time the primer can reach, down to 1 ms = %d ms"
+                  % (1 + K12_OVERHEAD_MS))
+            print("      of elapsed against this design's own %d ms floor. ⇒ **the region's"
+                  % K12_OVERHEAD_MS)
+            print("      bottom is not below 20 ms; it is inside the field-up overhead, where no")
+            print("      primer can go.** The next move is the overhead, not the ladder.")
+        lo = [[k for k in ladder if f(k) >= K23_LOW] for f in rate_ofs]
+        print("   V3 reported, never tested: the lowest cell at or above %.0f%% is %s ⇒ carry the"
+              % (K23_LOW, " / ".join(x[0] if x else "none" for x in lo)))
+        print("      RANGE across seeds, never a single boundary (M64).\n")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -949,6 +1049,8 @@ def main():
                     help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
     ap.add_argument("--k19", nargs="+", metavar="CAP",
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
+    ap.add_argument("--k23", nargs="+", metavar="CAP",
+                    help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
     ap.add_argument("--k22", nargs="+", metavar="CAP",
                     help="⭐ K22: the 20-80 ms ladder, two seeds, both arms")
     ap.add_argument("--k21", nargs="+", metavar="CAP",
@@ -956,6 +1058,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k23:
+        k23(a.k23)
+        return 0
     if a.k22:
         k22(a.k22)
         return 0
