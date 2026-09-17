@@ -105,6 +105,34 @@ period, the DELAYS SHUFFLED across sessions so D is not confounded with time (M6
   - patterns not repeatable WITHIN a D ⇒ no verdict; report that the determinism is itself
     D-dependent.
 
+## ⭐⭐ K7 — WHY WAS K5 DETERMINISTIC AND K6 NOT? (written before its capture)
+
+K5 got `gproxii`'s `.X.XX.` in **16 of 16** sessions. K6, same arm and same six identical reads,
+got its modal pattern in only **2 of 4** at the same D=0. ⛔ By K6 as written that is the
+*no verdict* branch for the determinism, and the difference between the two runs must not be
+explained by staring at them. **The one structural difference**: K5 spaced every session
+identically (a fixed pause, and every session the same length), while K6's sessions differ in
+length because their delays differ — so the PHASE AT SESSION START was repeatable in K5 and was
+not in K6.
+
+**H_phase** — the pattern is deterministic when the session's START PHASE is repeatable; the
+cadence then fixes every later read's phase off it.
+**H_other** — the K5/K6 difference is something else, and the determinism is not about spacing.
+
+**K7**, one arm, identical session content throughout, two blocks INTERLEAVED so drift moves both:
+  - **fixed** spacing — the same pause between every session
+  - **random** spacing — a pause drawn uniformly over a span wider than the beat period
+  - H_phase ⇒ **fixed reaches a modal pattern in >= 70% of its sessions and random in <= 40%.**
+  - both high ⇒ spacing is not what sets the phase; H_phase refuted and the K5/K6 difference is
+    still open.
+  - both low ⇒ K5's 16/16 did not reproduce at all, and the determinism claim of C507 weakens
+    further rather than being rescued. ⚠ **That outcome must be reported as such**, not retried
+    until it comes out.
+  - otherwise ⇒ no verdict.
+
+⚠ This tests the DETERMINISM half only. K6 already refuted H_client on its own evidence — a
+host-side `msleep` moved the outcome — and nothing here revisits that.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
@@ -252,6 +280,62 @@ def k6(a, arms, delays):
     return 0
 
 
+def k7(a, arms):
+    """⭐ K7. Fixed vs randomised inter-session spacing, interleaved, identical sessions."""
+    import collections
+    import random as _r
+    rng = _r.Random(a.seed)
+    plan = [m for _ in range(a.reps) for m in ("fixed", "random")]
+    rng.shuffle(plan)
+    print("K7 — %d sessions x %d reads, fixed pause %.1fs vs random over [%.1f, %.1f]s, "
+          "interleaved (seed %d)" % (len(plan), a.reads, a.fixed_pause, a.fixed_pause,
+                                     a.fixed_pause + a.jitter, a.seed))
+    out = {}
+    try:
+        for key in arms:
+            arm = shortread.ARMS[key]
+            ok, why = seqdump.arm(a.port, arm.typ, arm.econfig)
+            if not ok:
+                print("%-9s ⛔ ARM FAILED: %s" % (key, why))
+                continue
+            pats = collections.defaultdict(list)
+            for mode in plan:
+                sc = session(key, a.reads, a.timeout)
+                pats[mode].append(pattern(sc))
+                time.sleep(a.fixed_pause if mode == "fixed"
+                           else a.fixed_pause + rng.uniform(0.0, a.jitter))
+            out[key] = dict(pats)
+            print("\n%-9s probe %r" % (key, PROBES[key] or arm.reader))
+            share = {}
+            for mode in ("fixed", "random"):
+                c = collections.Counter(pats[mode])
+                top, n = c.most_common(1)[0]
+                share[mode] = n / float(len(pats[mode]))
+                print("   %-7s modal %-10s %d/%d = %.0f%%   %s"
+                      % (mode, top, n, len(pats[mode]), 100 * share[mode],
+                         " ".join(pats[mode])))
+            f, r = share["fixed"], share["random"]
+            if f >= 0.70 and r <= 0.40:
+                v = "⇒ H_phase SUPPORTED — the start phase is what makes it deterministic"
+            elif f >= 0.70 and r >= 0.70:
+                v = ("⇒ BOTH HIGH — spacing is not what sets the phase. H_phase refuted and the "
+                     "K5/K6 difference is still open")
+            elif f <= 0.40 and r <= 0.40:
+                v = ("⇒ BOTH LOW — K5's 16/16 did not reproduce at all. C507's determinism half "
+                     "weakens rather than being rescued; report it, do not retry it")
+            else:
+                v = "⇒ no verdict under K7 as written"
+            print("   %s" % v)
+    finally:
+        o = seqdump.disarm(a.port)
+        print("\ndisarm: %s" % ("ok" if "success" in o.lower() else o.strip()[-160:]))
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump(out, fh, indent=1)
+        print("raw patterns → %s" % a.out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ORDER))
@@ -267,6 +351,11 @@ def main():
                                      "shuffled session groups")
     ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
     ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
+    ap.add_argument("--k7", action="store_true",
+                    help="⭐ K7: fixed vs randomised inter-session spacing, interleaved")
+    ap.add_argument("--fixed-pause", dest="fixed_pause", type=float, default=1.0)
+    ap.add_argument("--jitter", type=float, default=8.0,
+                    help="K7: the random block's extra pause span, wider than the beat period")
     ap.add_argument("--null", action="store_true",
                     help="⛔ K3: nothing armed. Every decode count must be 0.")
     a = ap.parse_args()
@@ -281,6 +370,8 @@ def main():
           "It moves no cell.")
     if a.delays:
         return k6(a, arms, [int(x) for x in a.delays.split(",")])
+    if a.k7:
+        return k7(a, arms)
     print("criteria K1/K2/K3/K4 are in this file's docstring and were committed before this run.\n")
 
     # K4 costs nothing and is stated whatever else happens.
