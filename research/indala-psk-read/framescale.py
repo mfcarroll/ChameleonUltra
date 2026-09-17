@@ -957,12 +957,46 @@ K23_HIGH = 50.0
 K23_HIGH_CELLS = 2
 
 
-def k23(paths):
+def _split_half(c, ladder):
+    """K16's shape-agnostic drift statistic, in points. ⚠ C527 priced it: at n=88 its sd is
+    10.6 points, so the 15-point gate is 1.4 sigma and fails on pure noise 14-16% of the time."""
+    halves = []
+    for lo, hi in ((0, 0.5), (0.5, 1.0)):
+        h = n = 0
+        for k in ladder:
+            sc = c[k]["scores"]
+            part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+            h += sum(1 for _, e in part if e)
+            n += len(part)
+        halves.append(100.0 * h / n if n else 0.0)
+    return abs(halves[1] - halves[0])
+
+
+def k23(paths, select=None):
     """V1/V2/V2b/V3 — where does C525's 20-30 ms region start?
 
     ⛔ V2 AND V2b are GATES, not findings. V2 asks the older hump to reappear and V2b asks
-    C525's own region to reappear; either failing means V1 is not read for that arm."""
+    C525's own region to reappear on THE ARM IT WAS MEASURED ON (M71); either failing means V1
+    is not read for that arm.
+
+    ⭐ `select` is K24's PRE-REGISTERED rule: given more than two runs, score the `select` with
+    the lowest split-half |Δ|. ⚠ Not perfectly independent of V1 — the Δ comes from the same
+    scores the bands read — which is why it is declared before the capture and disclosed here."""
     runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    if select and len(runs) > select:
+        arms0 = sorted({a for _, d in runs for a in d})
+        lad0 = [k for k in K23_LADDER if k in numeric_cells(runs[0][1][arms0[0]])]
+        scored = sorted(runs, key=lambda r: min(_split_half(r[1][a], lad0) for a in r[1]))
+        print("## K24 selection rule (PINNED BEFORE THE CAPTURE): score the %d of %d runs with the"
+              % (select, len(runs)))
+        print("   lowest split-half |delta|. ⚠ Not perfectly independent of V1 — the delta comes")
+        print("   from the same scores the bands read. Declared in advance, and disclosed here.")
+        for name, d in scored:
+            print("   %-24s |delta| %5.1f   %s"
+                  % (name, min(_split_half(d[a], lad0) for a in d),
+                     "SCORED" if (name, d) in scored[:select] else "not scored"))
+        print("")
+        runs = scored[:select]
     print("## K23 — where does the 20-30 ms region start?")
     print("   ⛔ The axis floor is the design's own ~%d ms field-up overhead, NOT 1 ms: this"
           % K12_OVERHEAD_MS)
@@ -1066,6 +1100,9 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--k24", nargs="+", metavar="CAP",
+                    help="⭐ K24: K23's bands over THREE seeds, scoring the two with the lowest "
+                         "split-half |delta| — the rule is pinned in burstsync's docstring")
     ap.add_argument("--k22", nargs="+", metavar="CAP",
                     help="⭐ K22: the 20-80 ms ladder, two seeds, both arms")
     ap.add_argument("--k21", nargs="+", metavar="CAP",
@@ -1073,6 +1110,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k24:
+        k23(a.k24, select=2)
+        return 0
     if a.k23:
         k23(a.k23)
         return 0

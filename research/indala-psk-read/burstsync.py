@@ -1192,6 +1192,47 @@ the no-primer control. Two fresh seeds (**151** and **167**), `--reps 8`, `--per
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K24 — `keri`'s BOTTOM EDGE, WITH THREE SEEDS AND THE SELECTION RULE PINNED FIRST
+
+`keri` has now lost **three** K23 session pairs and its bottom edge is still unmeasured. ⛔ **Not
+one of those losses is evidence about `keri`**, and the reasons are on the record:
+
+| pair | why it was not read |
+|---|---|
+| s151 / s167 | s167 **DRIFTED** (split-half 15.9 against a 15-point gate) |
+| s181 / s193 | ⛔ **my gate was wrong** — V2b asked for a region C525 had REFUTED on this arm (M71) |
+| s199 / s211 | s211 **DRIFTED** (20.5) |
+
+⭐ **And C527 prices the first and third: the drift gate fails on pure counting noise 14-16% of the
+time per run, 26-30% per pair.** Two of three pairs lost to it is unremarkable at that rate
+(P(>= 2 of 6 runs over the gate) = 0.26). ⇒ **the fix is more seeds, not a different gate**, and
+the gate is deliberately left alone (C527: re-pointing it is the operator's decision).
+
+⛔⛔ **THE SELECTION RULE, PINNED BEFORE THE CAPTURE — THIS IS THE WHOLE REASON K24 EXISTS AS ITS
+OWN UNIT RATHER THAN A THIRD ATTEMPT AT K23.** Three fresh seeds (**223**, **227**, **229**), one
+arm, the K23 ladder and **the K23 bands unchanged**.
+
+  **S — WHICH TWO RUNS ARE SCORED.** Of the three, score the **two with the lowest split-half |Δ|**,
+  and score them under V1/V2/V3 exactly as K23 defines them. ⛔ **If fewer than two runs pass the
+  gate at all, the unit returns NO VERDICT and reports how many passed** — the rule may not reach
+  down to a failing run to make up a pair.
+  ⚠⚠ **THE ONE DEPENDENCE, STATED RATHER THAN DISCOVERED**: the split-half Δ is computed from the
+  **same scores the bands read**, so choosing runs by Δ is *not* perfectly independent of V1. A run
+  with an unusually low Δ is, very weakly, one whose two halves agree — which is not the same thing
+  as one whose 1 and 5 ms cells are low. ⇒ The rule is declared in advance, which is what keeps it
+  honest, and **the verdict must say that two of three were selected.**
+  ⛔ **The bands are NOT re-tuned.** A re-run at fresh seeds is replication; a re-run with new
+  thresholds is fitting, and K23's V1 threshold, its 40% absolute level and its power table all
+  stand exactly as committed.
+
+  ⭐ **V2b does not apply to `keri` (M71)** — C525 refuted a region there on this arm — so **V2, the
+  50-65 ms hump, is its only continuity gate**, and the write-up must say one gate was passed and
+  not two.
+
+⇒ **Priced: 93% chance of two usable runs against 71% for a pair**, at ~6 min per seed for one arm.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse

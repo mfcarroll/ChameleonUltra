@@ -1078,3 +1078,45 @@ without looking at the new data at all. ⛔ But the caps taken under the wrong g
 at, so the arm re-runs on **fresh seeds** and the old caps are banked evidence rather than the
 scored run. Fixing a gate and re-scoring the same data would be re-specifying a band after seeing
 it, whatever the justification.
+
+**M72 — A CONTROL NEEDS ITS NULL DISTRIBUTION COMPUTED TOO. THE DRIFT GATE FAILS ON PURE COUNTING
+NOISE ABOUT A SIXTH OF THE TIME, WHICH IS A QUARTER OF EVERY TWO-SEED RUN.**
+
+M70 said to simulate every band against a null before the capture. ⛔ **The same obligation applies
+to the CONTROLS, and this project has never met it for its oldest one.** K16's shape-agnostic drift
+check — pooled first half of each cell's reps against the second half, over the whole ladder, fail
+at **> 15 points** — has been carried unchanged since, and the 15 was chosen by eye.
+
+**Simulated, 40,000 draws per row, an 11-cell ladder at `--reps 8` and NO drift whatsoever:**
+
+| true rate | P(|Δ| > 15 pts) | median |Δ| | 95th |
+|---|---|---|---|
+| 0.65 | **14.2%** | 6.8 | 20.5 |
+| 0.55 | **16.2%** | 6.8 | 20.5 |
+| 0.45 | **16.0%** | 6.8 | 20.5 |
+
+⇒ **a per-run false-failure rate of 14-16%, and 26-30% for a two-seed pair.** The sd of the
+split-half difference at n=88 is **10.6 points**, so a fixed 15-point band is **1.4σ**. A 2.5σ band
+would be about **27 points**.
+
+⭐⭐ **THE OPERATIVE CONSEQUENCE, AND IT IS RETROACTIVE: every *NO VERDICT — DRIFTED* in this
+record carries roughly a one-in-four chance of being noise, and NONE of them is evidence that the
+bench moved.** ⛔ That is how they must be read from here on.
+
+⚠⚠ **AND IT IMMEDIATELY DISSOLVES AN ARM DIFFERENCE I COULD HAVE CLAIMED.** Across the six K23
+ladder runs: `indala` **0 of 6** over 15 points (max 11.5), `keri` **2 of 6** (15.9 and 20.5). At a
+16% rate, P(0 of 6) = **0.34** and P(>= 2 of 6) = **0.26**. ⇒ **Both are ordinary. *`keri` drifts
+more* is not a finding and may not be quoted** — M58 for the fifth time, caught by the same
+arithmetic that priced the gate.
+
+⛔⛔ **THE GATE IS NOT CHANGED, AND THAT IS DELIBERATE.** It is conservative, not wrong: it costs
+runs, it does not manufacture findings. Re-pointing it would re-base how every K17+ run that passed
+it is read, which is the same class of change as re-pointing `pm3_read` and is **the operator's
+decision**. ⇒ Computed, recorded, queued.
+
+⭐ **The remedy that does NOT touch the gate is more seeds, and it is priced.** At a 16% per-run
+failure rate, two seeds give a 71% chance of two usable runs and **three seeds give 93%**. ⇒ For any
+arm that has already lost a pair to drift, **run three seeds and pre-register the selection rule**.
+⚠ The rule must be declared before the capture, and its one dependence stated: the split-half Δ is
+computed from the same scores the bands read, so selecting on it is not perfectly independent of
+them. Declaring it in advance is what keeps that honest.
