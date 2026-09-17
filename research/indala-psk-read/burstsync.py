@@ -624,6 +624,81 @@ re-bases every past cell, exactly as C499's read length would, and remains the o
 What this can do is hand them a number with a control attached. ⚠ Ungraded, no null sweep, no
 calibration row, moves no cell.
 
+## ⭐⭐⭐ K17 — DOES THE HUMP FOLLOW THE MODULATION OR THE FRAME? (written before its capture)
+
+C519 refuted *the hump travels in the arm's own frame count* on `gproxii` — 80.6% and 78.5% where
+the frame reading needed <= 30%, two seeds. ⛔⛔ **And M65 is the same finding's own limitation:
+`gproxii` is the only arm here with a different frame AND the only ASK/biphase one**, so that
+refutation cannot separate *not frames* from *it is a PSK effect*. The band named frame length and
+said nothing about the other thing that moves with it.
+
+⭐⭐ **`nexwatch` BREAKS THE CONFOUND, AND IT IS THE ONLY ARM THAT CAN.** It is PSK like `indala`
+and `keri`, but its frame is **4096 samples = 32.768 ms** against their 2048 — so the two readings
+put its peak **66 ms apart**:
+
+| reading | where `nexwatch` peaks | why |
+|---|---|---|
+| **H_ms** the hump sits at a fixed lead time | **65 ms** | where `indala` and `keri` peak (C517) |
+| **H_frame** it sits at the arm's own frame count | **130 ms** | 3.97 of ITS frames, where they peak in theirs |
+
+⭐ The ladder carries **both windows at 5 ms resolution** plus the wings each reading needs, in the
+arm's own frames alongside the milliseconds:
+
+    40   45   55   60   65   70   75   80  |  120  125  130  135  140  160   ms
+    1.22 1.37 1.68 1.83 1.98 2.14 2.29 2.44|  3.66 3.81 3.97 4.12 4.27 4.88  frames
+
+⭐ **80 ms is the cell both readings call LOW** — H_ms's high wing and H_frame's 2.44-frame low
+wing land on the same cell — so it is a shared sanity cell and discriminates nothing. The
+discrimination is entirely in **55-75 ms** against **120-140 ms**.
+
+⛔⛔ **THIS ALSO CLOSES `rfid-tools`' QUEUE UNIT 4** — `nexwatch` is unmeasured on this knob — so
+one capture answers both, and the criterion is written for the discrimination rather than fitted to
+whatever the arm turns out to do.
+
+  ⭐ **THE PROBE IS FIXED BY A PRE-EXISTING RULE, NOT BY A PILOT.** C499: the window is 3-4 frames
+  on every arm, carry the range not the number. `nexwatch`'s 3 frames is **`lf read -s 12288`** +
+  `lf nexwatch demod`. ⛔ Choosing it from a pilot's scores would fit the instrument to the run;
+  the plumbing pass checks P1 and that the demod answers, and **its rates are not interpreted**.
+
+  **U1 — H_ms FIRES** ⇒ pooled(55,60,65,70,75) − pooled(40,45,80) **>= 30 points**, AND at least
+  **3 of those 5** cells individually sit above the highest of 40, 45 and 80.
+  **U2 — H_frame FIRES** ⇒ pooled(120,125,130,135,140) − pooled(80,160) **>= 30 points**, AND at
+  least **3 of those 5** cells individually sit above the higher of 80 and 160.
+  **U3 — BOTH fire** ⇒ ⛔ **NO VERDICT on location.** Report both; this ladder cannot separate two
+  humps from one broad rise spanning them, and that is said here rather than chosen afterwards.
+  **U4 — NEITHER fires** ⇒ no verdict on location, and the substantive reading is that `nexwatch`
+  does not carry C517's hump at all — a limit on its generality, reported as one.
+
+  ⛔⛔ **THE NO-POWER GATE, AND IT IS PRE-DECLARED BECAUSE IT IS THE LIKELY OUTCOME.** `nexwatch`
+  is the weakest of the six — 6/24 through its own reader (C491), precision 77% (C502). **If the
+  pooled rate over ALL fourteen cells is below 15%, the run is NO POWER and NEITHER U1 nor U2 is
+  read**, whatever they compute to. K15 named this exact hazard for `keri` and it applies harder
+  here: a rise is detectable from a low baseline, but only if the arm decodes at all.
+
+  ⭐ **THE SHAPE CLAUSE IS A CONJUNCTION, NEVER A TRIGGER** (M62, M64). Each U is a 5-cell pooled
+  gap of n=80 FIRST; the 3-of-5 clause can only make it stricter and can never fire on its own, and
+  no single cell's rate is claimed (M58). ⛔ No argmax appears in either band — C504 and M64 both
+  cost a verdict to that.
+
+  ⭐ **THE DRIFT CONTROL IS K16's, WHICH SURVIVED**: split-half over the rounds, the arm's pooled
+  rate across the whole ladder agreeing between first and second halves within **15 points**.
+  ⛔ **NOT K15's anchors rule, which is withdrawn** — on a ladder built to have two humps and three
+  wings, an anchors-against-median control presumes the flatness it is testing (M63).
+
+  ⛔ P1 carries over and is checked per cell: arrivals **<= 0.6** in every primer cell. The top
+  cell is the budget risk — 160 + ~192 overhead + 98 probe = **450 ms** against the 500 ms burst
+  (K4/C516) — and **P1 is what decides that, not the arithmetic**. A cell that climbs to >= 0.8 got
+  its own burst and is reported rather than interpreted.
+  ⚠ The no-primer cell is **informational**: `nexwatch` is not in `FRESH_BURST_ZERO`, and C514 is
+  why that set names exactly one arm.
+
+⛔⛔ **WHAT K17 CANNOT DO.** A null in both windows is **not** *no hump on `nexwatch`* — the grid
+argument cuts the same way it did for K15: a hump at some third lead time is unmeasured, and 14
+cells across 40-160 ms leave most of the range untouched. ⛔ And it locates a hump; it explains
+nothing. The mechanism is still open and is unit 1.
+
+⚠ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -645,7 +720,13 @@ PROBES = {
     "gproxii": "lf read -s 12288",      # ~100% in C498 — the ceiling that a dead read must break
     "indala": "lf read -s 4096",        # ~75%
     "keri": None,                       # its own reader, ~38%
+    # ⭐ K17's arm, and the only one that can break M65's confound: PSK like `indala`/`keri` but a
+    # 4096-sample frame, so H_ms and H_frame put its peak 66 ms apart. 3 frames by C499's rule
+    # (the window is 3-4 frames on every arm), NOT by a pilot — see the K17 section.
+    "nexwatch": "lf read -s 12288",
 }
+# ⛔ `nexwatch` is deliberately NOT in ORDER: it is the weakest of the six and would dilute the
+# default three-arm runs, whose probes were chosen for power. `--arms nexwatch` asks for it.
 ORDER = ["gproxii", "indala", "keri"]
 
 # ⛔⛔ THE ARMS WHOSE NO-PRIMER CELL IS EXPECTED AT ~0%, AND IT IS EXACTLY ONE. C512 measured
