@@ -1047,3 +1047,34 @@ described. If either is unacceptable the band is not ready, and finding that out
 paying for it twice. ⭐ Y1, simulated the same way, came back at 77% power with symmetric ~2%
 errors and a real 20 ms offset landing in NO VERDICT 98% of the time — so the method does not only
 kill bands, it licenses them.
+
+**M71 — A CONTINUITY GATE MUST BE BUILT FROM A FINDING THAT HOLDS ON THE ARM IT GATES. A GATE
+TAKEN FROM ANOTHER ARM'S RESULT DOES NOT PROTECT THE RUN, IT BLOCKS IT.**
+
+K23 carried two continuity gates, and V2b was the good idea: ask the finding the run is **extending**
+to reappear, not only an older one. K22 should have had it. ⛔ **But it was written for both arms,
+and the finding it asks for is `indala`'s.** C525's Z1 **FIRED for `indala`** (20, 25, 30 ms
+elevated) and was **REFUTED for `keri`**, whose 20 ms cell was elevated and *stood alone* — reported
+and explicitly not counted as a feature.
+
+⇒ On the `keri` re-run: **all four instrument gates passed, V2 passed on all four anchor cells in
+both seeds, and V1 was then blocked by V2b asking for a region C525 had already said was not
+there.** The gate did not protect anything. **It blocked the one arm the re-run existed to measure**,
+and the data behind it is perfectly good.
+
+⚠⚠ **THIS IS THE SEVENTH MEMBER OF THE SAME FAMILY AND IT ARRIVED THROUGH THE FIX FOR AN EARLIER
+ONE.** M63 said a control must not presume the shape it polices ⇒ K18 fixed wings by position ⇒
+M67, an edge is not outside anything ⇒ K19 used the arm's own median ⇒ M68, a relative threshold
+inherits the arm's headroom ⇒ K20/K22 computed power in advance and used absolute thresholds
+justified by prior measurement ⇒ **M71, a gate justified by prior measurement ON THE WRONG ARM.**
+
+⇒ **Before pinning a gate, name the arm each of its clauses was measured on.** C514 is the standing
+rule that one arm is a scope and not a law; M71 is C514 applied to the *controls* rather than to the
+findings, which is where nobody was looking.
+
+⭐ **And the repair is cheap and must be done the strict way.** The correction is licensed by the
+PRIOR record — C525's refutation was published before K23 was written, so the defect is demonstrable
+without looking at the new data at all. ⛔ But the caps taken under the wrong gate have been looked
+at, so the arm re-runs on **fresh seeds** and the old caps are banked evidence rather than the
+scored run. Fixing a gate and re-scoring the same data would be re-specifying a band after seeing
+it, whatever the justification.

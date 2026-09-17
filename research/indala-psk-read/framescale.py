@@ -945,7 +945,14 @@ K23_LADDER = ["1", "5", "10", "15", "20", "25", "30", "50", "55", "60", "65"]
 K23_EDGE = ["1", "5", "10"]          # V1: the cells below anything ever measured
 K23_LOW = 40.0                       # V1: ABSOLUTE, carried unchanged from K22's Z1
 K23_ANCHOR = ["50", "55", "60", "65"]        # V2: the hump k15/k16 measured
-K23_REGION = ["20", "25", "30"]              # V2b: the region C525 measured, an hour earlier
+# ⛔⛔ V2b IS `indala`-ONLY, AND THE FIRST VERSION OF THIS BAND GOT THAT WRONG (M71). It asks
+# C525's 20-30 ms region to reappear — but C525 established that region on `indala` and
+# **Z1 was REFUTED for `keri`**, whose 20 ms cell was elevated and STOOD ALONE, reported and not
+# counted. Applying it to `keri` gates an arm on another arm's finding, and it blocked V1 for the
+# very arm a re-run existed to measure. ⚠ The correction is justified by the PRIOR record
+# (C525's own refutation, published before K23 was written) and not by K23's data — but the
+# caps taken under the wrong gate have been looked at, so `keri` re-runs on FRESH seeds.
+K23_REGION = {"indala": ["20", "25", "30"]}   # V2b: arms with an established region there
 K23_HIGH = 50.0
 K23_HIGH_CELLS = 2
 
@@ -998,8 +1005,16 @@ def k23(paths):
             print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm)
             continue
         ok = True
-        for lbl, sel in (("V2  (the k15/k16 hump)", K23_ANCHOR),
-                         ("V2b (C525's own region)", K23_REGION)):
+        checks = [("V2  (the k15/k16 hump)", K23_ANCHOR)]
+        if arm in K23_REGION:
+            checks.append(("V2b (C525's region on THIS arm)", K23_REGION[arm]))
+        else:
+            print("   V2b: not applicable to %s -- C525 REFUTED a region there on this arm"
+                  % arm)
+            print("        (its 20 ms cell stood alone), so gating it on one would be gating an")
+            print("        arm on another arm's finding (M71). V2 is this arm's only continuity")
+            print("        gate, and the write-up must say so.")
+        for lbl, sel in checks:
             hits = [[k for k in sel if f(k) >= K23_HIGH] for f in rate_ofs]
             good = all(len(h) >= K23_HIGH_CELLS for h in hits)
             ok = ok and good

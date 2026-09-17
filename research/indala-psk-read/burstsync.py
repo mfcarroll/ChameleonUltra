@@ -1158,11 +1158,26 @@ the no-primer control. Two fresh seeds (**151** and **167**), `--reps 8`, `--per
   **50%** in both seeds, or **V1 is not read at all**. ⚠ Not a claim; it is safe as an anchor only
   because prior runs measured those cells HIGH (M63's distinction).
 
-  **V2b — AND THE NEW-REGION CELLS MUST REAPPEAR TOO.** At least two of **20, 25, 30** at or above
-  **50%** in both seeds. ⛔ **If V2b fails, V1 is not read either**: a ladder that cannot reproduce
-  C525's own region, measured twice an hour earlier, is not evidence about what lies below it.
-  ⭐ This is the first continuity gate here that checks the finding the run is EXTENDING rather
-  than only an older one, and K22 should have had it.
+  **V2b — AND THE NEW-REGION CELLS MUST REAPPEAR TOO, ON THE ARM THEY WERE MEASURED ON.** At least
+  two of **20, 25, 30** at or above **50%** in both seeds. ⛔ **If V2b fails, V1 is not read
+  either**: a ladder that cannot reproduce C525's own region, measured an hour earlier, is not
+  evidence about what lies below it. ⭐ This is the first continuity gate here that checks the
+  finding the run is EXTENDING rather than only an older one, and K22 should have had it.
+
+  ⛔⛔ **AMENDED AFTER ITS FIRST RUN, AND THE AMENDMENT IS A DEFECT REPORT ON ME — V2b IS
+  `indala`-ONLY (M71).** The first version applied it to **both** arms. **But C525 established
+  that region on `indala` and its Z1 was REFUTED for `keri`**, whose 20 ms cell was elevated and
+  **stood alone**, reported and not counted. ⇒ V2b on `keri` gates an arm on **another arm's
+  finding**, and on the first run it did exactly the damage that implies: `keri` passed all four
+  instrument gates and V2, then had V1 **blocked** by a gate asking for a region C525 had already
+  said was not there. **It blocked the very arm the re-run existed to measure.**
+  ⚠ **The correction is licensed by the PRIOR record and not by the new data** — C525's refutation
+  was published before K23 was written, so the error is demonstrable without looking at K23 at all.
+  ⛔ **But those caps have now been looked at, so `keri` re-runs on FRESH seeds (199, 211)** and
+  `caps/k23_keri_s{181,193}.json` are banked evidence, not the scored run.
+  ⇒ **For `keri`, V2 — the 50-65 ms hump — is the ONLY continuity gate available**, because it is
+  the only prior finding that holds on that arm, and the write-up must say so rather than implying
+  two gates were passed.
 
   **V3 — reported, never tested**: the lowest cell at or above 40%, as a RANGE across the two
   seeds and never as a number (M64, C504).
