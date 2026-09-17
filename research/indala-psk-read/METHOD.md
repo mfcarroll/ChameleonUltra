@@ -700,3 +700,21 @@ rather than as a measurement.
 ⭐ The cheap discipline: a rate claimed from fewer than ~20 trials is written as a rate with its n
 attached, never as a capability. "0 of 9" is a number; "nexwatch does not decode" is a claim, and
 only the second one was wrong.
+
+**M59 — ON A BENCH WHOSE RATE WANDERS, COMPARE INTERLEAVED OR DO NOT COMPARE.**
+
+C497 measured the same arm, same credential, same rig, one evening: **88%, 60%, 38%, 75%**. Not a
+decline — a wander. Every cross-arm number in C491 and C494 was taken arm by arm, in sequence, and
+so silently assumed a stationary bench.
+
+⇒ **A rate measured in session A and a rate measured in session B are not comparable**, however
+large n is in each. n fixes the sampling error inside a session; it does nothing about the session.
+
+⭐ The fix costs nothing but arrangement: **round-robin the arms one capture at a time**, so
+whatever is drifting moves all of them together. The indala-vs-keri result (6/10 against 0/10,
+alternating) is the only cross-arm comparison in this round that is safe, and it is safe for that
+reason alone.
+
+⚠ What survives non-stationarity is a **zero against a non-zero** — *this arm decoded at all* is a
+fact about the arm, not about the hour. What does not survive is *this arm decodes more often than
+that one*. M58 is about n; this is about when.
