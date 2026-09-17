@@ -57,6 +57,32 @@ squares the baseband to kill the data, and the squaring **destroys the sign**. S
 the MAGNITUDE of the offset only and cannot see a sign flip — a pair drifting through true zero
 would read as a dip to zero and back, not as a reversal. Any verdict here is about magnitude.
 
+## ⭐⭐ J4 — IS THE SPREAD REAL OR THE ESTIMATOR'S FLOOR? (added after the J2 run; host only)
+
+The J2 run gave **19 accepted, 0 refused, min 130.9 max 131.9 mean 131.5 ppm — a spread of
+0.9 ppm, 1% of the mean**. ⛔ **J3 then refused it**, because the spread is smaller than the FFT
+bin (28.1 ppm).
+
+⚠⚠ **J3's NUMBER IS PROBABLY THE WRONG ONE, AND THAT IS MY ERROR, NOT THE DATA'S.** `offset_ppm`
+does **parabolic interpolation on the log spectrum** for exactly this reason, so the raw bin is its
+GRID, not its resolution — and `clockoffset.py`'s own docstring already claims ~1 ppm accuracy from
+synthetic validation. ⛔ **But I will not rescue a refused result by asserting that**: the guard
+was written before the data and it fired, so the verdict stands until a control says otherwise.
+
+**J4, host only, no bench, no device.** Synthesise the signal the estimator expects — a PSK1 frame
+at fc/2, 125 kHz sampling, **the same capture length as the run** (resolution scales with it) and
+a comparable noise level — and run `offset_ppm` at a ladder of KNOWN offsets bracketing the run,
+including its own min and max.
+  - **resolves sub-bin** ⇒ returned values track the inputs to within **3 ppm** AND preserve the
+    ordering of 130.9 against 131.9. ⇒ the run's 0.9 ppm spread is a real measurement, and J3's
+    refusal was an artifact of comparing against the grid instead of the resolution.
+  - **floor-limited** ⇒ inputs 1 ppm apart return the SAME value, or the ordering inverts.
+    ⇒ **J3's refusal stands on the merits** and no stability claim is available from this run.
+  - between ⇒ no verdict.
+
+⛔ **J4 decides which GUARD was right. It does not re-read the J2 run until it comes out better** —
+the run's numbers are fixed, and only the sentence describing them is in question.
+
 ⛔ UNGRADED. No null sweep, no calibration row, no licence; it moves no cell and is not a bench
 verdict about any protocol. It is a measurement of two oscillators.
 """
@@ -71,6 +97,43 @@ import seqdump
 import shortread
 
 
+def selftest(n_samples, offsets, noise, seed=1):
+    """⭐ J4. Feed `offset_ppm` synthetic PSK1 at KNOWN offsets and see what it gives back."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    fs = 125000.0
+    print("J4 — synthetic PSK1, %d samples (%.0f ms), noise sigma %.1f, criteria in the "
+          "docstring\n" % (n_samples, 1000 * n_samples / fs, noise))
+    print("   %-10s %-10s %-9s %s" % ("input ppm", "read ppm", "error", "peak/median"))
+    got = []
+    for ppm in offsets:
+        t = np.arange(n_samples) / fs
+        # 64-bit PSK1 frame at RF/32: the data flips the subcarrier's phase by pi.
+        bits = rng.integers(0, 2, 64)
+        phase_bit = np.cumsum(bits) % 2
+        idx = (np.arange(n_samples) // 32) % 64
+        d = 1.0 - 2.0 * phase_bit[idx]
+        # fc/2 subcarrier, offset by `ppm`, sampled once per carrier cycle -> the fs/2
+        # degeneracy the estimator is built around.
+        f = 62500.0 * (1.0 + ppm * 1e-6)
+        sig = 20.0 * d * np.cos(2 * np.pi * f * t)
+        sig = sig + rng.normal(0.0, noise, n_samples)
+        out, hz, snr, binppm = clockoffset.offset_ppm(sig)
+        got.append(out)
+        print("   %-10.1f %-10.1f %+8.1f  %.1f" % (ppm, out, out - ppm, snr))
+    errs = [abs(g - o) for g, o in zip(got, offsets)]
+    pairs_ok = all(got[i] < got[i + 1] for i in range(len(got) - 1))
+    print("\n   max |error| %.1f ppm; monotone in the input: %s" % (max(errs), pairs_ok))
+    if max(errs) <= 3.0 and pairs_ok:
+        print("   ⇒ **RESOLVES SUB-BIN.** J3 compared the spread against the FFT GRID rather than "
+              "the\n     estimator's resolution, so its refusal was an artifact. The J2 run's "
+              "0.9 ppm spread\n     is a real measurement.")
+    elif not pairs_ok or max(errs) > 3.0:
+        print("   ⇒ **FLOOR-LIMITED.** J3's refusal stands on the merits and no stability claim "
+              "is\n     available from the J2 run.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", default="indala")
@@ -78,7 +141,17 @@ def main():
     ap.add_argument("--minutes", type=float, default=25.0)
     ap.add_argument("--interval", type=float, default=90.0)
     ap.add_argument("--min", type=float, default=10.0)
+    ap.add_argument("--selftest", action="store_true",
+                    help="⭐ J4: host-only. Feed the estimator synthetic PSK1 at known offsets "
+                         "and see whether it resolves below the FFT bin.")
+    ap.add_argument("--n-samples", dest="n_samples", type=int, default=35587,
+                    help="J4: the J2 run's own capture length (its 28.1 ppm bin implies this)")
+    ap.add_argument("--noise", type=float, default=10.0, help="J4: synthetic noise sigma")
     a = ap.parse_args()
+
+    if a.selftest:
+        # ⚠ The run's own capture length, recovered from its reported bin: bin_ppm = 1e6 / N.
+        return selftest(a.n_samples, [129.0, 130.0, 130.9, 131.5, 131.9, 133.0], a.noise)
 
     arm = shortread.ARMS[a.arm]
     print("⛔ UNGRADED — two oscillators, not a protocol verdict. Criteria J1/J2/J3 are in this "
