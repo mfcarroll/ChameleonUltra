@@ -121,6 +121,38 @@ def score(block, marker, expect):
     return hit, ex
 
 
+RAW_RX = re.compile(r"Raw:\s*([0-9a-fA-F]+)")
+
+
+def leading_bits(raw_hex, expect_hex):
+    """How many LEADING bits of the demodulated payload are ours, and does a shift do better?
+
+    ⛔ The second number is the control the criterion asked for. `lf indala demod` reports a
+    nonsense length for indala224 (254-611 against 224), so the payload's alignment cannot be
+    taken on trust: if some small bit-shift matched far more than offset 0, the demodulator
+    locked somewhere other than our bit 0 and the offset-0 count would be meaningless. A correct
+    lock has its best agreement AT offset 0."""
+    def bits(h):
+        return bin(int(h, 16))[2:].zfill(len(h) * 4)
+
+    def prefix(a, b):
+        n = 0
+        for x, y in zip(a, b):
+            if x != y:
+                break
+            n += 1
+        return n
+
+    a, b = bits(raw_hex), bits(expect_hex)
+    at0 = prefix(a, b)
+    best, shift = at0, 0
+    for sh in range(1, 9):
+        m = prefix(a[sh:], b)
+        if m > best:
+            best, shift = m, sh
+    return at0, best, shift
+
+
 def run(port, key, repeat, timeout, lengths=None, null=False, shuffle=True,
         rng=random):
     """⛔ `null=True` RUNS THE IDENTICAL COMMANDS WITH NOTHING ARMED. Rig B is tagless, so every
@@ -169,7 +201,8 @@ def run(port, key, repeat, timeout, lengths=None, null=False, shuffle=True,
         blocks.append((label, "\n".join(cur)))
 
     res = {"arm": key, "lengths": ns, "reader_n": a.reader_n, "frame": a.frame,
-           "long": [], "by_len": {n: [] for n in ns}}
+           "long": [], "by_len": {n: [] for n in ns},
+           "raws": {n: [] for n in ns}, "raws_long": []}
     pending = None      # the `lf read -s N` whose samples the next demod will judge
     for label, body in blocks:
         m = re.match(r"lf read -s (\d+)$", label)
@@ -177,8 +210,10 @@ def run(port, key, repeat, timeout, lengths=None, null=False, shuffle=True,
             pending = int(m.group(1))
         elif label == a.reader:
             res["long"].append(score(body, a.marker, a.expect))
+            res["raws_long"] += RAW_RX.findall(body)
         elif label == demod and pending is not None:
             res["by_len"][pending].append(score(body, a.marker, a.expect))
+            res["raws"][pending] += RAW_RX.findall(body)
             pending = None
     return res
 
@@ -223,6 +258,11 @@ def main():
                          "to reproduce a pre-M60 run.")
     ap.add_argument("--seed", type=int, default=None,
                     help="seed for the shuffle, so a run can be repeated exactly")
+    ap.add_argument("--leading", action="store_true",
+                    help="⭐ report the LEADING-BIT agreement of every decoded payload instead of "
+                         "pass/fail. A frame the beat cuts short is ours up to the cut and then "
+                         "collapses, so the ceiling is the emission's null-free window measured in "
+                         "bits — which is `indala224`'s whole story (C493).")
     ap.add_argument("--null", action="store_true",
                     help="run every read with NOTHING armed; every count must be zero")
     ap.add_argument("--json", action="store_true")
@@ -250,7 +290,8 @@ def main():
             for k in a.arms:
                 ns = lengths or ladder(k)
                 acc[k] = {"arm": k, "lengths": ns, "reader_n": ARMS[k].reader_n,
-                          "frame": ARMS[k].frame, "long": [], "by_len": {n: [] for n in ns}}
+                          "frame": ARMS[k].frame, "long": [], "by_len": {n: [] for n in ns},
+                          "raws": {n: [] for n in ns}, "raws_long": []}
             for _ in range(a.repeat):
                 for key in a.arms:
                     r = run(a.port, key, 1, a.timeout, lengths=lengths, null=a.null,
@@ -259,8 +300,11 @@ def main():
                         print("%-10s %s" % (key, r["error"]))
                         continue
                     acc[key]["long"] += r["long"]
+                    acc[key]["raws_long"] += r.get("raws_long", [])
                     for n, v in r["by_len"].items():
                         acc[key]["by_len"][n] += v
+                    for n, v in r.get("raws", {}).items():
+                        acc[key]["raws"][n] += v
             out = [acc[k] for k in a.arms]
         else:
             # ⚠ valid per arm, NOT comparable across arms — M59.
@@ -273,6 +317,31 @@ def main():
         for r in out:
             if "error" not in r:
                 print(fmt(r))
+        if a.leading:
+            print("\n⭐ LEADING-BIT AGREEMENT — how much of each decoded payload is ours before it "
+                  "diverges.\n   bit period = frame_samples / bits, so a cut at T ms shows as "
+                  "T/bit_period bits.")
+            for r in out:
+                if "error" in r:
+                    continue
+                exp = ARMS[r["arm"]].expect
+                nbits = len(exp) * 4
+                rows = []
+                for n in r["lengths"] + ["reader"]:
+                    raws = r["raws_long"] if n == "reader" else r["raws"].get(n, [])
+                    if not raws:
+                        continue
+                    got = [leading_bits(x, exp) for x in raws]
+                    at0 = sorted(g[0] for g in got)
+                    misaligned = sum(1 for g in got if g[1] > g[0])
+                    rows.append("    %-8s n=%-3d leading %s of %d%s"
+                                % (n, len(at0), "/".join(str(x) for x in at0), nbits,
+                                   "   ⛔ %d payload(s) matched a SHIFT better than offset 0"
+                                   % misaligned if misaligned else ""))
+                if rows:
+                    print("  %s (%d bits, bit period %.0f us):"
+                          % (r["arm"], nbits, r["frame"] / nbits * 8.0))
+                    print("\n".join(rows))
         print("\n* = the arm's OWN reader sample count, run through `lf read` + `demod` instead "
               "(H3's control)\n! = marker hit without an exact match: a decoded frame carrying "
               "the WRONG payload")
