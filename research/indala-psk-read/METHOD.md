@@ -682,3 +682,21 @@ second. ⚠ And `PWM0 COUNTERTOP` reading 1000 under every arm is already explai
 reader's carrier value, because WaveForm mode writes the top per entry. It is not evidence.
 
 ⭐ **M57 HELD, AND THE DOUBT IT RAISED IS RESOLVED (C479).** The capture showed the third row — no 1-sample alternation — and the obvious objection was that sampling a 62.5 kHz square at 8us is critically aliased, so a CORRECT signal might look the same. It does not, and the project already knew: L03 established that the pm3 samples once per carrier cycle and reads real Indala fine, so genuine PSK is demodulable at this rate. The demodulators then settled it directly — `--p1` nothing, `--nr` the credential. ⇒ When a criterion's null result has a plausible instrument explanation, the way out is an arm the instrument is known to succeed on, not more argument about the sampling.
+
+**M58 — A SMALL-n ZERO ON AN INTERMITTENT ARM IS NOT A ZERO, AND I MADE THIS MISTAKE ONE CLAIM
+AFTER DIAGNOSING IT IN SOMEONE ELSE'S WORK.**
+
+C491 established that C488's *silent* arms were under-sampled: one capture per arm cannot tell a
+silent emitter from an intermittent one. **Two claims later I recorded `nexwatch` as 0 of 9 and
+built an inference on it** — C493 said the frame-length model *over-predicts nexwatch, it says
+1 in 3 and the bench says 0 of 9*. At n=24 nexwatch is **6 of 24, almost exactly the 1 in 3 the
+model predicted.** The model was right and my n was too small.
+
+⇒ Before a **rate** goes in a claim, state n and the interval it supports. At p ≈ 0.3, nine trials
+return zero about 4% of the time — often enough to happen, and it happened. ⛔ And a zero is the
+most dangerous cell to under-sample, because it reads as a *property* (this arm does not work)
+rather than as a measurement.
+
+⭐ The cheap discipline: a rate claimed from fewer than ~20 trials is written as a rate with its n
+attached, never as a capability. "0 of 9" is a number; "nexwatch does not decode" is a claim, and
+only the second one was wrong.
