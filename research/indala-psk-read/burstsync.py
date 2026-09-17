@@ -699,6 +699,52 @@ nothing. The mechanism is still open and is unit 1.
 
 ⚠ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K18 — IS THERE A SECOND FEATURE ABOVE 80 ms? (written before its capture)
+
+C520 found a second elevated region on `nexwatch` at **135-140 ms**, reproduced in both seeds
+(62-88% against 0-25% either side) — and **the band aimed at it did not fire**, so it is a lead and
+nothing is claimed about it. ⛔ `indala` and `keri` have **never been measured above 80 ms**:
+K14/K15/K16 all stop there. So the question the bench can actually answer is whether *anything* is
+up there on the two arms whose profile below 80 ms is best known.
+
+⛔⛔ **THIS LADDER ASKS *IS THERE A SECOND FEATURE*, NOT *WHERE IT IS*.** M64 and M66 each cost a
+verdict to a location clause — one read a shape off its argmax, the other pooled a window on the
+assumption the feature would fill it. ⇒ **Location is REPORTED and never tested here.** One ladder
+on two arms cannot establish a period, and saying so before the capture is the only way that
+sentence is worth anything afterwards.
+
+**The ladder**: a positive-control cell at **65 ms**, then **100..170 ms in 5 ms steps** (15 cells).
+Budget at the top: 170 + ~192 overhead + the probe (33 ms for `indala`, 80 ms for `keri`) = 395 and
+442 ms against the 500 ms burst — ⛔ and **P1 decides that, not the arithmetic** (C516).
+
+  ⭐ **V1 — A SECOND FEATURE EXISTS IN 100-170 ms.** Per arm, ALL THREE:
+  **(a)** pooled(110..160) − pooled(100,105,165,170) >= **25 points**, in **EACH seed**;
+  **(b)** a contiguous run of **>= 2 adjacent cells inside 110-160, each >= 50%**, present in
+  **BOTH seeds** and overlapping in at least one cell;
+  **(c)** that run's pooled rate >= **30 points** above the same four wing cells, on the cells
+  pooled across both seeds.
+  **V2 — IT DOES NOT** ⇒ (a) fails in both seeds *and* the window sits within **10 points** of its
+  wings. between ⇒ no verdict for that arm.
+
+  ⛔⛔ **THE WINGS ARE FIXED BY POSITION, NOT BY OUTCOME** — the four cells at the ladder's edges,
+  named here before the capture. M66's disease is a window whose contents are chosen after the
+  fact, and a run clause searched against outcome-defined wings would be the same thing wearing a
+  run clause.
+
+  ⚠ **AND THE >= 50% CELL THRESHOLD CANNOT CARRY THIS ALONE, WHICH IS WHY IT IS NOT ASKED TO.**
+  `indala`'s baseline is ~50%, so *a cell at >= 50%* is nearly a coin flip on that arm and would
+  fire on noise about two thirds of the time. **The gap clauses (a) and (c) are what discriminate**;
+  the run clause only insists the rise is contiguous rather than one scattered cell (M62), and the
+  both-seeds overlap is what stops eleven candidate positions being eleven chances to be wrong.
+
+  ⛔ **Gates first, either one ends it**: pooled over every cell **< 15%** is NO POWER; K16's
+  split-half over the rounds differing by **> 15 points** is a drifted run; P1 **<= 0.6** per cell.
+  ⚠ **The 65 ms control cell is INFORMATIONAL and is NOT a gate.** On a bench that gave one arm
+  88/60/38/75% in an evening (C497) no absolute-level control can certify a session — it is there
+  so a session that has gone strange is visible, not so a band can lean on it.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse

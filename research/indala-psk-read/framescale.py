@@ -325,13 +325,135 @@ def k17(paths):
     print("⇒ **K17: %s**" % out)
 
 
+
+# ⛔ K18's ladder and bands, from `burstsync.py`'s pinned section. Wings are the four cells at the
+# ladder's EDGES — fixed by position, never by outcome (M66).
+K18_WINGS = ["100", "105", "165", "170"]
+K18_INNER = ["110", "115", "120", "125", "130", "135", "140", "145", "150", "155", "160"]
+K18_CONTROL = "65"
+K18_GAP = 25.0          # (a) inner minus wings, in EACH seed
+K18_RUN_CELL = 50.0     # (b) each cell of the run
+K18_RUN_LEN = 2         # (b) adjacent cells, in BOTH seeds, overlapping in >= 1
+K18_RUN_GAP = 30.0      # (c) the run over the wings, on the seed-pooled cells
+K18_FLAT = 10.0         # V2: the window sits within this of its wings
+
+
+def _runs(cells, rate_of, lo=K18_RUN_CELL):
+    """Maximal contiguous stretches of `cells` whose rate is at or above `lo`."""
+    out, cur = [], []
+    for k in cells:
+        if rate_of(k) >= lo:
+            cur.append(k)
+        else:
+            if len(cur) >= K18_RUN_LEN:
+                out.append(cur)
+            cur = []
+    if len(cur) >= K18_RUN_LEN:
+        out.append(cur)
+    return out
+
+
+def k18(paths):
+    """V1/V2 over banked `--k12` runs carrying K18's ladder. Gates first, then the bands."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    arms = sorted({a for _, d in runs for a in d})
+    print("## K18 — is there a SECOND feature above 80 ms? "
+          "⛔ existence only; location is reported, never tested\n")
+
+    for arm in arms:
+        print("### %s" % arm)
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        cells = numeric_cells(per[0][1])
+        for k in cells:
+            row = []
+            for _, c in per:
+                h, n = cell_rate(c[k]["scores"])
+                row.append("%-12s" % ("%d/%d (%.0f%%)" % (h, n, 100.0 * h / n)))
+            tag = "  ← control, informational" if k == K18_CONTROL else ""
+            print("   %8s %s%s" % (k, "  ".join(row), tag))
+
+        # ⛔ Refuse a cap that does not carry K18's ladder rather than scoring a subset of it:
+        # a band evaluated over whichever cells happen to be present is not the pinned band.
+        missing = [k for k in K18_WINGS + K18_INNER if k not in cells]
+        if missing:
+            print("   ⛔ this run does not carry K18's ladder — missing %s ms. Not scored.\n"
+                  % ",".join(missing))
+            continue
+
+        gated = False
+        for name, c in per:
+            allr, _, alln = pooled(c, cells)
+            halves = []
+            for lo, hi in ((0, 0.5), (0.5, 1.0)):
+                h = n = 0
+                for k in cells:
+                    sc = c[k]["scores"]
+                    part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+                    h += sum(1 for _, e in part if e)
+                    n += len(part)
+                halves.append(100.0 * h / n if n else 0.0)
+            arr = max(max(c[k]["arrivals"]) for k in cells)
+            print("   gate %s: pooled %.1f%% of %d | split-half %.0f→%.0f (Δ %.1f) | worst P1 %.2f"
+                  % (name, allr, alln, halves[0], halves[1], abs(halves[1] - halves[0]), arr))
+            if allr < K17_NO_POWER:
+                print("      ⛔ NO POWER"); gated = True
+            if abs(halves[1] - halves[0]) > K17_DRIFT:
+                print("      ⛔ DRIFTED"); gated = True
+            if arr > 0.6:
+                print("      ⛔ P1 — a cell reached %.2f arrivals/read" % arr)
+        if gated:
+            print("   ⇒ **NO VERDICT for %s — a gate failed.**\n" % arm)
+            continue
+
+        gaps, seed_runs = [], []
+        for name, c in per:
+            inn, _, _ = pooled(c, K18_INNER)
+            wing, _, _ = pooled(c, K18_WINGS)
+            gaps.append(inn - wing)
+            rate_of = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            seed_runs.append(_runs(K18_INNER, rate_of))
+            print("   (a) %-22s inner %.1f%% − wings %.1f%% = %+.1f pts | runs %s"
+                  % (name, inn, wing, inn - wing,
+                     [",".join(r) for r in seed_runs[-1]] or "none"))
+
+        overlap = None
+        for r1 in seed_runs[0] if seed_runs else []:
+            for r2 in (seed_runs[1] if len(seed_runs) > 1 else []):
+                if set(r1) & set(r2):
+                    overlap = sorted(set(r1) | set(r2), key=int)
+        merged = {k: sum((c[k]["scores"] for _, c in per), []) for k in cells}
+        mrate = lambda ks: (100.0 * sum(cell_rate(merged[k])[0] for k in ks)
+                            / sum(len(merged[k]) for k in ks))
+        run_gap = (mrate(overlap) - mrate(K18_WINGS)) if overlap else None
+        print("   (b) a run in BOTH seeds overlapping: %s"
+              % (",".join(overlap) + " ms" if overlap else "none"))
+        if overlap:
+            print("   (c) that run pooled %.1f%% − wings %.1f%% = %+.1f pts"
+                  % (mrate(overlap), mrate(K18_WINGS), run_gap))
+
+        a_ok = all(g >= K18_GAP for g in gaps)
+        if a_ok and overlap and run_gap >= K18_RUN_GAP:
+            print("   ⇒ **V1 FIRES for %s — a second feature exists in 100-170 ms.** "
+                  "⛔ Its LOCATION (%s ms) is reported, not tested.\n" % (arm, ",".join(overlap)))
+        elif not a_ok and all(abs(g) <= K18_FLAT for g in gaps):
+            print("   ⇒ **V2 for %s — no second feature here.** The window sits within %.0f "
+                  "points of its wings in both seeds.\n" % (arm, K18_FLAT))
+        else:
+            print("   ⇒ **no verdict for %s** — reported as such.\n" % arm)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
                     help="print every banked cell in both units, then the verdict")
     ap.add_argument("--k17", nargs="+", metavar="CAP",
                     help="⭐ score K17's U1-U4 over banked `--k12` runs on `nexwatch`")
+    ap.add_argument("--k18", nargs="+", metavar="CAP",
+                    help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
     a = ap.parse_args()
+    if a.k18:
+        k18(a.k18)
+        return 0
     if a.k17:
         k17(a.k17)
         return 0
