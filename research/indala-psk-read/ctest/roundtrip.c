@@ -85,8 +85,21 @@ static size_t render(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len
  * 16 holds x SAMPLES_PER_ENTRY = **32 samples per bit**, and 32 samples x 8us = **256us**, the
  * run length measured on the air.
  *
- * ⇒ This renderer is the host-side reproduction of C479. Nothing in it is fitted to the
- * result: it is `render()` with the hardcoded alternation removed. */
+ * ⛔⛔ WHAT THIS MODELS IS A HYPOTHESIS, AND C485 WITHDREW THE CLAIM THAT IT IS WHAT
+ * THE HARDWARE DOES. This was added as "C479 without a Chameleon". C485 then built the
+ * emitter that hypothesis implies, flashed it, and the Proxmark stayed silent — and the
+ * discriminating run showed that a capture with C479's signature is ALSO what a correct,
+ * free-running subcarrier produces, because an fc/2 subcarrier sampled once per carrier
+ * cycle sits at fs/2 where a 180-degree flip merely inverts the alternation.
+ *
+ * ⇒ So read this as: **IF** the peripheral collapsed each entry to a held level, the PSK
+ * demodulator would find nothing — which is true, and is what the arm below asserts.
+ * Whether it actually does is **UNKNOWN**, and no longer claimed here.
+ *
+ * ⭐ The part of C483 that still stands, and it is the reason to keep both renderers:
+ * `render()` reads ONLY the polarity bit and hardcodes the alternation, so the round trip
+ * cannot tell two peripheral models apart and will pass under either. A green PSK round
+ * trip has never been evidence about the air. */
 static size_t render_psk_measured(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len) {
     const size_t entries = (size_t)seq->length / 4u;
     const size_t holds = (size_t)seq->repeats + 1u;
@@ -109,11 +122,11 @@ static size_t render_psk_measured(const nrf_pwm_sequence_t *seq, int16_t *out, s
  * NRZ. That is the current, broken state of the emitter, pinned here so it is visible on the host
  * with no bench: run `ctest` and this is C479 without a Chameleon.
  *
- * ⭐⭐ **WHEN THIS ARM FAILS, THE EMITTER HAS BEEN FIXED — do not "repair" the test.**
- * A PSK frame that survives the measured renderer means the emitter stopped relying on per-entry
- * duty (the FSK2a fix in `fsk2a_mod.h`: constant `counter_top`, several full-on/full-off entries
- * per subcarrier period). At that point invert this expectation and move the arm into `trial()`'s
- * family, where a decode is the pass. */
+ * ⚠ IT IS NOT A TRIPWIRE FOR "THE EMITTER IS FIXED" — that framing came with C479 and
+ * C485 withdrew it. The emitter WAS rebuilt to spend alternating full-on/full-off entries, which
+ * is what this arm was supposed to detect, and the air did not change: the Proxmark is still
+ * silent. ⇒ Passing or failing here says something about the BUFFER under one model of the
+ * peripheral, and nothing about whether a reader can hear it. Only the bench says that. */
 static int trial_psk_measured(const char *name, const char *hex, size_t bits,
                               lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt) {
     uint8_t frame[LF_DECODE_MAX_FRAME_BYTES] = {0};
@@ -152,10 +165,10 @@ static int trial_psk_measured(const char *name, const char *hex, size_t bits,
     const int decoded = lf_psk1_decode_fmt(samples, n, fmt, &r);
     const int as_expected = (!decoded && runs_ok);
 
-    printf("  %-28s %s  runs %s  PSK decode %s  (C479: NRZ on the air)\n",
+    printf("  %-28s %s  runs %s  PSK decode %s  (held-level model; C485)\n",
            name, as_expected ? "✓" : "⛔",
            runs_ok ? "whole bits" : "RAGGED",
-           decoded ? "SUCCEEDED — THE EMITTER MAY BE FIXED, see the note above" : "finds nothing");
+           decoded ? "SUCCEEDED — the buffer changed shape; see the note above" : "finds nothing");
     return as_expected ? 0 : 1;
 }
 
@@ -694,8 +707,8 @@ int main(void) {
                  LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_INDALA64);
 
     /* IDTECK shares the buffer and the encoder; only the preamble differs. */
-    /* ⛔ The same two credentials through the MEASURED peripheral (C479/C482). These pin the
-     * defect on the host; see the note on trial_psk_measured for what to do when they fail. */
+    /* ⛔ The same credential under the HELD-LEVEL model of the peripheral. C485 withdrew the
+     * claim that this is what the hardware does — see the note on trial_psk_measured. */
     bad += trial_psk_measured("Indala26  under measured PWM", "a0000000e6bd0e92", 64,
                               LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_INDALA64);
     bad += trial("IDTECK    PSK1", "4944544b55667788", 64,
