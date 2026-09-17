@@ -971,3 +971,30 @@ and report that the reference is the ladder's own body rather than a baseline.
 K18's clause (c) fired for both arms. Promoting it after V1 failed would be M62 — a verdict chosen
 from the statistic that happened to agree. The band did not fire; the finding is that the band was
 mis-built, and the measurement is banked for a ladder that is not.
+
+**M68 — A THRESHOLD OF *MEDIAN + Δ* HAS NO POWER WHEN THE MEDIAN IS WITHIN Δ OF THE CEILING. AND
+IT IS M67'S OWN FIX THAT CREATED IT.**
+
+K19 answered M67 by refusing to designate wings at all: *elevated* was defined as **median + 25
+points**, referenced to the arm's own ladder, which presumes nothing about where the quiet is. On
+`keri`, median 25-31%, it worked — two features found, both seeds, W1 fired.
+
+⛔ **On `indala` the median is 75%, so the threshold is 100% — the ceiling.** A feature required
+two adjacent cells at *exactly* 100% in both seeds. W1 came back REFUTED on an arm whose profile
+visibly has structure (0-25% at 120-125, 12-25% at 165-175, against a body at 75-100%). **The band
+could not have fired whatever the data did.**
+
+⚠⚠ **EACH FIX INTRODUCED THE NEXT FAILURE, AND THAT IS THE PATTERN WORTH KEEPING.** M63 said a
+control must not presume the profile is flat ⇒ K18 fixed its wings by position ⇒ M67, an edge is
+not outside anything ⇒ K19 referenced the arm's own median ⇒ M68, a relative threshold inherits
+the arm's headroom. **Three consecutive criteria, each written to repair the last, each broken in a
+new place.** ⇒ The repair is not a better rule; it is a **check run against the design before the
+capture**.
+
+⇒ **Before pinning any relative threshold, compute it against each arm's KNOWN level and state
+what the band can detect there.** If the threshold lands within a few points of 0% or 100% for an
+arm, that arm has no power and the criterion must say so **in advance** — the way K17's high half
+was declared uninformative before it ran, which is the one time this project got it right.
+⭐ And when a profile is high, the detectable feature is a **notch**, not a hump: the inverse
+threshold (median − Δ) has the power the forward one lacks, and an arm should be given the
+detector its own level can support.
