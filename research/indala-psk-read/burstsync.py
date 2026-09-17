@@ -323,6 +323,59 @@ before this run rather than after it.
 ⚠ Per-cell n is `--reps` and **no single cell's rate is claimed on its own** (M58). The statistics
 that carry the verdict pool three cells (P2), six pairs (P3) or twelve (P4).
 
+
+### ⛔⛔ THE LADDER WAS RE-FIXED BEFORE THE SCORING CAPTURE, AND ~80 ms WAS THE WRONG OFFSET
+
+A reps=1 plumbing pass (13 sessions, numbers NOT interpreted — n=1 per cell) fired **P1 at the
+top two cells**: arrivals 1.00 at primers 220 and 240 ms, i.e. the burst re-arms while the field
+is still up. ⭐ **P1 was written as a mechanism control independent of the outcome and this is it
+working**, so the ladder is re-fixed from it rather than the result being explained away.
+
+⛔ **Re-fixed from MECHANISM data only, with no rate information involved.** Two sweeps, both with
+nothing to score:
+
+    lf read -s N                      # a bare capture — there is nothing to demodulate
+    lf read -s <primer>; lf read -s 12288   # ⭐ the demod OMITTED; it raises no field, so the
+                                            #   field behaviour is identical to a real probe
+
+**Both came back perfectly deterministic, 3 of 3 at every step (seeds 5 and 9, shuffled):**
+
+| sweep | result |
+|---|---|
+| one read, sampling 100→450 ms | **1 arrival**; at 500 and 600 ms, **2** |
+| two reads, primer 140→200 ms | **1 arrival** (0.50/read); primer **220→280 ms, 2** (1.00/read) |
+
+⭐⭐ **The first is `LF_TAG_BURST_TARGET_MS` = 500 measured FROM THE AIR SIDE** — the constant read
+out of the firmware in K4, now confirmed by the counter, with a step sharp enough to bracket it in
+one 50 ms interval.
+
+⛔ **The second corrects this criterion's own offset, and by more than a factor of two.** From the
+two thresholds: `field_up(single, N) = N + c1` bracketed at 500 ⇒ **c1 ∈ (0, 50] ms**; and
+`primer + gap + 98 + c1` crossing 500 between primer 200 and 220 ⇒ **gap + c1 ∈ [182, 202) ms**.
+⇒ **elapsed(probe) = primer + G with G ≈ 182-202 ms**, not the ~80 ms the wall-clock timing
+suggested. ⚠ The wall-clock delta for an extra read (~80 ms) measures the CLIENT's cost; the field
+stays up through USB round trips that delta does not isolate. **A number measured on the host was
+not the number the air sees**, and only the arrivals counter could tell the difference.
+
+✅ **P3 IS UNTOUCHED BY THE CORRECTION, and that is why it was specified as a difference.** The
+pairs are 120 ms apart and a constant offset **cancels in a difference** — so the periodicity test
+does not depend on knowing G at all. ⛔ What the correction does change is the absolute phase
+column (now printed against G = 192 ms) and, more seriously, the **floor**: the probe cannot start
+earlier than ~190 ms after arrival, so the unreachable region is **~190 ms, not ~80** — over 1.5
+beat cycles. **The NO POWER branch is correspondingly more likely and its statement is
+correspondingly weaker.** That is worse for this experiment and is recorded as such.
+
+⇒ **THE LADDER IS NOW 20..200 ms IN 20 ms STEPS — ten cells, not twelve.** 200 + 192 + 98 = 490 ms
+against the 500 ms burst, and the arrivals control confirms it directly (0.50 per read at 200,
+1.00 at 220) rather than by arithmetic. **The cost is two of the six phase pairs**: the matched
+set is now (20,140) (40,160) (60,180) (80,200) — **four pairs**, each still within 1.6 ms of one
+full cycle. P2 becomes bottom three {20,40,60} against top three {160,180,200}, P4 spans ten
+cells, and the within-half range is over {20..120}.
+
+⚠ **What this costs in reach**: the elapsed span is now 212→392 ms, **1.48 beat cycles**, so P3
+tests one lag and not a profile. A periodicity claim from four pairs at one lag is weaker than the
+six this criterion first asked for, and it is not to be written up as though it were the same test.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -693,12 +746,20 @@ def k9(a, arms, gaps):
     return 0
 
 
-# ⭐ K12's ladder. The step is 20 ms and the top is 240 ms; both are load-bearing and the
-# docstring says why (120 ms = one beat cycle to within 1.6 ms; 240+80+98 = 418 ms < the 500 ms
-# burst). ⛔ Do not widen the top without re-doing that arithmetic.
-K12_PRIMERS_MS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240]
+# ⭐ K12's ladder. The step is 20 ms and the top is 200 ms; both are load-bearing and the
+# docstring says why (120 ms = one beat cycle to within 1.6 ms; 200+192+98 = 490 ms < the 500 ms
+# burst). ⛔⛔ THE TOP WAS 240 UNTIL THE ARRIVALS CONTROL REFUTED IT — 220 and above re-arm the
+# burst mid-session, measured 3/3. Do not widen it without re-running that sweep; the arithmetic
+# alone said 418 ms and was wrong, because the field-up overhead is ~192 ms and not the ~80 ms
+# the client's wall clock shows.
+K12_PRIMERS_MS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200]
 K12_CYCLE_MS = 121.6          # C509: 131.5 ppm on 62.5 kHz = 8.22 Hz. Not fitted here.
 K12_PAIR_LAG_MS = 120         # the ladder's own approximation to it — 1.6 ms, 4.7 degrees
+# ⛔ MEASURED, NOT ASSUMED — see the docstring. The client's wall-clock overhead for an extra
+# read is ~80 ms; the FIELD stays up ~192 ms, which is what the emission actually experiences.
+# Only the arrivals counter distinguishes the two, and the first version of this file used the
+# host number. It shifts the phase COLUMN and the floor; P3 is a difference, so it cancels there.
+K12_OVERHEAD_MS = 192
 
 
 def k12(a, arms, primers):
@@ -719,8 +780,8 @@ def k12(a, arms, primers):
           "round (seed %d)" % (len(plan), len(cells),
                                ",".join(str(p) for p in primers), a.seed))
     print("   probe is fixed and at a fixed index; the primer's LENGTH is the only variable")
-    print("   elapsed(probe) ~ primer + ~80 ms measured client overhead; one full beat cycle "
-          "is %.1f ms\n" % K12_CYCLE_MS)
+    print("   elapsed(probe) ~ primer + ~%d ms measured FIELD-UP overhead; one full beat cycle "
+          "is %.1f ms\n" % (K12_OVERHEAD_MS, K12_CYCLE_MS))
     out = {}
     try:
         for key in arms:
@@ -763,8 +824,8 @@ def k12(a, arms, primers):
                 if c is None:
                     el, ph = "0", "-"
                 else:
-                    el = "%d" % (c + 80)
-                    ph = "%.0f" % ((c + 80) % K12_CYCLE_MS)
+                    el = "%d" % (c + K12_OVERHEAD_MS)
+                    ph = "%.0f" % ((c + K12_OVERHEAD_MS) % K12_CYCLE_MS)
                 print("   %-8s %-9s %-7s %-9.2f %d/%d=%.0f%%"
                       % ("none" if c is None else c, el, ph, cell_arr(c), h, n, r))
 
