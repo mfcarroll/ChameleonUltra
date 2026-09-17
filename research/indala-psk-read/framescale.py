@@ -97,6 +97,32 @@ reports **FLAT** — which is not a verdict for H_ms either.
    difference if it works"* is too generous to the hypothesis and this file does not inherit it.
 3. Ungraded throughout — no null sweep, no calibration row, no licence. **It moves no cell**, and a
    re-analysis is not a bench result (AUTOPILOT §4).
+
+## ⭐⭐⭐ K17's BANDS IN CODE, WRITTEN BEFORE THE SCORING CAPTURE
+
+`burstsync.py`'s K17 section (pinned `fdd31f49`) asks the question C519 could not: `nexwatch` is
+PSK like `indala`/`keri` but its frame is 4096 samples, so **H_ms puts its peak at 65 ms and
+H_frame at 130 ms**. ⛔ **The bands are implemented HERE, before the capture, because C519's own
+slip was a prose band and a rounded constant disagreeing** — six wing cells named in the text,
+five selected by the code. A criterion that exists only in prose is not yet a criterion.
+
+  **U1 — H_ms** ⇒ pooled(55,60,65,70,75) − pooled(40,45,80) >= **30 points**.
+  **U2 — H_frame** ⇒ pooled(120,125,130,135,140) − pooled(80,160) >= **30 points**.
+  Each also needs its shape: **>= 3 of its 5 window cells above the highest of its own wings.**
+  **U3** both fire ⇒ no verdict on location. **U4** neither ⇒ no verdict on location, and the
+  substantive reading is that `nexwatch` does not carry the hump.
+
+⛔ **THE GATES RUN FIRST AND EITHER ONE ENDS IT.** Pooled over all fourteen cells **< 15%** ⇒
+**NO POWER**, neither U is read. Split-half over the rounds disagreeing by **> 15 points** ⇒ the
+run drifted and its structure is not interpretable (K16's control, which survived; ⛔ not K15's
+anchors rule, withdrawn as M63).
+
+⚠⚠ **AMENDED BEFORE ANY SCORING DATA EXISTED, AND FOR A BENCH-TIME REASON.** K17 as pinned implied
+one run. Fifteen sessions per round against the tick's budget makes **two runs of `--reps 8` at
+different seeds** the affordable shape, and it is the better one — it is C519's own construction,
+where a verdict had to survive two independent seeds. ⇒ **The 30-point gap must hold in EACH seed
+separately**; the 3-of-5 shape clause is evaluated on the cells **pooled across both**, because at
+n=8 a single cell cannot carry it (M58). Recorded here rather than in the write-up.
 """
 import argparse
 import json
@@ -201,11 +227,114 @@ def f1():
     return out
 
 
+
+# ⛔ K17's ladder, exactly as `burstsync.py`'s pinned section lists it. Cells are strings because
+# that is how `burstsync --out` keys them.
+K17_MS_WINDOW = ["55", "60", "65", "70", "75"]      # H_ms: where indala and keri peak
+K17_MS_WINGS = ["40", "45", "80"]
+K17_FRAME_WINDOW = ["120", "125", "130", "135", "140"]   # H_frame: 3.66..4.27 of nexwatch's frame
+K17_FRAME_WINGS = ["80", "160"]
+K17_GAP = 30.0          # points, and it must hold in EACH seed
+K17_SHAPE = 3           # of 5 window cells above the highest wing, on the seed-pooled cells
+K17_NO_POWER = 15.0     # pooled over every cell, below which neither U is read
+K17_DRIFT = 15.0        # split-half over rounds
+
+
+def k17(paths):
+    """U1-U4 over one or more banked `--k12` runs on `nexwatch`. Gates first, then the bands."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))["nexwatch"])
+            for p in paths]
+    fms = frame_ms("nexwatch")
+    print("## K17 — does `nexwatch`'s hump sit at H_ms's 65 ms or H_frame's %.0f ms?\n"
+          % (3.97 * fms))
+
+    print("   %8s %8s %s" % ("lead ms", "frames", "  ".join("%-12s" % n for n, _ in runs)))
+    cells = numeric_cells(runs[0][1])
+    for k in cells:
+        row = []
+        for _, c in runs:
+            h, n = cell_rate(c[k]["scores"])
+            row.append("%-12s" % ("%d/%d (%.0f%%)" % (h, n, 100.0 * h / n)))
+        print("   %8s %8.2f %s" % (k, int(k) / fms, "  ".join(row)))
+
+    print("\n### gates")
+    gated = False
+    for name, c in runs:
+        allr, _, alln = pooled(c, cells)
+        halves = []
+        for lo, hi in ((0, 0.5), (0.5, 1.0)):
+            h = n = 0
+            for k in cells:
+                sc = c[k]["scores"]
+                part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+                h += sum(1 for _, e in part if e)
+                n += len(part)
+            halves.append(100.0 * h / n if n else 0.0)
+        drift = abs(halves[1] - halves[0])
+        arr = max(max(c[k]["arrivals"]) for k in cells)
+        print("   %s  pooled %.1f%% of %d | split-half %.0f%% → %.0f%% (Δ %.1f) | worst P1 %.2f"
+              % (name, allr, alln, halves[0], halves[1], drift, arr))
+        if allr < K17_NO_POWER:
+            print("      ⛔ NO POWER — pooled below %.0f%%; neither U is read" % K17_NO_POWER)
+            gated = True
+        if drift > K17_DRIFT:
+            print("      ⛔ DRIFTED — split-half over %.0f points; structure not interpretable"
+                  % K17_DRIFT)
+            gated = True
+        if arr > 0.6:
+            print("      ⛔ P1 — a cell reached %.2f arrivals/read; reported, not interpreted" % arr)
+    if gated:
+        print("\n⇒ **K17: NO VERDICT — a gate failed, and that decides it before any U does.**")
+        return
+
+    print("\n### U1 / U2 — the 30-point gap, in EACH seed")
+    fired = {}
+    for tag, win, wings in (("U1 H_ms", K17_MS_WINDOW, K17_MS_WINGS),
+                            ("U2 H_frame", K17_FRAME_WINDOW, K17_FRAME_WINGS)):
+        gaps = []
+        for name, c in runs:
+            w, _, _ = pooled(c, win)
+            g, _, _ = pooled(c, wings)
+            gaps.append(w - g)
+            print("   %-11s %-22s window %.1f%% − wings %.1f%% = %+.1f pts"
+                  % (tag, name, w, g, w - g))
+        # the shape clause, on the cells pooled across every seed (M58 — n=8 cannot carry a cell)
+        merged = {k: sum((c[k]["scores"] for _, c in runs), []) for k in cells}
+        wing_max = max(100.0 * cell_rate(merged[k])[0] / len(merged[k]) for k in wings)
+        above = [k for k in win
+                 if 100.0 * cell_rate(merged[k])[0] / len(merged[k]) > wing_max]
+        ok = all(g >= K17_GAP for g in gaps) and len(above) >= K17_SHAPE
+        print("   %-11s shape: %d of 5 above the highest wing (%.1f%%) — need %d ⇒ %s\n"
+              % (tag, len(above), wing_max, K17_SHAPE, "FIRES" if ok else "does not fire"))
+        fired[tag] = ok
+
+    a, b = fired["U1 H_ms"], fired["U2 H_frame"]
+    if a and not b:
+        out = ("**U1 — H_ms.** The hump sits at the same lead time on an arm whose frame is twice "
+               "as long ⇒ it does not travel with the frame, and M65's confound is broken")
+    elif b and not a:
+        out = ("**U2 — H_frame.** The hump moved to `nexwatch`'s own 3.97 frames ⇒ it travels with "
+               "the frame after all, and C519's refutation was the modulation confound")
+    elif a and b:
+        out = ("**U3 — BOTH FIRED, NO VERDICT ON LOCATION.** This ladder cannot separate two humps "
+               "from one broad rise spanning them, and K17 said so before the capture")
+    else:
+        out = ("**U4 — NEITHER FIRED.** No verdict on location; the substantive reading is that "
+               "`nexwatch` does not carry C517's hump. ⛔ Not the same as *no hump anywhere* — "
+               "14 cells across 40-160 ms leave most of the range untouched")
+    print("⇒ **K17: %s**" % out)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
                     help="print every banked cell in both units, then the verdict")
+    ap.add_argument("--k17", nargs="+", metavar="CAP",
+                    help="⭐ score K17's U1-U4 over banked `--k12` runs on `nexwatch`")
     a = ap.parse_args()
+    if a.k17:
+        k17(a.k17)
+        return 0
     if a.table:
         table()
         print()
