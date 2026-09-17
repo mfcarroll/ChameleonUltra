@@ -1720,6 +1720,81 @@ check and C540's timing, and its product is a ceiling and a level.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐ K34 — THE BURST IS OURS, AND IT IS THE ONLY LEVER LEFT (design pinned; UNRUN)
+
+C545-C548 closed the decimation approach, and closed it **generally**: every bound on the
+separation is proportional to the elapsed budget `B`, and `B = LF_TAG_BURST_TARGET_MS - overhead -
+probe`. ⛔ The obvious escape (an `msleep`, which buys lead time at zero sample cost) is **already
+refuted** — a gap means the field is DOWN, which K10 measured restarts the burst past ~120 ms, and
+that is precisely why K12 abandoned the gap knob for the primer knob (C515).
+
+⇒ ⭐⭐ **THE ONE TERM LEFT IS THE BURST ITSELF, AND IT IS A CONSTANT IN OUR OWN FIRMWARE** —
+`LF_TAG_BURST_TARGET_MS (500)` at `lf_tag_em.c:75`, clamped to `[2, 255]` whole frames at
+`lf_tag_em.c:569`.
+
+### THE ARITHMETIC, AND IT IS THE WHOLE CASE FOR DOING IT
+
+At **1000 ms** the budget goes from 345.7 ms of elapsed primer to 845.7 — **245 → 600 dec-1 nominal
+ms** — and the reachable tops at dec 2 / 3 / 4 go from **138 / 100 / 79** to **338 / 245 / 193**:
+
+| region | separation at dec 2 | reachable at burst 500 | at burst 1000 |
+|---|---|---|---|
+| R3 100-105 | 45.8 ms | yes — ⛔ **and K32 measured it BRIDGED** | yes |
+| **R4 140-145** | **63.3 ms** | **NO** (top 138.2) | ⭐ **yes** |
+| **R5 180-190** | **82.9 ms** | **NO** | ⭐ **yes** |
+
+⇒ **R4 and R5 both clear the skirt with room**, and the cap `Bn/4` rises from 61.3 ms to **150 ms**.
+
+### ⛔⛔ AND THE REASON THIS IS NOT A QUIET RE-RUN OF K33
+
+**The burst is not a neutral instrument — it is the PHASE REFERENCE this entire line measures lead
+time FROM** (C511, C512). Lengthening it may **move** the regions rather than merely reveal more of
+them, and a K33 re-run that assumed otherwise would be measuring one thing and reporting another.
+
+⇒ ⭐⭐⭐ **SO IT IS TWO STAGES, AND STAGE 1 IS THE CONTROL FOR STAGE 2 — never run stage 2 alone.**
+
+  **K34a — DOES THE BURST'S LENGTH MOVE THE REGIONS?** The dec-1 ladder over a span both builds
+  reach (say **10-190 ms**, the C538 common ladder), `idteck` + `keri`, two fresh seeds,
+  `--per-arm-shuffle`, at burst **500** and burst **1000**, the two builds interleaved **by
+  session and not by block** if the flashing cost allows it, and by block if it does not — ⚠ in
+  which case **order is a variable (M60) and the block order must be counterbalanced.**
+  - **regions at the same lead times in both** ⇒ the burst length is a **reach** knob and nothing
+    else. ⭐ **That licenses K34b and is the only thing that does.**
+  - **regions MOVE** ⇒ ⭐⭐ **a finding in its own right and a bigger one than K34b** — the
+    structure is referenced to the burst, which is upstream of reader *and* field, and it would
+    **retire the whole *reader-or-field* branch** C538 opened. ⛔ K34b is then meaningless and must
+    not be run.
+  - **no regions at burst 1000 at all** ⇒ the longer burst changed the emission's own behaviour;
+    report it and stop, do not reach for a third build.
+
+  **K34b — K33, FINALLY RUNNABLE.** Only if K34a says *same lead times*. `idteck`, `--dec 2`, R4
+  unmoved **140-145** against moved **84.7-87.7** — ⛔ **placed with the stretch re-fitted by
+  `dectime.py` on the NEW build**, never with 1.653 and never with this build's 1.775 (M79/C547: it
+  is known to ~7% and a new binary is a new condition). ⭐ **The cells at 140-145 are now 41% of the
+  reachable top rather than 101% of it**, so M82's failure mode is gone rather than reduced.
+  ⚠ Threshold and reps to be re-derived from K34a's measured dec-2 level at the new burst (**M80** —
+  the level is exactly what a longer burst might change), power and false-fire simulated first
+  (M70/M75), both no-verdict branches given meanings in advance (M74).
+
+### ⛔ THE COST, STATED PLAINLY BECAUSE IT IS A DECISION AND NOT A DETAIL
+
+**K34 needs a cu2 FLASH.** That is permitted unattended — `enterdfu.py --port <tty> --program <zip>`
+needs no bench move and verifies re-enumeration — and ⛔ **cu2 ONLY, NEVER cu1**, which is the spare
+that keeps the bench alive and the successor project's writer. ⚠ `enterdfu.py` is known to fail to
+**trigger** two or three times before succeeding, with nothing flashed either time, and it
+distinguishes that from a flash failure — **retry it; do not go looking for a broken device.**
+⚠⚠ **The honest risk**: a flash that goes wrong with nobody present costs Rig B for the rest of the
+absence. It does not cost the bench — Rig A is untouched and cu1 is never flashed — but it ends the
+air-side work. ⇒ ⭐ **verify the new build FUNCTIONALLY and not by version string (C461)** before
+spending a capture on it: an armed Indala must show **64 entries, `seq repeats` 15**
+(`hw emuseq --count 0`), `hw emuhold -n 1 --top 8` must succeed, and ⭐ **the burst change itself
+must be confirmed from the AIR, not the source** — at burst 1000 a primer that broke P1 at 500
+(`idteck` 140 nominal at dec 2, arrivals 0.81) must come back **clean at 0.50**. ⛔ **That check is
+not optional: it is the only evidence the constant took effect**, and C461 is the note about
+believing a version string instead of the device.
+
+⛔ Ungraded, and UNRUN — a design. No null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
