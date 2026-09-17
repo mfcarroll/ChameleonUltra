@@ -1382,3 +1382,37 @@ design was an improvement on every other axis, which is what made the dropped co
 ⭐ **And the cost was two full captures**, which is the most expensive single lesson of the round —
 more than any of the seven over-reaches, because those were caught by simulation and this one could
 only be caught by the bench.
+
+---
+
+**M82 — WHEN A DESIGN BUYS ITS DISCRIMINATING POWER AT THE TOP OF A BUDGET, MEASURE THE BUDGET
+FIRST. A COMPUTED CEILING THAT HAS ALREADY BEEN CAUGHT OPTIMISTIC ONCE IS NOT A CEILING.**
+
+K33 was specified by C544's arithmetic as `idteck`, R4-unmoved 140-145 against R4-moved 84.7-87.7 —
+a 56 ms separation chosen precisely because the *smaller* separations had been measured to be bridged
+by the feature's skirt. ⛔ **But the separation grows with the label, and the label is paid for out of
+the burst**, so the test necessarily sat at 89-93% of `burstsync`'s computed primer top. **That
+number is printed by the tool with its own warning attached**: the same formula put `nexwatch` at
+~210 ms where 200 FAILED P1 twice and 195 was clean.
+
+⇒ ⭐ **A pilot measured it instead of assuming it, and the ceiling came in at 130 nominal, not 157**
+— the last cell with arrivals at 0.50, against 0.81 at 140 and 0.94 at 145. **K33's entire unmoved
+window was outside the burst**, so the capture would have returned a confident *no region at unmoved*
+that was starvation wearing the costume of a verdict.
+
+⚠⚠ **AND THAT FAILURE WOULD HAVE POINTED THE WRONG WAY, WHICH IS WHAT MAKES IT WORTH A RULE.**
+Starvation depresses the **unmoved** window and leaves the **moved** one untouched, so it does not
+produce a *no verdict* — it produces **ELAPSED**, a clean, publishable, pre-registered fire. ⇒ **the
+band could not have failed safe.** M78 asks which way a defect pushes; this is the case where the
+answer is *toward a positive result*, and nothing downstream would have caught it.
+
+⭐ **THE GENERAL FORM, AND IT IS NOT ABOUT BURSTS:** whenever a design's power comes from pushing one
+parameter toward the edge of an allowance — a time budget, a buffer, a range, a rate — **the
+allowance has stopped being a constraint to respect and become a quantity under test.** Measure it in
+the condition the band will actually run in, and measure it *before* the band, because after the band
+it is indistinguishable from the band's own result.
+
+⛔ **The corollary that saved the second capture**: the ceiling also bounds every VARIANT of the
+design. Once `B` is known, `separation = label x (1 - 1/S)` under `label <= B/S` has a closed maximum
+of `B/4` at `S = 2` — so one measurement retired dec 3 and dec 4 as well, **without running either**.
+⇒ when a knob has a budget, get the budget and then do the calculus; do not sweep the knob.
