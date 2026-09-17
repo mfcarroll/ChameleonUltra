@@ -437,6 +437,70 @@ NO POWER branch was written to say.
 ⛔ P1 and the bench-moved control carry over unchanged and are checked again. ⚠ Still one arm,
 still `gproxii`, still ungraded — no null sweep, no calibration row, no licence, moves no cell.
 
+
+## ⭐⭐⭐ K14 — HOW WIDE IS THE NOTCH? (written before its capture)
+
+**K13 (seed 41) replicated K12 and the notch came back HARDER — 0/24 against K12's 2/24.**
+Pooled over both runs:
+
+    none  0/48   0%   |  100  48/48  100%
+    20   48/48 100%   |  120  39/48   81%
+    40   46/48  96%   |  140  45/48   94%
+    60    2/48   4%  ⛔ |  160  44/48   92%
+    80   46/48  96%   |  180  42/48   88%
+                      |  200  32/48   67%
+
+⭐⭐ **THE NOTCH IS THE FINDING: 2 of 48 at one primer length, against 92 of 96 at the two
+lengths either side of it.** ⛔ And it is not the beat: **cell 60 sits at phase 8.8 ms and cell
+180 at 7.2 ms** — the same phase to within 1.6 ms — yet they score **2/48 and 42/48**. P3's own
+band agrees (mean |Δ| 22 and 42 points over the four pairs, against a pre-registered 15).
+
+⛔⛔ **AND K13 TRIGGERS K12's PRE-REGISTERED CONSEQUENCE.** Q1 held (notch at 0%, median of the
+other nine 100%) and **Q3 failed in both runs** — non-decreasing in 5 of 9 steps each time, and at
+seed 41 the contrast did not even fire (+10 points). ⇒ **K12's P2 is WITHDRAWN as an artifact of
+the notch, and H_settle is supported by neither run.** That was written down before this capture,
+so it is applied rather than argued.
+
+⚠ **Q4 HOLDS IN ONE RUN AND NOT THE OTHER, so the *saturated above the floor* claim does not
+replicate**: the off-notch cells span 17 points at seed 17 and **62** at seed 41 (cell 200 falls
+96% → 38%, cell 120 92% → 71%). That is C497's wander, and **M59 forbids comparing two sessions'
+levels** — so the off-notch PROFILE is not a result. ⭐ **What survives M59 is exactly the notch**:
+it is a zero against a non-zero, measured against neighbours **interleaved with it inside the same
+rounds**, which is the one comparison M59's last paragraph says non-stationarity cannot touch.
+
+⇒ What holds across both runs: the control at **0%**, the notch's neighbours near **100%**, and
+therefore the 0% → ~100% transition still sitting **below the ~190 ms floor**. What does not hold
+is any shape above that floor.
+
+**K14 — a fine ladder around the notch: 40, 45, 50, 55, 60, 65, 70, 75, 80 ms**, plus the
+no-primer control, interleaved and shuffled within every round (M60). ⛔ **P2, P3 and P4 DO NOT
+APPLY to this ladder** — it spans 40 ms and carries no pair 120 ms apart, so the periodicity and
+contrast bands are not the operative ones and are printed only for completeness. K14 is judged on:
+
+  **R1 — the anchors, and it is the bench-moved control for this run.** Cells **40 and 80 must
+  both come back >= 75%** (they are 46/48 and 46/48 pooled) and the no-primer control **<= 15%**.
+  ⛔ If the anchors fail, the bench has moved and none of the fine cells mean anything.
+
+  **R2 — NARROW** ⇒ cell 60 **<= 25%** while **both 50 and 70 are >= 75%**. ⇒ the notch is under
+  ±10 ms wide: a sharp feature at one primer length, and the third independent replication of it.
+
+  **R3 — BROAD** ⇒ cells 50, 55, 60, 65 and 70 **all <= 40%**. ⇒ a dip tens of ms wide, which
+  would be a different kind of object and would want a different explanation.
+
+  **R4 — IT DOES NOT REPRODUCE A THIRD TIME** ⇒ cell 60 **>= 75%**. ⛔ Two runs at 2/48 against a
+  third at >= 75% would make the notch a property of something that changed between runs and not
+  of the primer length. **Report it that way and withdraw the notch**, rather than running a
+  fourth to break the tie.
+
+  between ⇒ report the profile and call the width unresolved.
+
+⚠ One coincidence, named before the run so it cannot be discovered afterwards: the phase wrap
+falls between cells 50 (120.4 ms) and 55 (3.8 ms), right beside the notch. ⭐ **It is already
+controlled**: if the notch were the wrap, cell 180 at phase 7.2 ms would notch too, and it is
+42/48. K14 adds nothing to that question and is not read as bearing on it.
+
+⚠ Still one arm, still `gproxii`, still ungraded — no null sweep, no calibration row, no licence.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -943,6 +1007,10 @@ def k12(a, arms, primers):
             half = [cell_rate(c)[0] for c in primers if c <= K12_PAIR_LAG_MS]
             hr = max(half) - min(half)
             p3 = (md <= 15.0) and (hr >= 30.0)
+            if not pairs:
+                print("   ⚠ this ladder carries NO pair %.0f ms apart, so P2/P3/P4 are not the "
+                      "operative bands\n     for it — they are printed for completeness only."
+                      % K12_PAIR_LAG_MS)
             print("   P3 H_phase: mean |Δ| over %d pairs %.0f ms apart = %.0f pts; "
                   "within-half range %.0f pts ⇒ %s"
                   % (len(pairs), K12_PAIR_LAG_MS, md, hr,
@@ -970,6 +1038,21 @@ def k12(a, arms, primers):
                   % (lo, lo_r, med,
                      "A NOTCH — cell-specific and it needs its own explanation" if notch
                      else "no notch at the pre-registered bands"))
+
+            # ⭐ R1/R2/R3/R4 — the notch's WIDTH, read off the ladder's own neighbours so it
+            # works whatever the ladder is. ⛔ The neighbours are the cells ADJACENT IN THE
+            # LADDER, not a fixed 20 ms away: on K14's fine ladder they are 5 ms away.
+            i = primers.index(lo)
+            nb = [primers[j] for j in (i - 1, i + 1) if 0 <= j < len(primers)]
+            nbr = [cell_rate(c)[0] for c in nb]
+            narrow = notch and len(nbr) == 2 and min(nbr) >= 75.0
+            wide = [c for c in primers if abs(c - lo) <= 2 * (primers[1] - primers[0])]
+            broad = all(cell_rate(c)[0] <= 40.0 for c in wide) and len(wide) >= 3
+            print("   R2/R3 width: %d ms at %.0f%%, ladder neighbours %s at %s ⇒ %s"
+                  % (lo, lo_r, nb, ", ".join("%.0f%%" % x for x in nbr),
+                     "NARROW — under one ladder step either side" if narrow
+                     else "BROAD — the dip covers %d cells" % len(wide) if broad
+                     else "width unresolved at the pre-registered bands"))
 
             # ⭐ Q4 — the NO POWER statement, computed with the notch cell excluded.
             nine = [cell_rate(c)[0] for c in primers if c != lo]
