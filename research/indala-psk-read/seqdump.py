@@ -123,6 +123,10 @@ def gproxii_expect(raw):
 # than four separately-derived guesses.
 PSK1_TOP = 16       # LF_PSK1_SUBCARRIER_TOP  (psk1.h:15)
 PSK1_DUTY = 8       # LF_PSK1_SUBCARRIER_DUTY (psk1.h:16)
+# LF_PSK1_SEQ_REPEATS = LF_PSK1_RF32_SUBCYCLES_PER_BIT - 1 (psk1.h:56). PAC and GProxII put the
+# bit in `counter_top` and repeat 0 times (pac.c:301, gproxii.c:38).
+PSK1_SEQ_REPEATS = 15
+PAC_GPROX_REPEATS = 0
 
 
 def psk1_expect(raw, bits, differential):
@@ -134,7 +138,9 @@ def psk1_expect(raw, bits, differential):
     frame's LAST bit so the buffer wraps continuously — the telescoping identity
     phase[k] = bit[k] XOR bit[N-1], which is periodic whatever the parity.
 
-    DIFFERENTIAL (PSK2, Indala224/NexWatch): phase flips on every 1. ⛔ AND AN ODD-PARITY FRAME
+    DIFFERENTIAL (PSK2, Indala224 — and ONLY Indala224 among these arms; NexWatch is
+    PSK2 in the Proxmark's naming but reaches this builder as DIRECT, `nexwatch.c:49`):
+    phase flips on every 1. ⛔ AND AN ODD-PARITY FRAME
     DOES NOT REPEAT AT THE FRAME PERIOD — psk1.c:58-86 appends a whole INVERTED copy, so the
     buffer is 2N entries, not N. That is not a detail: a single-copy buffer was decoded 6 of 6 as a
     confident WRONG credential (C152). ⇒ the entry COUNT is itself a prediction here, and the
@@ -164,6 +170,32 @@ def psk1_expect(raw, bits, differential):
     if differential and phase:
         out += [(e[0] ^ 0x8000, 0, 0, PSK1_TOP) for e in out]
     return out
+
+
+def keri_frame(internal_id_hex):
+    """⛔⛔ THE BLOCK FORM GOES ON THE AIR, NOT THE READER'S FRAME VIEW — `(id << 3) | 7`,
+    which is what `lf keri clone` leaves in T5577 blocks 1-2 and therefore what a real tag
+    transmits. Emulating `E0000000||id` instead is the same 64-bit cycle three bits along, and it
+    gave Momentum a stable WRONG credential 6 times out of 6 (C160). This is the composition
+    `lf keri econfig --id` performs (chameleon_cli_unit.py), reproduced here rather than read back
+    off the device, so the prediction stays independent of what the device says it holds."""
+    v = int(internal_id_hex, 16)
+    if not v & 0x80000000:
+        raise ValueError("Keri internal id %s has its top bit clear — that bit is the last "
+                         "bit of the preamble, so the frame would have none" % internal_id_hex)
+    return (((v << 3) | 7) & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "big").hex()
+
+
+def nexwatch_frame(cn, mode, magic="nexkey"):
+    """⭐ THE CLI'S OWN BUILDER, IMPORTED RATHER THAN TRANSCRIBED. The frame is a scramble, a
+    parity and a vendor checksum (`_nexwatch_build_frame`); a second copy here would be a second
+    thing to keep in step, and the bytes under test are precisely the ones `econfig` sends. ⭐
+    No rotation, unlike Keri: NexWatch's frame begins at a T5577 block boundary, so block form and
+    air frame are the same bytes — which is a measured fact about a clone's block dump, not a
+    default."""
+    sys.path.insert(0, os.path.join(HERE, "../../software/script"))
+    import chameleon_cli_unit as cli
+    return cli._nexwatch_build_frame(cn, mode, cli.NEXWATCH_MAGIC[magic]).hex()
 
 
 def cu(port, *cmds):
@@ -332,7 +364,7 @@ def dump(port, entries):
     return hdr, vals, raw
 
 
-def grade(name, expect, got, hdr):
+def grade(name, expect, got, hdr, repeats=None):
     print("  %s: %d entries expected, %d returned, emulating %s, playbacks %s"
           % (name, len(expect), len(got), hdr.get("emulating now", "?"),
              hdr.get("playbacks started", "?")))
@@ -340,6 +372,23 @@ def grade(name, expect, got, hdr):
     # for a PSK2 arm it is the one that tests the odd-parity doubling: `entries in buffer` is read
     # off the live sequence, not off however many entries this tool managed to transfer. Paging a
     # buffer short would otherwise be indistinguishable from the firmware having built a short one.
+    # ⭐⭐ `repeats` IS PART OF THE PREDICTION, NOT A FIELD TO PRINT. Every entry can match
+    # the source and the air still be wrong, because this is what sets the BIT PERIOD: the PSK
+    # builder emits one entry per BIT and leans on the peripheral to hold each for
+    # LF_PSK1_RF32_SUBCYCLES_PER_BIT periods (psk1.h:35-48), so repeats must be 15. PAC and
+    # GProxII carry the bit in `counter_top` instead and need 0. A wrong value here is a
+    # wrong bit rate on a byte-perfect buffer — exactly the defect an entry-by-entry
+    # comparison cannot see, which is why it is graded rather than displayed.
+    if repeats is not None:
+        saw = hdr.get("seq repeats", "")
+        if not saw.isdigit():
+            print("    ⚠ the device did not report `seq repeats`, so the bit period is "
+                  "UNCHECKED and a byte-perfect buffer could still play at the wrong rate.")
+        elif int(saw) != repeats:
+            print("    ⛔ SEQ REPEATS IS %s, THE SOURCE SAYS %d — every entry can match "
+                  "and the BIT PERIOD still be wrong by a factor of %.3g." %
+                  (saw, repeats, (int(saw) + 1) / float(repeats + 1)))
+            return False
     held = hdr.get("entries in buffer", "").split()[0] if hdr.get("entries in buffer") else ""
     if held.isdigit() and int(held) != len(expect):
         print("    ⛔ THE DEVICE HOLDS %s ENTRIES, THE SOURCE PREDICTS %d — the buffer "
@@ -371,6 +420,9 @@ def main():
     ap.add_argument("--idteck-id", default="4944544b55667788")
     ap.add_argument("--indala224-id",
                     default="80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5")
+    ap.add_argument("--keri-id", default="80003039")
+    ap.add_argument("--nexwatch-cn", type=int, default=87654321)
+    ap.add_argument("--nexwatch-mode", type=int, default=2)
     ap.add_argument("--seconds", type=float, default=12.0)
     ap.add_argument("--field", choices=("auto", "pm3", "flipper", "none"), default="auto",
                     help="reader that raises the field. `auto` takes it from the port's rig: "
@@ -399,23 +451,41 @@ def main():
     # Credentials are the registry's, so a dump and a graded cell are the same arm.
     arms = {
         "pac":       ("PAC", "lf pac econfig -s %d --cn " + a.card,
-                      lambda: pac_expect(a.card)),
+                      lambda: pac_expect(a.card), PAC_GPROX_REPEATS),
         "gprox":     ("GProxII", "lf gproxii econfig -s %d --raw " + a.gprox_raw,
-                      lambda: gproxii_expect(a.gprox_raw)),
+                      lambda: gproxii_expect(a.gprox_raw), PAC_GPROX_REPEATS),
         "indala":    ("Indala", "lf indala econfig -s %d --id " + a.indala_id,
-                      lambda: psk1_expect(a.indala_id, 64, False)),
+                      lambda: psk1_expect(a.indala_id, 64, False), PSK1_SEQ_REPEATS),
         "idteck":    ("IDTECK", "lf idteck econfig -s %d --id " + a.idteck_id,
-                      lambda: psk1_expect(a.idteck_id, 64, False)),
+                      lambda: psk1_expect(a.idteck_id, 64, False), PSK1_SEQ_REPEATS),
         "indala224": ("Indala224", "lf indala econfig -s %d --id " + a.indala224_id + " --224",
-                      lambda: psk1_expect(a.indala224_id, 224, True)),
+                      lambda: psk1_expect(a.indala224_id, 224, True), PSK1_SEQ_REPEATS),
+        "keri":      ("Keri", "lf keri econfig -s %d --id " + a.keri_id,
+                      lambda: psk1_expect(keri_frame(a.keri_id), 64, False), PSK1_SEQ_REPEATS),
+        "nexwatch":  ("NexWatch", "lf nexwatch econfig -s %%d --cn %d -m %d"
+                      % (a.nexwatch_cn, a.nexwatch_mode),
+                      lambda: psk1_expect(nexwatch_frame(a.nexwatch_cn, a.nexwatch_mode),
+                                          96, False), PSK1_SEQ_REPEATS),
     }
 
+    # ⭐ THE REGISTRY'S KEY IS `gproxii`; THIS TOOL'S ARM WAS ALWAYS `gprox`. A cold session
+    # reads the six out of QUEUE.md and types them, so accept both rather than making the operator
+    # remember which file they are quoting.
+    ALIASES = {"gproxii": "gprox", "indala26": "indala"}
+    protos = [ALIASES.get(n, n) for n in a.protos]
+
+    # ⛔ VALIDATE EVERY NAME BEFORE ARMING ANYTHING. A typo in the last of seven used to be
+    # discovered after six arms had been run, which wastes the bench time and — worse —
+    # leaves a half-finished run that reads like a crash.
+    unknown = [n for n in protos if n not in arms]
+    if unknown:
+        print("  unknown arm(s) %s — known: %s"
+              % (", ".join(repr(u) for u in unknown), " ".join(sorted(arms))))
+        return 2
+
     rc = 0
-    for name in a.protos:
-        if name not in arms:
-            print("  unknown arm %r" % name)
-            return 2
-        typ, ec, expect_fn = arms[name]
+    for name in protos:
+        typ, ec, expect_fn, repeats = arms[name]
         expect = expect_fn()
         entries = len(expect)
         try:
@@ -443,7 +513,7 @@ def main():
                 print("     header: %s" % hdr)
                 rc = 2
                 continue
-            if not grade(name, expect, got, hdr):
+            if not grade(name, expect, got, hdr, repeats):
                 rc = 1
         finally:
             disarm(a.port)                          # ⛔ every path, including the exception one
