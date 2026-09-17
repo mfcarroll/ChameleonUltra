@@ -187,6 +187,28 @@ K5-K8 — report that, do not interpret the rest.
 an operator decision, because the graded read path re-bases every past cell. What this run can do
 is hand them the number.
 
+## ⛔⛔⛔ K10 — K9 IMPLICATES A HARNESS CONSTANT I ALREADY SHIPPED, SO THIS DECIDES IT
+
+K9 measured `gproxii` at **50% with D=0, 12% at D=300 ms, 0% at D=600 and 900** — with arrivals
+per read going 0.50 → 1.00, so past the burst every read starts a fresh one and **a fresh burst
+does not decode at all.**
+
+⛔⛔ **THAT BEARS DIRECTLY ON `benchmatrix`' `--repeat`, WHICH I CHANGED EARLIER TONIGHT** on
+C507's evidence, adding a random pause of **[0, 250) ms** between repeats so they would not
+resample one phase. K9 says a pause is **not a neutral randomiser**: it systematically collapses
+the rate. A 250 ms span reaches into the region where these arms stop decoding, so the fix may be
+trading a correlated rate for a suppressed one.
+
+**K10** sweeps D ∈ {0, 40, 80, 120, 160, 200, 250, 300} ms, shuffled, with arrivals and rate.
+  - **the number wanted**: the largest D at which arrivals/read stays **<= 0.6** (bursts still
+    span reads) AND the rate stays **>= 40%** (within noise of D=0's 50%).
+  - **the harness rule**: the jitter span must be **<= that D** and **>= 121.6 ms** (C509's full
+    phase cycle) to decorrelate phase at all.
+  - ⛔⛔ **AND IT IS ALLOWED TO CONCLUDE THAT NO SUCH SPAN EXISTS.** If nothing satisfies both,
+    then **spacing cannot decorrelate phase without collapsing the rate**, and `--repeat` simply
+    cannot produce independent samples of these arms by spacing alone. That outcome goes in the
+    flag's own help text — it does not get papered over with a number that looks defensible.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
@@ -568,6 +590,7 @@ def main():
                                      "shuffled session groups")
     ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
     ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
+    ap.add_argument("--gaps", help="K9/K10: comma-separated between-read gaps in ms")
     ap.add_argument("--k9", action="store_true",
                     help="⭐ K9: between-read gaps spanning the 500 ms burst, with arrivals")
     ap.add_argument("--k8", action="store_true",
@@ -596,7 +619,8 @@ def main():
     if a.k8:
         return k8(a, arms, list(range(0, 241, 15)))
     if a.k9:
-        return k9(a, arms, [0, 300, 600, 900])
+        gaps = ([int(x) for x in a.gaps.split(",")] if a.gaps else [0, 300, 600, 900])
+        return k9(a, arms, gaps)
     print("criteria K1/K2/K3/K4 are in this file's docstring and were committed before this run.\n")
 
     # K4 costs nothing and is stated whatever else happens.
