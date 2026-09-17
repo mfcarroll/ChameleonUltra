@@ -501,6 +501,60 @@ controlled**: if the notch were the wrap, cell 180 at phase 7.2 ms would notch t
 
 ⚠ Still one arm, still `gproxii`, still ungraded — no null sweep, no calibration row, no licence.
 
+
+## ⭐⭐⭐ K15 — DOES THE NOTCH GENERALISE, AND IF SO IS IT AT THE SAME LEAD TIME?
+
+C515 is one arm. **C514 is the standing reason that is not good enough** — it cost this project its
+biggest claim of the previous round, and the correction was live for an hour. So the notch gets the
+same treatment, on `indala` (probe `lf read -s 4096`, ~75%) and `keri` (its own reader, ~38%):
+different probe lengths, different demodulator code, different frame geometry.
+
+⛔⛔ **THE RESOLUTION PROBLEM, AND IT DECIDES THE DESIGN.** The notch is **5 ms wide** — cells 55
+and 65 are 24/24 while 60 is 0/24. **A 20 ms grid across 20..200 ms would miss a 5 ms feature about
+three times in four**, and `gproxii`'s was found only because 60 happened to sit on that grid. ⇒ A
+coarse ladder on a new arm cannot answer *is there a notch*. It can only answer *is there a notch
+HERE*, so that is what K15 asks, at full resolution, on K14's exact ladder:
+**40, 45, 50, 55, 60, 65, 70, 75, 80 ms.**
+
+  **S1 — the notch is at the SAME lead time** ⇒ the arm's 60 ms cell is **<= 25%** absolute **AND
+  <= one third** of the median of the other eight cells. ⇒ the notch belongs to the shared timing
+  path — the field, the burst, the client's scheduling — and not to a protocol, a frame length or
+  a demodulator. ⭐ That would be a general fact and a much bigger one than C515.
+  **S1 REFUTED** ⇒ the 60 ms cell is **within 15 points** of the median of the other eight.
+  between ⇒ no verdict for that arm.
+
+⛔⛔ **WHAT K15 CANNOT DO, WRITTEN DOWN BEFORE IT RUNS.** Neither outcome decides whether the arm
+has a notch **somewhere else**. *No notch at 60* is **not** *no notch* — the grid argument above
+cuts both ways, and a per-arm notch at a per-arm lead time (which is what a frame-length or
+read-length mechanism would predict) is exactly what this ladder is blind to. ⇒ **A null here
+narrows C515 to `gproxii`'s lead time, not to `gproxii`.** Anything more needs a 5 ms grid across
+the full range: 37 cells, and it is a whole tick of its own.
+
+⚠⚠ **POWER, PER ARM, AND IT IS NOT THE SAME.** `gproxii`'s notch is near-total (**2 of 72**).
+Against `indala`'s ~75% baseline a near-total notch is unmistakable. ⛔ **Against `keri`'s ~38%
+baseline only a near-total notch is detectable at all, and a PARTIAL one is invisible** — so **a
+null on `keri` is not evidence of absence** (M58, and this is its exact shape). Said here rather
+than discovered in the write-up.
+
+⛔⛔ **AND THE CONTROL BAND IS NOT TRANSFERABLE — THIS IS A DEFECT IN THE TOOL, FIXED BEFORE THE
+RUN.** K12's no-primer cell is checked against **<= 15%** because C512 measured `gproxii` at 0% on
+a fresh burst. ⭐ **C514 measured that `indala` and `keri` do NOT collapse on a fresh burst** —
+50% → 67% and 33% → 54%. ⇒ On those arms the no-primer cell is expected to be *comparable to its
+ladder cells*, and the inherited band would have printed **BENCH MOVED** on a perfectly healthy
+run. `FRESH_BURST_ZERO` now names the one arm the band applies to, and for any other arm the
+control line prints as **informational**. ⚠ A criterion carried across arms without re-deriving it
+is the same error as C512's warning being carried across arms without re-measuring it.
+
+  ⇒ **For `indala` and `keri` the bench-moved check is the ANCHORS**: cells 40 and 80 must both
+  land within 20 points of the arm's own median. ⛔ If they do not, the arm's run is not
+  interpretable and is reported, not read.
+
+⛔ P1 carries over unchanged and is checked per cell. Budget: `keri`'s probe is the longer at
+10,000 samples = 80 ms, so 200 + 192 + 80 = 472 ms against the 500 ms burst — inside it, and P1
+is what confirms that rather than the arithmetic (C516).
+
+⚠ Ungraded — no null sweep, no calibration row, no licence, moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -524,6 +578,13 @@ PROBES = {
     "keri": None,                       # its own reader, ~38%
 }
 ORDER = ["gproxii", "indala", "keri"]
+
+# ⛔⛔ THE ARMS WHOSE NO-PRIMER CELL IS EXPECTED AT ~0%, AND IT IS EXACTLY ONE. C512 measured
+# `gproxii` at 0% on a fresh burst; C514 measured that `indala` and `keri` do NOT collapse there
+# (50%→67%, 33%→54%). K12's control band was written for the first and would print BENCH MOVED on
+# a healthy run of the others. ⇒ A criterion carried across arms without re-deriving it is the
+# same error C514 caught in a warning carried across arms without re-measuring it.
+FRESH_BURST_ZERO = frozenset({"gproxii"})
 
 
 def playbacks(port):
@@ -956,12 +1017,48 @@ def k12(a, arms, primers):
 
             # ⛔ THE BENCH-MOVED CONTROL FIRST, because nothing else is interpretable without it.
             cr, ch, cn = cell_rate(None)
-            ctl_ok = cn > 0 and cr <= 15.0
-            print("\n   control (no primer, fresh burst): %d/%d = %.0f%%  ⇒ %s"
-                  % (ch, cn, cr, "PASSES — matches C512's D>=600 and K5's index 0"
-                     if ctl_ok else
-                     "⛔⛔ BENCH MOVED — C512 and K5 both measured 0% here. "
-                     "Nothing below is comparable to K5-K12."))
+            zero_expected = key in FRESH_BURST_ZERO
+            if zero_expected:
+                ctl_ok = cn > 0 and cr <= 15.0
+                print("\n   control (no primer, fresh burst): %d/%d = %.0f%%  ⇒ %s"
+                      % (ch, cn, cr, "PASSES — matches C512's D>=600 and K5's index 0"
+                         if ctl_ok else
+                         "⛔⛔ BENCH MOVED — C512 and K5 both measured 0% here. "
+                         "Nothing below is comparable to K5-K12."))
+            else:
+                # ⭐ C514: this arm does not collapse on a fresh burst, so there is no 0% to
+                # check against. The bench check for it is the ANCHORS, below.
+                ctl_ok = True
+                print("\n   control (no primer, fresh burst): %d/%d = %.0f%%  ⇒ "
+                      "INFORMATIONAL — C514 measured that %s does NOT collapse on a fresh "
+                      "burst,\n     so the <=15%% band is `gproxii`'s and does not apply here."
+                      % (ch, cn, cr, key))
+                med_all = sorted(cell_rate(c)[0] for c in primers)[len(primers) // 2]
+                anch = [c for c in (primers[0], primers[-1])]
+                ok_a = all(abs(cell_rate(c)[0] - med_all) <= 20.0 for c in anch)
+                print("      anchors %s at %s against a median of %.0f%% ⇒ %s"
+                      % (anch, ", ".join("%.0f%%" % cell_rate(c)[0] for c in anch), med_all,
+                         "the bench-moved check PASSES"
+                         if ok_a else "⛔ anchors off the median — this arm's run is NOT "
+                                      "interpretable"))
+                ctl_ok = ok_a
+
+            # ⭐ S1 — is the notch at the SAME lead time as `gproxii`'s? Only asked when the
+            # ladder actually contains that cell.
+            if 60 in primers:
+                r60 = cell_rate(60)[0]
+                rest60 = sorted(cell_rate(c)[0] for c in primers if c != 60)
+                m60 = rest60[len(rest60) // 2]
+                if r60 <= 25.0 and r60 <= m60 / 3.0:
+                    s1 = "⇒ **S1 SUPPORTED** — the notch is at the SAME lead time"
+                elif abs(r60 - m60) <= 15.0:
+                    s1 = ("⇒ **S1 REFUTED** — no notch at 60 ms. ⛔ That is NOT *no notch*: a "
+                          "5 ms\n        feature elsewhere in 20..200 ms is invisible to any "
+                          "coarse grid.")
+                else:
+                    s1 = "⇒ no verdict for this arm"
+                print("   S1 same-lead-time: 60 ms at %.0f%% against a median of %.0f%%  %s"
+                      % (r60, m60, s1))
 
             # P1 — the mechanism, and the control cell is exempt by construction.
             worst = max(primers, key=lambda c: (cell_arr(c) if cell_arr(c) == cell_arr(c) else 0))
