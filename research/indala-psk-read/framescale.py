@@ -1402,6 +1402,115 @@ def inventory(paths):
     print("")
 
 
+K29_ARMS = ("keri", "idteck", "nexwatch")   # decided by ARITHMETIC (C537): all three take one
+                                            # forward detector; `indala`'s 75% median puts its
+                                            # threshold at the ceiling, so it is scoped out (M68).
+K29_LADDER = [str(x) for x in range(10, 196, 5)]        # the common ladder, topped at 195 (M77)
+K29_REGIONS = [("R1", "15", "20"), ("R2", "55", "65"), ("R3", "100", "105"),
+               ("R4", "140", "145"), ("R5", "180", "190")]   # derived from --inventory (M76)
+K29_HIGH = 25.0        # a cell is elevated at that arm's ladder median + this
+K29_CELLS = 2          # cells of a region an arm must have elevated, in BOTH seeds, to HIT it
+K29_FIRE = 11          # of 15: fires on 4-5 of 5 regions shared (98.8-100%)
+K29_REFUTE = 7         # of 15: refutes on <= 2 of 5 shared (100%), and 0.0% false-fire
+
+
+def k29(paths):
+    """B1 — are the lead-time regions the SAME regions across three arms?
+
+    ⛔ The reference regions were derived from the banked caps by `--inventory`, so this may
+    NOT be scored on any of them: fresh seeds only. ⛔ And if any arm is gated out, B1 is not
+    re-scored over the remaining two — the 15-cell statistic and every simulated figure in the
+    K29 section assume three arms."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K29 — are the regions SHARED across `%s`?" % "`, `".join(K29_ARMS))
+    print("   reference derived by `--inventory` from the banked caps (M76), so this run must be")
+    print("   on FRESH seeds. ⛔ `indala` is scoped out by arithmetic: its 75%% median puts the")
+    print("   forward threshold at the ceiling (C537/M68).")
+    print("   B1: total hits over 5 regions x 3 arms, of 15. >= %d fires, <= %d refutes,"
+          % (K29_FIRE, K29_REFUTE))
+    print("   %d-%d is NO VERDICT and MEANS *about three of the five are shared*." 
+          % (K29_REFUTE + 1, K29_FIRE - 1))
+    print("")
+    if len(runs) != 2:
+        print("   ⛔ B1 needs exactly two seeds — %d supplied\n" % len(runs))
+        return
+    missing = [a for a in K29_ARMS if not all(a in d for _, d in runs)]
+    if missing:
+        print("   ⛔ both runs must carry all three arms; missing %s\n" % ",".join(missing))
+        return
+    total, gated = 0, []
+    for arm in K29_ARMS:
+        per = [(n, d[arm]) for n, d in runs]
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K29_LADDER if k in cells]
+        if ladder != K29_LADDER:
+            print("### %s ⛔ not the common ladder (%d of %d cells) — not scored\n"
+                  % (arm, len(ladder), len(K29_LADDER)))
+            gated.append(arm)
+            continue
+        meds, rate_ofs, ok = [], [], True
+        for name, c in per:
+            g, line = _gate(name, c, ladder)
+            print("   gate %-9s %s" % (arm, line.strip()))
+            ok = ok and g
+            r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            rate_ofs.append(r)
+            vals = sorted(r(k) for k in ladder)
+            meds.append(0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2])
+                        if len(vals) % 2 == 0 else vals[len(vals) // 2])
+        if not ok:
+            print("   ⇒ ⛔ %s is GATED OUT\n" % arm)
+            gated.append(arm)
+            continue
+        print("### %s   median %s   elevated >= %s"
+              % (arm, "/".join("%.0f%%" % m for m in meds),
+                 "/".join("%.0f%%" % (m + K29_HIGH) for m in meds)))
+        for lbl, lo, hi in K29_REGIONS:
+            span = [k for k in ladder if int(lo) <= int(k) <= int(hi)]
+            per_seed = [[k for k in span if rate_ofs[i](k) >= meds[i] + K29_HIGH]
+                        for i in range(2)]
+            hit = all(len(x) >= K29_CELLS for x in per_seed)
+            total += hit
+            print("   %s %-9s %s ⇒ %s"
+                  % (lbl, "%s-%s" % (lo, hi),
+                     " | ".join(",".join(x) or "none" for x in per_seed),
+                     "HIT" if hit else "no"))
+        print("")
+    if gated:
+        print("⇒ ⛔ **NO VERDICT — %s gated out, and B1 is NOT re-scored over the rest**: its "
+              "15-cell\n     statistic and every simulated figure assume three arms.\n"
+              % ", ".join(gated))
+        return
+    if total >= K29_FIRE:
+        v = ("**B1 FIRES — %d of 15. THE REGIONS ARE SHARED ACROSS ALL THREE ARMS.**\n"
+             "     Simulated before the capture: %d+ occurs 98.8-100%% when 4-5 of the 5 regions "
+             "are\n     genuinely shared and **0.0%%** when each arm carries independent "
+             "structure of its own.\n     ⚠ `nexwatch`'s 4096-sample frame is in it, so this puts "
+             "two frame lengths in the same\n     millisecond regions — which C536 already "
+             "showed for two of them, so this STRENGTHENS\n     rather than establishes it. "
+             "⛔ It says nothing about WHY, and it excludes `indala` by\n     construction."
+             % (total, K29_FIRE))
+    elif total <= K29_REFUTE:
+        v = ("**B1 REFUTED — %d of 15. THE REGIONS ARE NOT SHARED.** Simulated: <= %d occurs "
+             "100%%\n     when 2 or fewer of the 5 are shared, and 100%% when each arm carries 3 "
+             "random regions\n     of its own.\n"
+             "     ⛔⛔ BUT IT DOES NOT DISTINGUISH *each arm has structure of its OWN* from "
+             "*no arm\n     has structure at all* — a flat ladder refutes it too. **The per-arm "
+             "A1 verdicts are\n     what separate those** (C533 `idteck`, C536 `nexwatch`, C537 "
+             "`keri` — all three FIRED),\n     so read this row beside them and never alone."
+             % (total, K29_REFUTE))
+    else:
+        v = ("⛔ **NO VERDICT — %d of 15, inside the pre-registered %d-%d band. IT HAS A STATED\n"
+             "     MEANING: about THREE of the five regions are shared** (simulated median 9 for "
+             "that\n     truth). ⛔ That is not a failed band — do not re-tune the "
+             "thresholds (M74)."
+             % (total, K29_REFUTE + 1, K29_FIRE - 1))
+    print("⇒ %s" % v)
+    print("")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1414,6 +1523,9 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--k29", nargs="+", metavar="CAP",
+                    help="⭐ K29: two fresh caps, each carrying keri+idteck+nexwatch on the "
+                         "common 10-195 ms ladder")
     ap.add_argument("--inventory", nargs="+", metavar="CAP",
                     help="⭐ M76: sweep every cap and report per-cell HIGH/LOW counts per arm, "
                          "so a reference list is derived from the data and not the write-ups")
@@ -1431,6 +1543,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k29:
+        k29(a.k29)
+        return 0
     if a.inventory:
         inventory(a.inventory)
         return 0

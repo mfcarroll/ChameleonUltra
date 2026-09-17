@@ -1415,6 +1415,88 @@ binding constraint for them; **195 is chosen to make the ladder COMMON, which is
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐ K29 — THE THREE-ARM SHARED-REGIONS BAND (written before its capture)
+
+The unit C537 specified and the first thing on this line that could point at a **mechanism** rather
+than at another profile. **The lead-time structure is already measured at fixed MILLISECONDS on four
+arms and two frame lengths (C536); this asks whether the four arms' regions are THE SAME regions**,
+in one pre-registered statistic instead of four per-arm ones.
+
+⭐ **THREE ARMS, AND THE THIRD IS DECIDED BY ARITHMETIC RATHER THAN BY TASTE** (C537): medians on
+the common 10-195 ladder are `keri` **25%**, `idteck` **25%**, `nexwatch` **25-38%** — all three
+take one **forward** detector — while `indala`'s is **75%**, where *median + 25* is the ceiling and
+the forward detector has no power at all (M68, K20's move a second time). ⭐⭐ **`nexwatch` stays in,
+and that is the point: its frame is 4096 samples against the others' 2048, so it is the only frame
+discriminator on the bench** (M65/C520/C536).
+
+### ⭐ THE REFERENCE, DERIVED MECHANICALLY FROM THE CAPS AND NOT FROM ANY WRITE-UP (M76)
+
+`./framescale.py --inventory` over every banked cap, then: a cell is HIGH for an arm when it is
+**>= 62.5% (5 of 8) in EVERY cap that measured it**, with at least two caps measuring it.
+
+    keri      15 20 60 65 105 140 145 190
+    idteck    15 20 55 60 65 95 100 140 145 180 185 190
+    nexwatch  10 20 55 60 65 100 105 140 180 185 190
+
+⇒ contiguous runs of **>= 2 cells HIGH in >= 2 of the three arms**, which is the candidate set:
+
+    R1 15-20     R2 55-65     R3 100-105     R4 140-145     R5 180-190
+
+⚠ **Five cells — 20, 60, 65, 140, 190 — are HIGH in ALL THREE arms in every cap that measured
+them.** ⛔ That is the observation this band exists to test and **not** evidence for it: the regions
+come from these caps, so **K29 may not be scored on any of them.** Fresh seeds only.
+⚠ **And the caps are uneven**: per-cell counts are `keri` 4-23, `nexwatch` 4-6, **`idteck` only 2**.
+The derivation is therefore weakest for `idteck`, which is stated here rather than discovered later.
+
+### THE BAND
+
+**The ladder**: the common **10..195 ms at 5 ms, 38 cells** (M77 — topped at 195, measured twice),
+`--arms keri,idteck,nexwatch` in ONE run so the arms interleave, `--reps 8`,
+**`--per-arm-shuffle`** (M69, mandatory), two fresh seeds (**283**, **293**).
+
+  **B1 — ARE THE REGIONS SHARED?** An arm **HITS** a region when **>= 2 of that region's cells are
+  at or above (that arm's ladder median + 25) in BOTH seeds**. The statistic is the **total hit
+  count over 5 regions x 3 arms, out of 15**.
+  - **>= 11 ⇒ B1 FIRES — the regions are shared across all three arms.**
+  - **<= 7 ⇒ B1 REFUTED — the regions are NOT shared.** ⛔⛔ It does NOT distinguish *each arm
+    has structure of its own* from *no arm has structure at all* — a flat ladder refutes it too.
+    **The per-arm A1 verdicts separate those** (C533 `idteck`, C536 `nexwatch`, C537 `keri` — all
+    three FIRED), so a refutation must be read beside them and never alone.
+  - **8-10 ⇒ NO VERDICT, AND IT HAS A STATED MEANING** (see below).
+
+  ⭐⭐ **FULLY CHARACTERISED BY SIMULATION BEFORE THE CAPTURE (1,500 draws per row), AND THE
+  NO-VERDICT BAND IS GIVEN A MEANING IN ADVANCE — WHICH IS M74's LESSON APPLIED AT DESIGN TIME:**
+
+  | the truth | median hits | P(>= 11) | P(<= 7) |
+  |---|---|---|---|
+  | all 5 regions shared by all 3 arms | **15** | **100.0%** | 0.0% |
+  | 4 of 5 shared | 12 | **98.8%** | 0.0% |
+  | **3 of 5 shared** | **9** | 0.0% | 0.3% |
+  | 2 of 5 shared | 6 | 0.0% | **100.0%** |
+  | 1 of 5 | 3 | 0.0% | **100.0%** |
+  | each arm 3 RANDOM 3-cell regions of its own | 3 | **0.0%** | **100.0%** |
+  | each arm 5 RANDOM regions of its own | 4 | **0.0%** | 99.3% |
+  | flat, no regions at all | 0 | 0.0% | 100.0% |
+
+  ⇒ **it fires on 4-5 of 5 shared and refutes on 2 or fewer, with 0.0% false-fire against arms
+  carrying independent structure of their own.** ⭐ **And 8-10 means specifically *about three of
+  the five regions are shared*** — not *the band failed*. Say that if it lands there.
+
+  ⛔ Gates unchanged and any one ends an arm: pooled **< 15%** is NO POWER; split-half **> 15
+  points** (38 cells x 8 reps ⇒ n/half 152, so ~**2.7σ** and under 1% on noise — C530/M73);
+  **P1 > 0.6** in any cell. ⚠ **If any arm is gated out, B1 is NOT re-scored over the remaining
+  two** — the 15-cell statistic and every figure above assume three arms. Report NO VERDICT and
+  which arm failed.
+
+  ⛔⛔ **WHAT B1 CANNOT DO.** It tests whether the regions COINCIDE. It says nothing about WHY, it
+  cannot separate a reader effect from a field effect, and **it excludes `indala` by construction**
+  so it is a claim about three arms and not about the bench. ⚠ And `nexwatch`'s presence is what
+  makes a FIRE interesting — it would put a 4096-sample frame and two 2048-sample frames in the
+  same millisecond regions — but C536 already showed that for two of these regions, so a FIRE
+  strengthens rather than establishes it.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
