@@ -1088,6 +1088,96 @@ def k23(paths, select=None):
     print("")
 
 
+NOTCH_CELLS = ("15", "20", "25")     # the predicted notch and its two ladder neighbours
+NOTCH_FRAME = 1.22                   # `gproxii`'s notch, in frames of its own 6144-sample frame
+NOTCH_DEPTH = 25.0                   # a notch must sit this far below its neighbours' mean
+# ⭐ SIMULATED (40,000 draws, n=8/cell) so the tally can be READ rather than eyeballed:
+#   a real notch of `gproxii`'s depth (100/3/100) fires this detector on **100% of caps**;
+#   no-notch truths matching the observed profile fire it on 0.6-12.2%, i.e. 0.1-1.3 of 11.
+# ⇒ at 11 caps, 2 or fewer hits refutes a notch OF THAT DEPTH and is what noise alone gives.
+NOTCH_REAL_RATE = 100.0              # % of caps a gproxii-depth notch fires on
+NOTCH_NULL_MAX = 12.2                # worst-case % under a no-notch truth (a flat 76/76/76)
+
+
+def notch20(paths):
+    """Is there a FRAME-LOCKED notch at 20 ms on `indala` and `keri`?
+
+    ⭐ OFFLINE. Opens no serial port and arms nothing. `gproxii`'s 5 ms notch sits at 60 ms =
+    1.22 of its 6144-sample frame; 1.22 frames of the 2048-sample frame `indala` and `keri`
+    share is **20.0 ms**, so the frame reading predicts a notch there on both arms.
+
+    ⚠⚠ **THE CAPS ARE BANKED, SO THIS IS A RETRODICTION.** The criterion below is written after
+    the data existed and that is disclosed rather than glossed. ⭐ **What licenses it anyway is
+    the direction**: foreknowledge cannot manufacture the ABSENCE of a collapse that is not in
+    the data, which is `framescale.py`'s own standing rule for banked re-analysis. ⛔ A
+    SUPPORTED verdict here would be worth very little; only a REFUTED one is honestly carried.
+    """
+    print("## Is there a frame-locked notch at 20 ms?")
+    print("   `gproxii`'s notch is %.2f frames; on a 2048-sample frame that is %.1f ms."
+          % (NOTCH_FRAME, NOTCH_FRAME * 2048 * SAMPLE_US / 1000.0))
+    print("   ⚠ BANKED CAPS — a retrodiction. Only a REFUTED verdict is honestly carried here.")
+    print("   A notch needs the 20 ms cell at least %.0f points below the mean of 15 and 25."
+          % NOTCH_DEPTH)
+    print("")
+    rows = []
+    for p in sorted(paths):
+        d = json.load(open(p))
+        for arm in sorted(d):
+            c = d[arm]
+            ks = set(numeric_cells(c))
+            if not set(NOTCH_CELLS) <= ks:
+                continue
+            r = [100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"]) for k in NOTCH_CELLS]
+            rows.append((os.path.basename(p).replace(".json", ""), arm, r))
+    if not rows:
+        print("   ⛔ no banked cap carries all of %s\n" % ",".join(NOTCH_CELLS))
+        return
+    print("   %-26s %-7s %7s %7s %7s  notch?" % ("cap", "arm", *NOTCH_CELLS))
+    hits = 0
+    for name, arm, r in rows:
+        nb = 0.5 * (r[0] + r[2])
+        is_notch = r[1] <= nb - NOTCH_DEPTH
+        hits += is_notch
+        print("   %-26s %-7s %6.0f%% %6.0f%% %6.0f%%  %s"
+              % (name, arm, r[0], r[1], r[2], "NOTCH" if is_notch else "no"))
+    lowest = min(r[1] for _, _, r in rows)
+    means = [sum(r[i] for _, _, r in rows) / len(rows) for i in range(3)]
+    print("")
+    print("   %d of %d independently seeded measurements show a notch at 20 ms."
+          % (hits, len(rows)))
+    print("   mean %s = %.0f%% / %.0f%% / %.0f%%; the 20 ms cell never falls below %.0f%%."
+          % (" / ".join(NOTCH_CELLS), means[0], means[1], means[2], lowest))
+    exp_real = NOTCH_REAL_RATE / 100.0 * len(rows)
+    exp_null = NOTCH_NULL_MAX / 100.0 * len(rows)
+    print("   ⇒ a notch of `gproxii`'s DEPTH would fire this detector on %.0f of %d caps; "
+          "a no-notch" % (exp_real, len(rows)))
+    print("     profile gives at most %.1f of %d from counting noise (simulated, 40,000 draws)."
+          % (exp_null, len(rows)))
+    if hits <= exp_null:
+        print("   ⇒ **REFUTED AT `gproxii`'s DEPTH. There is no notch at 20 ms on either arm.**")
+        print("     %d of %d is inside what noise alone gives and nowhere near the %.0f a real"
+              % (hits, len(rows), exp_real))
+        print("     notch demands — and `gproxii`'s own notch scored **2 of 72** against "
+              "neighbours")
+        print("     at 100%, a shape nothing here comes within reach of. ⛔ A fresh "
+              "pre-registered band")
+        print("     would re-measure a question the record has answered, which is C473's "
+              "method.")
+        print("     ⚠ It refutes a notch of THAT depth. A shallower one is not excluded, "
+              "and this")
+        print("     detector was never built to see one.")
+    else:
+        print("   ⇒ not refuted — %d hits is above the %.1f noise gives. ⛔ And a "
+              "retrodiction cannot" % (hits, exp_null))
+        print("     SUPPORT it either; that needs a pre-registered band on fresh seeds.")
+    print("")
+    print("   ⚠ POST-HOC LEAD, NOT A FINDING: the low cell in this region is 25 ms, not 20.")
+    print("     25 ms is %.2f frames, which does NOT match %.2f, so even a *notch at a "
+          "different frame" % (25.0 / (2048 * SAMPLE_US / 1000.0), NOTCH_FRAME))
+    print("     count* reading does not fit. It needs its own pre-registered band.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1100,6 +1190,8 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--notch20", nargs="+", metavar="CAP",
+                    help="⭐ offline: is there a frame-locked notch at 20 ms? (banked caps)")
     ap.add_argument("--k24", nargs="+", metavar="CAP",
                     help="⭐ K24: K23's bands over THREE seeds, scoring the two with the lowest "
                          "split-half |delta| — the rule is pinned in burstsync's docstring")
@@ -1110,6 +1202,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.notch20:
+        notch20(a.notch20)
+        return 0
     if a.k24:
         k23(a.k24, select=2)
         return 0
