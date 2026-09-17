@@ -1329,3 +1329,30 @@ have been a confident *fixed samples*.** The knob would have refuted the truth.
 ⚠ **And the general form of the missing term is worth naming: a host-visible duration is
 acquisition PLUS transfer, and only one of them responds to the knob.** Any instrument where the
 host times something it also has to fetch has this shape.
+
+**M80 — AN *ABSOLUTE* THRESHOLD IS ONLY TRANSFERABLE TO A CONDITION THAT DOES NOT CHANGE THE LEVEL.
+IT BUYS INDEPENDENCE FROM THE ARM, NEVER FROM THE CONDITION.**
+
+M68 caught a median-relative threshold inheriting an arm's headroom, and the fix used since has been
+**absolute** thresholds justified by prior measurement (K22's Z1, K26's A1, K29, K30). ⛔ **K30 shows
+the fix has its own failure mode, and it is the same shape one level up.**
+
+K30's detector asked for **>= 62.5%**, justified by `--inventory`'s dec-1 measurements. Run at
+`--dec 2` it found nothing on either arm — **and the profile is simply lower**: `keri` pools
+42.1/41.8% at dec 1 against **26.5/25.0%** at dec 2 (61% of it), `idteck` 43.1/41.4% against
+**31.6/30.1%** (73%), with dec-2 cell medians of **12%** and **25%**.
+
+⚠⚠ **AND IT WAS FORESEEABLE.** Decimation changes the primer's duration; **this entire line exists
+because the decode rate is a function of that duration.** The level was guaranteed to move, and the
+threshold was derived from the condition that was about to be changed.
+
+⇒ **Ask of every threshold, relative or absolute: what does it assume about the condition I am about
+to vary?** A relative threshold inherits the arm's level (M68); an absolute one inherits the
+*condition's* level. Neither is free, and the one that feels safest is the one that hides the
+assumption.
+
+⭐ **The remedy is not to lower it afterwards** — that is fitting, and it is exactly what the run
+tempts you to do. **The remedy is to treat the first run as a PILOT whose product is the level**,
+and to derive the threshold for a fresh-seed re-run from it, with the power recomputed against that
+level. ⇒ **When a band changes the condition, budget two runs: one to measure the level and one to
+test the claim.** K30 paid for that lesson with one capture and it is cheap at the price.
