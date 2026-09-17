@@ -1378,6 +1378,43 @@ seeds (**257**, **263**), `--reps 8`, `--per-arm-shuffle`.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K28 — THE COMMON LADDER, WHICH IS THE CROSS-ARM BAND'S REAL PREREQUISITE
+
+⛔⛔ **THE FOUR ARMS HAVE NEVER BEEN MEASURED ON ONE LADDER, AND THAT IS WHY NO CROSS-ARM BAND CAN
+BE WRITTEN YET.** Checking the caps mechanically (M76's habit, applied to the design rather than to
+a reference): only `idteck` (K26) and `nexwatch` (K27) carry the full 10-200 ms span in a single
+run. **`indala` and `keri`'s coverage is a UNION of four different ladders** — K19/K20 and K21/K25
+at 85-200, K22 at 20-80, K23/K24 at 1-65 — **with different seeds, different reps, different arms
+present and, in K22/K23's case, a different number of cells feeding the median every band is read
+against.** ⇒ **any cross-arm comparison over those cells compares a stitched profile with a measured
+one**, which is a confound of the same family as M69's shared shuffle: something differs between
+the arms that is not the arms.
+
+⭐ **K28 is the fix and it is a plain capture, not a new band**: `indala` and `keri` together over
+the **same 10..195 ms at 5 ms — 38 cells** that `nexwatch` ran, two fresh seeds (**277**, **281**),
+`--reps 8`, `--per-arm-shuffle`. ⛔ **Topped at 195 and not 200, by M77's per-arm rule** — and note
+their probes are SHORTER than `nexwatch`'s (32.8 ms and its own reader), so the burst is not the
+binding constraint for them; **195 is chosen to make the ladder COMMON, which is the whole point.**
+
+  **SCORED BY K26's A1, UNCHANGED** — a run of **>= 3 adjacent cells at median + 25** in **BOTH**
+  seeds, overlapping. ⭐ Third and fourth application of an already-pinned band to a new arm, which
+  is replication; nothing is re-tuned.
+  ⚠⚠ **AND IT SETTLES THE QUESTION THAT DECIDES WHETHER A CROSS-ARM BAND IS BUILDABLE AT ALL.**
+  `indala`'s median on the 85-200 ladder is **75-88%**, where *median + 25* is the CEILING and the
+  forward detector has no power (M68 — this is K20's power table, and it is why K20 used a notch).
+  **Nobody knows its median over the FULL span**, because the 10-80 region it has never been scored
+  with includes measured lows at 35-45 ms. ⇒ **If the full-span median comes out near 50%, one
+  forward band can cover all four arms; if it stays near 75-88%, it cannot, and a cross-arm band
+  needs two detectors — which is exactly the confound C524 identified in K21.**
+  ⛔ **That question is answered by this capture and must NOT be pre-judged**: K28 makes no
+  cross-arm claim and its A1 verdicts are per-arm, as committed.
+
+  ⛔ Gates unchanged: pooled **< 15%** is NO POWER; split-half **> 15 points** (at 38 cells x 8 reps
+  the n per half is 152, so ~**2.7σ** — C530/M73); **P1 > 0.6** in any cell, which M77's printed
+  per-arm top should now keep clear.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
