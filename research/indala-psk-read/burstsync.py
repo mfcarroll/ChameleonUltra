@@ -846,6 +846,151 @@ observation and is the whole of its value.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K21 — DO `indala` AND `keri` HAVE ONE PROFILE OR TWO? (written before its capture)
+
+`rfid-tools` `QUEUE.md`, committed before this section existed, makes *a criterion for the
+interleaving* the next hands-off unit: K19 put `keri`'s features at **95-105** and **140-150** ms
+and K20 put `indala`'s notches at **115-130** and **165-175** ms, and the queue's own note says the
+two arms' structure **interleaves** — consecutive same-type regions ~45-50 ms apart on each arm,
+the arms offset from each other by ~20 ms. It is labelled post-hoc there, and this is its band.
+
+⛔⛔ **BUT THE QUEUE'S FRAMING CONTAINS THE ERROR, AND IT IS THE M62 FAMILY AGAIN.** *Interleaving*
+was read off two profiles that were scored with **OPPOSITE DETECTORS** — `keri` with a forward one
+(its median is 25-31%, so only a hump is detectable) and `indala` with an inverse one (median 75%,
+so only a notch is). ⭐ **If the two arms shared ONE profile, that is exactly what you would see**:
+`keri`'s humps would land on the shared profile's peaks and `indala`'s notches on its troughs, and
+the two sets would interleave along the ladder **by construction, with no offset in anything
+physical.** The observed numbers are consistent with it — `indala`'s 115-130 notch sits inside the
+110-135 gap between `keri`'s two humps. ⇒ **The question worth a capture is not *where* the regions
+are. It is whether there is one profile here or two**, and *interleaved* is the reading that has to
+earn its place against the simpler one.
+
+⛔⛔⛔ **AND THE BANKED K19/K20 CAPS CANNOT ANSWER IT — A DEFECT IN THE LADDER ITSELF, FOUND BY
+ASKING WHAT THE TWO ARMS SHARE (M69).** `k12()` built ONE shuffled `plan` and ran **every arm
+through it**, so both arms saw the identical cell→position mapping in every round. M60 established
+that **position is a variable** on this bench. ⇒ any residual position effect enters BOTH arms'
+profiles **identically** and manufactures a positive cross-arm correlation out of nothing. It does
+not touch K19's or K20's verdicts — those are within-arm — but it is fatal to this one.
+⇒ `--per-arm-shuffle` gives each arm its own derived, recorded seed. **K21 runs with it, and no
+cross-arm correlation may be computed on a cap taken without it.**
+
+### ⛔ THE POWER COMPUTATION, DONE BEFORE THE BAND (M68), ON BANKED CAPS
+
+⚠ Only the **per-arm reliability** is taken from banked data. ⛔ The cross-arm correlation — the
+thing Y1 scores — **was not computed on them**, and must not be, for the reason above and because
+it is the answer.
+
+| arm | seed-to-seed Spearman over the 24-cell ladder | sd across cells |
+|---|---|---|
+| `keri` (K19 s53 vs s67) | **+0.786** | 32.4 / 35.3 |
+| `indala` (K19 s53 vs s67) | **+0.817** | 32.3 / 32.7 |
+| `indala` (K20 s89 vs s101) | **+0.637** | 37.0 / 28.4 |
+
+⭐ **Both arms have a profile that replicates, and that is a new quantitative fact** — K19 and K20
+only ever checked whether categorical features overlapped, never whether the whole profile did.
+⚠ And it is a little WORSE than binomial noise alone allows: resampling one fixed profile twice at
+n=8 gives a median Spearman of **+0.89** (`keri`) and **+0.85** (`indala`), 5th percentiles +0.80
+and +0.75, so `keri`'s +0.786 sits at that floor and `indala`'s K20 pair at +0.637 is below it.
+⇒ **there is session-to-session movement beyond the counting noise**, which is C497's wander
+appearing in a new statistic. Disattenuation must therefore use the MEASURED reliability, not the
+simulated one.
+
+**The critical value, from a 20,000-draw permutation null on a real profile's tie structure**
+(24 cells): |r| = **0.342** at p=0.10, **0.402** at p=0.05, **0.520** at p=0.01.
+
+⇒ **What the design can detect.** With per-arm reliabilities near +0.79 and +0.82, a TRUE shared
+profile would show a cross-arm Spearman of about sqrt(0.79 x 0.82) ≈ **+0.80**, and true
+independence about **0**. Both pre-registered thresholds below therefore sit well inside what this
+ladder can produce, which is the check whose absence WAS M68.
+
+⇒ ⭐ **AND Y1's OWN POWER, SIMULATED BEFORE THE CAPTURE** (2,000 draws per row, two runs required
+to agree, ±0.52):
+
+| the truth | SHARED | OPPOSED | no verdict |
+|---|---|---|---|
+| one shared profile | **77%** | 0% | 23% |
+| two independent profiles | 1.9% | 2.4% | **96%** |
+| anti-aligned (`keri` = 100 − `indala`) | 0% | **77%** | 23% |
+| one profile offset by 20 ms | 2.0% | 0.1% | **98%** |
+
+⭐ **Y1 is properly powered and its errors are symmetric and small** — and the last row is the one
+that makes it honest: a real 20 ms offset lands in NO VERDICT 98% of the time rather than being
+dressed up as either answer. ⚠ `--reps 12` would take the two live rows to 90%, at 1.5x the
+capture; **8 is kept** so the ladder matches K19/K20 and the cost stays inside one tick.
+
+### THE BANDS
+
+**The ladder**: unchanged from K19/K20 — a 65 ms informational cell excluded from everything, then
+**85..200 ms in 5 ms steps** (24 cells), `--reps 8`, two fresh seeds (**113** and **127**; 53/67
+and 89/101 are spent), **both arms in each run, shuffled independently of each other.**
+
+  **Y1 — ONE PROFILE OR TWO.** Spearman r between `indala`'s and `keri`'s cell rates across the
+  24 cells, computed **separately in each seed's run** and required to agree.
+  - r >= **+0.52** in BOTH runs ⇒ **SHARED** — the arms track each other, and *interleaving* is an
+    artifact of opposite detectors on arms with different medians. The regions stay where K19/K20
+    put them; what dies is the claim that they are offset from each other.
+  - r <= **−0.52** in BOTH runs ⇒ **OPPOSED** — one arm is high where the other is low. This is the
+    strong form of the interleaving reading and it would be a real finding.
+  - anything else, or the two runs disagreeing in sign ⇒ ⛔ **NO VERDICT**, reported with both
+    numbers. ⚠ The threshold is the p=0.01 permutation critical value, used symmetrically on
+    purpose: no mechanism predicts a sign, so neither direction gets the cheaper test.
+
+  **Y2 — WITHDRAWN BEFORE ITS CAPTURE, AND THAT IS THE POINT (M70).** Y2 was written as
+  *cross-correlate the arms at lags 0, ±5 .. ±25 ms; fire when the best NON-ZERO lag beats lag 0
+  by >= 0.30 in both runs with the sign agreeing.* ⛔ **It was then simulated against a null of
+  two INDEPENDENT smooth profiles and it FALSE-FIRED 41% OF THE TIME** — the median null gain is
+  **+0.37**, already above the threshold, because lag 0 is one correlation and *the best of ten
+  lags* is an order statistic. Raising the bar to a 0.3% false-fire rate needs a gain of **1.10**.
+
+  ⛔⛔ **AND AT THAT BAR IT HAS NO POWER: a REAL 20 ms offset fires it 0.3% of the time.** The
+  argmax version is unusable at either end. A fixed, signed, single pre-registered lag (**+4
+  cells**, the direction the observation names — `keri`'s structure below `indala`'s) is better
+  but still not enough: **37% power at a 5% false-fire rate, 18% at 2%.** ⇒ **A non-firing Y2
+  would carry no information**, which is the K8 NO POWER trap this project has now named five
+  times. ⇒ **Y2 is withdrawn as a verdict.** The lag table is still PRINTED, labelled
+  exploratory, with its power beside it, so that nobody reads its silence as evidence.
+
+  ⭐ **This is the first band in this project withdrawn BEFORE its capture rather than after it**,
+  and it is the QUEUE's own prescription — *the repair is not a better rule, it is a check run
+  against the design before the capture* — executed. M62, M63, M64, M66, M67 and M68 were all
+  pre-registered and all six were discovered to be broken by the data they were meant to judge.
+  **M70 is the first one found by the simulation instead**, and it cost no bench time at all.
+
+  ⇒ **THE OFFSET IS THEREFORE NOT MEASURABLE ON THIS LADDER AT THIS n, AND THAT IS THE ANSWER TO
+  GIVE IT.** It is not that the arms are not offset; it is that a 24-cell ladder at n=8 cannot
+  tell a 20 ms shift from nothing. Reaching it needs either a finer ladder or many more reps, and
+  the arithmetic for that belongs to whoever runs it next.
+
+  **Y3 — THE REPLICATION OF THE REGIONS THEMSELVES**, carried over unchanged so the run is not
+  wasted if Y1 lands in its no-verdict band. K19's W1 detector on `keri` (median + 25, runs of
+  >= 2, in both seeds) and K20's X1 detector on `indala` (median − 25, inverse) re-scored on these
+  fresh seeds. ⭐ Y3 is the first time either region set is tested **at a named location** — W1 and
+  X1 were deliberately COUNT-and-SEPARATION only — and it is legitimate here precisely because
+  K19/K20 named the cells first: `keri` high in 95-105 and 140-150, `indala` low in 115-130 and
+  165-175. **Y3 fires** when each of those four regions contains >= 2 cells meeting its arm's
+  detector in BOTH fresh seeds. ⛔ No single cell can decide it: four regions x two cells x two
+  seeds is sixteen cell-observations, and one region falling short refutes it.
+
+  ⛔ Gates unchanged and any one ends it: pooled over every cell **< 15%** is NO POWER; K16's
+  split-half over the rounds **> 15 points** is a drifted run; **P1 > 0.6** in any cell means a
+  cell restarted its burst. ⚠ The 65 ms cell is informational and is excluded from the median, the
+  correlations and the gates' pooled figure alike.
+
+  ⛔⛔ **PERIODICITY IS STILL NOT TESTED AND STILL CANNOT BE.** The ~45-50 ms spacing between each
+  arm's own two regions is **not** a period claim and none may be quoted off this run: a third
+  region would sit near 215-240 ms, outside `LF_TAG_BURST_TARGET_MS` = 500 (C516, and K12 saw P1
+  fail at 220). ⚠ And ~49 ms is also **3 frames** of the 2048-sample frame these two arms share,
+  which C520 gives no licence to invoke — an arm-independent spacing and a frame-locked one are not
+  separable on two arms with the same frame.
+
+⚠⚠ **DISCLOSED**: I have read the prose describing K19's and K20's profiles, so the region
+locations in Y3 are known to me and Y3 is a REPLICATION, not a discovery. ⛔ And my own reading
+before writing this — that the observed numbers look like ONE profile — means **a SHARED verdict is
+the one foreknowledge points at, and is worth less than an OPPOSED one.** Said here, before the
+capture, rather than in the write-up.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -1252,16 +1397,34 @@ def k12(a, arms, primers):
     rest so it cannot sit at a fixed position (M60)."""
     import collections
     import random as _r
-    rng = _r.Random(a.seed)
     cells = [None] + list(primers)
-    plan = []
-    for _ in range(a.reps):
-        rnd = list(cells)
-        rng.shuffle(rnd)                    # ⭐ shuffled WITHIN each round, not once globally
-        plan.extend(rnd)
+
+    def build(seed):
+        rng = _r.Random(seed)
+        plan = []
+        for _ in range(a.reps):
+            rnd = list(cells)
+            rng.shuffle(rnd)                # ⭐ shuffled WITHIN each round, not once globally
+            plan.extend(rnd)
+        return plan
+
+    # ⛔⛔ ONE PLAN FOR EVERY ARM IS A CROSS-ARM CONFOUND (M69, found while designing K21).
+    # M60 established that POSITION is a variable on this bench. With a single plan, every arm
+    # sees the identical cell→position mapping in every round, so whatever position contributes
+    # enters both arms' profiles IDENTICALLY and manufactures a positive cross-arm correlation
+    # out of nothing. ⚠ It does not touch a WITHIN-arm verdict (K12-K20 are all within-arm), so
+    # nothing banked is retracted — but a cap taken without `--per-arm-shuffle` can never carry
+    # a cross-arm correlation. The derived seeds are printed so the run is reproducible.
+    seeds = {k: (a.seed + 1000 * (i + 1) if a.per_arm_shuffle else a.seed)
+             for i, k in enumerate(arms)}
+    plans = {k: build(seeds[k]) for k in arms}
+    plan = plans[arms[0]]
     print("K12 — %d sessions over %d cells (%s ms + no-primer control), shuffled within each "
           "round (seed %d)" % (len(plan), len(cells),
                                ",".join(str(p) for p in primers), a.seed))
+    print("   cell order per arm: %s"
+          % (", ".join("%s=seed %d" % (k, seeds[k]) for k in arms) if a.per_arm_shuffle
+             else "⛔ ONE SHARED PLAN — this cap carries no cross-arm correlation (M69)"))
     print("   probe is fixed and at a fixed index; the primer's LENGTH is the only variable")
     print("   elapsed(probe) ~ primer + ~%d ms measured FIELD-UP overhead; one full beat cycle "
           "is %.1f ms\n" % (K12_OVERHEAD_MS, K12_CYCLE_MS))
@@ -1275,7 +1438,7 @@ def k12(a, arms, primers):
                 continue
             sc = collections.defaultdict(list)
             arr = collections.defaultdict(list)
-            for cell in plan:
+            for cell in plans[key]:
                 before = playbacks(a.port)
                 # ⛔ `reads=1` is the PROBE count. The primer is a separate `lf read` that is
                 # never scored — `session()` only scores blocks labelled with the demod
@@ -1290,6 +1453,11 @@ def k12(a, arms, primers):
                 time.sleep(0.4)
             out[key] = {("none" if c is None else str(c)):
                         {"scores": sc[c], "arrivals": arr[c]} for c in cells}
+            # ⭐ M69: the scorer must be able to REFUSE a cap that shared its plan, rather than
+            # trusting whoever ran it to remember the flag.
+            out[key]["_plan"] = {"seed": seeds[key],
+                                 "per_arm_shuffle": bool(a.per_arm_shuffle),
+                                 "arms": list(arms)}
 
             def cell_rate(c):
                 h, n = rate(sc[c])
@@ -1562,6 +1730,10 @@ def main():
                     help="⭐ K12: sweep the PRIMER's length — field-UP time before a fixed "
                          "probe at a fixed index, separating elapsed time from read index")
     ap.add_argument("--primers", help="K12: comma-separated primer durations in ms")
+    ap.add_argument("--per-arm-shuffle", dest="per_arm_shuffle", action="store_true",
+                    help="⭐ K21/M69: give each arm its OWN derived cell-order seed. Required "
+                         "for any cap a CROSS-ARM correlation will be computed on; without it "
+                         "every arm shares one plan and position leaks in identically.")
     ap.add_argument("--k9", action="store_true",
                     help="⭐ K9: between-read gaps spanning the 500 ms burst, with arrivals")
     ap.add_argument("--k8", action="store_true",

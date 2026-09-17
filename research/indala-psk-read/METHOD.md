@@ -998,3 +998,52 @@ was declared uninformative before it ran, which is the one time this project got
 ⭐ And when a profile is high, the detectable feature is a **notch**, not a hump: the inverse
 threshold (median − Δ) has the power the forward one lacks, and an arm should be given the
 detector its own level can support.
+
+**M69 — ONE SHUFFLE FOR EVERY ARM IS A CROSS-ARM CONFOUND, AND ASKING *WHAT DO THE ARMS SHARE?*
+IS WHAT FOUND IT.**
+
+`burstsync.py`'s `k12()` built a single shuffled `plan` and ran **every arm through it**, so both
+arms saw the identical cell→position mapping in every round. M60 established that **position is a
+variable on this bench** — `lf keri reader` scored 2/12 ascending against 10/12 shuffled, same
+count, same demodulator. ⇒ whatever position contributes enters every arm's profile **identically**,
+and manufactures a positive **cross-arm** correlation out of nothing.
+
+⚠ **It does not touch a WITHIN-arm verdict**, which is every band from K12 to K20, so nothing
+banked is retracted. It is fatal only to a statistic that compares two arms cell by cell — and the
+first such statistic was K21's. ⇒ `--per-arm-shuffle` derives and records a separate seed per arm,
+and the scorer **REFUSES by name** a cap taken without it rather than trusting whoever ran it to
+have remembered the flag.
+
+⇒ **The general form: before comparing two arms, enumerate what the harness gives them in common.**
+The shuffle was introduced as the fix for M60 and became a confound one question later.
+
+**M70 — A BAND WITHDRAWN BY SIMULATION BEFORE ITS CAPTURE, WHICH IS THE FIRST TIME THAT HAS
+HAPPENED HERE, AND THE ONLY REASON IS THAT THE POWER WAS COMPUTED.**
+
+K21's Y2 asked whether the two arms' profiles are OFFSET: cross-correlate at lags 0, ±5..±25 ms and
+fire when the best non-zero lag beats lag 0 by >= 0.30 in both runs, with the sign agreeing. It was
+pre-registered, it was replicated across two seeds, and it was **broken**:
+
+- **41% false-fire rate** against a null of two INDEPENDENT smooth profiles. The median null gain
+  is **+0.37**, already above the threshold, because **lag 0 is one correlation and *the best of
+  ten lags* is an order statistic.** A maximum's null is not zero.
+- Raising the bar to a 0.3% false-fire rate needs a gain of **1.10**, and at that bar a **real
+  20 ms offset fires it 0.3% of the time.** Unusable at either end.
+- A fixed, signed, single pre-registered lag removes the argmax and is better — **37% power at a
+  5% false-fire rate, 18% at 2%** — and still not enough to make a silence mean anything.
+
+⇒ **Y2 was withdrawn before the bench was touched**, its lag table kept as labelled exploratory
+output with the power printed beside it. The answer it can honestly give is *the offset is not
+measurable on this ladder at this n* — which is a statement about the instrument, not about the air.
+
+⚠⚠ **THE POINT IS NOT THE STATISTIC, IT IS WHERE THE DEFECT WAS CAUGHT.** M62, M63, M64, M66, M67
+and M68 were all pre-registered and all six were found broken **by the data they were built to
+judge** — six captures spent discovering that six criteria could not carry a verdict. M70 was found
+by 4,000 draws of a simulated null and **cost no bench time at all**.
+
+⇒ **Simulate every band against a null and against the effect it claims to detect, before the
+capture.** Two numbers: the false-fire rate under no effect, and the power under the effect as
+described. If either is unacceptable the band is not ready, and finding that out on the bench is
+paying for it twice. ⭐ Y1, simulated the same way, came back at 77% power with symmetric ~2%
+errors and a real 20 ms offset landing in NO VERDICT 98% of the time — so the method does not only
+kill bands, it licenses them.

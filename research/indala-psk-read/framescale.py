@@ -126,6 +126,7 @@ n=8 a single cell cannot carry it (M58). Recorded here rather than in the write-
 """
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -169,7 +170,8 @@ def pooled(cells, keys):
 
 
 def numeric_cells(cells):
-    return sorted((k for k in cells if k != "none"), key=int)
+    # `_`-prefixed keys are burstsync metadata (`_plan`, M69), never ladder cells.
+    return sorted((k for k in cells if k != "none" and not k.startswith("_")), key=int)
 
 
 def table():
@@ -627,6 +629,226 @@ def k20(paths):
                  if back else "this ladder's top edge licenses NO wing for this arm either"))
 
 
+K21_LADDER = [str(x) for x in range(85, 201, 5)]
+K21_R = 0.52          # Y1: the p=0.01 two-tailed permutation critical |spearman| at 24 cells
+# ⛔⛔ Y2 IS WITHDRAWN AND CARRIES NO THRESHOLD (M70). The argmax-over-lags statistic false-fired
+# 41% of the time against two INDEPENDENT profiles (median null gain +0.37 against a 0.30 band);
+# at a 0.3% false-fire bar it needs a gain of 1.10 and then detects a real 20 ms offset 0.3% of
+# the time. A fixed signed lag of +4 cells is better and still only 37% power at a 5% false-fire
+# rate. ⇒ the lag table is PRINTED, labelled exploratory, and no verdict is read off it.
+K21_LAGS = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]     # cells; the ladder step is 5 ms
+K21_LAG_PREREG = 4    # the direction the post-hoc observation names: `keri` 20 ms BELOW `indala`
+K21_REGIONS = {                                    # Y3, named by K19/K20 BEFORE this run
+    "keri":   ([["95", "100", "105"], ["140", "145", "150"]], False),
+    "indala": ([["115", "120", "125", "130"], ["165", "170", "175"]], True),
+}
+K21_REGION_CELLS = 2   # Y3: cells of a region that must meet the detector, in BOTH seeds
+
+
+def _ranks(v):
+    """Average ranks, so ties are handled — every cell rate here is one of nine values."""
+    idx = sorted(range(len(v)), key=lambda i: v[i])
+    out = [0.0] * len(v)
+    i = 0
+    while i < len(idx):
+        j = i
+        while j + 1 < len(idx) and v[idx[j + 1]] == v[idx[i]]:
+            j += 1
+        avg = (i + j) / 2.0 + 1
+        for k in range(i, j + 1):
+            out[idx[k]] = avg
+        i = j + 1
+    return out
+
+
+def _pearson(a, b):
+    n = len(a)
+    if n < 3:
+        return float("nan")
+    ma, mb = sum(a) / n, sum(b) / n
+    sa = math.sqrt(sum((x - ma) ** 2 for x in a))
+    sb = math.sqrt(sum((x - mb) ** 2 for x in b))
+    if sa == 0 or sb == 0:
+        return float("nan")
+    return sum((a[i] - ma) * (b[i] - mb) for i in range(n)) / (sa * sb)
+
+
+def _spearman(a, b):
+    return _pearson(_ranks(a), _ranks(b))
+
+
+def _profile(cells, ladder):
+    return [100.0 * cell_rate(cells[k]["scores"])[0] / len(cells[k]["scores"]) for k in ladder]
+
+
+def _gate(name, c, cells):
+    """The three gates every K17+ run carries. Returns (ok, one printable line)."""
+    allr, _, alln = pooled(c, cells)
+    halves = []
+    for lo, hi in ((0, 0.5), (0.5, 1.0)):
+        h = n = 0
+        for k in cells:
+            sc = c[k]["scores"]
+            part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+            h += sum(1 for _, e in part if e)
+            n += len(part)
+        halves.append(100.0 * h / n if n else 0.0)
+    drift = abs(halves[1] - halves[0])
+    arr = max(max(c[k]["arrivals"]) for k in cells)
+    bad = []
+    if allr < K17_NO_POWER:
+        bad.append("NO POWER")
+    if drift > K17_DRIFT:
+        bad.append("DRIFTED")
+    if arr > 0.6:
+        bad.append("P1 — a cell reached %.2f arrivals/read" % arr)
+    return (not bad,
+            "   gate %s: pooled %.1f%% of %d | split-half delta %.1f | worst P1 %.2f%s"
+            % (name, allr, alln, drift, arr,
+               "" if not bad else "   ⛔ " + "; ".join(bad)))
+
+
+def k21(paths):
+    """Y1/Y2/Y3 — is the `indala`/`keri` structure ONE profile or two offset ones?
+
+    ⛔ Each path is one RUN carrying BOTH arms, and the run must have been captured with
+    `--per-arm-shuffle`: without it the two arms share a cell-to-position mapping and any
+    cross-arm correlation is partly manufactured (M69). This refuses such a cap by name."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K21 — do `indala` and `keri` share ONE lead-time profile?")
+    print("   ⛔ *Interleaving* was read off two profiles scored with OPPOSITE detectors, and")
+    print("   one shared profile reproduces that by construction. Y1 is the discriminating test.")
+    print("")
+
+    ok_runs = []
+    for name, d in runs:
+        arms = [a for a in ("indala", "keri") if a in d]
+        if len(arms) < 2:
+            print("### %s ⛔ carries %s — K21 needs BOTH arms from ONE run\n"
+                  % (name, ",".join(sorted(d)) or "nothing"))
+            continue
+        plans = {a: d[a].get("_plan") for a in arms}
+        if not all(p and p.get("per_arm_shuffle") for p in plans.values()):
+            print("### %s ⛔⛔ REFUSED — captured WITHOUT `--per-arm-shuffle` (M69): both arms"
+                  % name)
+            print("   shared one cell order, so a cross-arm correlation is partly the shuffle")
+            print("   and not the air.\n")
+            continue
+        cells = numeric_cells(d[arms[0]])
+        ladder = [k for k in K21_LADDER if k in cells]
+        if len(ladder) < len(K21_LADDER):
+            print("### %s ⛔ partial ladder — not scored\n" % name)
+            continue
+        gates, lines = [], []
+        for a in arms:
+            g, line = _gate("%s %s" % (name, a), d[a], numeric_cells(d[a]))
+            gates.append(g)
+            lines.append(line)
+        profs = {a: _profile(d[a], ladder) for a in arms}
+        print("### %s   plan seeds %s"
+              % (name, ", ".join("%s=%d" % (a, plans[a]["seed"]) for a in arms)))
+        for line in lines:
+            print(line)
+        if not all(gates):
+            print("   ⇒ ⛔ NO VERDICT for this run — a gate failed.\n")
+            continue
+        r0 = _spearman(profs["indala"], profs["keri"])
+        lagged = []
+        for L in K21_LAGS:
+            # ⭐ a POSITIVE lag shifts `keri` UP the ladder relative to `indala`.
+            if L > 0:
+                x, y = profs["indala"][L:], profs["keri"][:-L]
+            else:
+                x, y = profs["indala"][:L], profs["keri"][-L:]
+            lagged.append((L, _spearman(x, y), len(x)))
+        best = max(lagged, key=lambda t: t[1])
+        preg = [t for t in lagged if t[0] == K21_LAG_PREREG][0]
+        print("   Y1 cross-arm spearman at lag 0: **%+.3f** over %d cells" % (r0, len(ladder)))
+        print("   ⚠ EXPLORATORY, NO VERDICT (Y2 withdrawn, M70) — lags (ms, r, n): %s"
+              % "  ".join("%+d:%+.2f/%d" % (L * 5, r, n) for L, r, n in lagged))
+        print("      best non-zero %+d ms at %+.3f (gain %+.3f); the pre-registered %+d ms at "
+              "%+.3f (gain %+.3f)"
+              % (best[0] * 5, best[1], best[1] - r0,
+                 K21_LAG_PREREG * 5, preg[1], preg[1] - r0))
+        ok_runs.append({"name": name, "r0": r0, "best": best, "preg": preg, "profs": profs,
+                        "ladder": ladder, "d": d})
+        print("")
+
+    if len(ok_runs) < 2:
+        print("⇒ ⛔ NO VERDICT — Y1 and Y2 both require BOTH runs to agree, and %d scored.\n"
+              % len(ok_runs))
+        return
+
+    rs = [o["r0"] for o in ok_runs]
+    if all(r >= K21_R for r in rs):
+        y1 = ("**Y1 — SHARED.** Both runs at or above +%.2f: the arms track each other, and"
+              "\n     *interleaving* is an artifact of opposite detectors on arms with different"
+              "\n     medians. ⚠ This is the direction foreknowledge pointed at (disclosed in the"
+              "\n     band), so it is the weaker of the two verdicts this design can return."
+              % K21_R)
+    elif all(r <= -K21_R for r in rs):
+        y1 = ("**Y1 — OPPOSED.** Both runs at or below −%.2f: one arm is high where the other is"
+              "\n     low. That is the strong form of the interleaving reading, and foreknowledge"
+              "\n     pointed the other way." % K21_R)
+    else:
+        y1 = ("⛔ **Y1 — NO VERDICT.** %s against a pre-registered ±%.2f in BOTH runs."
+              % (" and ".join("%+.3f" % r for r in rs), K21_R))
+    print("⇒ %s" % y1)
+
+    print("")
+    print("⇒ ⛔ **Y2 — WITHDRAWN BEFORE THE CAPTURE (M70), so nothing here is a verdict.** The "
+          "argmax")
+    print("     statistic false-fired 41% against independent profiles; at a 0.3% bar it has "
+          "0.3%")
+    print("     power against a real 20 ms offset. A fixed +%d-cell lag reaches only 37%% power "
+          "at a" % K21_LAG_PREREG)
+    print("     5% false-fire rate. ⇒ **the offset is not measurable on this ladder at this n**, "
+          "and")
+    print("     a silent Y2 is NOT evidence that the arms are aligned.")
+    print("     for the record: best-lag gains %s | pre-registered %+d ms gains %s"
+          % (", ".join("%+.3f" % (o["best"][1] - o["r0"]) for o in ok_runs),
+             K21_LAG_PREREG * 5,
+             ", ".join("%+.3f" % (o["preg"][1] - o["r0"]) for o in ok_runs)))
+    print("")
+    print("## Y3 — do K19/K20's NAMED regions come back on fresh seeds?")
+    y3 = True
+    for arm, (regions, below) in sorted(K21_REGIONS.items()):
+        meds, rate_ofs = [], []
+        for o in ok_runs:
+            c = o["d"][arm]
+            r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            rate_ofs.append(r)
+            vals = sorted(r(k) for k in o["ladder"])
+            meds.append(0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2])
+                        if len(vals) % 2 == 0 else vals[len(vals) // 2])
+        thr = [(m - K20_LOW) if below else (m + K19_HIGH) for m in meds]
+        print("   %-7s median %s   detector %s %s"
+              % (arm, "/".join("%.0f%%" % m for m in meds),
+                 "notch <=" if below else "high >=", "/".join("%.0f%%" % t for t in thr)))
+        for reg in regions:
+            per_seed = []
+            for i in range(len(ok_runs)):
+                if below:
+                    hit = [k for k in reg if rate_ofs[i](k) <= thr[i]]
+                else:
+                    hit = [k for k in reg if rate_ofs[i](k) >= thr[i]]
+                per_seed.append(hit)
+            ok = all(len(h) >= K21_REGION_CELLS for h in per_seed)
+            y3 = y3 and ok
+            print("      %-18s %s ⇒ %s"
+                  % (",".join(reg),
+                     " | ".join("%s: %s" % (ok_runs[i]["name"].split("_")[-1],
+                                            ",".join(per_seed[i]) or "none")
+                                for i in range(len(per_seed))),
+                     "replicates" if ok else "⛔ FALLS SHORT"))
+    print("   ⇒ **Y3 %s** — all four named regions carry >= %d cells in BOTH fresh seeds%s"
+          % ("FIRES" if y3 else "REFUTED", K21_REGION_CELLS,
+             "" if y3 else ": at least one does not."))
+    print("")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -637,9 +859,14 @@ def main():
                     help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
     ap.add_argument("--k19", nargs="+", metavar="CAP",
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
+    ap.add_argument("--k21", nargs="+", metavar="CAP",
+                    help="⭐ K21: runs carrying BOTH arms, captured with --per-arm-shuffle")
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k21:
+        k21(a.k21)
+        return 0
     if a.k20:
         k20(a.k20)
         return 0
