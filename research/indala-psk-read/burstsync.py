@@ -376,6 +376,67 @@ cells, and the within-half range is over {20..120}.
 tests one lag and not a profile. A periodicity claim from four pairs at one lag is weaker than the
 six this criterion first asked for, and it is not to be written up as though it were the same test.
 
+
+## ⛔⛔⛔ K13 — P2's BAND FIRED AND THE PROFILE REFUTES WHAT IT WAS WRITTEN TO LICENSE
+
+**K12's run (seed 17, reps 24, 264 sessions, `caps/k12_gproxii_s17.json`) came back saturated with
+ONE deep notch, and P2's pooled contrast fired on the notch rather than on a rise:**
+
+    none  0/24 = 0%     ⭐ the bench-moved control PASSES — C512's 0% reproduced
+    20    24/24  100%   |  120  22/24   92%
+    40    22/24   92%   |  140  24/24  100%
+    60     2/24    8%   ⛔ THE NOTCH   |  160  20/24   83%
+    80    22/24   92%   |  180  20/24   83%
+    100   24/24  100%   |  200  23/24   96%
+
+Nine of the ten cells sit in **83-100%, a range of 17 points, median 92%**. P1 held at **0.50
+arrivals per read in every cell**, so one burst spanned primer and probe throughout and the
+elapsed axis is real.
+
+⛔⛔ **AND P2 IS AN ARTIFACT OF WHERE THE NOTCH FELL.** Bottom three {20,40,60} = 67% against top
+three {160,180,200} = 88%, so +21 points and the band fires at >= 20. **Bottom TWO {20,40} = 96%**
+— higher than the top three. The ten cells are non-decreasing in only **5 of 9** adjacent steps and
+the two large steps are **-83 and +83**: the notch's own walls. **There is no rise; there is a
+notch in the bottom bin.**
+
+⭐ **THIS IS A METHOD FAILURE IN MY OWN CRITERION, NOT A BENCH RESULT** (M62). A pooled contrast
+over three cells is **not robust to a single-cell outlier**, and P2 was written with no
+monotonicity requirement at all — so one cell at 8% in a field of 92% is enough to manufacture a
+21-point "rise". The band was pre-registered, it fired, and believing it would have been wrong.
+
+⇒ **THE SUBSTANTIVE READING OF K12 IS ITS OWN NO POWER BRANCH.** Every reachable cell is saturated
+(>= 83%) while the no-primer control is at **0%**, so the whole 0% → ~92% transition happens
+**below 212 ms of elapsed time — inside the ~190 ms floor this design cannot reach.** K12 therefore
+LOCATES the process below its floor and says nothing about its shape, which is exactly what the
+NO POWER branch was written to say.
+
+⭐ **The notch is silence, not a wrong answer**: marker 2/24 = exact 2/24 at that cell, against
+24/24 = 24/24 at its neighbours. The demodulator goes quiet there; it does not decode and lie
+(contrast C502).
+
+**K13 — a straight replication at a fresh seed, same ten cells, same probe, nothing else changed.**
+
+  **Q1 — the notch REPRODUCES** ⇒ cell 60 comes back **<= 25%** while the median of the other nine
+  is **>= 75%**. ⇒ a real, cell-specific effect at n=48 pooled, and it needs its own explanation.
+  **Q2 — it does NOT** ⇒ cell 60 comes back **>= 75%**, inside the field. ⇒ K12's cell was a fluke
+  despite n=24, and P2's firing was pure artifact. Report that and claim nothing further.
+  between ⇒ no verdict on the notch.
+
+  **Q3 — P2 AMENDED, DECLARED HERE BEFORE THE RUN.** A rise is claimed only if the top-three vs
+  bottom-three contrast is **>= 20 points** AND the ten cells are non-decreasing in **>= 7 of the
+  9** adjacent steps. ⛔ **Pre-registered consequence: if Q1 holds and Q3 fails, K12's P2 is
+  WITHDRAWN as an artifact of the notch** and H_settle is not supported by either run.
+  ⚠ The amended band is applied to K13 prospectively and recomputed on K12 retrospectively; the
+  retrospective figure is labelled as such wherever it appears.
+
+  **Q4 — the NO POWER statement, and it is what the pair of runs actually establishes.** Excluding
+  the notch cell, the nine remaining cells' range is **<= 20 points** with a minimum **>= 75%**,
+  against a control at **<= 15%**. ⇒ the transition is entirely below the floor and the shape above
+  it carries no information about it.
+
+⛔ P1 and the bench-moved control carry over unchanged and are checked again. ⚠ Still one arm,
+still `gproxii`, still ungraded — no null sweep, no calibration row, no licence, moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -857,11 +918,22 @@ def k12(a, arms, primers):
             th, tn = rate(top)
             bp = 100.0 * bh / bn if bn else float("nan")
             tp = 100.0 * th / tn if tn else float("nan")
-            p2 = (tp - bp) >= 20.0
+            rs_all = [cell_rate(c)[0] for c in primers]
+            steps = [rs_all[i + 1] - rs_all[i] for i in range(len(rs_all) - 1)]
+            nondec = sum(1 for s in steps if s >= 0)
+            # ⛔ Q3, DECLARED IN THE DOCSTRING BEFORE K13's CAPTURE. The contrast alone is not
+            # robust to a single-cell notch: K12's seed-17 run fired it at +21 points with its
+            # bottom TWO cells at 96%, above the top three. A rise now needs the shape too.
+            contrast = (tp - bp) >= 20.0
+            mono = nondec >= 7
+            p2 = contrast and mono
             print("   P2 H_settle: bottom three %d/%d=%.0f%% vs top three %d/%d=%.0f%%  "
-                  "Δ %+.0f pts ⇒ %s"
-                  % (bh, bn, bp, th, tn, tp, tp - bp,
-                     "RISES with elapsed time" if p2 else "no rise at the pre-registered 20 pts"))
+                  "Δ %+.0f pts (contrast %s)"
+                  % (bh, bn, bp, th, tn, tp, tp - bp, "fires" if contrast else "no"))
+            print("      Q3 shape: steps %s ⇒ non-decreasing in %d of %d ⇒ %s"
+                  % (" ".join("%+.0f" % s for s in steps), nondec, len(steps),
+                     "a rise" if mono else
+                     "⛔ NOT a rise — the contrast is not carried by the profile"))
 
             # P3 — H_phase. The pairs are one full cycle apart to within 1.6 ms.
             pairs = [(c, c + K12_PAIR_LAG_MS) for c in primers
@@ -882,9 +954,32 @@ def k12(a, arms, primers):
             rs = [cell_rate(c)[0] for c in primers]
             span = max(rs) - min(rs)
             p4 = span <= 15.0
-            print("   P4 H_index: range across the twelve cells %.0f pts ⇒ %s"
-                  % (span, "FLAT — elapsed time does not matter"
+            print("   P4 H_index: range across the %d cells %.0f pts ⇒ %s"
+                  % (len(rs), span, "FLAT — elapsed time does not matter"
                      if p4 else "not flat"))
+
+            # ⭐ Q1/Q2 — the notch. Reported as a NAMED cell, not as "the minimum", so a run
+            # with no notch cannot dress its lowest cell up as one.
+            lo = min(primers, key=lambda c: cell_rate(c)[0])
+            lo_r = cell_rate(lo)[0]
+            rest = sorted(cell_rate(c)[0] for c in primers if c != lo)
+            med = rest[len(rest) // 2]
+            notch = lo_r <= 25.0 and med >= 75.0
+            print("   Q1/Q2 notch: lowest cell is %d ms at %.0f%%, median of the other nine "
+                  "%.0f%% ⇒ %s"
+                  % (lo, lo_r, med,
+                     "A NOTCH — cell-specific and it needs its own explanation" if notch
+                     else "no notch at the pre-registered bands"))
+
+            # ⭐ Q4 — the NO POWER statement, computed with the notch cell excluded.
+            nine = [cell_rate(c)[0] for c in primers if c != lo]
+            q4 = (max(nine) - min(nine)) <= 20.0 and min(nine) >= 75.0 and ctl_ok
+            print("   Q4 no-power: the nine cells off the notch span %.0f pts, min %.0f%%, "
+                  "control %.0f%% ⇒ %s"
+                  % (max(nine) - min(nine), min(nine), cr,
+                     "the 0%%→~%.0f%% transition is entirely BELOW the ~%d ms floor"
+                     % (med, K12_OVERHEAD_MS) if q4
+                     else "the profile above the floor is not saturated-flat"))
 
             if not ctl_ok:
                 v = ("⇒ ⛔⛔ NO VERDICT — the bench-moved control failed and that decides it "
@@ -892,6 +987,14 @@ def k12(a, arms, primers):
             elif not p1_ok:
                 v = ("⇒ ⛔ NO VERDICT — P1 failed, so at least one cell's elapsed axis does not "
                      "exist.")
+            elif q4:
+                v = ("⇒ **NO POWER ON THE SHAPE, AND IT LOCATES THE PROCESS** — every cell off "
+                     "the notch is\n     saturated while the no-primer control is at %.0f%%, so "
+                     "the whole transition happens\n     inside the ~%d ms floor this design "
+                     "cannot reach. Pre-registered NO POWER branch.%s"
+                     % (cr, K12_OVERHEAD_MS,
+                        "\n     ⛔ AND THE NOTCH AT %d ms IS UNEXPLAINED BY EITHER HYPOTHESIS."
+                        % lo if notch else ""))
             elif p4 and min(rs) >= 85.0:
                 v = ("⇒ **NO POWER ON THE SHAPE, AND IT LOCATES THE PROCESS** — every primer "
                      "cell is saturated\n     while the no-primer control is at %.0f%%, so "
