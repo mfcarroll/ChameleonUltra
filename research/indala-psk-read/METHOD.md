@@ -718,3 +718,33 @@ reason alone.
 ⚠ What survives non-stationarity is a **zero against a non-zero** — *this arm decoded at all* is a
 fact about the arm, not about the hour. What does not survive is *this arm decodes more often than
 that one*. M58 is about n; this is about when.
+**M60 — ORDER IS A VARIABLE. IF EVERY SETTING SITS AT A FIXED POSITION IN THE SEQUENCE, YOU ARE
+MEASURING POSITION AND CALLING IT THE SETTING.**
+
+M59 fixed *when* arms are measured relative to each other. This is the same disease one level down:
+inside a single session, a ladder of settings run in ascending order gives each setting a **fixed
+position after the arming**, so position and setting are perfectly correlated and nothing in the
+result can separate them.
+
+⭐ **It was caught by a control that could have failed, and only just.** Sweeping read length per
+arm, ascending, `lf keri reader` scored **2/12** against `lf read -s 10000` + `lf keri demod`
+**10/12**. But `cmdlfkeri.c:222` is `lf_read(false, 10000); demodKeri()` — the *same count* through
+the *same demodulator*. The two differed in nothing but where they sat in the sequence, so a 5x gap
+was position and could be nothing else. ⇒ The rung was in the ladder as a control on the reader
+command's code path (a hypothesis worth testing after C487), and instead it caught the experiment.
+
+⛔⛔ **AND THE EFFECT WAS AS BIG AS THE ONE BEING MEASURED.** Shuffled, `gproxii` went from 0/12 to
+5/12 on its own reader, and its 12,288-sample rung from **0/12 to 8/12**. The ascending run's zeros
+were an artifact of position, and would have been written up as a knife-edge length window —
+a false mechanism, with n=12 behind it and a tidy story attached.
+
+⭐ The fix is one line: **shuffle the ladder within each round, and record the seed.** It costs
+nothing, it needs no extra captures, and it turns position from a confound into noise.
+
+⚠ **This retroactively qualifies every fixed-order sweep in this project**, C498 included: there
+the short read was the *second* command after arming every time. Its zero-versus-non-zero findings
+survive (M59's last paragraph), its levels do not.
+
+⇒ Before any sweep: **ask what else is monotone with the variable.** Position, temperature, time
+since arming, buffer state, and sequence index are all free to masquerade as the thing being swept.
+

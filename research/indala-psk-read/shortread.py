@@ -1,20 +1,37 @@
 #!/usr/bin/env python3
-"""Does C490 generalise? Each emulate arm read TWICE — the reader's own way, and with a short read.
+"""Which read LENGTH decodes each emulate arm? Interleaved, a ladder of lengths per arm.
 
-    ./shortread.py                       # all six silent arms
-    ./shortread.py indala keri --repeat 5
+    ./shortread.py --interleave --repeat 8        # the whole ladder, all six arms
+    ./shortread.py gproxii --lengths 6144,10000,12288 --repeat 10
+    ./shortread.py --interleave --repeat 2 --null # the control: every count must be zero
 
 ⭐⭐ WHY. C490 measured that `lf indala reader` is silent on our emulation while `lf read -s 4096`
 followed by `lf indala demod` returns the armed credential byte-exact, 4 of 4, in the same session
 and the same field. The reader's own source says why: `cmdlfindala.c:633` is `lf_read(false,
 30000)` — 240 ms, against the short read's 33 ms — and a span that long carries enough of C486's
-beat to defeat the demodulator. ⇒ **The obvious question is whether the other five silent arms are
-the same story**, and that is what this answers.
+beat to defeat the demodulator.
 
-⛔⛔ THE A/B IS THE POINT AND IT MUST BE INTERLEAVED. Both reads run in ONE pm3 session, alternating,
-so field strength, coupling, temperature and the arm itself are identical between them. The ONLY
-variable is how many samples the client asks for. A run that did all the long reads and then all
-the short ones would confound the answer with drift.
+⛔⛔ **BUT "USE A SHORT READ" IS NOT THE RULE (C498).** At one length per arm, interleaved,
+`gproxii` went 0/8 → 8/8 at 12288 while `keri` went the OTHER WAY — 3/8 on its own 10,000-sample
+read against 0/8 at 4096. Each arm has a WINDOW, bounded below by needing whole frames and above by
+the ~61 ms fading period. ⇒ **So the question is no longer "short or long" but "how many samples,
+for this arm", and that is what this tool now sweeps.**
+
+⛔ THE A/B IS THE POINT AND IT MUST BE INTERLEAVED. Every length for one arm runs inside ONE pm3
+session and one arming, so field strength, coupling, temperature and the arm itself are identical
+across the ladder — the ONLY variable is the sample count. Arms are then ROUND-ROBINED one round at
+a time (`--interleave`, M59), so the bench's wander moves every arm together.
+
+⛔⛔ AND THE RUNGS ARE SHUFFLED, because ascending order confounds the sample count with the
+POSITION of the read after arming. The first run of this ladder scored `lf keri reader` 2/12 against
+`lf read -s 10000` + `lf keri demod` 10/12 — and `cmdlfkeri.c:222` is `lf_read(false, 10000);
+demodKeri()`, i.e. the SAME count through the SAME demodulator, so nothing but position could
+differ. Shuffled (the default; `--no-shuffle` reproduces a pre-M60 run) the two agree. M60.
+
+⭐ EACH ARM'S LADDER INCLUDES ITS OWN READER'S SAMPLE COUNT, and that is the control that makes the
+rest readable. `lf gproxii reader` asks for 10,000 samples; so does one rung of gproxii's ladder. If
+the two disagree AT THE SAME N, the difference is the reader command's code path and not the length
+— which is C487's save/load artifact showing up somewhere it was thought bounded away from.
 
 ⛔ TWO SCORES, NOT ONE, because they answer different questions:
   - `marker` — the registry's own decode marker matched PER LINE (C488: a marker is matched
@@ -23,12 +40,14 @@ the short ones would confound the answer with drift.
   - `exact`  — the armed credential appears in the output. It says the frame was OURS, byte for
     byte. ⭐ A marker without an exact is a decoded frame carrying the WRONG payload, which is a
     result in its own right and is reported as such: C490 saw exactly that from a one-frame window
-    (`a0000000e4000000` for `a0000000e6bd0e92`), confidently and with no warning.
+    (`a0000000e4000000` for `a0000000e6bd0e92`), confidently and with no warning. ⭐⭐ The ladder's
+    SHORTEST rung is one frame precisely so that failure mode gets sampled rather than avoided.
 
-⛔ THE SHORT READ IS SIZED PER ARM at roughly two frames, because one frame is demonstrably enough
-to produce a confident wrong answer and not enough to check itself. Frame lengths are the arm's
-own: 64 bits x RF/32 for the PSK64 arms, 128 x RF/32 for NexWatch, 224 x RF/32 for Indala224,
-96 x RF/64 for GProxII.
+⛔ LADDER CONSTRUCTION, so nobody has to reverse it from the numbers: multiples 1,2,3,4,6 of the
+arm's OWN frame length in samples, plus its reader's own count, deduped, sorted, capped at 40,000
+(the largest `lf read -s` this bench has used — C487/C488). Frame lengths are the arm's own:
+64 bits x RF/32 for the PSK64 arms, 128 x RF/32 for NexWatch, 224 x RF/32 for Indala224,
+96 x RF/64 for GProxII. At 125 kHz one sample is one carrier cycle, so samples/125000 = seconds.
 
 ⛔⛔ THIS GRADES NOTHING. No null sweep, no calibration row, no licence — a manual observation
 like C487/C488/C490. It cannot move a cell in the matrix and must never be reported as if it had.
@@ -39,37 +58,59 @@ repos. If one drifts from the other that is a thing to report, not to paper over
 """
 import argparse
 import json
+import random
 import re
 import subprocess
 import sys
 import os
+from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import seqdump
 
 PM3 = "/Users/Shared/code/personal/rfid/proxmark3/pm3"
+SAMPLE_HZ = 125000          # one LF sample per carrier cycle
+MAX_SAMPLES = 40000         # the largest `lf read -s` this bench has used (C487/C488)
 
-# key -> (cu slot type, econfig, pm3 reader cmd, decode marker regex, expected raw, short samples)
+
+class Arm(NamedTuple):
+    typ: str                # cu slot type
+    econfig: str            # cu econfig command, `%d` is the slot
+    reader: str             # the pm3 reader command the MATRIX grades on
+    marker: str             # registry decode-marker regex, matched per LINE
+    expect: str             # the armed credential, byte for byte
+    frame: int              # this arm's frame length in samples
+    reader_n: int           # how many samples its own reader command asks for
+
+
 ARMS = {
-    "indala": ("Indala", "lf indala econfig -s %d --id a0000000e6bd0e92",
-               "lf indala reader", r"Indala \(len", "a0000000e6bd0e92", 4096),
-    "keri": ("Keri", "lf keri econfig -s %d --id 80003039",
-             "lf keri reader", r"KERI - Internal ID|Descrambled MS - FC:|probably KERI",
-             "80003039", 4096),
-    "idteck": ("IDTECK", "lf idteck econfig -s %d --id 4944544b55667788",
-               "lf idteck reader", r"IDTECK Tag Found: Card ID", "4944544B55667788", 4096),
-    "nexwatch": ("NexWatch", "lf nexwatch econfig -s %d --cn 87654321 -m 2",
-                 "lf nexwatch reader", r"NexWatch raw id|88bit id", "87654321", 8192),
-    "indala224": ("Indala224",
-                  "lf indala econfig -s %d --id "
-                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5 --224",
-                  "lf indala reader", r"Indala \(len",
-                  "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 16384),
-    "gproxii": ("GProxII", "lf gproxii econfig -s %d --raw fac2a38c2b081af0210b12c2",
-                "lf gproxii reader", r"G-Prox-II - (Unknown )?[Ll]en:",
-                "fac2a38c2b081af0210b12c2", 12288),
+    "indala": Arm("Indala", "lf indala econfig -s %d --id a0000000e6bd0e92",
+                  "lf indala reader", r"Indala \(len", "a0000000e6bd0e92", 2048, 30000),
+    "keri": Arm("Keri", "lf keri econfig -s %d --id 80003039",
+                "lf keri reader", r"KERI - Internal ID|Descrambled MS - FC:|probably KERI",
+                "80003039", 2048, 10000),
+    "idteck": Arm("IDTECK", "lf idteck econfig -s %d --id 4944544b55667788",
+                  "lf idteck reader", r"IDTECK Tag Found: Card ID", "4944544B55667788", 2048, 5000),
+    "nexwatch": Arm("NexWatch", "lf nexwatch econfig -s %d --cn 87654321 -m 2",
+                    "lf nexwatch reader", r"NexWatch raw id|88bit id", "87654321", 4096, 20000),
+    "indala224": Arm("Indala224",
+                     "lf indala econfig -s %d --id "
+                     "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5 --224",
+                     "lf indala reader", r"Indala \(len",
+                     "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 7168, 30000),
+    "gproxii": Arm("GProxII", "lf gproxii econfig -s %d --raw fac2a38c2b081af0210b12c2",
+                   "lf gproxii reader", r"G-Prox-II - (Unknown )?[Ll]en:",
+                   "fac2a38c2b081af0210b12c2", 6144, 10000),
 }
 ORDER = ["indala", "keri", "idteck", "nexwatch", "indala224", "gproxii"]
+MULTIPLES = (1, 2, 3, 4, 6)
+
+
+def ladder(key):
+    """The arm's own frame times MULTIPLES, plus its reader's count. See the module docstring."""
+    a = ARMS[key]
+    ns = {a.frame * m for m in MULTIPLES} | {a.reader_n}
+    return sorted(n for n in ns if n <= MAX_SAMPLES)
 
 
 def score(block, marker, expect):
@@ -80,23 +121,37 @@ def score(block, marker, expect):
     return hit, ex
 
 
-def run(port, key, repeat, timeout, null=False):
+def run(port, key, repeat, timeout, lengths=None, null=False, shuffle=True,
+        rng=random):
     """⛔ `null=True` RUNS THE IDENTICAL COMMANDS WITH NOTHING ARMED. Rig B is tagless, so every
     count must be zero; a single hit there means the reads are picking up something that is not
     our emission, and no armed figure in the same run can be believed."""
-    typ, ec, rd, marker, expect, n = ARMS[key]
-    demod = rd.replace(" reader", " demod")
+    a = ARMS[key]
+    ns = lengths or ladder(key)
+    demod = a.reader.replace(" reader", " demod")
     if null:
         seqdump.disarm(port)
     else:
-        ok, why = seqdump.arm(port, typ, ec)
+        ok, why = seqdump.arm(port, a.typ, a.econfig)
         if not ok:
             return {"arm": key, "error": "ARM FAILED: " + why}
     cmds = []
     for _ in range(repeat):
-        cmds.append(rd)
-        cmds.append("lf read -s %d" % n)
-        cmds.append(demod)
+        # ⛔⛔ ORDER IS A CONFOUND AND IT NEARLY COST A FINDING. Ascending rungs put every sample
+        # count at a FIXED POSITION after the arming, so position and length are perfectly
+        # correlated and any warm-up effect reads as a length effect. The first ascending run
+        # scored `lf keri reader` 2/12 against `lf read -s 10000` + `lf keri demod` 10/12 — the
+        # SAME count through the SAME demodulator (`cmdlfkeri.c:222` is `lf_read(false, 10000);
+        # demodKeri()`), so the gap could only be position. Shuffling decorrelates them. M60.
+        items = [None] + list(ns)          # None = the arm's own reader command
+        if shuffle:
+            rng.shuffle(items)
+        for it in items:
+            if it is None:
+                cmds.append(a.reader)
+            else:
+                cmds.append("lf read -s %d" % it)
+                cmds.append(demod)
     r = subprocess.run([PM3, "-c", "; ".join(cmds)], capture_output=True, text=True,
                        timeout=timeout)
     out = r.stdout + r.stderr
@@ -113,13 +168,37 @@ def run(port, key, repeat, timeout, null=False):
     if label is not None:
         blocks.append((label, "\n".join(cur)))
 
-    res = {"arm": key, "short_samples": n, "long": [], "short": []}
+    res = {"arm": key, "lengths": ns, "reader_n": a.reader_n, "frame": a.frame,
+           "long": [], "by_len": {n: [] for n in ns}}
+    pending = None      # the `lf read -s N` whose samples the next demod will judge
     for label, body in blocks:
-        if label == rd:
-            res["long"].append(score(body, marker, expect))
-        elif label == demod:
-            res["short"].append(score(body, marker, expect))
+        m = re.match(r"lf read -s (\d+)$", label)
+        if m:
+            pending = int(m.group(1))
+        elif label == a.reader:
+            res["long"].append(score(body, a.marker, a.expect))
+        elif label == demod and pending is not None:
+            res["by_len"][pending].append(score(body, a.marker, a.expect))
+            pending = None
     return res
+
+
+def fmt(res):
+    """One line per arm: its own reader, then every rung of the ladder."""
+    key = res["arm"]
+    lx = sum(1 for _, e in res["long"] if e)
+    lm = sum(1 for h, _ in res["long"] if h)
+    rungs = []
+    for n in res["lengths"]:
+        hits = res["by_len"][n]
+        ex = sum(1 for _, e in hits if e)
+        mk = sum(1 for h, _ in hits if h)
+        tag = "*" if n == res["reader_n"] else " "     # * = its own reader's sample count
+        odd = "!" if mk > ex else ""                   # marker without exact = WRONG payload
+        rungs.append("%d%s %d/%d%s" % (n, tag, ex, len(hits), odd))
+    return ("%-10s frame %-5d  %-18s exact %d/%d marker %d/%d\n            %s"
+            % (key, res["frame"], ARMS[key].reader, lx, len(res["long"]), lm, len(res["long"]),
+               "  ".join(rungs)))
 
 
 def main():
@@ -127,14 +206,23 @@ def main():
     ap.add_argument("arms", nargs="*", default=ORDER)
     ap.add_argument("--port", default=seqdump.CU2_PORT)
     ap.add_argument("--repeat", type=int, default=3)
-    ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--timeout", type=int, default=900)
+    ap.add_argument("--lengths", help="comma-separated sample counts, overriding every arm's "
+                                      "ladder. ⚠ Only meaningful for ONE arm at a time — the "
+                                      "ladders differ because the FRAMES differ.")
     ap.add_argument("--interleave", action="store_true",
-                    help="⭐ ROUND-ROBIN the arms one capture at a time (M59). The bench's hit "
+                    help="⭐ ROUND-ROBIN the arms one round at a time (M59). The bench's hit "
                          "rate wanders — the same arm gave 88%%, 60%%, 38%% and 75%% in one "
                          "evening — so arms measured one after another cannot be compared with "
                          "each other. Interleaved, whatever drifts moves all of them together and "
-                         "the ORDERING becomes readable. ⚠ Slower: it re-arms every round, "
-                         "which C497 measured as costing nothing (8/10 against 7/10).")
+                         "the ORDERING becomes readable. ⚠ Lengths WITHIN one arm are already "
+                         "safe without this: they share a session, a field and an arming.")
+    ap.add_argument("--no-shuffle", dest="shuffle", action="store_false",
+                    help="⛔ run the ladder in ASCENDING order. Off by default because it "
+                         "confounds sample count with position-after-arming (M60). Use it only "
+                         "to reproduce a pre-M60 run.")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="seed for the shuffle, so a run can be repeated exactly")
     ap.add_argument("--null", action="store_true",
                     help="run every read with NOTHING armed; every count must be zero")
     ap.add_argument("--json", action="store_true")
@@ -144,56 +232,65 @@ def main():
     if bad:
         print("unknown arm(s): %s\nknown: %s" % (", ".join(bad), ", ".join(ORDER)))
         return 2
+    lengths = None
+    if a.lengths:
+        lengths = sorted({int(x) for x in a.lengths.split(",")})
+        if len(a.arms) > 1:
+            print("⚠ --lengths with %d arms: the same ladder is being applied to different frame "
+                  "lengths, so the rungs are NOT comparable across arms." % len(a.arms))
+
+    seed = a.seed if a.seed is not None else random.randrange(1 << 30)
+    rng = random.Random(seed)
+    print("order: %s (seed %d)" % ("SHUFFLED" if a.shuffle else "⛔ ASCENDING", seed))
 
     out = []
     try:
         if a.interleave:
-            acc = {k: {"arm": k, "short_samples": ARMS[k][5], "long": [], "short": []}
-                   for k in a.arms}
+            acc = {}
+            for k in a.arms:
+                ns = lengths or ladder(k)
+                acc[k] = {"arm": k, "lengths": ns, "reader_n": ARMS[k].reader_n,
+                          "frame": ARMS[k].frame, "long": [], "by_len": {n: [] for n in ns}}
             for _ in range(a.repeat):
                 for key in a.arms:
-                    r = run(a.port, key, 1, a.timeout, null=a.null)
+                    r = run(a.port, key, 1, a.timeout, lengths=lengths, null=a.null,
+                            shuffle=a.shuffle, rng=rng)
                     if "error" in r:
                         print("%-10s %s" % (key, r["error"]))
                         continue
                     acc[key]["long"] += r["long"]
-                    acc[key]["short"] += r["short"]
+                    for n, v in r["by_len"].items():
+                        acc[key]["by_len"][n] += v
             out = [acc[k] for k in a.arms]
-            for r in out:
-                key = r["arm"]
-                lx = sum(1 for _, e in r["long"] if e)
-                sx = sum(1 for _, e in r["short"] if e)
-                print("%-10s  %-22s exact %d/%d   |   short -s %-5d exact %d/%d"
-                      % (key, ARMS[key][2], lx, len(r["long"]), r["short_samples"],
-                         sx, len(r["short"])))
         else:
+            # ⚠ valid per arm, NOT comparable across arms — M59.
             for key in a.arms:
-                r = run(a.port, key, a.repeat, a.timeout, null=a.null)
+                r = run(a.port, key, a.repeat, a.timeout, lengths=lengths, null=a.null,
+                        shuffle=a.shuffle, rng=rng)
                 out.append(r)
                 if "error" in r:
                     print("%-10s %s" % (key, r["error"]))
-                    continue
-                lm = sum(1 for h, _ in r["long"] if h)
-                lx = sum(1 for _, e in r["long"] if e)
-                sm = sum(1 for h, _ in r["short"] if h)
-                sx = sum(1 for _, e in r["short"] if e)
-                print("%-10s  %-22s marker %d/%d  exact %d/%d   |   short -s %-5d marker %d/%d  "
-                      "exact %d/%d"
-                      % (key, ARMS[key][2], lm, len(r["long"]), lx, len(r["long"]),
-                         r["short_samples"], sm, len(r["short"]), sx, len(r["short"])))
-            # (sequential mode: valid per arm, not comparable across arms — M59)
+        for r in out:
+            if "error" not in r:
+                print(fmt(r))
+        print("\n* = the arm's OWN reader sample count, run through `lf read` + `demod` instead "
+              "(H3's control)\n! = marker hit without an exact match: a decoded frame carrying "
+              "the WRONG payload")
     finally:
         print("\ndisarming cu2 ...")
         seqdump.disarm(a.port)
 
     if a.null:
-        tot = sum(sum(1 for h, _ in r.get("long", []) if h)
-                  + sum(1 for h, _ in r.get("short", []) if h) for r in out)
-        print("\n%s NULL: %d marker hits across every arm with NOTHING armed"
+        tot = 0
+        for r in out:
+            tot += sum(1 for h, _ in r.get("long", []) if h)
+            for v in r.get("by_len", {}).values():
+                tot += sum(1 for h, _ in v if h)
+        print("\n%s NULL: %d marker hits across every arm and length with NOTHING armed"
               % ("✅" if tot == 0 else "⛔⛔", tot))
     print("\n⛔ Ungraded: no null sweep, no calibration row, no licence. Moves no cell.")
     if a.json:
-        print(json.dumps(out, indent=2))
+        print(json.dumps(out, indent=2, default=str))
     return 0
 
 
