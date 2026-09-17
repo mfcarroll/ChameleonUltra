@@ -745,6 +745,21 @@ nothing, it needs no extra captures, and it turns position from a confound into 
 the short read was the *second* command after arming every time. Its zero-versus-non-zero findings
 survive (M59's last paragraph), its levels do not.
 
-⇒ Before any sweep: **ask what else is monotone with the variable.** Position, temperature, time
-since arming, buffer state, and sequence index are all free to masquerade as the thing being swept.
+⭐⭐ **BUT IT DOES NOT BITE EVERY SWEEP EQUALLY, AND THE DISCRIMINATOR IS WORTH HAVING: WAS THE
+STATISTIC PREDICTED IN ADVANCE, OR READ OFF THE SWEEP'S OWN SHAPE?** `shortread.py` was exposed
+because "which length is best" is read off the shape — whatever shape the run produces becomes the
+answer, so a drift with the right sign IS an answer. `holdsweep.py` sweeps in exactly the same
+fixed ascending order, and **C469 is not exposed**, because its criterion was fixed in the file
+before the firmware existed: modal run = N x 256us, slope 1 through the origin. A drift cannot land
+on nine independently predicted values within one sample each.
+
+✅ **CHECKED RATHER THAN ASSUMED.** `holdsweep.py --seed 7`, order **2 7 8 5 1 9 4 3 6**: every N
+still on its prediction, 91.8-97.2% modal share against C469's 84.5-97.6%, slope 1, no knee. ⇒ A
+shape-read statistic needs shuffling; a predicted one carries its own control. ⛔ Shuffle anyway —
+it costs nothing, and the next question asked of an instrument is rarely the one it was built for.
+
+⇒ Before any sweep: **ask what else is monotone with the variable**, and **ask whether your
+criterion was written before the data**. Position, temperature, time since arming, buffer state and
+sequence index are all free to masquerade as the thing being swept — and only a prediction made in
+advance can tell you they did not.
 

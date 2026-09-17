@@ -86,7 +86,7 @@ fixed time. So:
     already reads the live buffer through the same `m_pwm_seq` pointer playback is handed (C462), so
     the shape under test is confirmed at the source rather than assumed.
 """
-import argparse, os, re, subprocess, sys
+import argparse, os, random, re, subprocess, sys
 from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -139,6 +139,11 @@ def main():
                     help="the Chameleon on the PROXMARK's pad — #2 (the bench moved 2026-09-15)")
     ap.add_argument("--samples", type=int, default=40000)
     ap.add_argument("--predict-only", action="store_true")
+    ap.add_argument("--no-shuffle", dest="shuffle", action="store_false",
+                    help="⛔ sweep N ascending. Off by default: ascending order gives every N a "
+                         "fixed position after the arming, so position and N cannot be separated "
+                         "(M60). Use only to reproduce a pre-M60 run.")
+    ap.add_argument("--seed", type=int, default=None, help="seed for the shuffle, to repeat a run")
     a = ap.parse_args()
 
     print("  Sweep and predictions (pac.c: one entry = %.0fus):" % ENTRY_US)
@@ -158,17 +163,37 @@ def main():
     py = os.path.join(HERE, "../../software/script/.venv/bin/python")
     cu = os.path.join(HERE, "../../software/script/cu.py")
 
-    # ⛔ emuhold borrows the armed protocol's clock and is refused with nothing armed. PAC is the
-    # right arm to borrow from: it is the 125 kHz type whose idiom the buffer imitates.
-    subprocess.run([py, cu, "-p", a.port, "hw slot type -s 8 -t PAC", "hw slot enable -s 8 --lf",
-                    "hw slot change -s 8", "hw mode -e"], capture_output=True, text=True)
-
-    print("\n  measured (reader: pm3 raw sample buffer, no comparator in the chain — C464/C466):")
+    # ⛔⛔ ORDER IS A VARIABLE (M60). Ascending, every N sits at a fixed position after the arming,
+    # so a monotone drift over the session is indistinguishable from a trend in N — and a KNEE is
+    # exactly the shape such a drift fabricates. `shortread.py` was caught by this: a 5x effect
+    # there was position and nothing else. ⭐ C469 is NOT exposed, because its statistic was
+    # PREDICTED (modal run = N*256us, fixed in this file before the firmware existed) and every N
+    # landed on its own prediction within one sample; a drift cannot hit nine predicted values.
+    # A statistic read off the sweep's own SHAPE has no such protection, so we shuffle regardless.
+    seed = a.seed if a.seed is not None else random.randrange(1 << 30)
+    rng = random.Random(seed)
+    order = list(range(1, a.max + 1))
+    if a.shuffle:
+        rng.shuffle(order)
+    print("\n  order: %s (seed %d) — rows print ascending regardless"
+          % ("SHUFFLED " + " ".join(map(str, order)) if a.shuffle else "⛔ ASCENDING", seed))
+    print("  measured (reader: pm3 raw sample buffer, no comparator in the chain — C464/C466):")
     rows = []
+    # ⛔⛔ THE ARM IS INSIDE THE `try`. It used to sit above it, so anything that raised between
+    # arming and the loop — an unbound name did exactly this — left cu2 EMITTING, which jams the
+    # Proxmark's pad for every later run on this rig. Disarm belongs in a `finally`, always.
     try:
-        for n in range(1, a.max + 1):
+        # ⛔ emuhold borrows the armed protocol's clock and is refused with nothing armed. PAC is
+        # the right arm to borrow from: it is the 125 kHz type whose idiom the buffer imitates.
+        subprocess.run([py, cu, "-p", a.port, "hw slot type -s 8 -t PAC",
+                        "hw slot enable -s 8 --lf", "hw slot change -s 8", "hw mode -e"],
+                       capture_output=True, text=True)
+        for n in order:
             r = sweep_one(a.port, n, a.samples, py, cu)
             rows.append(r)
+        rows.sort(key=lambda r: r["n"])
+        for r in rows:
+            n = r["n"]
             if "error" in r:
                 print("    N=%-3d ⛔ %s" % (n, r["error"]))
                 continue
