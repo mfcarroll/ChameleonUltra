@@ -1279,3 +1279,28 @@ redundant.
 ⇒ either the ~192 ms overhead is an underestimate or it jitters, and **nothing has measured which**.
 **Treat the arithmetic as an upper bound and P1 as the arbiter**, which is the same relationship
 C516 established between a host-side number and the air.
+
+**M78 — A DEFECT IN A REFERENCE LIST HAS A DIRECTION. AN OMISSION MAKES A BAND CONSERVATIVE, NOT
+UNSOUND, AND SAYING *UNSOUND* THROWS AWAY THE VERDICTS THAT WERE STILL GOOD.**
+
+M76 found that A2's named-region list came from the write-ups and omitted 180-195 ms. C533 recorded
+the band as **unsound** and withdrew its verdict, flatly. ⛔ **That was one step too far, and K28
+showed it.**
+
+A2 fires when every region found sits inside a named one and at least two are found. ⇒ **a list
+that OMITS a genuinely high region can only turn a real match into an ORPHAN** — it manufactures
+*REFUTED*. **It cannot manufacture a match, so it cannot manufacture a FIRE.**
+
+⇒ **`idteck`'s and `nexwatch`'s REFUTED verdicts stay withdrawn; `keri`'s FIRING verdict is sound**
+and is the first cross-arm location result here that is both pre-registered and readable.
+
+⇒ ⭐ **Before withdrawing a band, work out which way its defect pushes.** An omission, a too-narrow
+threshold and a missing arm all bias in a direction, and the verdicts on the other side of that
+direction survive. ⚠ The opposite mistake is worse and is the one this project usually guards
+against — reading a verdict the defect could have manufactured — so the check is *which branch
+could this defect produce?*, not *is the band perfect?*
+
+⭐ **This is the round's SIXTH self-correction and the only one that gives something back rather
+than taking it away**, which is worth noticing: five were over-reaches walked back, and this one is
+an under-reach walked forward. **Both directions are errors of the same kind — a conclusion drawn
+without checking which way the evidence could bend.**
