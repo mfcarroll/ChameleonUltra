@@ -442,6 +442,99 @@ def k18(paths):
             print("   ⇒ **no verdict for %s** — reported as such.\n" % arm)
 
 
+
+# ⛔ K19's ladder and bands. There are NO designated wings — M67's whole content is that a wing has
+# to be justified rather than located, so the reference is the arm's own median across the ladder.
+K19_LADDER = [str(x) for x in range(85, 201, 5)]
+K19_CONTROL = "65"        # informational, and EXCLUDED from the median (it must not move it)
+K19_HIGH = 25.0           # a cell is "elevated" at median + this
+K19_LOW = 10.0            # a separating cell is at median − this
+K19_RUN = 2               # adjacent elevated cells to be a feature
+K19_FLOOR = 25.0          # W2: a top-four cell at median − this
+K19_TOP = ["185", "190", "195", "200"]
+
+
+def k19(paths):
+    """W1/W2 over banked `--k12` runs carrying K19's ladder."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    arms = sorted({a for _, d in runs for a in d})
+    print("## K19 — how many separated features, and does the profile return to a floor?")
+    print("   ⛔ COUNT and SEPARATION only; location is reported, never tested. "
+          "⛔ Periodicity is NOT testable here — the burst ceiling stops the ladder near 200 ms.\n")
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K19_LADDER if k in cells]
+        partial = len(ladder) < len(K19_LADDER)
+        meds, rate_ofs = [], []
+        for name, c in per:
+            r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            rate_ofs.append(r)
+            vals = sorted(r(k) for k in ladder)
+            meds.append(vals[len(vals) // 2] if len(vals) % 2
+                        else 0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]))
+        print("### %s   median %s   %s" % (arm, "/".join("%.0f%%" % m for m in meds),
+                                           "⛔ PARTIAL LADDER" if partial else ""))
+        for k in ladder:
+            marks = "".join("▲" if rate_ofs[i](k) >= meds[i] + K19_HIGH else
+                            "▽" if rate_ofs[i](k) <= meds[i] - K19_LOW else "·"
+                            for i in range(len(per)))
+            print("   %5s %s %s" % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                                    marks))
+        gated = False
+        for (name, c), _ in zip(per, meds):
+            allr, _, alln = pooled(c, cells)
+            halves = []
+            for lo, hi in ((0, 0.5), (0.5, 1.0)):
+                h = n = 0
+                for k in cells:
+                    sc = c[k]["scores"]
+                    part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+                    h += sum(1 for _, e in part if e)
+                    n += len(part)
+                halves.append(100.0 * h / n if n else 0.0)
+            arr = max(max(c[k]["arrivals"]) for k in cells)
+            print("   gate %s: pooled %.1f%% of %d | split-half Δ %.1f | worst P1 %.2f"
+                  % (name, allr, alln, abs(halves[1] - halves[0]), arr))
+            if allr < K17_NO_POWER:
+                print("      ⛔ NO POWER"); gated = True
+            if abs(halves[1] - halves[0]) > K17_DRIFT:
+                print("      ⛔ DRIFTED"); gated = True
+            if arr > 0.6:
+                print("      ⛔ P1 — a cell reached %.2f arrivals/read" % arr)
+        if gated:
+            print("   ⇒ **NO VERDICT for %s — a gate failed.**\n" % arm); continue
+
+        seed_feats = [_runs(ladder, rate_ofs[i], meds[i] + K19_HIGH) for i in range(len(per))]
+        feats = []
+        for f1 in seed_feats[0]:
+            for f2 in (seed_feats[1] if len(seed_feats) > 1 else []):
+                if set(f1) & set(f2):
+                    feats.append(sorted(set(f1) | set(f2), key=int))
+        print("   features (>= %d adjacent cells at median+%.0f, in BOTH seeds): %s"
+              % (K19_RUN, K19_HIGH, [",".join(f) for f in feats] or "none"))
+        sep = []
+        for a_, b_ in zip(feats, feats[1:]):
+            gap = [k for k in ladder if int(k) > int(a_[-1]) and int(k) < int(b_[0])]
+            quiet = [k for k in gap
+                     if all(rate_ofs[i](k) <= meds[i] - K19_LOW for i in range(len(per)))]
+            sep.append((a_[-1], b_[0], len(gap), len(quiet)))
+            print("   separation %s→%s ms: %d cells between, %d quiet in both seeds"
+                  % (a_[-1], b_[0], len(gap), len(quiet)))
+        floor = [k for k in K19_TOP if k in cells
+                 and all(rate_ofs[i](k) <= meds[i] - K19_FLOOR for i in range(len(per)))]
+        if partial:
+            print("   ⛔ partial ladder — W1/W2 not scored for %s\n" % arm); continue
+        w1 = len(feats) >= 2 and any(q >= 2 for _, _, _, q in sep)
+        print("   ⇒ **W1 %s for %s** — %d separated feature(s)"
+              % ("FIRES" if w1 else "REFUTED" if len(feats) < 2 else "no verdict", arm, len(feats)))
+        print("   ⇒ **W2 %s for %s** — top-four cells at a floor: %s ⛔ %s\n"
+              % ("met" if floor else "FAILED", arm, ",".join(floor) or "none",
+                 "the ladder reaches a floor, so its top edge could license a wing"
+                 if floor else "THE LADDER IS STILL TOO NARROW — no wing at its top edge is "
+                               "licensed for any future band"))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -450,7 +543,12 @@ def main():
                     help="⭐ score K17's U1-U4 over banked `--k12` runs on `nexwatch`")
     ap.add_argument("--k18", nargs="+", metavar="CAP",
                     help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
+    ap.add_argument("--k19", nargs="+", metavar="CAP",
+                    help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     a = ap.parse_args()
+    if a.k19:
+        k19(a.k19)
+        return 0
     if a.k18:
         k18(a.k18)
         return 0

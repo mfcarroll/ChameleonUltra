@@ -745,6 +745,58 @@ Budget at the top: 170 + ~192 overhead + the probe (33 ms for `indala`, 80 ms fo
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K19 — HOW MANY FEATURES ARE THERE, AND DOES THE PROFILE EVER COME BACK DOWN?
+
+K18 measured `indala` and `keri` above 80 ms and **its band mis-fired**: the wing cells it fixed at
+the ladder's edges landed ON an elevated region, so it scored a three-cell feature at 140-150 ms as
+*no second feature here* (C521, M67). ⛔ **The captures are good and the criterion was not**, so
+this re-runs them with the reference built the way M67 prescribes.
+
+⛔⛔ **NO DESIGNATED WINGS. THE REFERENCE IS THE LADDER'S OWN BODY.** M67's whole content is that a
+wing has to be *justified*, not *located* — and 85-90 ms is NOT justified either, though it is
+tempting: `indala` and `keri` are 17-25% and 8-17% at 80 ms in K15/K16, but that is one cell 5 ms
+away, on profiles whose features are 5-15 ms wide. ⇒ **"elevated" here means elevated relative to
+THIS arm's own median across THIS ladder**, which presumes nothing about where the quiet is. ⚠ It
+buys that by measuring *relative* structure only: on an arm sitting high everywhere, a feature
+means *high for this arm*, and the write-up must say so rather than implying an absolute level.
+
+**The ladder**: an informational control at **65 ms**, then **85..200 ms in 5 ms steps** (24 cells),
+one session per cell per round, shuffled within every round with the seed recorded (M60). Two seeds
+per arm at `--reps 8`.
+
+⛔⛔ **THE INSTRUMENT'S CEILING, NAMED BEFORE THE RUN SO A NULL AT THE TOP IS NOT MISREAD.** The
+burst is `LF_TAG_BURST_TARGET_MS` = 500 ms (K4, confirmed from the air by C516). At a 200 ms primer
+`keri` spends 200 + ~192 overhead + 80 probe = **472 ms** of it, and K12's re-fixed ladder already
+saw **P1 fail at 220 and 240 ms**. ⇒ **~200 ms is the reachable maximum on this rig**, and P1 —
+not this arithmetic — is what confirms each cell (C516).
+
+  **W1 — THE PROFILE HAS MORE THAN ONE SEPARATED FEATURE.** A *feature* is a maximal contiguous
+  run of **>= 2 cells each at or above (this arm's ladder median + 25 points)**, present in **BOTH
+  seeds** and overlapping in at least one cell. **W1 fires** when there are **>= 2** such features
+  separated by **>= 2 cells each at or below (median − 10 points) in both seeds**.
+  **W1 REFUTED** ⇒ at most one such feature. between ⇒ reported, no verdict.
+  ⛔ Location is REPORTED, NEVER TESTED — M64 and M66 each cost a verdict to a location clause, and
+  W1 is deliberately a claim about COUNT and SEPARATION, which is what this ladder can carry.
+
+  **W2 — DOES THE PROFILE RETURN TO A FLOOR INSIDE THE LADDER?** ⇒ at least one of the top four
+  cells (185, 190, 195, 200) is at or below **(median − 25)** in **both** seeds. ⛔ **W2 FAILING IS
+  A RESULT, NOT A NUISANCE**: it says the ladder is still too narrow and **no wing at its top edge
+  is licensed for any future band** — which is M67 turned into something a run can actually check
+  instead of a rule a designer has to remember.
+
+  ⛔⛔ **PERIODICITY IS NOT TESTED AND CANNOT BE HERE.** If the ~55-65 and ~135-160 ms regions are
+  one period apart, the next would be near 215-240 ms — **outside the burst ceiling above**. ⇒ A
+  null at the top of this ladder is **not** evidence against a period, and no periodicity claim may
+  be built on this run. Said before the capture because the temptation will be there afterwards.
+
+  ⛔ Gates first, unchanged and either one ends it: pooled over every cell **< 15%** is NO POWER;
+  K16's split-half over the rounds differing by **> 15 points** is a drifted run; **P1 <= 0.6** per
+  cell. ⚠ The 65 ms cell is INFORMATIONAL, not a gate (C497 — no absolute-level control can certify
+  a session on this bench), and it is excluded from the median so the control cannot move the
+  reference the bands are read against.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
