@@ -68,6 +68,97 @@ static size_t render(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len
     return n;
 }
 
+/* ⛔⛔ THE PERIPHERAL AS MEASURED, WHICH IS NOT THE PERIPHERAL `render()` MODELS (C479/C482).
+ *
+ * `render()` above takes ONLY the polarity bit and hardcodes `high = (s ^ phase) & 1` — it
+ * never looks at the duty or at `counter_top`. That models a peripheral which always renders a
+ * perfect 50% subcarrier inside every entry, and it is why the PSK round trips have been green
+ * for weeks while the Proxmark decoded nothing: **the test assumes the exact behaviour the
+ * hardware turned out not to have.** A round trip cannot catch a defect it encodes as a premise.
+ *
+ * What the air actually carries, captured off cu2 with `indala` armed (C479): level runs at
+ * 256/512/768/1024us — multiples of the BIT — and no 8us alternation anywhere. On that
+ * capture the Proxmark's PSK1 demod returned nothing and its NRZ demod returned the credential.
+ * So the entry's duty is not rendered; its polarity bit becomes a HELD LEVEL for the whole entry.
+ *
+ * ⭐ The arithmetic lines up exactly, which is why this model is worth having: `repeats`+1 =
+ * 16 holds x SAMPLES_PER_ENTRY = **32 samples per bit**, and 32 samples x 8us = **256us**, the
+ * run length measured on the air.
+ *
+ * ⇒ This renderer is the host-side reproduction of C479. Nothing in it is fitted to the
+ * result: it is `render()` with the hardcoded alternation removed. */
+static size_t render_psk_measured(const nrf_pwm_sequence_t *seq, int16_t *out, size_t out_len) {
+    const size_t entries = (size_t)seq->length / 4u;
+    const size_t holds = (size_t)seq->repeats + 1u;
+    size_t n = 0;
+    for (size_t i = 0; n < out_len; i++) {
+        const nrf_pwm_values_wave_form_t *e = &seq->values.p_wave_form[i % entries];
+        const int high = (e->channel_0 & (1u << 15)) ? 1 : 0;   /* the polarity bit, alone */
+        for (size_t h = 0; h < holds && n < out_len; h++) {
+            for (size_t s = 0; s < SAMPLES_PER_ENTRY && n < out_len; s++) {
+                out[n++] = (int16_t)(DC + (high ? AMPL : -AMPL));
+            }
+        }
+    }
+    return n;
+}
+
+/* ⛔ ASSERTS THE DEFECT, AND IS MEANT TO FAIL THE DAY IT IS FIXED.
+ *
+ * Under the measured model the PSK demodulator must find nothing, because what it is handed is
+ * NRZ. That is the current, broken state of the emitter, pinned here so it is visible on the host
+ * with no bench: run `ctest` and this is C479 without a Chameleon.
+ *
+ * ⭐⭐ **WHEN THIS ARM FAILS, THE EMITTER HAS BEEN FIXED — do not "repair" the test.**
+ * A PSK frame that survives the measured renderer means the emitter stopped relying on per-entry
+ * duty (the FSK2a fix in `fsk2a_mod.h`: constant `counter_top`, several full-on/full-off entries
+ * per subcarrier period). At that point invert this expectation and move the arm into `trial()`'s
+ * family, where a decode is the pass. */
+static int trial_psk_measured(const char *name, const char *hex, size_t bits,
+                              lf_psk1_phase_mode_t mode, const lf_psk1_format_t *fmt) {
+    uint8_t frame[LF_DECODE_MAX_FRAME_BYTES] = {0};
+    const size_t bytes = bits / 8;
+    for (size_t i = 0; i < bytes; i++) {
+        unsigned v;
+        sscanf(hex + i * 2, "%2x", &v);
+        frame[i] = (uint8_t)v;
+    }
+
+    const nrf_pwm_sequence_t *seq = lf_psk1_modulator(frame, bits, mode);
+    if (seq == NULL) {
+        printf("  %-28s ⛔ modulator refused the frame\n", name);
+        return 1;
+    }
+
+    static int16_t samples[LF_SAMPLED_MAX_CAPTURE_SAMPLES];
+    size_t want_samples = INDALA_PSK_MIN_SAMPLES(bits) * 2;
+    if (want_samples > LF_SAMPLED_MAX_CAPTURE_SAMPLES) want_samples = LF_SAMPLED_MAX_CAPTURE_SAMPLES;
+    const size_t n = render_psk_measured(seq, samples, want_samples);
+
+    /* The level runs must be whole bits — 32 samples — which is what ties this model to
+     * the capture rather than to a convenient assumption. A run that is not a multiple of 32
+     * means the model drifted from `repeats` and the arm is measuring itself. */
+    size_t runs_ok = 1, run = 1;
+    for (size_t i = 1; i < n; i++) {
+        if (samples[i] == samples[i - 1]) {
+            run++;
+        } else {
+            if (run % (SAMPLES_PER_ENTRY * 16u) != 0) runs_ok = 0;
+            run = 1;
+        }
+    }
+
+    lf_decode_result_t r;
+    const int decoded = lf_psk1_decode_fmt(samples, n, fmt, &r);
+    const int as_expected = (!decoded && runs_ok);
+
+    printf("  %-28s %s  runs %s  PSK decode %s  (C479: NRZ on the air)\n",
+           name, as_expected ? "✓" : "⛔",
+           runs_ok ? "whole bits" : "RAGGED",
+           decoded ? "SUCCEEDED — THE EMITTER MAY BE FIXED, see the note above" : "finds nothing");
+    return as_expected ? 0 : 1;
+}
+
 /* ⭐ THE ASK RENDERER, AND IT IS NOT THE PSK ONE. A PSK entry is one bit held for `repeats`+1
  * periods of an fc/2 subcarrier whose POLARITY is the data; an ASK entry is one bit of
  * `counter_top` CARRIER CYCLES whose first and second halves carry the Manchester transition.
@@ -603,6 +694,10 @@ int main(void) {
                  LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_INDALA64);
 
     /* IDTECK shares the buffer and the encoder; only the preamble differs. */
+    /* ⛔ The same two credentials through the MEASURED peripheral (C479/C482). These pin the
+     * defect on the host; see the note on trial_psk_measured for what to do when they fail. */
+    bad += trial_psk_measured("Indala26  under measured PWM", "a0000000e6bd0e92", 64,
+                              LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_INDALA64);
     bad += trial("IDTECK    PSK1", "4944544b55667788", 64,
                  LF_PSK1_PHASE_DIRECT, &LF_PSK1_FORMAT_IDTECK);
 
