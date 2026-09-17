@@ -1120,3 +1120,33 @@ arm that has already lost a pair to drift, **run three seeds and pre-register th
 ⚠ The rule must be declared before the capture, and its one dependence stated: the split-half Δ is
 computed from the same scores the bands read, so selecting on it is not perfectly independent of
 them. Declaring it in advance is what keeps that honest.
+
+**M73 — NAME THE CONFIGURATION A SIMULATED RATE WAS COMPUTED UNDER, BESIDE THE RATE. ONE LADDER IS
+A SCOPE, AND SO IS ONE SESSION PAIR.**
+
+M70 and M72 added the right obligation — simulate every band and every control before the capture —
+and this is the failure mode they create. C527 simulated the drift gate on an **11-cell ladder at
+`--reps 8`** and reported **14-16% per run**, then drew a retroactive consequence about *every* `NO
+VERDICT — DRIFTED` on the record. ⛔ **The statistic is a split-half over the whole ladder, so its
+sd scales with the run's total n**:
+
+| ladder | n per half | sd(Δ) | 15 points is | P(fail) |
+|---|---|---|---|---|
+| 11 cells, reps 8 | 44 | 10.6 | **1.4σ** | **14-16%** |
+| 25 cells, reps 8 | 100 | 6.7-7.0 | **2.2σ** | 2.1-2.7% |
+| 25 cells, reps 12 | 150 | 5.5-5.7 | **2.7σ** | 0.6-0.9% |
+
+⇒ the gate is badly calibrated on short ladders and properly calibrated on long ones, and **K17-K21
+all ran on long ones.** ✅ The substance of C527 survives where it was applied — both drifted
+verdicts actually on record are short-ladder — and only its scope was wrong.
+
+⚠⚠ **THIS IS THE THIRD INSTANCE OF ONE DISEASE IN A SINGLE ROUND**, which is what makes it worth a
+rule of its own: **M71** a gate justified on the wrong **ARM**; **C526** a level quoted from one
+session **PAIR**; **C530** a rate quoted from one **LADDER**. ⇒ **C514's *one arm is a scope, not a
+law* was too narrowly stated.** Every number here is measured under a configuration — arm, ladder,
+n, seed pair — and **the configuration travels with the number or the number is wrong the first
+time it is reused.**
+
+⭐ The cheap discipline: when a simulation produces a rate, print the n it assumed in the same
+sentence. C527's own table did carry *an 11-cell ladder at reps 8* in its header and the prose
+still over-reached — so the rate and its configuration have to be **one string**, not two lines.
