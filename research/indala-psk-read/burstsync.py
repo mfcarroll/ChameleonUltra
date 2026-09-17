@@ -209,6 +209,24 @@ trading a correlated rate for a suppressed one.
     cannot produce independent samples of these arms by spacing alone. That outcome goes in the
     flag's own help text — it does not get papered over with a number that looks defensible.
 
+## ⭐⭐ K11 — DOES C512 HOLD ON A SECOND ARM, OR IS THE WARNING `gproxii`-SHAPED?
+
+⛔ **K5 through K10 all used ONE arm.** C512's conclusion — *a fresh burst scores zero, so never
+add settling between graded reads* — is the round's most consequential warning and it rests
+entirely on `gproxii`. A warning that general has to be shown to be that general.
+
+**K11**: K9's design (gaps 0 and 600 ms, shuffled, arrivals counted) on **`indala`** and
+**`keri`**, whose probes are different lengths and whose demodulators are different code.
+  - **generalises** ⇒ both arms lose at least **half** their D=0 rate at D=600, and arrivals per
+    read climb to **>= 0.8** on both. The warning stands as written.
+  - **`gproxii`-shaped** ⇒ either arm holds its rate at D=600 while its arrivals still climb.
+    ⛔ Then **C512 must be re-scoped to the one arm** and the harness warning narrowed with it.
+  - split ⇒ report per arm and narrow the claim to the arms that showed it.
+  ⚠ The arrivals half is the control: if arrivals do NOT climb on an arm, its burst never
+  restarted and its rate says nothing about fresh bursts.
+⚠ Each arm's D=0 rate is its own baseline — M59 forbids comparing the arms' absolute rates with
+each other, and nothing here does: the comparison is within an arm, across two gaps.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
