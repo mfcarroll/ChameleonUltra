@@ -800,3 +800,36 @@ span, the drawing and the between-not-before placement each pinned by a break-te
 
 ⇒ Before quoting any rate: **ask whether the reads that produced it were independent, or merely
 consecutive.** Independence is a property of the schedule, and on this bench it has to be bought.
+
+
+**M62 — A POOLED CONTRAST IS NOT ROBUST TO A SINGLE-CELL OUTLIER. PRE-REGISTER THE SHAPE AS WELL
+AS THE GAP, OR ONE CELL WILL MANUFACTURE YOUR EFFECT.**
+
+K12's P2 was written before its capture and operationalised H_settle — *the rate rises with time
+since field arrival* — as a pooled contrast: **top three cells minus bottom three >= 20 points.**
+It fired at **+21 points**. ⛔ **And it was an artifact of where one cell fell.**
+
+The profile was nine cells in 83-100% with a single notch of 8% at 60 ms. That notch sat in the
+bottom bin, so bottom three {20,40,60} = 67% against top three {160,180,200} = 88%. **Bottom TWO
+{20,40} = 96% — higher than the top three.** The ten cells were non-decreasing in **5 of 9**
+adjacent steps and the two large steps were **-83 and +83**: the notch's own walls.
+
+⇒ **There was no rise. There was a notch in the bottom bin, and the band could not tell.**
+
+⚠ **Pre-registration did not save it, and that is the point.** M55's discipline was followed
+exactly — the criterion was committed before the capture (`d4cf4b53`) — and the criterion was
+still wrong, because a three-cell mean is a statistic that a single outlier moves by a third of
+its own range. **Pre-registering a bad statistic pre-registers a bad answer.**
+
+⭐ **The fix is one extra clause and it costs nothing**: a rise is claimed only if the contrast
+fires **AND** the profile is non-decreasing in >= 7 of 9 adjacent steps. Q3 added it before K13,
+and K13's own data then failed it too (5 of 9 again, contrast not even firing) — so the amendment
+was not fitted to the run that prompted it.
+
+⛔ **The consequence was pre-stated so it could not be argued afterwards**: if the notch replicated
+and Q3 failed, **K12's P2 is withdrawn**. Both happened, so it is withdrawn.
+
+⇒ Before pre-registering a pooled statistic, ask: **what single cell could produce this number on
+its own?** If one can, the criterion needs the shape as well as the level. ⭐ And the cheap general
+form: **a contrast says how far apart two bins are; only a monotonicity check says there is a
+trend.** They are different claims and the second is usually the one being made.
