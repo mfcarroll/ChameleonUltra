@@ -680,3 +680,5 @@ at, which is not a property of the protocol in front of it.
 alternation resolves and a null result needs the third row above ruled out before it is read as the
 second. ⚠ And `PWM0 COUNTERTOP` reading 1000 under every arm is already explained in M56 — the
 reader's carrier value, because WaveForm mode writes the top per entry. It is not evidence.
+
+⭐ **M57 HELD, AND THE DOUBT IT RAISED IS RESOLVED (C479).** The capture showed the third row — no 1-sample alternation — and the obvious objection was that sampling a 62.5 kHz square at 8us is critically aliased, so a CORRECT signal might look the same. It does not, and the project already knew: L03 established that the pm3 samples once per carrier cycle and reads real Indala fine, so genuine PSK is demodulable at this rate. The demodulators then settled it directly — `--p1` nothing, `--nr` the credential. ⇒ When a criterion's null result has a plausible instrument explanation, the way out is an arm the instrument is known to succeed on, not more argument about the sampling.
