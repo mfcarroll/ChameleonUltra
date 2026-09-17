@@ -541,12 +541,18 @@ def k9(a, arms, gaps):
                       % (d, am, "%d/%d=%.0f%%" % (hits, n, 100.0 * hits / n),
                          " ".join(str(x) for x in per), " ".join(ps)))
             # P1
-            big = [d for d in gaps if d >= 600]
+            # ⛔ DEFINED FROM THE BURST, NOT HARDCODED. The first version tested `d >= 600`,
+            # which is empty for any sweep that stops below it — K10's did, and the summary
+            # then reported "0.00 arrivals at D>=600" and declared the run uninterpretable while
+            # the table above it was perfectly good. A guard that fires on the absence of data
+            # reads exactly like a guard that fires on bad data.
+            big = [d for d in gaps if d >= 600] or [max(gaps)]
             a0 = sum(arr[gaps[0]]) / len(arr[gaps[0]]) if arr[gaps[0]] else 0.0
             ab = ([sum(arr[d]) / len(arr[d]) for d in big if arr[d]] or [0.0])
             abm = sum(ab) / len(ab)
-            print("\n   P1 mechanism: arrivals/read %.2f at D=0 → %.2f at D>=600  ⇒ %s"
-                  % (a0, abm, "burst restarts per read" if abm >= 0.8
+            print("\n   P1 mechanism: arrivals/read %.2f at D=%d → %.2f at D=%s  ⇒ %s"
+                  % (a0, gaps[0], abm, ",".join(str(d) for d in big),
+                     "burst restarts per read" if abm >= 0.8
                      else "it does NOT restart per read — P2/P3 are uninterpretable"))
             # P2
             for d in big:
