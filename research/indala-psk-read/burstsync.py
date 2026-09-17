@@ -236,6 +236,94 @@ detect a fall, a rise, or neither.
 the same class as C487/C488/C490. It cannot move a cell in the matrix and must never be reported
 as if it had. What it can do is tell us whether an instrument artifact has been diluting every
 read-length figure this round produced.
+
+## ⭐⭐⭐ K12 — IS IT TIME SINCE FIELD ARRIVAL, OR THE READ'S INDEX? (written before its capture)
+
+C512's mechanism story is post-hoc and the finding itself says so: *the emission needs time after
+field arrival before it is decodable*. Everything measured so far is consistent with it and none
+of it TESTS it, because in K5-K11 **time-since-arrival and read INDEX are perfectly confounded**:
+every read is the same length and issued back to back, so read k sits at
+elapsed ~ k x (probe + overhead) by construction. C507's `.X.XX.` is a statement about index; the
+settling story is a statement about elapsed time; no run so far can tell the two apart.
+
+⭐⭐ **THE KNOB THAT SEPARATES THEM, AND IT IS A NEW ONE.** K6/K9/K10/K11 all varied the GAP
+between reads — field DOWN — and K10 measured what that costs: past ~120 ms the burst restarts
+(arrivals 0.50 → 1.00), so the gap knob moves elapsed time and burst identity TOGETHER. **This
+varies the field-UP duration instead**: a PRIMER `lf read -s N` of varying length immediately
+followed by the probe, with no `msleep` anywhere. The probe is then
+
+  - always the **same command** (`lf read -s 12288` + `lf gproxii demod`),
+  - always at the **same index** (1),
+  - always inside **one burst** with the primer (P1 checks it),
+
+and the only thing that moves between cells is how long the emission has been running when the
+probe starts.
+
+    elapsed(probe) = primer_duration + C
+
+C is the client's inter-command overhead, **measured at ~80 ms before the ladder was fixed**
+(`hw version` 0.60 s; +4096 samples 0.11 s for 32.8 ms of sampling; +30000 samples 0.33 s for
+240 ms of sampling ⇒ ~80-90 ms of it is not sampling). It is constant across cells, so it offsets
+the axis and cannot bend it.
+
+⛔ **THE LADDER'S FLOOR IS THAT OVERHEAD, AND IT IS A REAL LIMITATION.** With any primer present
+the probe cannot start earlier than ~80 ms after arrival, so the 0-80 ms region is reachable only
+through the no-primer control. **If settling completes inside 80 ms this design sees a flat,
+saturated profile and must report NO POWER** — which would itself locate the process below 80 ms
+rather than refute it. Named here, before the run, because K8 died of exactly this.
+
+**K12**: primer durations **20..240 ms in 20 ms steps** (`-s` = ms x 125), one session per cell
+per round, **cells shuffled within every round and the seed recorded** (M60), plus a no-primer
+control cell. Twelve cells x `--reps` rounds.
+
+⛔ **THE BURST MUST NOT EXPIRE, or this measures starvation instead of settling.** 240 ms primer
++ ~80 ms overhead + 98 ms probe = **418 ms** against `LF_TAG_BURST_TARGET_MS` = 500 ms (K4). That
+is why the ladder stops at 240 and not higher. ⚠ **A rate that FALLS at the longest cells is the
+expiry signature** and must not be read as anything else.
+
+  **P1 — the mechanism control, independent of the outcome.** Arrivals per read must stay
+  **<= 0.6 in every one of the twelve primer cells** — one arrival for the primer+probe pair,
+  i.e. the field never dropped and the two reads share a burst. ⛔ A cell climbing to >= 0.8 got
+  its own burst, its elapsed axis does not exist, and it is reported rather than interpreted.
+  ⚠ **The no-primer control is EXEMPT and is expected at ~1.0**: one read, its own arrival, which
+  is precisely what makes it the fresh-burst cell. ⭐ P1 is also what makes K12 a different
+  experiment from K9-K11: there the independent variable moved arrivals BY DESIGN; here it must
+  not move them at all.
+
+  **P2 — H_settle: the rate RISES with elapsed time.** Pre-registered: the pooled rate over the
+  top three cells (200, 220, 240 ms) exceeds the pooled rate over the bottom three (20, 40, 60)
+  by **>= 20 points**.
+
+  **P3 — H_phase: the rate is PERIODIC in elapsed at C509's 121.6 ms, not monotone.** ⭐⭐ The
+  ladder is built so the two cannot be confused: **phase = elapsed mod 121.6 ms is a SAWTOOTH
+  over this range while elapsed is monotone**, and the six pairs (20,140) (40,160) (60,180)
+  (80,200) (100,220) (120,240) sit 120 ms apart — within **1.6 ms, 4.7 degrees, of one full
+  cycle**. Pre-registered: mean |rate(d) - rate(d+120)| over those six pairs **<= 15 points**
+  AND the profile's own range within a half **>= 30 points**. ⛔ Without that range there is
+  nothing for the pairs to match and a flat profile scores a perfect match — the K8 NO POWER
+  trap, named before the run for the second time in this file.
+
+  **P4 — H_index: flat.** All twelve cells within **15 points** of each other ⇒ elapsed time does
+  not matter and C507's index effect is not a settling process.
+
+  ⛔⛔ **IF P2 AND P3 BOTH FIRE THE VERDICT IS *NO VERDICT*** — a rising sawtooth satisfies both
+  and this n cannot separate them. Written here so it cannot be settled by preference afterwards.
+
+⛔ **THE CONTROL THAT CAN FAIL, and it is the bench-moved check.** The no-primer cell is one probe
+alone in a fresh client session — a fresh burst, phase zero — which is C512's D>=600 condition and
+K5's index 0. **Both measured 0% on `gproxii`, so it must come back at or below 15% here.** If it
+is high the bench has moved, nothing in the run is comparable to K5-K12, and none of it gets
+interpreted.
+
+⚠ ONE ARM, and C514 is the reason it is this one: *a fresh burst scores zero* is `gproxii`-only,
+so the mechanism proposed for it is tested where the effect actually exists. ⛔ **Whatever it
+returns is scoped to `gproxii` until a second arm says otherwise** — the lesson C514 cost, written
+before this run rather than after it.
+
+⚠ Per-cell n is `--reps` and **no single cell's rate is claimed on its own** (M58). The statistics
+that carry the verdict pool three cells (P2), six pairs (P3) or twelve (P4).
+
+⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
 import json
@@ -275,7 +363,7 @@ def playbacks(port):
         return None
 
 
-def session(arm_key, reads, timeout, delay=0, lead=0):
+def session(arm_key, reads, timeout, delay=0, lead=0, primer=0):
     """One pm3 invocation issuing `reads` IDENTICAL probes. Returns the per-read scores in order.
 
     ⛔ `reads == 0` is the instrument control and is not a degenerate case: the client still
@@ -285,6 +373,12 @@ def session(arm_key, reads, timeout, delay=0, lead=0):
     cmds = []
     if lead:
         cmds.append("msleep -t %d" % lead)     # ⭐ K8: once, BEFORE the first read
+    if primer:
+        # ⭐ K12's independent variable, and it is the only one in this file that holds the
+        # field UP rather than letting it drop: one capture of `primer` samples immediately
+        # before the probe, no msleep between them, so both reads share one burst and the
+        # cells differ only in how long the emission has been running.
+        cmds.append("lf read -s %d" % primer)
     for _ in range(reads):
         if delay:
             # ⭐ K6's independent variable. `msleep` is AlwaysAvailable in the client
@@ -599,6 +693,176 @@ def k9(a, arms, gaps):
     return 0
 
 
+# ⭐ K12's ladder. The step is 20 ms and the top is 240 ms; both are load-bearing and the
+# docstring says why (120 ms = one beat cycle to within 1.6 ms; 240+80+98 = 418 ms < the 500 ms
+# burst). ⛔ Do not widen the top without re-doing that arithmetic.
+K12_PRIMERS_MS = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240]
+K12_CYCLE_MS = 121.6          # C509: 131.5 ppm on 62.5 kHz = 8.22 Hz. Not fitted here.
+K12_PAIR_LAG_MS = 120         # the ladder's own approximation to it — 1.6 ms, 4.7 degrees
+
+
+def k12(a, arms, primers):
+    """⭐ K12. Primer LENGTH varies the field-UP time before a fixed probe at a fixed index.
+
+    ⛔ The cell list carries `None` for the no-primer control, and it is shuffled in with the
+    rest so it cannot sit at a fixed position (M60)."""
+    import collections
+    import random as _r
+    rng = _r.Random(a.seed)
+    cells = [None] + list(primers)
+    plan = []
+    for _ in range(a.reps):
+        rnd = list(cells)
+        rng.shuffle(rnd)                    # ⭐ shuffled WITHIN each round, not once globally
+        plan.extend(rnd)
+    print("K12 — %d sessions over %d cells (%s ms + no-primer control), shuffled within each "
+          "round (seed %d)" % (len(plan), len(cells),
+                               ",".join(str(p) for p in primers), a.seed))
+    print("   probe is fixed and at a fixed index; the primer's LENGTH is the only variable")
+    print("   elapsed(probe) ~ primer + ~80 ms measured client overhead; one full beat cycle "
+          "is %.1f ms\n" % K12_CYCLE_MS)
+    out = {}
+    try:
+        for key in arms:
+            arm = shortread.ARMS[key]
+            ok, why = seqdump.arm(a.port, arm.typ, arm.econfig)
+            if not ok:
+                print("%-9s ⛔ ARM FAILED: %s" % (key, why))
+                continue
+            sc = collections.defaultdict(list)
+            arr = collections.defaultdict(list)
+            for cell in plan:
+                before = playbacks(a.port)
+                # ⛔ `reads=1` is the PROBE count. The primer is a separate `lf read` that is
+                # never scored — `session()` only scores blocks labelled with the demod
+                # command, and the primer is a bare capture.
+                scores = session(key, 1, a.timeout,
+                                 primer=(0 if cell is None else int(cell * 125)))
+                after = playbacks(a.port)
+                sc[cell].extend(scores)
+                nreads = 1 if cell is None else 2
+                if before is not None and after is not None:
+                    arr[cell].append((after - before) / float(nreads))
+                time.sleep(0.4)
+            out[key] = {("none" if c is None else str(c)):
+                        {"scores": sc[c], "arrivals": arr[c]} for c in cells}
+
+            def cell_rate(c):
+                h, n = rate(sc[c])
+                return (100.0 * h / n if n else float("nan")), h, n
+
+            def cell_arr(c):
+                v = arr[c]
+                return sum(v) / len(v) if v else float("nan")
+
+            print("\n%-9s probe %r" % (key, PROBES[key] or arm.reader))
+            print("   %-8s %-9s %-7s %-9s %s"
+                  % ("primer", "elapsed~", "phase", "arr/read", "rate"))
+            for c in cells:
+                r, h, n = cell_rate(c)
+                if c is None:
+                    el, ph = "0", "-"
+                else:
+                    el = "%d" % (c + 80)
+                    ph = "%.0f" % ((c + 80) % K12_CYCLE_MS)
+                print("   %-8s %-9s %-7s %-9.2f %d/%d=%.0f%%"
+                      % ("none" if c is None else c, el, ph, cell_arr(c), h, n, r))
+
+            # ⛔ THE BENCH-MOVED CONTROL FIRST, because nothing else is interpretable without it.
+            cr, ch, cn = cell_rate(None)
+            ctl_ok = cn > 0 and cr <= 15.0
+            print("\n   control (no primer, fresh burst): %d/%d = %.0f%%  ⇒ %s"
+                  % (ch, cn, cr, "PASSES — matches C512's D>=600 and K5's index 0"
+                     if ctl_ok else
+                     "⛔⛔ BENCH MOVED — C512 and K5 both measured 0% here. "
+                     "Nothing below is comparable to K5-K12."))
+
+            # P1 — the mechanism, and the control cell is exempt by construction.
+            worst = max(primers, key=lambda c: (cell_arr(c) if cell_arr(c) == cell_arr(c) else 0))
+            wa = cell_arr(worst)
+            p1_ok = all((cell_arr(c) <= 0.6) for c in primers if cell_arr(c) == cell_arr(c))
+            print("   P1 mechanism: worst primer cell is %d ms at %.2f arrivals/read  ⇒ %s"
+                  % (worst, wa,
+                     "one burst spans primer and probe in every cell"
+                     if p1_ok else
+                     "⛔ a cell restarted its burst — its elapsed axis does not exist"))
+            print("      control cell arrivals %.2f (expected ~1.0 — that IS the fresh burst)"
+                  % cell_arr(None))
+
+            # P2 — H_settle.
+            bot = [s for c in primers[:3] for s in sc[c]]
+            top = [s for c in primers[-3:] for s in sc[c]]
+            bh, bn = rate(bot)
+            th, tn = rate(top)
+            bp = 100.0 * bh / bn if bn else float("nan")
+            tp = 100.0 * th / tn if tn else float("nan")
+            p2 = (tp - bp) >= 20.0
+            print("   P2 H_settle: bottom three %d/%d=%.0f%% vs top three %d/%d=%.0f%%  "
+                  "Δ %+.0f pts ⇒ %s"
+                  % (bh, bn, bp, th, tn, tp, tp - bp,
+                     "RISES with elapsed time" if p2 else "no rise at the pre-registered 20 pts"))
+
+            # P3 — H_phase. The pairs are one full cycle apart to within 1.6 ms.
+            pairs = [(c, c + K12_PAIR_LAG_MS) for c in primers
+                     if (c + K12_PAIR_LAG_MS) in primers]
+            diffs = [abs(cell_rate(x)[0] - cell_rate(y)[0]) for x, y in pairs]
+            md = sum(diffs) / len(diffs) if diffs else float("nan")
+            half = [cell_rate(c)[0] for c in primers if c <= K12_PAIR_LAG_MS]
+            hr = max(half) - min(half)
+            p3 = (md <= 15.0) and (hr >= 30.0)
+            print("   P3 H_phase: mean |Δ| over %d pairs %.0f ms apart = %.0f pts; "
+                  "within-half range %.0f pts ⇒ %s"
+                  % (len(pairs), K12_PAIR_LAG_MS, md, hr,
+                     "PERIODIC at C509's cycle" if p3 else
+                     "⛔ NO POWER — the profile is too flat for the pairs to mean anything"
+                     if hr < 30.0 else "not periodic at the pre-registered 15 pts"))
+
+            # P4 — H_index / flat.
+            rs = [cell_rate(c)[0] for c in primers]
+            span = max(rs) - min(rs)
+            p4 = span <= 15.0
+            print("   P4 H_index: range across the twelve cells %.0f pts ⇒ %s"
+                  % (span, "FLAT — elapsed time does not matter"
+                     if p4 else "not flat"))
+
+            if not ctl_ok:
+                v = ("⇒ ⛔⛔ NO VERDICT — the bench-moved control failed and that decides it "
+                     "before any P does.")
+            elif not p1_ok:
+                v = ("⇒ ⛔ NO VERDICT — P1 failed, so at least one cell's elapsed axis does not "
+                     "exist.")
+            elif p4 and min(rs) >= 85.0:
+                v = ("⇒ **NO POWER ON THE SHAPE, AND IT LOCATES THE PROCESS** — every primer "
+                     "cell is saturated\n     while the no-primer control is at %.0f%%, so "
+                     "whatever happens, happens inside the ~80 ms\n     floor this design "
+                     "cannot reach. That is the pre-registered NO POWER branch." % cr)
+            elif p4:
+                v = ("⇒ **H_index** — twelve cells within 15 points, so elapsed time since the "
+                     "field arrived is\n     not what the rate depends on.")
+            elif p2 and p3:
+                v = ("⇒ ⛔ **NO VERDICT** — a rising sawtooth satisfies P2 and P3 at once and "
+                     "this n cannot\n     separate them. Pre-registered as no verdict.")
+            elif p2:
+                v = ("⇒ **H_settle SUPPORTED** — the rate rises with time since field arrival "
+                     "at a fixed index.")
+            elif p3:
+                v = ("⇒ **H_phase SUPPORTED** — the rate is periodic in elapsed at C509's "
+                     "121.6 ms, which is a\n     number from a different experiment. H_settle "
+                     "is not needed to explain the profile.")
+            else:
+                v = "⇒ NO VERDICT — none of the four pre-registered bands fired."
+            print("   %s" % v)
+    finally:
+        # ⛔ ALWAYS, NOT ONLY ON THE HAPPY PATH (AUTOPILOT §2a).
+        o = seqdump.disarm(a.port)
+        print("\ndisarm: %s" % ("ok" if "success" in o.lower() else o.strip()[-160:]))
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump(out, fh, indent=1)
+        print("raw → %s" % a.out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ORDER))
@@ -615,6 +879,10 @@ def main():
     ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
     ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
     ap.add_argument("--gaps", help="K9/K10: comma-separated between-read gaps in ms")
+    ap.add_argument("--k12", action="store_true",
+                    help="⭐ K12: sweep the PRIMER's length — field-UP time before a fixed "
+                         "probe at a fixed index, separating elapsed time from read index")
+    ap.add_argument("--primers", help="K12: comma-separated primer durations in ms")
     ap.add_argument("--k9", action="store_true",
                     help="⭐ K9: between-read gaps spanning the 500 ms burst, with arrivals")
     ap.add_argument("--k8", action="store_true",
@@ -642,6 +910,9 @@ def main():
         return k7(a, arms)
     if a.k8:
         return k8(a, arms, list(range(0, 241, 15)))
+    if a.k12:
+        pr = ([int(x) for x in a.primers.split(",")] if a.primers else K12_PRIMERS_MS)
+        return k12(a, arms, pr)
     if a.k9:
         gaps = ([int(x) for x in a.gaps.split(",")] if a.gaps else [0, 300, 600, 900])
         return k9(a, arms, gaps)
