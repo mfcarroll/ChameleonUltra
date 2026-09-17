@@ -1233,6 +1233,118 @@ arm, the K23 ladder and **the K23 bands unchanged**.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K26 — `idteck` ON THE LEAD-TIME KNOB, AND WHY `indala224` CANNOT BE (written before its capture)
+
+The last outstanding item on the lead-time list: `idteck` and `indala224` have never been measured
+on this knob. ⭐ **One of them can be and one of them cannot, and the scoping is done by arithmetic
+before either is armed — the step whose absence was M68.**
+
+### ⛔⛔ `indala224` IS NOT SCOREABLE ON THIS KNOB AT ALL, AND THAT CLOSES IT
+
+Two independent reasons, both from the existing record:
+
+1. **It cannot be scored on *exact*.** Its precision is **0%** — 51 decodes, none carrying our
+   credential, at every read length (C502). An *exact* rate would be a flat zero and measure
+   nothing.
+2. ⭐⭐ **And it cannot be scored on *decoded* either, which is the part that was not obvious.**
+   Its marker is `Indala \\(len` — **the SAME marker `indala` uses**, because both go through
+   `lf indala demod` (C502). So a *decoded* hit cannot distinguish a 224-bit frame from a 64-bit
+   one. ⛔ **And no length-specific marker can rescue it**: C493/C501 measured that the
+   demodulator reports a **nonsense length for this arm — 254 to 611 against 224** — so there is
+   no string in the output that identifies a 224-bit decode.
+
+⇒ **There is no rate to put on the y-axis.** The item is closed as **not measurable with this
+instrument**, not deferred. ⚠ It would become measurable with a marker that keyed on payload
+LENGTH in bits rather than on the reported length, which is a `shortread.py` change and a
+different unit.
+
+### `idteck` CAN BE, AND ITS PROBE IS CHOSEN BY A PRE-EXISTING RULE RATHER THAN A PILOT
+
+⭐ Precision **100%** — 25 of 25 decodes correct, and 0 wrong in 24 at n=24 (C503) — and a marker
+of its own (`IDTECK Tag Found: Card ID`). ⭐ Probe: **`lf read -s 6144`**, which is **3 frames** of
+its 2048-sample frame, by C499's standing *2-6 frames, best at 3-4* rule and **not** by a pilot on
+this arm. C499 measured it at **9/24 ≈ 38%** there, which is a low baseline — so the FORWARD
+detector has power and the inverse one would sit near the floor (K20's power table, a third time).
+
+**The ladder**: **10..200 ms in 5 ms steps — 39 cells**, the full span anything has been measured
+over on any arm, plus the no-primer control. One arm, two fresh seeds (**241**, **251**),
+`--reps 8`, `--per-arm-shuffle` (M69). ⚠ At a 200 ms primer the burst carries 200 + ~192 overhead +
+49 ms probe = **441 ms of 500**; P1, not that arithmetic, is what confirms each cell (C516).
+
+  ⛔⛔ **A1's RUN LENGTH IS 3 AND NOT 2, AND THE REASON IS THE LADDER'S LENGTH — SIMULATED FIRST
+  (M70/M73).** A 39-cell ladder gives a 2-cell run detector **many chances**, and its false-fire
+  rate on a completely FLAT profile swings with where the median lands on the n=8 grid:
+
+  | flat median | need 2 | **need 3** | need 4 |
+  |---|---|---|---|
+  | 12% | 1.6% | **0.0%** | 0.0% |
+  | 25% | **13.2%** | **0.2%** | 0.0% |
+  | 38% | 0.3% | **0.0%** | 0.0% |
+  | 50% | **25.8%** | **0.8%** | 0.0% |
+  | 62% | **19.0%** | **0.3%** | 0.0% |
+  | 75% | 8.6% | **0.1%** | 0.0% |
+
+  ⇒ **need 2 is unusable here at 13-26%** for medians this arm might plausibly have, and **need 3
+  holds at or under 0.8% whatever the median turns out to be** — which matters because `idteck`'s
+  median on this knob is not known in advance. ⛔ **This is why the same detector was fine on
+  K19's 24-cell ladder and is not fine here: the number of chances is part of the detector.**
+
+  **A1 — DOES `idteck` HAVE STRUCTURE ON THIS KNOB AT ALL?** ⇒ a maximal contiguous run of
+  **>= 3 cells each at or above (this arm's ladder median + 25 points)**, present in **BOTH** seeds
+  and overlapping in at least one cell. **A1 REFUTED** ⇒ no such run. between ⇒ reported.
+  ⭐ **Power, simulated against the region widths actually observed on the other arms** (3-5 cells):
+  a 3-cell region at 88% fires **69-99%** depending on the median, a 4-cell region **78-100%**, a
+  5-cell region **87-100%**; on the full four-region truth A1 fires **95.5%** and on a completely
+  flat ladder **0.2%**. ⚠ **The weak corner is a 3-cell region on a 38-50% median at 69-73%**,
+  so **a REFUTED A1 means *no region as wide and as tall as the other arms' regions*, not *flat*.**
+  ⭐ And the median reference survives regions occupying **36% of the ladder** — checked, because
+  four named regions span 14 of 39 cells and M68 is exactly a reference dragged by its own signal.
+  ⛔ A 25th-percentile reference was tried instead and is far WORSE: it false-fires **68%** on a
+  flat profile, because a threshold 25 points over the quartile is reachable by noise.
+
+  **A2 — IS ITS STRUCTURE WHERE THE OTHER ARMS' IS?** ⭐ This is the cheapest attack there is on the
+  mechanism, and it is a legitimate LOCATION test because the locations were named first and have
+  now replicated across **three independent seed pairs**: `indala`/`keri` are HIGH in **10-30**,
+  **50-65**, **95-105** and **140-150** ms. ⇒ **A2 fires when every region A1 finds has a MAJORITY
+  of its cells inside one of those four AND at least two of the four are found.** **A2 REFUTED**
+  ⇒ some region A1 finds does not, i.e. `idteck`'s structure is its own.
+
+  ⛔⛔ **A MAJORITY AND NOT ONE CELL, AND THE BREAK-TEST IS WHY.** The first version of A2 accepted a
+  single cell of overlap. Simulated against a ground truth whose structure sat **entirely
+  elsewhere** (70-80 and 110-120 ms), a wide spilling run touched a named span by accident, counted
+  as a match **and escaped being an orphan** — **A2 false-fired 2.8%** where it should never fire.
+  **The majority rule takes that to 0.0%.**
+
+  ⭐ **A1 AND A2's POWER, SIMULATED BEFORE THE CAPTURE (2,000 draws per row, both seeds required):**
+
+  | ground truth | A1 fires | A2 fires | wanted |
+  |---|---|---|---|
+  | **flat, no regions at all** | **0.2%** | **0.0%** | A1 refuted |
+  | the four named regions | **95.5%** | **79.8%** | A2 fires |
+  | structure entirely ELSEWHERE (70-80, 110-120) | 97.8% | **0.0%** | A2 refuted |
+  | the named regions **plus** an extra one | 78.5% | **42.1%** | A2 refuted |
+
+  ⛔⛔ **THE LAST ROW IS A REAL LIMIT AND IT IS STATED IN ADVANCE: A2 FIRING MEANS *the structure
+  found is in the named places*, NOT *there is no structure elsewhere*.** On a truth carrying the
+  named regions plus an extra one it still fires about 42% of the time, because A1 often fails to
+  resolve the extra region as a separate run. ⇒ **A2 can establish that `idteck` shares the other
+  arms' locations; it cannot establish that it has no others.**
+
+  ⛔ **A2 tests the HIGH regions only, by arithmetic**: the other arms' LOW regions (120-130,
+  165-175) need an inverse detector, and on a ~38% median *median − 25* is near the floor where it
+  has no power (K20's table).
+  ⚠ **`idteck` shares the 2048-sample frame with `indala` and `keri`, so it can no more separate
+  frames from milliseconds than they can** (M65/C520). A2 is not asking that; it asks whether the
+  structure is a property of the EMISSION or of the reader, and a third arm agreeing is the
+  strongest cheap evidence for the former.
+
+  ⛔ Gates unchanged and any one ends it: pooled **< 15%** is NO POWER; split-half over the rounds
+  **> 15 points** is a drifted run — ⭐ and at 39 cells x 8 reps the n per half is **156**, so that
+  gate is about **2.7σ** here and fails on noise under 1% (C530/M73, which is why its configuration
+  is named beside it); **P1 > 0.6** in any cell.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -1258,6 +1370,10 @@ PROBES = {
     # 4096-sample frame, so H_ms and H_frame put its peak 66 ms apart. 3 frames by C499's rule
     # (the window is 3-4 frames on every arm), NOT by a pilot — see the K17 section.
     "nexwatch": "lf read -s 12288",
+    # ⭐ K26's arm. 3 frames of its 2048-sample frame, by C499's standing rule and NOT by a pilot
+    # on this arm. Precision 100% (C503) and a marker of its own, which is what makes it
+    # scoreable where `indala224` is not — see the K26 section for why that one cannot be.
+    "idteck": "lf read -s 6144",
 }
 # ⛔ `nexwatch` is deliberately NOT in ORDER: it is the weakest of the six and would dilute the
 # default three-arm runs, whose probes were chosen for power. `--arms nexwatch` asks for it.

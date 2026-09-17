@@ -1178,6 +1178,130 @@ def notch20(paths):
     print("")
 
 
+K26_LADDER = [str(x) for x in range(10, 201, 5)]      # 39 cells — the full measured span
+K26_HIGH = 25.0        # A1: a cell is elevated at median + this
+K26_RUN = 3            # ⛔ THREE, not two: a 39-cell ladder gives a 2-cell run 13-26% false-fire
+                       # on a flat profile depending on where the median lands on the n=8 grid;
+                       # need-3 holds under 0.8% at every median from 12% to 75% (simulated first).
+K26_REGIONS = {        # A2: where `indala`/`keri` are HIGH, named before this capture and
+    "10-30": ("10", "30"),          # replicated across three independent seed pairs
+    "50-65": ("50", "65"),
+    "95-105": ("95", "105"),
+    "140-150": ("140", "150"),
+}
+K26_REGIONS_MIN = 2    # A2: at least this many of the four must be found
+# ⛔⛔ A2 MATCHES ON A MAJORITY OF A REGION'S CELLS, NOT ON ONE. The first version accepted a
+# single cell of overlap, and the break-test showed a WIDE spilling run touching a named span by
+# accident was then counted as a match AND escaped being an orphan: A2 false-fired 2.8% on a
+# ground truth whose structure was entirely elsewhere. The majority rule takes that to 0.0%.
+K26_MAJORITY = True
+
+
+def k26(paths):
+    """A1/A2 — does `idteck` have structure on the lead-time knob, and is it in the same places?
+
+    ⛔ `indala224` is NOT scoreable on this knob and does not appear here: its precision is 0%
+    (C502) so *exact* is a flat zero, and its marker `Indala \\(len` is the SAME one `indala`
+    uses, so *decoded* cannot tell a 224-bit frame from a 64-bit one — and the demodulator
+    reports a nonsense length for it (254-611 against 224, C493/C501), so no length-keyed
+    marker rescues it either. There is no rate to put on the y-axis."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K26 — `idteck` on the lead-time knob")
+    print("   probe `lf read -s 6144` = 3 frames, by C499's standing rule and not by a pilot.")
+    print("   ⛔ A1 needs a run of %d cells, not 2: over %d cells a 2-cell run false-fires"
+          % (K26_RUN, len(K26_LADDER)))
+    print("   13-26%% on a FLAT profile depending on the median; need-%d holds under 0.8%%."
+          % K26_RUN)
+    print("")
+    arms = sorted({a for _, d in runs for a in d})
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        if len(per) < 2:
+            print("### %s ⛔ needs two seeds — %d supplied\n" % (arm, len(per)))
+            continue
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K26_LADDER if k in cells]
+        if len(ladder) < len(K26_LADDER):
+            print("### %s ⛔ partial ladder (%d of %d) — not scored\n"
+                  % (arm, len(ladder), len(K26_LADDER)))
+            continue
+        meds, rate_ofs = [], []
+        for name, c in per:
+            r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            rate_ofs.append(r)
+            vals = sorted(r(k) for k in ladder)
+            meds.append(0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2])
+                        if len(vals) % 2 == 0 else vals[len(vals) // 2])
+        print("### %s   median %s   elevated >= %s"
+              % (arm, "/".join("%.0f%%" % m for m in meds),
+                 "/".join("%.0f%%" % (m + K26_HIGH) for m in meds)))
+        for k in ladder:
+            print("   %5s %s %s"
+                  % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                     "".join("▲" if rate_ofs[i](k) >= meds[i] + K26_HIGH else "·"
+                             for i in range(len(per)))))
+        gated = False
+        for name, c in per:
+            g, line = _gate(name, c, ladder)
+            print(line)
+            gated = gated or not g
+        if gated:
+            print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm)
+            continue
+        seed_runs = [_runs(ladder, rate_ofs[i], meds[i] + K26_HIGH) for i in range(len(per))]
+        seed_runs = [[f for f in rs if len(f) >= K26_RUN] for rs in seed_runs]
+        found = []
+        for f1 in seed_runs[0]:
+            for f2 in seed_runs[1]:
+                if set(f1) & set(f2):
+                    found.append(sorted(set(f1) | set(f2), key=int))
+        print("   A1 (>= %d adjacent cells at median+%.0f, in BOTH seeds): %s"
+              % (K26_RUN, K26_HIGH, [",".join(f) for f in found] or "none"))
+        print("   ⇒ **A1 %s for %s** — %d region(s)%s"
+              % ("FIRES" if found else "REFUTED", arm, len(found),
+                 "" if found else ". ⚠ That means *no region as WIDE and as TALL as the other"
+                 "\n     arms' regions* (3-5 cells at ~88%), NOT *flat*: at a 3-cell region on a"
+                 "\n     38-50% median this detector has only 69-73% power."))
+        if not found:
+            print("")
+            continue
+        spans = {lbl: [k for k in ladder if int(lo) <= int(k) <= int(hi)]
+                 for lbl, (lo, hi) in K26_REGIONS.items()}
+
+        def inside(f):
+            """⛔ A MAJORITY of the region's cells, not one (see K26_MAJORITY)."""
+            best = max((len(set(f) & set(sp)) for sp in spans.values()), default=0)
+            return (best * 2 >= len(f)) if K26_MAJORITY else (best > 0)
+
+        named = []
+        for lbl, (lo, hi) in sorted(K26_REGIONS.items(), key=lambda kv: int(kv[1][0])):
+            span = spans[lbl]
+            hit = [",".join(f) for f in found
+                   if len(set(f) & set(span)) * 2 >= len(f) and set(f) & set(span)]
+            named.append((lbl, hit))
+            print("   A2 %-9s (%s): %s" % (lbl, ",".join(span), " | ".join(hit) or "no region"))
+        matched = sum(1 for _, h in named if h)
+        orphans = [",".join(f) for f in found if not inside(f)]
+        a2 = (not orphans) and matched >= K26_REGIONS_MIN
+        print("   ⇒ **A2 %s for %s** — %d of %d named regions found, %d region(s) outside them all"
+              % ("FIRES" if a2 else "REFUTED" if orphans else "no verdict",
+                 arm, matched, len(K26_REGIONS), len(orphans)))
+        if orphans:
+            print("      ⛔ outside: %s ⇒ this arm's structure is its OWN, not the other arms'."
+                  % "; ".join(orphans))
+        elif a2:
+            print("      ⭐ A THIRD ARM in the same places ⇒ the structure is a property of the")
+            print("      EMISSION rather than of one reader. ⚠ It shares the 2048-sample frame")
+            print("      with both, so it says nothing about frames vs milliseconds (M65/C520).")
+            print("      ⛔⛔ AND A2 FIRING MEANS *the structure found is in the named places*,")
+            print("      NOT *there is no structure elsewhere*: on a ground truth carrying the")
+            print("      named regions PLUS an extra one, A2 still fires ~42% of the time because")
+            print("      A1 often fails to resolve the extra region separately. Stated in advance.")
+        print("")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1190,6 +1314,8 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--k26", nargs="+", metavar="CAP",
+                    help="⭐ K26: `idteck` over the 10-200 ms ladder, two seeds")
     ap.add_argument("--notch20", nargs="+", metavar="CAP",
                     help="⭐ offline: is there a frame-locked notch at 20 ms? (banked caps)")
     ap.add_argument("--k24", nargs="+", metavar="CAP",
@@ -1202,6 +1328,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k26:
+        k26(a.k26)
+        return 0
     if a.notch20:
         notch20(a.notch20)
         return 0
