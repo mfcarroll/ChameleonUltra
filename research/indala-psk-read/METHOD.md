@@ -763,3 +763,40 @@ criterion was written before the data**. Position, temperature, time since armin
 sequence index are all free to masquerade as the thing being swept — and only a prediction made in
 advance can tell you they did not.
 
+
+**M61 — A RATE OVER BACK-TO-BACK READS IS A STATISTIC ABOUT THE SCHEDULE. SHUFFLING DOES NOT FIX
+IT; SPACING DOES.**
+
+M60 removed position as a confound by shuffling which SETTING sits at each position. ⛔ **That
+leaves the position effect itself completely intact** — it converts a systematic bias into uniform
+noise, which is exactly what "the hit rate wanders" looks like, so the disease survives its own
+treatment looking like ordinary variance.
+
+⭐⭐ **THE MEASUREMENT (C507).** Six IDENTICAL reads per session, one arming, sixteen sessions:
+`gproxii` returned the pattern **`.X.XX.` in 16 of 16** — index 1, 3 and 4 decoding every time and
+index 0, 2 and 5 **never** — and `indala` had **index 5 at 16/16 against index 4 at 0/16**,
+adjacent reads of the same command. At a ~50% base rate one fixed six-bit pattern cannot repeat
+sixteen times. ⇒ **Within a session the decode is not a coin; it is a function of position.**
+
+⛔ **AND IT IS THE AIR, NOT THE CLIENT — which had to be shown and not assumed.** The rival was
+*the nth read of a pm3 session is intrinsically different*. `msleep` is `AlwaysAvailable`
+(`cmdmain.c:365`): it touches no device and raises no field, so it cannot change which read is the
+nth. Inserting it moved the pattern on 3 of 4 delays for `gproxii` and 4 of 4 for `indala`, and
+swung `gproxii`'s rate from **29.2% to 70.8%**. A pure host pause did that.
+
+⇒ **The mechanism is C486's beat.** Each read lands at its own phase of a ~61-80 ms null cycle, and
+a fixed read cadence makes that phase deterministic. So repeats issued back to back do not sample
+independently — **they resample one phase, and AGREEMENT CAN BE MANUFACTURED BY THE SCHEDULE.**
+
+⚠ **THIS IS THE DANGEROUS DIRECTION.** M58, M59 and M60 all produce noisy or shifted numbers; this
+one produces *tight* ones. A `--repeat 10` run back to back would report ten agreeing reads and a
+confident rate, and the confidence would be the artifact. ⛔ That is the same shape of error as
+grading with no calibration row, which is the thing this project exists to prevent.
+
+⭐ **The fix is spacing, drawn and not constant.** A constant pause is just another fixed cadence —
+the very thing measured as deterministic here. `benchmatrix`' `--repeat` now waits a random
+interval spanning more than one beat period between repeats (`rfid-tools` `f22feec`), with the
+span, the drawing and the between-not-before placement each pinned by a break-tested test.
+
+⇒ Before quoting any rate: **ask whether the reads that produced it were independent, or merely
+consecutive.** Independence is a property of the schedule, and on this bench it has to be bought.
