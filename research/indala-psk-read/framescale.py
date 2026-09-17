@@ -1020,7 +1020,7 @@ def k23(paths):
                   % arm)
             print("      ⛔ Its location is reported, never tested. ⛔ And a firing V1 licenses"
                   " *the profile\n      comes down*, never *it reaches a floor*: at a true level"
-                  " of 62%% this detector fires\n      14%% of the time from counting noise"
+                  " of 62% this detector fires\n      14% of the time from counting noise"
                   " alone.")
         else:
             print("   ⇒ **V1 FAILS for %s — AND THAT IS THE RESULT WITH TEETH.** The profile is"
