@@ -158,6 +158,35 @@ prediction below is not fitted to anything.
   proves nothing. The mean over all lags is reported first for exactly that reason, and a flat
   profile is reported as **NO POWER**, not as support.
 
+## ⭐⭐⭐ K9 — GIVE EVERY READ ITS OWN BURST, AND SEE IF THE POSITION DEPENDENCE GOES AWAY
+
+C511's consolidated picture is post-hoc and says so: **the phase reference is the BURST's start,
+and only the inter-read cadence matters.** It needs K1's measurement to work at all — a burst
+SPANS reads (`gproxii` takes ~1 field arrival per 2.4 reads), so successive reads sit at
+successive phases of ONE burst. ⭐ **That makes a sharp prediction with a real payoff**: put a gap
+between reads longer than the burst itself (`LF_TAG_BURST_TARGET_MS` = 500 ms) and every read
+starts a FRESH burst ⇒ every read sits at phase zero ⇒ **the position dependence should vanish.**
+
+**K9**: between-read gaps D ∈ {0, 300, 600, 900} ms, sessions interleaved and shuffled, with the
+playbacks counter read around each session.
+
+  - **P1, the MECHANISM, and it is independent of the outcome.** Arrivals per read should climb
+    towards 1.0 as D passes ~500 ms, from K1's measured 0.42 at D=0. **P1 is what makes P2 and P3
+    interpretable**: without it, a change at large D could be anything.
+  - **P2, position dependence.** At D >= 600 the per-index hit rates should become EQUAL — spread
+    across the six indices <= 1 of `reps`, against the 16-of-16 alternation seen at D=0.
+  - **P3, the rate, and either direction is a result.** If every read lands at phase zero the rate
+    goes to ~100% (phase zero is favourable) or ~0% (it is not). ⛔ **A rate that stays near 50%
+    WITH structure refutes the whole picture**, and that is the outcome to watch for.
+
+⛔ **THE CONTROL THAT CAN FAIL**: D=0 runs in the same shuffled set and must still reproduce the
+`.X.XX.`-family pattern. If it does not, the bench moved and nothing in the run is comparable to
+K5-K8 — report that, do not interpret the rest.
+
+⚠ **IF P2 AND P3 BOTH LAND, IT IS STILL NOT A HARNESS CHANGE TO MAKE HERE.** A reliable read is
+an operator decision, because the graded read path re-bases every past cell. What this run can do
+is hand them the number.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
@@ -448,6 +477,82 @@ def k8(a, arms, leads):
     return 0
 
 
+def k9(a, arms, gaps):
+    """⭐ K9. Between-read gaps spanning the burst, with the arrivals counter as the mechanism."""
+    import collections
+    import random as _r
+    rng = _r.Random(a.seed)
+    plan = [d for d in gaps for _ in range(a.reps)]
+    rng.shuffle(plan)
+    print("K9 — %d sessions x %d reads, between-read gaps %s ms, shuffled (seed %d)"
+          % (len(plan), a.reads, gaps, a.seed))
+    print("   burst is LF_TAG_BURST_TARGET_MS = 500 ms; K1 measured 0.42 arrivals/read at D=0\n")
+    out = {}
+    try:
+        for key in arms:
+            arm = shortread.ARMS[key]
+            ok, why = seqdump.arm(a.port, arm.typ, arm.econfig)
+            if not ok:
+                print("%-9s ⛔ ARM FAILED: %s" % (key, why))
+                continue
+            pats = collections.defaultdict(list)
+            arr = collections.defaultdict(list)
+            for d in plan:
+                before = playbacks(a.port)
+                sc = session(key, a.reads, a.timeout, delay=d)
+                after = playbacks(a.port)
+                pats[d].append(pattern(sc))
+                if before is not None and after is not None:
+                    arr[d].append((after - before) / float(a.reads))
+                time.sleep(0.4)
+            out[key] = {str(d): {"patterns": pats[d], "arrivals": arr[d]} for d in gaps}
+            print("\n%-9s probe %r" % (key, PROBES[key] or arm.reader))
+            print("   %-6s %-10s %-9s %-24s %s"
+                  % ("gap", "arr/read", "rate", "per-index hits", "patterns"))
+            for d in gaps:
+                ps = pats[d]
+                per = [sum(1 for p in ps if p[i] == "X") for i in range(a.reads)]
+                hits = sum(p.count("X") for p in ps)
+                n = sum(len(p) for p in ps)
+                am = sum(arr[d]) / len(arr[d]) if arr[d] else float("nan")
+                print("   %-6d %-10.2f %-9s %-24s %s"
+                      % (d, am, "%d/%d=%.0f%%" % (hits, n, 100.0 * hits / n),
+                         " ".join(str(x) for x in per), " ".join(ps)))
+            # P1
+            big = [d for d in gaps if d >= 600]
+            a0 = sum(arr[gaps[0]]) / len(arr[gaps[0]]) if arr[gaps[0]] else 0.0
+            ab = ([sum(arr[d]) / len(arr[d]) for d in big if arr[d]] or [0.0])
+            abm = sum(ab) / len(ab)
+            print("\n   P1 mechanism: arrivals/read %.2f at D=0 → %.2f at D>=600  ⇒ %s"
+                  % (a0, abm, "burst restarts per read" if abm >= 0.8
+                     else "it does NOT restart per read — P2/P3 are uninterpretable"))
+            # P2
+            for d in big:
+                ps = pats[d]
+                per = [sum(1 for p in ps if p[i] == "X") for i in range(a.reads)]
+                spread = max(per) - min(per)
+                print("   P2 at D=%d: per-index spread %d of %d ⇒ %s"
+                      % (d, spread, len(ps),
+                         "position dependence GONE" if spread <= 1 else "structure REMAINS"))
+            # P3
+            for d in big:
+                ps = pats[d]
+                hits = sum(p.count("X") for p in ps)
+                n = sum(len(p) for p in ps)
+                r = 100.0 * hits / n
+                print("   P3 at D=%d: rate %.0f%% ⇒ %s"
+                      % (d, r, "near-deterministic" if r >= 85 or r <= 15
+                         else "⛔ still mid-range — this REFUTES the picture"))
+    finally:
+        o = seqdump.disarm(a.port)
+        print("\ndisarm: %s" % ("ok" if "success" in o.lower() else o.strip()[-160:]))
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump(out, fh, indent=1)
+        print("raw → %s" % a.out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ORDER))
@@ -463,6 +568,8 @@ def main():
                                      "shuffled session groups")
     ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
     ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
+    ap.add_argument("--k9", action="store_true",
+                    help="⭐ K9: between-read gaps spanning the 500 ms burst, with arrivals")
     ap.add_argument("--k8", action="store_true",
                     help="⭐ K8: sweep a LEAD-IN delay before the first read, across the beat")
     ap.add_argument("--k7", action="store_true",
@@ -488,6 +595,8 @@ def main():
         return k7(a, arms)
     if a.k8:
         return k8(a, arms, list(range(0, 241, 15)))
+    if a.k9:
+        return k9(a, arms, [0, 300, 600, 900])
     print("criteria K1/K2/K3/K4 are in this file's docstring and were committed before this run.\n")
 
     # K4 costs nothing and is stated whatever else happens.
