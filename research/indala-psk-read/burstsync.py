@@ -1345,6 +1345,39 @@ over on any arm, plus the no-primer control. One arm, two fresh seeds (**241**, 
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐ K27 — `nexwatch`'s OWN FULL LADDER, SCORED BY K26's A1 AND NOTHING ELSE
+
+⭐ `nexwatch` is the one arm whose frame differs — **4096 samples against the others' 2048** — so it
+is the only one that can separate *the structure is a property of the emission* from *it is a
+property of the frame* (M65/C520). ⛔ **But the inventory shows it with only 14 measured cells at
+2 seeds**, all from K17's two narrow windows, so it cannot carry a cross-arm band yet. **This is the
+capture that fixes that**: the same **10..200 ms at 5 ms, 39 cells** ladder `idteck` ran, two fresh
+seeds (**257**, **263**), `--reps 8`, `--per-arm-shuffle`.
+
+  **SCORED BY K26's A1, UNCHANGED AND ALREADY COMMITTED** — a run of **>= 3 adjacent cells at
+  median + 25** present in **BOTH** seeds and overlapping. ⭐ Applying an already-pinned band to a
+  new arm is replication; nothing here is re-tuned, and A1's simulated numbers carry over because
+  they were computed **as a function of the median** (flat-ladder false-fire at or under 0.8% for
+  every median from 12% to 75%, and 0.2% on the four-region truth's own flat control).
+  ⚠ `nexwatch` is the weakest of the six arms, so its median may sit very low. **That HELPS A1**:
+  the lower the median the further *median + 25* is from the ceiling (M68 inverted), and at a
+  median of 0% a flat ladder cannot false-fire at all. ⛔ But it also means **a REFUTED A1 here
+  must be read as *no region as wide and tall as the other arms' regions*, not as *flat*** — the
+  same reading K26 committed to.
+
+  ⛔⛔ **A2 IS NOT APPLIED TO THIS ARM, AND THAT IS DECIDED BEFORE THE CAPTURE.** A2's named-region
+  list is the one C533/M76 found unsound — it came from the write-ups and omitted 180-195 ms — and
+  the replacement must be derived from `--inventory`, which **this very capture changes**. ⇒ Scoring
+  a cross-arm location band on the run that extends its own reference is circular. **A1 only here;
+  the cross-arm band comes after, on fresh seeds, against the inventory this run has already fed.**
+
+  ⛔ Gates unchanged: pooled **< 15%** is NO POWER — ⚠ **and that one may well fire on this arm**,
+  which would be a result about `nexwatch`'s decode rate at a 3-frame read rather than about the
+  knob; split-half over the rounds **> 15 points** (at 39 cells x 8 reps the n per half is **156**,
+  so that gate is ~**2.7σ** here and fails on noise under 1% — C530/M73); **P1 > 0.6** in any cell.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
