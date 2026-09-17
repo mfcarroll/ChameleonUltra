@@ -1497,6 +1497,74 @@ The derivation is therefore weakest for `idteck`, which is stated here rather th
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐ K30 — IS THE LEAD TIME A DURATION OR A SAMPLE COUNT? (written before its capture)
+
+⛔⛔ **THE CONFOUND THIS CLOSES, AND NOTHING ON THIS LINE HAS EVER SEPARATED IT.** Every lead-time
+result varies the primer with `lf read -s N`, and **N sets its SAMPLE COUNT and its DURATION
+together**. So *fixed milliseconds* (C517/C536/C538) has always meant *fixed N*, and a purely
+**client-side** reading of the whole line is not excluded. ⭐ `lf config --dec N` separates them —
+verified two ways in C539 — and its stretch is **1.653x, not 2x** (C540/M79).
+
+### ⛔ THREE ARITHMETIC RESULTS THAT SHAPED THIS BAND, ALL BEFORE ANY CAPTURE
+
+1. **REACHABILITY** (M77 on the REAL duration): a dec-2 primer costs 1.653x its nominal ms, so the
+   top is **138 ms nominal** for `keri`, 157 for `idteck`. ⇒ **R4 and R5 cannot be seen at their
+   *stayed* positions**, and their absence there is uninformative.
+2. **A COLLISION** (C541): *elapsed* moves R3 to **60-64**, inside R2's *stayed* **55-65**. ⇒ a
+   region at 55-65 is produced by BOTH hypotheses and is **informational only**.
+3. ⭐⭐ **THE REGIONS NARROW.** A width in ms divides by 1.653 too: R2's 10 ms becomes **6.0 ms**
+   and R1/R3/R4's 5 ms become **3.0 ms** — **1.6 to 2.2 cells on a 5 ms grid.** ⛔ **A 3-cell run
+   detector (K26's A1) CANNOT SEE THEM**, so A1 is the wrong instrument here and is not used.
+
+### THE BAND
+
+**The ladder is TARGETED, not a sweep** — because a 2-cell run needs few chances to stay clean:
+**10,15,20,25,30,35,40,45,60,65,90,95,100,105,110,115,120 ms** (17 cells), at **`--dec 2`**,
+`--arms keri,idteck`, `--reps 8`, `--per-arm-shuffle`, two fresh seeds (**307**, **311**).
+
+  ⛔ **THE DETECTOR IS ABSOLUTE, NOT MEDIAN-RELATIVE**: a cell is elevated at **>= 62.5% (5 of 8)**,
+  the `--inventory` threshold, in **BOTH** seeds, and a region is **>= 2 adjacent** such cells.
+  ⭐ It is absolute because a 17-cell targeted ladder has no honest median, and it is justified by
+  prior measurement: `--inventory` has `keri` **LOW at 35-45 in every seed** at dec 1.
+
+  **THE TWO DISCRIMINATING PREDICTIONS**, each detectable at >= 2 cells:
+  - **ELAPSED** ⇒ regions at **30-40** (R2 moved, 33-39) **and 110-115** (R5 moved, 108.9-114.9),
+    and **NOT** at 100-105.
+  - **SAMPLES** ⇒ a region at **100-105** (R3 unmoved), and **NOT** at 30-40.
+
+  **D1 fires ELAPSED** when 30-40 carries a region **and** 100-105 does not, in both seeds.
+  **D1 fires SAMPLES** when 100-105 carries a region **and** 30-40 does not, in both seeds.
+  **Anything else is NO VERDICT, AND BOTH CASES HAVE A MEANING PINNED HERE** (M74):
+  - **regions at BOTH** ⇒ the knob changes something neither hypothesis describes;
+  - **regions at NEITHER** ⇒ the dec-2 profile carries nothing this detector can see — which the
+    gates and the 60-65 informational cells separate from a dead run.
+  ⚠ **AND ONE AMBIGUITY, NAMED**: R5-moved (110-115) sits one cell from R3-unmoved (105). ⇒ a
+  region spanning **105-110** supports neither and is **reported as ambiguous**, not counted.
+
+  ⭐ **POWER, SIMULATED BEFORE THE CAPTURE (20,000 draws, both seeds required):**
+
+  | the truth at those cells | fires |
+  |---|---|
+  | everything at the measured low, 25% | **0.01%** |
+  | everything at 38% (the top of `keri`'s measured low) | 4.7% |
+  | a 2-cell region at **88%** | **96.1%** |
+  | a 2-cell region at 75% | 62.4% |
+  | a ONE-cell spike at 100% | **0.36%** |
+
+  ⇒ **false-fire 0.01% against the level actually measured there, and 96% power against a region
+  as tall as the ones being looked for.** ⚠ The 4.7% row is the honest worst case and the reason
+  the 60-65 and 90-95 cells are in the ladder: they show what the local level actually is.
+
+  ⛔ Gates unchanged: pooled **< 15%** NO POWER; split-half **> 15 points**; **P1 > 0.6** in any
+  cell — ⚠ and P1 is load-bearing again, because a dec-2 primer eats 1.65x the burst and the
+  ladder's top cell (120 nominal = ~198 ms of elapsed primer) is close to `keri`'s computed 138.
+
+  ⛔⛔ **WHAT IT CANNOT DO**: it tests the PRIMER's knob only. A *SAMPLES* verdict would not by
+  itself make the whole line client-side — the probe's own read is untouched here — and an
+  *ELAPSED* verdict does not say WHICH duration (air, readback, or both) matters.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
@@ -1554,7 +1622,7 @@ def playbacks(port):
         return None
 
 
-def session(arm_key, reads, timeout, delay=0, lead=0, primer=0):
+def session(arm_key, reads, timeout, delay=0, lead=0, primer=0, dec=1):
     """One pm3 invocation issuing `reads` IDENTICAL probes. Returns the per-read scores in order.
 
     ⛔ `reads == 0` is the instrument control and is not a degenerate case: the client still
@@ -1569,7 +1637,15 @@ def session(arm_key, reads, timeout, delay=0, lead=0, primer=0):
         # field UP rather than letting it drop: one capture of `primer` samples immediately
         # before the probe, no msleep between them, so both reads share one burst and the
         # cells differ only in how long the emission has been running.
+        #
+        # ⭐⭐ K30's SECOND variable, and the two `lf config` commands are issued at EVERY dec
+        # INCLUDING 1 on purpose: the band compares dec 1 against dec 2 and needs the CLIENT's
+        # own cost identical in both, so only the primer's AIR duration differs (C539). ⛔ The
+        # reset to 1 before the probe is what keeps the demodulator working — `decprobe.py`
+        # measured that path decoding 3 of 3 at both settings.
+        cmds.append("lf config --dec %d" % dec)
         cmds.append("lf read -s %d" % primer)
+        cmds.append("lf config --dec 1")
     for _ in range(reads):
         if delay:
             # ⭐ K6's independent variable. `msleep` is AlwaysAvailable in the client
@@ -1900,6 +1976,13 @@ K12_PAIR_LAG_MS = 120         # the ladder's own approximation to it — 1.6 ms,
 K12_OVERHEAD_MS = 192
 # `LF_TAG_BURST_TARGET_MS` in `lf_tag_em.c` (K4, confirmed from the air by C516).
 LF_BURST_MS = 500
+# ⛔ `lf_read()`'s per-command sample count for arms probed by their OWN reader — the 6x spread
+# C494 measured in the pm3 client, and the burst pays for these samples too.
+READER_SAMPLES = {"keri": 10000, "indala": 30000, "nexwatch": 20000, "idteck": 5000,
+                  "gproxii": 10000, "indala224": 30000}
+# ⭐ MEASURED, not nominal (C540/M79): decimation 2 stretches a read by 1.653x and not 2x,
+# because the USB readback does not scale with it. ⚠ Unmeasured for other values.
+DEC_STRETCH = {1: 1.0, 2: 1.653}
 
 
 def k12(a, arms, primers):
@@ -1934,6 +2017,11 @@ def k12(a, arms, primers):
     print("K12 — %d sessions over %d cells (%s ms + no-primer control), shuffled within each "
           "round (seed %d)" % (len(plan), len(cells),
                                ",".join(str(p) for p in primers), a.seed))
+    if a.dec != 1:
+        print("   ⭐ PRIMER DECIMATION %d \u2014 the primer's AIR duration is ~%.2fx its nominal "
+              "ms (C540);\n     the probe runs at dec 1 and the two `lf config` commands are "
+              "issued at EVERY dec so the\n     client's own cost is identical across the "
+              "comparison." % (a.dec, 1.653 if a.dec == 2 else float(a.dec)))
     print("   cell order per arm: %s"
           % (", ".join("%s=seed %d" % (k, seeds[k]) for k in arms) if a.per_arm_shuffle
              else "⛔ ONE SHARED PLAN — this cap carries no cross-arm correlation (M69)"))
@@ -1947,11 +2035,18 @@ def k12(a, arms, primers):
     for _k in arms:
         _p = PROBES.get(_k) or ""
         _m = re.search(r"-s\s+(\d+)", _p)
-        _pm = (int(_m.group(1)) * 8.0 / 1000.0) if _m else 0.0
-        _top = LF_BURST_MS - K12_OVERHEAD_MS - _pm
+        # ⛔ An arm whose probe is its OWN reader still reads samples, and the burst pays for
+        # them: `lf_read()`'s count per command is C494's 6x spread. Falling back to 0 made the
+        # computed top 308 ms for `keri`, which is nonsense.
+        _n = int(_m.group(1)) if _m else READER_SAMPLES.get(_k, 0)
+        _pm = _n * 8.0 / 1000.0
+        # ⭐ AND THE PRIMER IS DECIMATED: at dec 2 it costs ~1.653x its nominal ms (C540), so
+        # the top in NOMINAL ms is the elapsed budget divided by that stretch.
+        _stretch = DEC_STRETCH.get(a.dec, float(a.dec))
+        _top = (LF_BURST_MS - K12_OVERHEAD_MS - _pm) / _stretch
         _over = [c for c in primers if c > _top]
-        print("   %-9s probe %-18s = %5.1f ms  ⇒ computed primer top ~%.0f ms%s"
-              % (_k, _p or "(its own reader)", _pm, _top,
+        print("   %-9s probe %-18s = %5.1f ms  ⇒ computed primer top ~%.0f ms nominal%s"
+              % (_k, _p or "(its own reader, %d samples)" % _n, _pm, _top,
                  ("   ⛔ %d cell(s) ABOVE it: %s — expect P1 to fail there (M77)"
                   % (len(_over), ",".join(str(c) for c in _over))) if _over else ""))
     # ⚠⚠ AND THE COMPUTED TOP IS OPTIMISTIC. It puts `nexwatch` at ~210 ms, and its 200 ms cell
@@ -1978,7 +2073,8 @@ def k12(a, arms, primers):
                 # never scored — `session()` only scores blocks labelled with the demod
                 # command, and the primer is a bare capture.
                 scores = session(key, 1, a.timeout,
-                                 primer=(0 if cell is None else int(cell * 125)))
+                                 primer=(0 if cell is None else int(cell * 125)),
+                                 dec=a.dec)
                 after = playbacks(a.port)
                 sc[cell].extend(scores)
                 nreads = 1 if cell is None else 2
@@ -2264,6 +2360,13 @@ def main():
                     help="⭐ K12: sweep the PRIMER's length — field-UP time before a fixed "
                          "probe at a fixed index, separating elapsed time from read index")
     ap.add_argument("--primers", help="K12: comma-separated primer durations in ms")
+    ap.add_argument("--dec", type=int, default=1,
+                    help="⭐ K30/C539: LF decimation for the PRIMER only, reset to 1 before the "
+                         "probe. At dec N the same `-s N` takes longer in real time with the "
+                         "carrier, field and emission untouched \u2014 measured stretch 1.653x at "
+                         "dec 2, NOT 2x, because the USB readback does not scale (C540/M79). "
+                         "\u26d4 The two `lf config` commands are issued at EVERY dec including 1 "
+                         "so the CLIENT's cost is identical across the comparison.")
     ap.add_argument("--per-arm-shuffle", dest="per_arm_shuffle", action="store_true",
                     help="⭐ K21/M69: give each arm its OWN derived cell-order seed. Required "
                          "for any cap a CROSS-ARM correlation will be computed on; without it "

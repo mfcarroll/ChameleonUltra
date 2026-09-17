@@ -1511,6 +1511,114 @@ def k29(paths):
     print("")
 
 
+K30_LADDER = ["10", "15", "20", "25", "30", "35", "40", "45", "60", "65",
+              "90", "95", "100", "105", "110", "115", "120"]
+K30_HIGH = 62.5        # ABSOLUTE (5 of 8) — a 17-cell targeted ladder has no honest median
+K30_RUN = 2            # the regions NARROW by 1.653 when decimated: 1.6-2.2 cells, so not 3
+K30_ELAPSED = ["30", "35", "40"]      # R2 moved (33-39)
+K30_SAMPLES = ["100", "105"]          # R3 unmoved
+K30_ELAPSED2 = ["110", "115"]         # R5 moved (108.9-114.9) — supporting, not deciding
+K30_AMBIG = ["105", "110"]            # one cell apart: supports neither, reported
+
+
+def _runs2(cells, hot, need):
+    out, cur = [], []
+    for k in cells:
+        if k in hot:
+            cur.append(k)
+        else:
+            if len(cur) >= need:
+                out.append(cur)
+            cur = []
+    if len(cur) >= need:
+        out.append(cur)
+    return out
+
+
+def k30(paths):
+    """D1 — is the lead time a DURATION or a SAMPLE COUNT?
+
+    ⛔ The detector is ABSOLUTE and its run length is 2, not 3: decimation divides a region's
+    width in nominal ms by 1.653, so the regions being looked for are 1.6-2.2 cells wide and
+    K26's A1 could not see them. ⛔ Both no-verdict cases have their meaning pinned in the K30
+    section of `burstsync.py`; do not invent a third."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    print("## K30 — is the lead time a DURATION or a SAMPLE COUNT?")
+    print("   ELAPSED ⇒ a region at %s and NOT at %s. SAMPLES ⇒ the reverse."
+          % (",".join(K30_ELAPSED), ",".join(K30_SAMPLES)))
+    print("   ⛔ absolute threshold %.1f%% (5 of 8), run of %d — the regions NARROW by 1.653x "
+          "when decimated." % (K30_HIGH, K30_RUN))
+    print("")
+    if len(runs) != 2:
+        print("   ⛔ needs exactly two seeds — %d supplied\n" % len(runs))
+        return
+    arms = sorted({a for _, d in runs for a in d})
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        if len(per) < 2:
+            print("### %s ⛔ needs both seeds\n" % arm); continue
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K30_LADDER if k in cells]
+        if ladder != K30_LADDER:
+            print("### %s ⛔ not the K30 ladder (%d of %d) — not scored\n"
+                  % (arm, len(ladder), len(K30_LADDER))); continue
+        rate_ofs = [(lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"]))
+                    for _, c in per]
+        print("### %s" % arm)
+        for k in ladder:
+            print("   %5s %s %s"
+                  % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                     "".join("▲" if f(k) >= K30_HIGH else "·" for f in rate_ofs)))
+        bad = False
+        for name, c in per:
+            g, line = _gate(name, c, ladder)
+            print(line)
+            bad = bad or not g
+        if bad:
+            print("   ⇒ ⛔ NO VERDICT for %s — a gate failed.\n" % arm); continue
+        hot = [{k for k in ladder if f(k) >= K30_HIGH} for f in rate_ofs]
+        def region(sel):
+            rs = [_runs2([k for k in ladder if k in sel], hot[i], K30_RUN) for i in (0, 1)]
+            return bool(rs[0]) and bool(rs[1]), rs
+        e1, re1 = region(set(K30_ELAPSED))
+        s1, rs1 = region(set(K30_SAMPLES))
+        e2, re2 = region(set(K30_ELAPSED2))
+        amb, _ = region(set(K30_AMBIG))
+        for lbl, sel, got in (("ELAPSED  (R2 moved)", K30_ELAPSED, e1),
+                              ("SAMPLES  (R3 unmoved)", K30_SAMPLES, s1),
+                              ("elapsed2 (R5 moved, supporting)", K30_ELAPSED2, e2)):
+            print("   %-32s %s ⇒ %s"
+                  % (lbl, ",".join(sel),
+                     "REGION" if got else "no region"))
+        if amb and not s1 and not e2:
+            print("   ⚠ AMBIGUOUS: a region spans %s, one cell across the R3/R5 boundary — it "
+                  "supports\n     NEITHER and is reported, not counted." % ",".join(K30_AMBIG))
+        if e1 and not s1:
+            v = ("**D1 — ELAPSED. The lead time is a DURATION, not a sample count.**\n"
+                 "     A region appears where the *moved* prediction puts it and NOT where the "
+                 "*unmoved*\n     one does. ⇒ a purely CLIENT-side reading of this line is "
+                 "excluded.%s"
+                 % ("\n     ⭐ And R5's moved position carries a region too, which is supporting "
+                    "and was\n     not required." if e2 else ""))
+        elif s1 and not e1:
+            v = ("**D1 — SAMPLES. The regions sit at a fixed `-s N`, not at a fixed duration.**\n"
+                 "     ⛔ This does NOT by itself make the whole line client-side: the PROBE's own "
+                 "read is\n     untouched by this band, and only the primer's knob was tested.")
+        elif e1 and s1:
+            v = ("⛔ **NO VERDICT — regions at BOTH**, which is the pre-registered branch meaning "
+                 "*the knob\n     changes something neither hypothesis describes*. Report both and "
+                 "do not choose.")
+        else:
+            v = ("⛔ **NO VERDICT — regions at NEITHER**, the pre-registered branch meaning *the "
+                 "decimated\n     profile carries nothing this detector can see*. ⚠ Read the "
+                 "gates and the 60-65 cells\n     before calling it an absence: the detector needs "
+                 "a region as tall as ~88%% to be 96%%\n     sure of seeing it, and only 62%% sure "
+                 "at 75%%.")
+        print("   ⇒ %s\n" % v)
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1523,6 +1631,8 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--k30", nargs="+", metavar="CAP",
+                    help="⭐ K30: two dec-2 caps on the targeted 17-cell ladder")
     ap.add_argument("--k29", nargs="+", metavar="CAP",
                     help="⭐ K29: two fresh caps, each carrying keri+idteck+nexwatch on the "
                          "common 10-195 ms ladder")
@@ -1543,6 +1653,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k30:
+        k30(a.k30)
+        return 0
     if a.k29:
         k29(a.k29)
         return 0
