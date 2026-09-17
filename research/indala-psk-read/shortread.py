@@ -128,6 +128,13 @@ def main():
     ap.add_argument("--port", default=seqdump.CU2_PORT)
     ap.add_argument("--repeat", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--interleave", action="store_true",
+                    help="⭐ ROUND-ROBIN the arms one capture at a time (M59). The bench's hit "
+                         "rate wanders — the same arm gave 88%%, 60%%, 38%% and 75%% in one "
+                         "evening — so arms measured one after another cannot be compared with "
+                         "each other. Interleaved, whatever drifts moves all of them together and "
+                         "the ORDERING becomes readable. ⚠ Slower: it re-arms every round, "
+                         "which C497 measured as costing nothing (8/10 against 7/10).")
     ap.add_argument("--null", action="store_true",
                     help="run every read with NOTHING armed; every count must be zero")
     ap.add_argument("--json", action="store_true")
@@ -140,20 +147,41 @@ def main():
 
     out = []
     try:
-        for key in a.arms:
-            r = run(a.port, key, a.repeat, a.timeout, null=a.null)
-            out.append(r)
-            if "error" in r:
-                print("%-10s %s" % (key, r["error"]))
-                continue
-            lm = sum(1 for h, _ in r["long"] if h)
-            lx = sum(1 for _, e in r["long"] if e)
-            sm = sum(1 for h, _ in r["short"] if h)
-            sx = sum(1 for _, e in r["short"] if e)
-            print("%-10s  %-22s marker %d/%d  exact %d/%d   |   short -s %-5d marker %d/%d  "
-                  "exact %d/%d"
-                  % (key, ARMS[key][2], lm, len(r["long"]), lx, len(r["long"]),
-                     r["short_samples"], sm, len(r["short"]), sx, len(r["short"])))
+        if a.interleave:
+            acc = {k: {"arm": k, "short_samples": ARMS[k][5], "long": [], "short": []}
+                   for k in a.arms}
+            for _ in range(a.repeat):
+                for key in a.arms:
+                    r = run(a.port, key, 1, a.timeout, null=a.null)
+                    if "error" in r:
+                        print("%-10s %s" % (key, r["error"]))
+                        continue
+                    acc[key]["long"] += r["long"]
+                    acc[key]["short"] += r["short"]
+            out = [acc[k] for k in a.arms]
+            for r in out:
+                key = r["arm"]
+                lx = sum(1 for _, e in r["long"] if e)
+                sx = sum(1 for _, e in r["short"] if e)
+                print("%-10s  %-22s exact %d/%d   |   short -s %-5d exact %d/%d"
+                      % (key, ARMS[key][2], lx, len(r["long"]), r["short_samples"],
+                         sx, len(r["short"])))
+        else:
+            for key in a.arms:
+                r = run(a.port, key, a.repeat, a.timeout, null=a.null)
+                out.append(r)
+                if "error" in r:
+                    print("%-10s %s" % (key, r["error"]))
+                    continue
+                lm = sum(1 for h, _ in r["long"] if h)
+                lx = sum(1 for _, e in r["long"] if e)
+                sm = sum(1 for h, _ in r["short"] if h)
+                sx = sum(1 for _, e in r["short"] if e)
+                print("%-10s  %-22s marker %d/%d  exact %d/%d   |   short -s %-5d marker %d/%d  "
+                      "exact %d/%d"
+                      % (key, ARMS[key][2], lm, len(r["long"]), lx, len(r["long"]),
+                         r["short_samples"], sm, len(r["short"]), sx, len(r["short"])))
+            # (sequential mode: valid per arm, not comparable across arms — M59)
     finally:
         print("\ndisarming cu2 ...")
         seqdump.disarm(a.port)
