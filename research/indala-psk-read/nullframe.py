@@ -56,16 +56,22 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PM3 = pm3cap.PM3
 OUT = "/tmp/nullframe"
 
-# name -> (slot type, econfig, marker that must appear in the demod output)
+# name -> (slot type, econfig, marker that must appear in the demod output, demod command)
+#
+# ⛔ EVERY ARM NEEDS A MARKER. The first run of this tool registered None for pac, keri and
+# idteck, and `bool(marker and ...)` then scored them silent BY CONSTRUCTION — so the control
+# could never pass and the run reported INCONCLUSIVE while the target was decoding in front of
+# it. A control that cannot succeed is not a control. (C488 logged the mirror-image bug: a
+# regex that could hide a rescue but not invent one.)
 ARMS = {
     "indala":   ("Indala", "lf indala econfig -s %d --id a0000000e6bd0e92",
                  "a0000000e6bd0e92", "lf indala demod"),
     "keri":     ("Keri", "lf keri econfig -s %d --id 80003039",
-                 None, "lf keri demod"),
+                 "80003039", "lf keri demod"),
     "idteck":   ("IDTECK", "lf idteck econfig -s %d --id 4944544b55667788",
-                 None, "lf idteck demod"),
+                 "4944544b55667788", "lf idteck demod"),
     "pac":      ("PAC", "lf pac econfig -s %d --cn 1337BEEF",
-                 None, "lf pac demod"),
+                 "1337BEEF", "lf pac demod"),
 }
 
 
@@ -147,6 +153,12 @@ def main():
             env = envelope(vals, a.smooth)
             wins, peak = windows(env, a.window, a.stride, a.null_frac)
             clean = sorted([w for w in wins if w[2]], key=lambda w: -w[1])
+            # ⛔ THE CONTROL MUST NOT INHERIT THE TARGET'S NULL-FREE TEST. Its job is only to
+            # show that a window this short can be demodulated at all, and the envelope of an
+            # ASK arm is not a beat, so requiring it to be null-free left the control with ZERO
+            # windows to try and no way to pass. It takes its best windows by envelope instead.
+            if role == "control" and not clean:
+                clean = sorted(wins, key=lambda w: -w[1])
             worst = sorted(wins, key=lambda w: w[1])
             swing = peak / max(float(env.min()), 1e-9)
             print("  %d samples, envelope peak %.1f min %.1f (swing %.1fx)"
@@ -186,16 +198,21 @@ def main():
         print("\ndisarming cu2 ...")
         seqdump.disarm(a.port)
 
+    # ⛔ THE CONTROL IS LOAD-BEARING ONLY FOR P0. If the TARGET decodes from a short window,
+    # that window length is proven sufficient by the target itself and the control has nothing
+    # left to rule out. The first version tested the control first and reported INCONCLUSIVE over
+    # a target that had just decoded 3 windows out of 3.
     t, c = report.get("target", {}), report.get("control", {})
-    if not c.get("hits") or not any(h["decodes"] for h in c.get("hits", [])):
+    if any(h["decodes"] for h in t.get("hits", [])):
+        report["verdict"] = ("P1 — C486 IS SUFFICIENT. A short window decodes on its own, so the "
+                             "emission is good inside a lobe and what defeats the live reader is "
+                             "the span it processes, not the emitter.")
+    elif not c.get("hits") or not any(h["decodes"] for h in c.get("hits", [])):
         report["verdict"] = ("INCONCLUSIVE — the control did not decode from a %d-sample window, "
                              "so a silent target window measures the window length or this "
                              "tool, not the air." % a.window)
     elif not t.get("clean"):
         report["verdict"] = "INCONCLUSIVE — no null-free window in the target capture."
-    elif any(h["decodes"] for h in t.get("hits", [])):
-        report["verdict"] = ("P1 — C486 IS SUFFICIENT. A null-free window decodes on its own, so "
-                             "the emission inside a lobe is good and the beat is the whole defect.")
     else:
         report["verdict"] = ("P0 — C486 IS NECESSARY BUT NOT SUFFICIENT. Null-free windows exist, "
                              "the control decodes from one, and the target does not. Something "
