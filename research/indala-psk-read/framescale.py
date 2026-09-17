@@ -741,7 +741,11 @@ def k21(paths):
             continue
         gates, lines = [], []
         for a in arms:
-            g, line = _gate("%s %s" % (name, a), d[a], numeric_cells(d[a]))
+            # ⛔ THE LADDER, NOT `numeric_cells` — K21's band says the 65 ms informational cell is
+            # excluded from the median, the correlations AND the gates' pooled figure alike, and
+            # the gate must honour the criterion it was committed with. ⚠ K19/K20 pooled their
+            # gates over the control too; that is their behaviour and is left alone.
+            g, line = _gate("%s %s" % (name, a), d[a], ladder)
             gates.append(g)
             lines.append(line)
         profs = {a: _profile(d[a], ladder) for a in arms}
