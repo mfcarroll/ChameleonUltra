@@ -1516,6 +1516,202 @@ def k29(paths):
     print("")
 
 
+K34_ARMS = ("keri", "idteck")
+K34_LADDER = [str(x) for x in range(10, 196, 5)]   # C538's common ladder, unchanged on purpose:
+                                                   # it is inside the budget at BOTH bursts (M77 —
+                                                   # dec 1 tops are keri 214 / idteck 245 nominal
+                                                   # at burst 500, 569 / 600 at burst 1000), so
+                                                   # the comparison is like-for-like.
+K34_REGIONS = list(K29_REGIONS)   # ⛔ the SAME five, derived by `--inventory` (M76). ⛔ Not re-
+                                  # derived for this band: re-deriving a reference on the run that
+                                  # tests it is the K26/A2 error M76 exists to stop.
+K34_HIGH = 25.0        # K29's elevation rule, unchanged
+K34_CELLS = 2          # K29's: cells of a region elevated, in BOTH seeds of that condition
+K34_KEEP = 0.75        # D1: the fraction of the burst-500 hits that must come back
+K34_NEW_MAX = 2        # D1: hits the long burst may ADD and still count as "the same regions"
+K34_FLOOR = 3          # below this many burst-500 hits the CONTROL failed and nothing is judged
+K34_REPS = 16          # ⛔ set by simulation, not by taste — see the K34a section in burstsync
+
+
+def _k34_burst(cap_arm):
+    """The burst condition a cap certifies for itself: the DEVICE's frames-per-burst.
+
+    ⛔ Never `declared`, and never a version string — C461 is the note about believing a build
+    label instead of the hardware, and this whole band is a comparison of two builds."""
+    b = cap_arm.get("_burst") or {}
+    return b.get("frames"), b.get("declared")
+
+
+def k34(paths):
+    """D1/D2/D3 — does LENGTHENING THE BURST move the lead-time regions?
+
+    ⛔⛔ K34a IS THE CONTROL FOR K34b AND ONLY A D1 FIRE LICENSES IT. The burst is the phase
+    reference this whole line measures lead time FROM (C511/C512), so a longer burst may MOVE
+    the structure rather than merely reveal more of it. If it moves, that is the bigger finding
+    and K34b is meaningless — see the K34 section in `burstsync.py`.
+
+    Four caps: two seeds at burst 500 and two at burst 1000, same ladder, same arms, dec 1,
+    `--per-arm-shuffle`. The caps are sorted into conditions BY WHAT THE DEVICE REPORTED."""
+    runs = []
+    for p in paths:
+        try:
+            runs.append((os.path.basename(p).replace(".json", ""), json.load(open(p))))
+        except Exception as exc:
+            print("   ⛔ %s unreadable: %s" % (os.path.basename(p), exc))
+            return
+    print("## K34a — does a LONGER BURST move the regions? (`%s`)" % "`, `".join(K34_ARMS))
+    print("   reference regions from `--inventory` (M76), the same five K29 used and NOT re-derived")
+    print("   here. Elevation, region width and the two-seed rule are K29's, unchanged.")
+    print("   D1 SAME  : >= %.0f%% of the burst-500 hits return AND <= %d new ones"
+          % (100 * K34_KEEP, K34_NEW_MAX))
+    print("   D2 MOVED : <= 1 returns while the long burst still shows >= 2 regions")
+    print("   D3 NONE  : the long burst shows no region at all")
+    print("   ⛔ Only D1 licenses K34b.\n")
+
+    if len(runs) != 4:
+        print("   ⛔ K34a needs exactly four caps (two seeds x two bursts) — %d supplied\n"
+              % len(runs))
+        return
+    # sort into conditions by the DEVICE's own answer
+    groups = {}
+    for name, d in runs:
+        arm0 = next((a for a in K34_ARMS if a in d), None)
+        if arm0 is None:
+            print("   ⛔ %s carries neither arm\n" % name)
+            return
+        frames, declared = _k34_burst(d[arm0])
+        if frames is None:
+            print("   ⛔ %s carries no device-measured frames-per-burst — it cannot certify its\n"
+                  "      own burst condition, and a build label is not evidence (C461)\n" % name)
+            return
+        groups.setdefault(frames, []).append((name, d, declared))
+    if len(groups) != 2 or sorted(len(v) for v in groups.values()) != [2, 2]:
+        print("   ⛔ the four caps must be two-and-two by MEASURED frames per burst; got %s\n"
+              % ", ".join("%d frames x%d" % (k, len(v)) for k, v in sorted(groups.items())))
+        return
+    lo, hi = sorted(groups)
+    if hi <= lo:
+        print("   ⛔ the two conditions have the same frames per burst\n")
+        return
+    print("   conditions: **%d frames** (declared %s) vs **%d frames** (declared %s) — the "
+          "device's\n   own answer, so the flash is evidenced rather than asserted"
+          % (lo, groups[lo][0][2], hi, groups[hi][0][2]))
+    print("")
+
+    hits = {}
+    for cond in (lo, hi):
+        for arm in K34_ARMS:
+            per = []
+            for name, d, _ in groups[cond]:
+                if arm not in d:
+                    print("   ⛔ %s is missing `%s`\n" % (name, arm))
+                    return
+                c = d[arm]
+                plan = c.get("_plan") or {}
+                if not plan.get("per_arm_shuffle"):
+                    print("   ⛔ %s/%s was captured without --per-arm-shuffle (M69)\n"
+                          % (name, arm))
+                    return
+                cells = numeric_cells(c)
+                if [k for k in K34_LADDER if k in cells] != K34_LADDER:
+                    print("   ⛔ %s/%s is not the common ladder\n" % (name, arm))
+                    return
+                g, line = _gate(name, c, K34_LADDER)
+                print("   gate %-7s %-5d %s" % (arm, cond, line.strip()))
+                if not g:
+                    print("   ⇒ ⛔ GATED OUT — K34a is NOT re-scored over what is left\n")
+                    return
+                per.append(c)
+            got = set()
+            meds = []
+            for c in per:
+                vals = sorted(100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+                              for k in K34_LADDER)
+                meds.append(0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]))
+            for lbl, l, h in K34_REGIONS:
+                span = [k for k in K34_LADDER if int(l) <= int(k) <= int(h)]
+                if all(sum(1 for k in span
+                           if 100.0 * cell_rate(per[i][k]["scores"])[0]
+                           / len(per[i][k]["scores"]) >= meds[i] + K34_HIGH) >= K34_CELLS
+                       for i in (0, 1)):
+                    got.add(lbl)
+            hits[(cond, arm)] = got
+    print("")
+    h500 = {(a, r) for a in K34_ARMS for r in hits[(lo, a)]}
+    h1000 = {(a, r) for a in K34_ARMS for r in hits[(hi, a)]}
+    for arm in K34_ARMS:
+        print("### %-7s %d frames: %-22s   %d frames: %s"
+              % (arm, lo, ",".join(sorted(hits[(lo, arm)])) or "none",
+                 hi, ",".join(sorted(hits[(hi, arm)])) or "none"))
+    kept, new = len(h500 & h1000), len(h1000 - h500)
+    print("\n   burst-%d hits %d of 10 | returned %d | new %d" % (lo, len(h500), kept, new))
+
+    if len(h500) < K34_FLOOR:
+        print("\n⇒ ⛔ **NO VERDICT — THE CONTROL FAILED.** The short burst showed only %d of 10 "
+              "regions,\n     under the pre-registered floor of %d. A control that finds too "
+              "little structure cannot\n     judge whether it moved. ⛔ This says nothing about "
+              "burst length; it is a statement\n     about this run. K34b is NOT licensed.\n"
+              % (len(h500), K34_FLOOR))
+        return
+    if kept >= K34_KEEP * len(h500) and new <= K34_NEW_MAX:
+        print("\n⇒ ⭐⭐ **D1 FIRES — THE REGIONS DO NOT MOVE. The burst length is a REACH knob "
+              "and nothing\n     else, and that is the ONLY result that licenses K34b.** "
+              "Simulated before the capture on\n     the two banked C538 caps' own per-cell "
+              "rates: at reps %d this fires **93.6%%** when the\n     profile is genuinely "
+              "unchanged, and **0.0%%** under all three ways it could have moved\n     (scaled "
+              "with the burst, shifted 20 ms, or flattened) over 10,000 draws each.\n"
+              "     ⚠ It does NOT say the structure is unrelated to the burst — only that its "
+              "LEAD TIMES\n     are unchanged when the burst doubles." % K34_REPS)
+    elif kept <= 1 and len(h1000) >= 2:
+        print("\n⇒ ⭐⭐⭐ **D2 FIRES — THE REGIONS MOVED, AND THIS IS THE BIGGER FINDING.** The "
+              "structure is\n     referenced to the BURST, which is upstream of both the reader "
+              "and the field — so it\n     retires the *reader-or-field* branch C538 opened. "
+              "⛔⛔ **K34b is meaningless and must\n     NOT be run.**\n"
+              "     ⚠ Read the SCALED check below before naming HOW it moved: this band detects "
+              "that the\n     regions are elsewhere, and is only 33%% powered to fire on a "
+              "scaled profile and 0.1%% on a\n     20 ms shift — most real moves land in NO "
+              "VERDICT, not here.")
+    elif len(h1000) == 0:
+        print("\n⇒ ⛔ **D3 — NO REGION SURVIVES THE LONGER BURST.** ⚠⚠ **THIS BAND CANNOT TELL "
+              "*abolished*\n     FROM *moved out of the window*, and the simulation says so: it "
+              "fires 100%% when the\n     profile is genuinely flattened but also 7.5%% when it "
+              "merely SCALED with the burst and\n     1.6%% on a 20 ms shift.** ⇒ report it as "
+              "*moved-or-abolished*, never as *abolished*, and\n     read the SCALED check "
+              "below. ⛔ K34b is NOT licensed either way.")
+    else:
+        print("\n⇒ ⛔ **NO VERDICT — %d of %d regions returned with %d new, outside every band. "
+              "IT HAS A\n     STATED MEANING: the structure PARTLY survives** — the burst "
+              "changes which regions reach\n     threshold without simply preserving or "
+              "relocating them. ⛔ That is not a failed band and\n     the thresholds must not "
+              "be re-tuned (M74). ⛔ **K34b is NOT licensed**: only D1 licenses it."
+              % (kept, len(h500), new))
+
+    # ⭐ DESCRIPTIVE, PRE-REGISTERED AS DESCRIPTIVE AND NOT A BAND (M74): if the structure is a
+    # fixed FRACTION of the burst, every region sits at 2x its burst-500 lead time. Two of the
+    # five land on this ladder. It is printed for every outcome so it can never be reached for
+    # only when the band disappoints.
+    print("\n   SCALED check (descriptive, NOT a band): if lead time scaled with the burst, the")
+    print("   regions would sit at 2x — R1 at 30-40 and R2 at 110-130. Cells elevated at %d "
+          "frames:" % hi)
+    for arm in K34_ARMS:
+        per = [d[arm] for _, d, _ in groups[hi]]
+        meds = []
+        for c in per:
+            vals = sorted(100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+                          for k in K34_LADDER)
+            meds.append(0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]))
+        out = []
+        for lbl, l, h in (("R1x2", 30, 40), ("R2x2", 110, 130)):
+            e = [k for k in K34_LADDER if l <= int(k) <= h
+                 and all(100.0 * cell_rate(per[i][k]["scores"])[0]
+                         / len(per[i][k]["scores"]) >= meds[i] + K34_HIGH for i in (0, 1))]
+            out.append("%s %s" % (lbl, ",".join(e) or "none"))
+        print("      %-7s %s" % (arm, "   ".join(out)))
+    print("")
+    print("⛔ Ungraded — no null sweep, no calibration row. It moves no cell.")
+    print("")
+
+
 K30_LADDER = ["10", "15", "20", "25", "30", "35", "40", "45", "60", "65",
               "90", "95", "100", "105", "110", "115", "120"]
 # ⛔⛔ K31 MOVED THIS FROM 62.5 TO 50.0, AND `--reps` FROM 8 TO 16 (C542/M80). 62.5 came from
@@ -1738,6 +1934,9 @@ def main():
                     help="⭐ K32: two dec-2 caps on the 2.5 ms 15-cell ladder")
     ap.add_argument("--k30", nargs="+", metavar="CAP",
                     help="⭐ K30: two dec-2 caps on the targeted 17-cell ladder")
+    ap.add_argument("--k34", nargs="+", metavar="CAP",
+                    help="⭐ K34a: four caps — two seeds at burst 500 and two at burst 1000, "
+                         "sorted into conditions by the frames-per-burst the DEVICE reported")
     ap.add_argument("--k29", nargs="+", metavar="CAP",
                     help="⭐ K29: two fresh caps, each carrying keri+idteck+nexwatch on the "
                          "common 10-195 ms ladder")
@@ -1758,6 +1957,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k34:
+        k34(a.k34)
+        return 0
     if a.k32:
         k32(a.k32)
         return 0

@@ -1793,6 +1793,80 @@ must be confirmed from the AIR, not the source** — at burst 1000 a primer that
 not optional: it is the only evidence the constant took effect**, and C461 is the note about
 believing a version string instead of the device.
 
+### ⭐⭐⭐⭐⭐ K34a PRE-REGISTERED, 2026-09-17 — THE BANDS, THEIR THRESHOLDS AND THEIR POWER
+
+⛔⛔ **WRITTEN BEFORE THE FLASH AND BEFORE ANY CAPTURE (M55).** Every number below came out of
+`k34sim.py` on the two banked C538 caps' own per-cell rates, which is the bench as it actually
+behaves rather than a curve chosen to be beaten.
+
+**THE RUN.** `keri` + `idteck`, the C538 common ladder **38 cells 10-195 ms**, **dec 1**,
+`--per-arm-shuffle`, **`--reps 16`**, two fresh seeds per burst condition — four caps.
+⭐ **M77 is satisfied by the SAME ladder in both conditions**, which is why it is not widened:
+the dec-1 reachable tops are `keri` **214** / `idteck` **245** nominal ms at burst 500 and 569 /
+600 at burst 1000, so 195 is inside the budget in both and the comparison is like-for-like. ⛔ A
+ladder that reached further at burst 1000 would confound the extra reach with the thing under test.
+
+**HOW A CAP KNOWS WHICH BUILD TOOK IT.** Each cap records `_burst.frames` — the frames-per-burst
+the DEVICE reports through `hw emudebug`, with a sequence loaded — and the scorer sorts the four
+caps into conditions **by that number and refuses a cap without it**. Predicted: **31 frames at
+burst 500 and 62 at burst 1000** (`ceil(target / 16.384 ms)`, `lf_tag_em.c:569`). ⛔ A version
+string is not evidence (C461); this is the device answering.
+
+**THE BANDS.** `H500` and `H1000` are the sets of (arm, region) pairs HITting in each condition,
+out of 2 arms x 5 regions = 10, under **K29's unchanged rule** (>= 2 cells of the region elevated
+at that cap's own ladder median + 25 points, in BOTH seeds of that condition).
+
+| band | fires when | meaning |
+|---|---|---|
+| **D1 SAME** | `|H500 ∩ H1000| >= 0.75·|H500|` **and** `|H1000 minus H500| <= 2` | the burst is a REACH knob ⭐ **the only band that licenses K34b** |
+| **D2 MOVED** | `|H500 ∩ H1000| <= 1` and `|H1000| >= 2` | structure present but ELSEWHERE ⇒ bigger finding, K34b meaningless |
+| **D3 NONE** | `|H1000| = 0` | no region survives — ⚠ *moved-or-abolished*, see below |
+| **CONTROL FAILED** | `|H500| < 3` | the short burst found too little to judge replication by |
+| **NO VERDICT** | anything else | ⭐ **stated in advance (M74): the structure PARTLY survives** — the burst changes which regions reach threshold without preserving or relocating them. ⛔ Not a failed band; do not re-tune |
+
+**POWER AND FALSE-FIRE, 10,000 draws per truth, at `--reps 16`:**
+
+| truth | D1 | D2 | D3 | no verdict |
+|---|---|---|---|---|
+| **A SAME** — identical profile | ⭐ **93.6%** | 0.0% | 0.0% | 6.4% |
+| **B SCALED** — `p1000(x) = p500(x/2)` | **0.0%** | 34.2% | 7.2% | 58.6% |
+| **C SHIFTED** — +20 ms | **0.0%** | 0.1% | 1.8% | 98.1% |
+| **D FLAT** — structure abolished | **0.0%** | 0.0% | 100.0% | 0.0% |
+
+⭐⭐ **D1's false-fire is 0.0% against all three ways the regions could have moved.** That is the
+number that matters, because D1 is the only band that licenses more bench time: K34b cannot be
+reached by a fluke. ⛔ `--reps 16` and not 8 is set by this table alone — at reps 8 D1's power is
+**79.0%** for the same 0.0% false-fire, and K31 already paid once for a no-verdict bought by
+under-powering (C542/M80).
+
+⚠⚠ **THE TWO WEAKNESSES, STATED BEFORE THE CAPTURE AND NOT AFTER IT.**
+1. ⛔ **D3 CANNOT TELL *abolished* FROM *moved out of the window*** — it fires 100% under FLAT
+   but also **7.2%** under SCALED and 1.8% under SHIFTED. ⇒ a D3 result must be reported as
+   **moved-or-abolished**, never as *abolished*. M78: the defect pushes a MOVED truth toward D3,
+   and since neither licenses K34b the licensing decision is unaffected — only the wording is.
+2. ⛔ **K34a IS POWERED TO LICENSE, NOT TO CHARACTERISE.** D2 fires on only 34% of genuinely
+   scaled profiles and 0.1% of 20 ms shifts; most real moves land in NO VERDICT. ⇒ **do not read
+   a NO VERDICT as evidence the regions stayed** — it is the single most likely outcome under
+   both SCALED (58.6%) and SHIFTED (98.1%).
+
+⭐ **AND ONE DESCRIPTIVE CHECK, PRE-REGISTERED AS DESCRIPTIVE SO IT CANNOT BE REACHED FOR LATER**
+(M74): if lead time scaled with the burst, every region sits at **2x** its burst-500 position, and
+two land on this ladder — **R1 at 30-40 and R2 at 110-130**. The scorer prints the cells elevated
+there **on every outcome**, fires nothing on it, and it is the thing to read beside a D3 or a NO
+VERDICT. ⛔ It is not a band and may not be upgraded into one.
+
+⚠ **THE CONFOUNDS ENUMERATED BEFORE THE RUN**, since a longer burst changes more than reach:
+- **Duty cycle: essentially unchanged.** Bursts repeat back-to-back separated by a fixed
+  `ANT_NO_MOD(); bsp_delay_ms(2)` (`lf_tag_em.c:198-215`), so the emission is ~99.6% duty at
+  burst 500 and ~99.8% at 1000. ⛔ Not zero, but far too small to be a mechanism.
+- **The probe stays inside the FIRST burst in both conditions.** The ladder's top is 195 nominal
+  = ~275 ms elapsed plus overhead and probe, against 507.9 ms of burst at 500. ⇒ the inter-burst
+  boundary is never crossed on this ladder, in either build, so no region can be an artefact of it.
+- ⚠ **What is NOT controlled: total emission time per burst.** That is the thing under test and
+  cannot be held constant. D1 firing is what says it did not matter.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔ Ungraded, and UNRUN — a design. No null sweep, no calibration row, no licence. It moves no cell.
 
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
@@ -2296,7 +2370,7 @@ def k12(a, arms, primers):
         # computes to 138) and `nexwatch` at dec 1 (clean 195, failed 200 — computes to 196),
         # where the old form said 157 and 210 and was 12-18 ms optimistic on each.
         _per = MS_PER_NOMINAL.get(a.dec, 125.0 * (0.00792 * a.dec + 0.00371))
-        _top = (LF_BURST_MS - CLIENT_OVERHEAD_MS - _pm) / _per
+        _top = (a.burst - CLIENT_OVERHEAD_MS - _pm) / _per
         _over = [c for c in primers if c > _top]
         print("   %-9s probe %-18s = %5.1f ms  ⇒ computed primer top ~%.0f ms nominal%s"
               % (_k, _p or "(its own reader, %d samples)" % _n, _pm, _top,
@@ -2346,6 +2420,12 @@ def k12(a, arms, primers):
             out[key]["_plan"] = {"seed": seeds[key],
                                  "per_arm_shuffle": bool(a.per_arm_shuffle),
                                  "arms": list(arms)}
+            # ⭐⭐ K34: the cap certifies its OWN burst condition. `declared` is what the
+            # operator of this run said the build is; `frames` is what the DEVICE answered with a
+            # sequence loaded (`lf_tag_em.c:576` recomputes it per sequence). A scorer comparing
+            # two builds must check `frames`, never `declared` and never a version string (C461).
+            out[key]["_burst"] = {"declared": a.burst,
+                                  "frames": seqdump.frames_per_burst(a.port)}
 
             def cell_rate(c):
                 h, n = rate(sc[c])
@@ -2625,6 +2705,12 @@ def main():
                          "dec 2, NOT 2x, because the USB readback does not scale (C540/M79). "
                          "\u26d4 The two `lf config` commands are issued at EVERY dec including 1 "
                          "so the CLIENT's cost is identical across the comparison.")
+    ap.add_argument("--burst", type=int, default=LF_BURST_MS,
+                    help="⭐ K34: the firmware's LF_TAG_BURST_TARGET_MS for THIS build. It "
+                         "does not SET anything — the constant is compiled in — it tells "
+                         "`_top` which budget to compute against, and it is recorded in the cap "
+                         "beside the frames-per-burst the DEVICE reports, so a cap certifies its "
+                         "own burst condition instead of trusting whoever ran it (M45/C461).")
     ap.add_argument("--per-arm-shuffle", dest="per_arm_shuffle", action="store_true",
                     help="⭐ K21/M69: give each arm its OWN derived cell-order seed. Required "
                          "for any cap a CROSS-ARM correlation will be computed on; without it "

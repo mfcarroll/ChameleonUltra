@@ -71,7 +71,7 @@ playback is BURSTY, so the instantaneous flag is False most of the time even whi
 working perfectly. A guard on that flag would have scored a live emulation VOID and sent the
 whole unit back to the air-side routes that are already exhausted.
 """
-import argparse, os, signal, subprocess, sys, threading, time
+import argparse, os, re, signal, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -306,6 +306,23 @@ class NoField:
 
     def __exit__(self, *a):
         pass
+
+
+def frames_per_burst(port):
+    """⭐ ASK THE DEVICE how many frames it puts in one burst (M45, C461).
+
+    `LF_TAG_BURST_TARGET_MS` is a firmware constant, so after a flash the ONLY honest evidence
+    that it took effect is the device's own answer — never a version string, which is C461's
+    whole lesson. `hw emudebug` carries it as `frames per burst`, recomputed by
+    `lf_tag_em.c:576` whenever the loaded sequence changes.
+
+    ⛔ MEANINGLESS UNLESS A SEQUENCE IS LOADED: with nothing armed the field is
+    `LF_TAG_BURST_MIN_FRAMES` (2), not the target. Call it AFTER `arm()`.
+
+    Returns the int, or None if the device did not answer with the field."""
+    out = cu(port, "hw emudebug")
+    m = re.search(r"frames per burst\s*:\s*(\d+)", out)
+    return int(m.group(1)) if m else None
 
 
 def disarm(port):
