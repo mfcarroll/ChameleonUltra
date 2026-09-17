@@ -1302,6 +1302,87 @@ def k26(paths):
     print("")
 
 
+INV_HIGH = 62.5       # a cell counts as HIGH at or above this (5 of 8 — the n=8 grid, not a taste)
+INV_LOW = 25.0        # and LOW at or below this (2 of 8)
+INV_MIN_SEEDS = 2     # a cell is only reported when this many independent caps measure it
+
+
+def inventory(paths):
+    """⭐ M76's FIX, AS A TOOL. Sweep every banked cap and report, per arm and per cell, how
+    many independent seeds measured it HIGH and how many LOW.
+
+    ⛔⛔ THIS EXISTS BECAUSE K26's A2 TOOK ITS REFERENCE LIST FROM THE WRITE-UPS. Four regions
+    were named because a band had tested and fired on them; 180-195 ms was omitted, and
+    `indala` measures 75-100% there across SIX seeds — it was never a *named feature* only
+    because it is where C522's W2 failed and K20's X2 passed, two bands asking different
+    questions about the same high region. A2's verdict had to be withdrawn in both directions.
+
+    ⇒ A reference list about *where the arms are high* must be derived from every cell of every
+    cap, mechanically. That is what this prints. ⛔ It is an INVENTORY and not a band: it makes
+    no claim, fires nothing, and its thresholds are the n=8 grid (5/8 and 2/8) rather than a
+    choice. ⚠ Cells measured by fewer than INV_MIN_SEEDS caps are printed with their count so a
+    thin cell is never mistaken for a solid one."""
+    import collections
+    seen = collections.defaultdict(lambda: collections.defaultdict(list))
+    for p in sorted(paths):
+        try:
+            d = json.load(open(p))
+        except Exception as exc:
+            print("   ⛔ %s unreadable: %s" % (os.path.basename(p), exc))
+            continue
+        for arm, c in d.items():
+            for k in numeric_cells(c):
+                sc = c[k].get("scores") or []
+                if not sc:
+                    continue
+                seen[arm][int(k)].append(100.0 * cell_rate(sc)[0] / len(sc))
+    print("## Region inventory — derived from the caps, not from the write-ups (M76)")
+    print("   HIGH is >= %.1f%% (5 of 8) and LOW is <= %.1f%% (2 of 8): the n=8 grid, not a taste."
+          % (INV_HIGH, INV_LOW))
+    print("   ⛔ An inventory, not a band. It claims nothing and fires nothing.")
+    for arm in sorted(seen):
+        cells = sorted(seen[arm])
+        print("\n### %s   %d cells over %d cap-measurements"
+              % (arm, len(cells), sum(len(v) for v in seen[arm].values())))
+        print("   %5s %6s %6s %6s  %s" % ("ms", "seeds", "high", "low", "levels"))
+        runs_hi, runs_lo, cur_hi, cur_lo = [], [], [], []
+        for c in cells:
+            v = seen[arm][c]
+            hi = sum(1 for x in v if x >= INV_HIGH)
+            lo = sum(1 for x in v if x <= INV_LOW)
+            mark = ""
+            solid_hi = len(v) >= INV_MIN_SEEDS and hi == len(v)
+            solid_lo = len(v) >= INV_MIN_SEEDS and lo == len(v)
+            if solid_hi:
+                mark = " ▲ HIGH in every seed"
+                cur_hi.append(c)
+            else:
+                if len(cur_hi) >= 2:
+                    runs_hi.append(list(cur_hi))
+                cur_hi = []
+            if solid_lo:
+                mark = " ▽ LOW in every seed"
+                cur_lo.append(c)
+            else:
+                if len(cur_lo) >= 2:
+                    runs_lo.append(list(cur_lo))
+                cur_lo = []
+            print("   %5d %6d %6d %6d  %s%s"
+                  % (c, len(v), hi, lo, " ".join("%.0f" % x for x in v), mark))
+        if len(cur_hi) >= 2:
+            runs_hi.append(list(cur_hi))
+        if len(cur_lo) >= 2:
+            runs_lo.append(list(cur_lo))
+        print("   ⇒ HIGH in EVERY seed, >= 2 adjacent cells: %s"
+              % ("; ".join("-".join(str(x) for x in (r[0], r[-1])) for r in runs_hi) or "none"))
+        print("   ⇒ LOW  in EVERY seed, >= 2 adjacent cells: %s"
+              % ("; ".join("-".join(str(x) for x in (r[0], r[-1])) for r in runs_lo) or "none"))
+        print("   ⚠ *adjacent* means adjacent IN THIS ARM'S MEASURED CELLS, which are not a")
+        print("     uniform grid across caps — a gap of 5 ms and a gap of 20 ms both read as")
+        print("     adjacent here. Use the seed counts and the ms column, never the run alone.")
+    print("")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -1314,6 +1395,9 @@ def main():
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
     ap.add_argument("--k23", nargs="+", metavar="CAP",
                     help="⭐ K23: the 1-65 ms ladder, two seeds, both arms")
+    ap.add_argument("--inventory", nargs="+", metavar="CAP",
+                    help="⭐ M76: sweep every cap and report per-cell HIGH/LOW counts per arm, "
+                         "so a reference list is derived from the data and not the write-ups")
     ap.add_argument("--k26", nargs="+", metavar="CAP",
                     help="⭐ K26: `idteck` over the 10-200 ms ladder, two seeds")
     ap.add_argument("--notch20", nargs="+", metavar="CAP",
@@ -1328,6 +1412,9 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.inventory:
+        inventory(a.inventory)
+        return 0
     if a.k26:
         k26(a.k26)
         return 0
