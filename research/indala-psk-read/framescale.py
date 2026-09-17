@@ -1356,7 +1356,10 @@ def inventory(paths):
                 sc = c[k].get("scores") or []
                 if not sc:
                     continue
-                seen[arm][int(k)].append(100.0 * cell_rate(sc)[0] / len(sc))
+                # ⭐ `float`, not `int`: K32's ladder is at 2.5 ms, so a cell key can be
+                # "52.5". `numeric_cells` was fixed for this and THIS LINE WAS NOT, so
+                # `--inventory` raised on the full cap set — exactly the sweep M76 needs.
+                seen[arm][float(k)].append(100.0 * cell_rate(sc)[0] / len(sc))
     print("## Region inventory — derived from the caps, not from the write-ups (M76)")
     print("   HIGH is >= %.1f%% (5 of 8) and LOW is <= %.1f%% (2 of 8): the n=8 grid, not a taste."
           % (INV_HIGH, INV_LOW))
@@ -1388,16 +1391,16 @@ def inventory(paths):
                 if len(cur_lo) >= 2:
                     runs_lo.append(list(cur_lo))
                 cur_lo = []
-            print("   %5d %6d %6d %6d  %s%s"
-                  % (c, len(v), hi, lo, " ".join("%.0f" % x for x in v), mark))
+            print("   %5s %6d %6d %6d  %s%s"
+                  % ("%g" % c, len(v), hi, lo, " ".join("%.0f" % x for x in v), mark))
         if len(cur_hi) >= 2:
             runs_hi.append(list(cur_hi))
         if len(cur_lo) >= 2:
             runs_lo.append(list(cur_lo))
         print("   ⇒ HIGH in EVERY seed, >= 2 adjacent cells: %s"
-              % ("; ".join("-".join(str(x) for x in (r[0], r[-1])) for r in runs_hi) or "none"))
+              % ("; ".join("-".join("%g" % x for x in (r[0], r[-1])) for r in runs_hi) or "none"))
         print("   ⇒ LOW  in EVERY seed, >= 2 adjacent cells: %s"
-              % ("; ".join("-".join(str(x) for x in (r[0], r[-1])) for r in runs_lo) or "none"))
+              % ("; ".join("-".join("%g" % x for x in (r[0], r[-1])) for r in runs_lo) or "none"))
         print("   ⚠ *adjacent* means adjacent IN THIS ARM'S MEASURED CELLS, which are not a")
         print("     uniform grid across caps — a gap of 5 ms and a gap of 20 ms both read as")
         print("     adjacent here. Use the seed counts and the ms column, never the run alone.")
