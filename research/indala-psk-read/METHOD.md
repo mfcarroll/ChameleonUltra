@@ -889,3 +889,27 @@ reads a shape off its argmax (M64). ⛔ All three were pre-registered before the
 **being pre-registered did not make any of them right.** ⇒ Pre-registration protects against
 fitting a criterion to the data; it does nothing about a criterion that was badly built in the
 first place. **Ask of every band: what single cell could decide this?**
+
+**M65 — A REFUTATION BUILT ON ONE CONTRAST ARM INHERITS EVERY WAY THAT ARM DIFFERS.**
+
+C519 asked whether C517's lead-time hump travels with the protocol's own frame length. `indala`
+and `keri` share a 2048-sample frame and so cannot answer it; the only arm on this bench with a
+different frame is `gproxii`, and its banked K12/K13 ladders refuted the frame reading cleanly —
+**80.6% and 78.5% where the hypothesis needed <= 30%**, in two independently seeded runs.
+
+⛔ **But `gproxii` is also the only ASK/biphase arm, and the criterion named only the frame.** So
+the refutation cannot separate *the hump does not travel in frames* from *the hump is a PSK
+effect*. Naming frame length as the variable under test did not make it the only variable that
+moved with it, and nothing in the pinned band said so.
+
+⚠ **This is C514's lesson pointed the other way.** C514 is *a finding from one arm does not
+generalise*. M65 is *a REFUTATION from one contrast arm is confounded by everything that arm
+differs in*. A refutation feels like the conservative direction, which is exactly why the confound
+went unwritten for a whole unit — the band was scrutinised for what it might wrongly CLAIM, and
+not for what it might wrongly DENY.
+
+⇒ **Before a cross-arm criterion is pinned, list every property that differs between the arms it
+compares — not only the one under test — and say which further arm would break the confound and
+what it would show.** C519's is `nexwatch`: PSK like the humped arms, but a 4096-sample frame, so
+the two readings put its peak **66 ms apart** (65 ms against ~131 ms). That sentence belongs in the
+criterion, not in the write-up.

@@ -113,8 +113,11 @@ SAMPLE_US = 8.0
 RUNS = [("k12_gproxii_s17", 17), ("k13_gproxii_s41", 41), ("k14_gproxii_s73", 73),
         ("k15_indala_keri_s91", 91), ("k16_indala_keri_s137", 137)]
 
-# F1's pool: the cells at or below `indala`/`keri`'s low wing of 2.44 frames.
-WING_FRAMES = 2.44
+# F1's pool: the cells at or below `indala`/`keri`'s own low wing. ⛔ DERIVED, not typed: the
+# criterion names their 40 ms cell, and 40/16.384 is 2.44140625, so the rounded 2.44 in the prose
+# excluded `gproxii`'s 120 ms cell (120/49.152 = 2.44140625) that the same prose lists by name.
+# Caught on the first run and fixed before the verdict was written up; it moved neither pool's band.
+WING_FRAMES = 40.0 / (2048 * SAMPLE_US / 1000.0)
 F1_SUPPORT, F1_REFUTE = 30.0, 60.0
 F2_RANGE, F2_FLAT = 30.0, 15.0
 
