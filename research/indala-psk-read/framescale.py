@@ -1219,12 +1219,31 @@ def k26(paths):
         if len(per) < 2:
             print("### %s ⛔ needs two seeds — %d supplied\n" % (arm, len(per)))
             continue
+        # ⭐⭐ M77: THE LADDER'S TOP IS PER ARM, so a correctly designed run may stop short of
+        # 200 ms — `nexwatch`'s 98 ms probe puts a 200 ms primer over the burst and P1 failed on
+        # exactly that cell, twice (C535). ⇒ accept a SHORTER ladder, but only a strict PREFIX of
+        # K26's, identical across every cap, and say so out loud. ⛔ The bands are untouched:
+        # A1's threshold, its run length and the both-seeds rule are exactly as committed.
+        sets = [set(numeric_cells(c)) & set(K26_LADDER) for _, c in per]
+        if len({frozenset(x) for x in sets}) != 1:
+            print("### %s ⛔ the caps carry DIFFERENT cell sets — not scored\n" % arm)
+            continue
         cells = numeric_cells(per[0][1])
         ladder = [k for k in K26_LADDER if k in cells]
-        if len(ladder) < len(K26_LADDER):
-            print("### %s ⛔ partial ladder (%d of %d) — not scored\n"
-                  % (arm, len(ladder), len(K26_LADDER)))
+        if ladder != K26_LADDER[:len(ladder)]:
+            print("### %s ⛔ the cells are not a contiguous prefix of the 10-200 ms ladder — "
+                  "not scored\n" % arm)
             continue
+        if len(ladder) < 20:
+            print("### %s ⛔ only %d cells — too short to carry A1\n" % (arm, len(ladder)))
+            continue
+        if len(ladder) < len(K26_LADDER):
+            print("### %s ⚠ SHORT LADDER: %d cells, %s..%s ms (of %s..%s). A1's run length was "
+                  "set for\n    %d cells; over %d the false-fire rate is LOWER, not higher, so "
+                  "the band is conservative\n    here. ⭐ The top was cut by M77's per-arm rule, "
+                  "not by a result."
+                  % (arm, len(ladder), ladder[0], ladder[-1], K26_LADDER[0], K26_LADDER[-1],
+                     len(K26_LADDER), len(ladder)))
         meds, rate_ofs = [], []
         for name, c in per:
             r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
