@@ -81,26 +81,32 @@ class Arm(NamedTuple):
     expect: str             # the armed credential, byte for byte
     frame: int              # this arm's frame length in samples
     reader_n: int           # how many samples its own reader command asks for
+    raw_is_expect: bool     # ⛔ is the demod's `Raw:` field the SAME OBJECT as `expect`?
+                            # Only then can --leading compare them bit 0 to bit 0. `lf keri
+                            # demod` prints `Raw: %08X%08X` (cmdlfkeri.c:176) — 64 bits — against
+                            # a 32-bit internal ID, and `lf nexwatch` reports a card number, not a
+                            # raw. `expect` still works for the EXACT score, which is a substring
+                            # search and does not care about framing.
 
 
 ARMS = {
     "indala": Arm("Indala", "lf indala econfig -s %d --id a0000000e6bd0e92",
-                  "lf indala reader", r"Indala \(len", "a0000000e6bd0e92", 2048, 30000),
+                  "lf indala reader", r"Indala \(len", "a0000000e6bd0e92", 2048, 30000, True),
     "keri": Arm("Keri", "lf keri econfig -s %d --id 80003039",
                 "lf keri reader", r"KERI - Internal ID|Descrambled MS - FC:|probably KERI",
-                "80003039", 2048, 10000),
+                "80003039", 2048, 10000, False),
     "idteck": Arm("IDTECK", "lf idteck econfig -s %d --id 4944544b55667788",
-                  "lf idteck reader", r"IDTECK Tag Found: Card ID", "4944544B55667788", 2048, 5000),
+                  "lf idteck reader", r"IDTECK Tag Found: Card ID", "4944544B55667788", 2048, 5000, True),
     "nexwatch": Arm("NexWatch", "lf nexwatch econfig -s %d --cn 87654321 -m 2",
-                    "lf nexwatch reader", r"NexWatch raw id|88bit id", "87654321", 4096, 20000),
+                    "lf nexwatch reader", r"NexWatch raw id|88bit id", "87654321", 4096, 20000, False),
     "indala224": Arm("Indala224",
                      "lf indala econfig -s %d --id "
                      "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5 --224",
                      "lf indala reader", r"Indala \(len",
-                     "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 7168, 30000),
+                     "80000001b23523a6c2e31eba3cbee4afb3c6ad1fcf649393928c14e5", 7168, 30000, True),
     "gproxii": Arm("GProxII", "lf gproxii econfig -s %d --raw fac2a38c2b081af0210b12c2",
                    "lf gproxii reader", r"G-Prox-II - (Unknown )?[Ll]en:",
-                   "fac2a38c2b081af0210b12c2", 6144, 10000),
+                   "fac2a38c2b081af0210b12c2", 6144, 10000, True),
 }
 ORDER = ["indala", "keri", "idteck", "nexwatch", "indala224", "gproxii"]
 MULTIPLES = (1, 2, 3, 4, 6)
@@ -275,9 +281,15 @@ def main():
     lengths = None
     if a.lengths:
         lengths = sorted({int(x) for x in a.lengths.split(",")})
-        if len(a.arms) > 1:
-            print("⚠ --lengths with %d arms: the same ladder is being applied to different frame "
-                  "lengths, so the rungs are NOT comparable across arms." % len(a.arms))
+        frames = {ARMS[k].frame for k in a.arms}
+        if len(frames) > 1:
+            print("⚠ --lengths across %d arms with DIFFERENT frame lengths %s: the same rung is a "
+                  "different number of frames on each, so the rungs are NOT comparable across arms."
+                  % (len(a.arms), sorted(frames)))
+        elif len(a.arms) > 1:
+            print("✅ --lengths across %d arms that all have a %d-sample frame, so each rung is the "
+                  "same number of frames on every one of them and IS comparable across arms."
+                  % (len(a.arms), frames.pop()))
 
     seed = a.seed if a.seed is not None else random.randrange(1 << 30)
     rng = random.Random(seed)
@@ -321,8 +333,17 @@ def main():
             print("\n⭐ LEADING-BIT AGREEMENT — how much of each decoded payload is ours before it "
                   "diverges.\n   bit period = frame_samples / bits, so a cut at T ms shows as "
                   "T/bit_period bits.")
+            skipped = [r["arm"] for r in out
+                       if "error" not in r and not ARMS[r["arm"]].raw_is_expect]
+            if skipped:
+                print("  ⛔ NOT MEASURABLE for %s: that reader's `Raw:` field is not the same "
+                      "object as the expected credential, so a bit-0 comparison is meaningless "
+                      "(`lf keri demod` prints 64 bits against a 32-bit internal ID, "
+                      "cmdlfkeri.c:176; `lf nexwatch` reports a card number). ⭐ The alignment "
+                      "control caught this rather than the numbers being read as low agreement."
+                      % ", ".join(skipped))
             for r in out:
-                if "error" in r:
+                if "error" in r or not ARMS[r["arm"]].raw_is_expect:
                     continue
                 exp = ARMS[r["arm"]].expect
                 nbits = len(exp) * 4
