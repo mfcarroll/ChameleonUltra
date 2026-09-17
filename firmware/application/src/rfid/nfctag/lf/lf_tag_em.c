@@ -252,12 +252,22 @@ static void lf_sense_enable(void) {
     // chip-to-chip spread that NRZ readers — which see cumulative error across
     // runs of same-polarity bits with no intra-run resync — reject even when
     // Manchester/FSK readers don't. Holding HFXO brings the PWM clock to
-    // ±40 ppm, which is also tight enough for differential PSK encodings
-    // (e.g. IDTECK) where what the reader decodes are bit-to-bit phase
-    // transitions, so absolute phase lock to the reader's carrier is not
-    // required. The tag-mode antenna taps on this board are envelope-only,
-    // which rules out coherent demodulation or phase-lock-based approaches,
-    // but does not preclude the differential-phase encodings supported here.
+    // ±40 ppm, which is what those NRZ readers need.
+    //
+    // ⛔ IT IS NOT ENOUGH FOR PSK, AND THIS COMMENT USED TO SAY IT WAS. It
+    // reasoned that differential encodings decode bit-to-bit phase transitions,
+    // so absolute phase lock to the reader's carrier is not required. C486
+    // measured the opposite: a reader sampling once per carrier cycle sees our
+    // FREE-RUNNING subcarrier beat against its own clock — 9.0x amplitude
+    // swing, a null every ~80 ms, 70-80 degrees of rotation across one 16.4 ms
+    // frame — and that is fatal whether the encoding is differential or not.
+    //
+    // ⭐ The tag-mode antenna taps really are envelope-only, and C489 traces
+    // that to VD1 rectifying at the coil: every LF pin is downstream of the
+    // rectifier, so nothing here can count a received carrier cycle, and the
+    // PWM has no external clock input to drive with one if it could. Coherent
+    // PSK emulation is a BOARD limitation, not a firmware one. HFXO still
+    // earns its place for every ASK/FSK arm.
     //
     // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
     // so this coexists with BLE. Both functions run from thread context
