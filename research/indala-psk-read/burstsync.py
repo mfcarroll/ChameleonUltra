@@ -133,6 +133,31 @@ cadence then fixes every later read's phase off it.
 ⚠ This tests the DETERMINISM half only. K6 already refuted H_client on its own evidence — a
 host-side `msleep` moved the outcome — and nothing here revisits that.
 
+## ⭐⭐⭐ K8 — THE PERIODICITY TEST, WITH ITS NUMBER TAKEN FROM A DIFFERENT EXPERIMENT
+
+C510 left exactly one thing standing and flagged it as post-hoc: **ms between READS move the
+pattern (K6) while 8 s between SESSIONS do not (K7)** ⇒ the phase is re-established at each
+session and only a read's offset WITHIN the session matters. If that is right, a `msleep -t D`
+placed as a **LEAD-IN**, before the first read, should slide the whole pattern through the beat.
+
+⭐⭐ **AND THE PERIOD IS NOT A FREE PARAMETER — IT COMES FROM C509, WHICH MEASURED SOMETHING
+ELSE.** The offset is **131.5 ppm on 62.5 kHz = 8.22 Hz**, so the full phase cycle is
+**121.6 ms**. ⭐ The amplitude nulls sit at HALF that, 60.8 ms — and C493 independently measured
+a null spacing of **60.8 ms**. Two experiments that never shared a method already agree, so the
+prediction below is not fitted to anything.
+
+**K8**: lead-in `msleep -t D` before the first read, D = 0..240 ms in 15 ms steps, reps shuffled.
+  - **primary prediction**: `pattern(D)` matches `pattern(D + 122 ms)` BETTER than `pattern(D +
+    61 ms)`, because 122 ms is a full phase cycle and 61 ms is a half cycle (an inversion).
+  - **SUPPORTED** ⇒ mean Hamming similarity at lag ~122 exceeds that at lag ~61 by **>= 1 bit of
+    6**, and lag-122 similarity is **>= 5/6**.
+  - **REFUTED** ⇒ lag-122 is not greater than lag-61, or lag-122 is below 4/6.
+  - between ⇒ no verdict.
+  ⛔ **THE CONTROL THAT CAN KILL IT FOR LACK OF POWER, and it is the likely failure**: if the
+  similarity is high at EVERY lag, the lead-in simply does not move the pattern and the test
+  proves nothing. The mean over all lags is reported first for exactly that reason, and a flat
+  profile is reported as **NO POWER**, not as support.
+
 ⛔ THE PROBE COMMAND PER ARM IS FIXED AND CHOSEN FOR POWER, not for being the graded one: an arm
 at 0% cannot show a decline and an arm at 100% cannot show a rise. `gproxii` at ~100% (fitted
 `-s 12288`), `indala` at ~75% (`-s 4096`), `keri` at ~38% (its own reader). Between them they can
@@ -181,7 +206,7 @@ def playbacks(port):
         return None
 
 
-def session(arm_key, reads, timeout, delay=0):
+def session(arm_key, reads, timeout, delay=0, lead=0):
     """One pm3 invocation issuing `reads` IDENTICAL probes. Returns the per-read scores in order.
 
     ⛔ `reads == 0` is the instrument control and is not a degenerate case: the client still
@@ -189,6 +214,8 @@ def session(arm_key, reads, timeout, delay=0):
     a = shortread.ARMS[arm_key]
     probe = PROBES[arm_key]
     cmds = []
+    if lead:
+        cmds.append("msleep -t %d" % lead)     # ⭐ K8: once, BEFORE the first read
     for _ in range(reads):
         if delay:
             # ⭐ K6's independent variable. `msleep` is AlwaysAvailable in the client
@@ -336,6 +363,91 @@ def k7(a, arms):
     return 0
 
 
+def _sim(a, b):
+    """Hamming similarity of two equal-length patterns, in bits."""
+    return sum(1 for x, y in zip(a, b) if x == y)
+
+
+def k8(a, arms, leads):
+    """⭐ K8. A LEAD-IN delay before the first read, swept across the beat. See the docstring."""
+    import collections
+    import random as _r
+    rng = _r.Random(a.seed)
+    plan = [d for d in leads for _ in range(a.reps)]
+    rng.shuffle(plan)
+    print("K8 — %d sessions x %d reads, lead-in %s ms, shuffled (seed %d)"
+          % (len(plan), a.reads, leads, a.seed))
+    print("   period from C509: 131.5 ppm x 62.5 kHz = 8.22 Hz ⇒ full cycle 121.6 ms, "
+          "nulls at 60.8 ms\n")
+    out = {}
+    try:
+        for key in arms:
+            arm = shortread.ARMS[key]
+            ok, why = seqdump.arm(a.port, arm.typ, arm.econfig)
+            if not ok:
+                print("%-9s ⛔ ARM FAILED: %s" % (key, why))
+                continue
+            pats = collections.defaultdict(list)
+            for d in plan:
+                # ⛔ The lead-in is ONE msleep before the first read and nothing between them:
+                # K6 already varied the between-read spacing, and varying both would confound
+                # the lead-in with the cadence.
+                sc = session(key, a.reads, a.timeout, delay=0, lead=d)
+                pats[d].append(pattern(sc))
+                time.sleep(0.4)
+            out[key] = {d: v for d, v in pats.items()}
+            modal = {}
+            print("\n%-9s probe %r" % (key, PROBES[key] or arm.reader))
+            for d in leads:
+                c = collections.Counter(pats[d])
+                top, n = c.most_common(1)[0]
+                modal[d] = top
+                print("   lead %-4d  modal %-10s %d/%d" % (d, top, n, len(pats[d])))
+
+            step = leads[1] - leads[0] if len(leads) > 1 else 1
+            def profile(lag_ms):
+                k = int(round(lag_ms / float(step)))
+                ps = [(modal[d], modal[d + k * step])
+                      for d in leads if (d + k * step) in modal]
+                return (sum(_sim(x, y) for x, y in ps) / float(len(ps)), len(ps)) if ps else (0, 0)
+
+            print("\n   similarity by lag (bits of %d):" % a.reads)
+            allsims = []
+            for lag in range(step, 241, step):
+                m, n = profile(lag)
+                if n:
+                    allsims.append(m)
+                    mark = ""
+                    if abs(lag - 122) <= step / 2.0:
+                        mark = "  ⭐ full cycle (C509)"
+                    elif abs(lag - 61) <= step / 2.0:
+                        mark = "  ← half cycle"
+                    print("     lag %3d ms  %.2f  (n=%d)%s" % (lag, m, n, mark))
+            s122, _ = profile(122)
+            s61, _ = profile(61)
+            flat = (max(allsims) - min(allsims)) if allsims else 0.0
+            print("\n   lag 122 = %.2f, lag 61 = %.2f, spread across all lags = %.2f"
+                  % (s122, s61, flat))
+            if flat < 0.5:
+                print("   ⇒ **NO POWER** — similarity is flat across every lag, so the lead-in "
+                      "does not move\n     the pattern at all. This proves nothing either way.")
+            elif s122 - s61 >= 1.0 and s122 >= a.reads * 5.0 / 6.0:
+                print("   ⇒ **SUPPORTED** — the pattern repeats at C509's full phase cycle, a "
+                      "number that\n     came from a different experiment entirely.")
+            elif s122 <= s61 or s122 < a.reads * 4.0 / 6.0:
+                print("   ⇒ **REFUTED** — no repeat at the predicted period.")
+            else:
+                print("   ⇒ between the bands — NO VERDICT.")
+    finally:
+        o = seqdump.disarm(a.port)
+        print("\ndisarm: %s" % ("ok" if "success" in o.lower() else o.strip()[-160:]))
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump({k: {str(d): v for d, v in x.items()} for k, x in out.items()}, fh, indent=1)
+        print("raw patterns → %s" % a.out)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ORDER))
@@ -351,6 +463,8 @@ def main():
                                      "shuffled session groups")
     ap.add_argument("--reps", type=int, default=4, help="K6 sessions per delay")
     ap.add_argument("--seed", type=int, default=1, help="K6 delay-shuffle seed")
+    ap.add_argument("--k8", action="store_true",
+                    help="⭐ K8: sweep a LEAD-IN delay before the first read, across the beat")
     ap.add_argument("--k7", action="store_true",
                     help="⭐ K7: fixed vs randomised inter-session spacing, interleaved")
     ap.add_argument("--fixed-pause", dest="fixed_pause", type=float, default=1.0)
@@ -372,6 +486,8 @@ def main():
         return k6(a, arms, [int(x) for x in a.delays.split(",")])
     if a.k7:
         return k7(a, arms)
+    if a.k8:
+        return k8(a, arms, list(range(0, 241, 15)))
     print("criteria K1/K2/K3/K4 are in this file's docstring and were committed before this run.\n")
 
     # K4 costs nothing and is stated whatever else happens.
