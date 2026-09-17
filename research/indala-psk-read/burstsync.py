@@ -797,6 +797,55 @@ not this arithmetic — is what confirms each cell (C516).
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐ K20 — `indala`'s NOTCHES, ON FRESH SEEDS (written before its capture)
+
+K19's W1 came back REFUTED for `indala` and **the refutation was worthless**: its median is 75%, so
+*median + 25* was the ceiling and the band could not have fired whatever the data did (M68). ⭐ M68's
+own prescription is that **an arm should be given the detector its own level can support** — and on
+a profile sitting high the detectable feature is a **notch**, not a hump.
+
+⛔⛔ **THE POWER COMPUTATION, DONE BEFORE THE BAND AND NOT AFTER IT.** This is the step whose
+absence was M68.
+
+| arm | median (K19) | *median − 25* | *median + 10* | can this detector fire? |
+|---|---|---|---|---|
+| `indala` | **75%** | 50% | 85% | ⭐ **yes — both thresholds sit well inside the arm's range** |
+| `keri` | 25-31% | **0-6%** | 35-41% | ⛔ **no — the notch threshold is the floor** |
+
+⇒ **K20 is `indala` ONLY, and that is a decision made from the arithmetic rather than from a
+result.** `keri` needs the forward detector, which is exactly what K19 gave it. ⚠ C514 stands: this
+is one arm and nothing here generalises off it.
+
+⚠⚠ **DISCLOSED, AND IT IS WHAT MAKES THIS WORTH RUNNING: I HAVE ALREADY SEEN K19's `indala`
+PROFILE.** Its low cells sat near 90, 120-125, 165-175 and 200 — observed **post-hoc**, on caps that
+have now been looked at. ⛔ **So K20 must NOT be scored on `caps/k19_indala_s{53,67}.json`**;
+scoring a band on the data that suggested it is fitting, whatever the band says. ⇒ **K20 is a
+PRE-REGISTERED REPLICATION on FRESH SEEDS**, which is the correct move after a post-hoc
+observation and is the whole of its value.
+
+**The ladder**: unchanged from K19 — a 65 ms informational cell excluded from the median, then
+**85..200 ms in 5 ms steps**, two fresh seeds at `--reps 8`.
+
+  **X1 — `indala` HAS MORE THAN ONE SEPARATED NOTCH.** A *notch* is a maximal contiguous run of
+  **>= 2 cells each at or below (median − 25)**, present in **BOTH seeds** and overlapping in at
+  least one cell. **X1 fires** with **>= 2** notches separated by **>= 2 cells each at or above
+  (median + 10) in both seeds**. **X1 REFUTED** ⇒ at most one. between ⇒ reported, no verdict.
+  ⛔ COUNT and SEPARATION only. Location is reported and never tested — M64 and M66 each cost a
+  verdict to a location clause and K19 did not repeat it.
+
+  **X2 — DOES THE PROFILE RETURN TO ITS BODY AT THE LADDER'S TOP?** ⇒ at least one of 185, 190,
+  195, 200 at or above **(median + 10)** in **both** seeds. ⛔ **X2 failing is a result**: it says
+  this ladder's top edge licenses no wing for `indala` either, the same teeth W2 had on `keri`.
+
+  ⛔ Gates unchanged and either ends it: pooled **< 15%** is NO POWER; K16's split-half over
+  **15 points** is a drifted run; **P1 <= 0.6** per cell. ⚠ The 65 ms cell is informational and
+  excluded from the median.
+
+  ⛔⛔ **PERIODICITY REMAINS UNTESTABLE** — `LF_TAG_BURST_TARGET_MS` = 500 stops the ladder near
+  200 ms (C516, and K12 saw P1 fail at 220). A null at the top is not evidence against a period.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse

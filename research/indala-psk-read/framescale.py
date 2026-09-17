@@ -338,11 +338,15 @@ K18_RUN_GAP = 30.0      # (c) the run over the wings, on the seed-pooled cells
 K18_FLAT = 10.0         # V2: the window sits within this of its wings
 
 
-def _runs(cells, rate_of, lo=K18_RUN_CELL):
-    """Maximal contiguous stretches of `cells` whose rate is at or above `lo`."""
+def _runs(cells, rate_of, lo=K18_RUN_CELL, below=False):
+    """Maximal contiguous stretches of `cells` whose rate is at or above `lo`.
+
+    ⭐ `below=True` inverts it — at or BELOW `lo` — which is K20's notch detector. M68: on a
+    profile sitting high the detectable feature is a notch, and the forward threshold is the
+    ceiling."""
     out, cur = [], []
     for k in cells:
-        if rate_of(k) >= lo:
+        if (rate_of(k) <= lo) if below else (rate_of(k) >= lo):
             cur.append(k)
         else:
             if len(cur) >= K18_RUN_LEN:
@@ -535,6 +539,94 @@ def k19(paths):
                                "licensed for any future band"))
 
 
+
+K20_LOW = 25.0        # a cell is "notched" at median − this
+K20_BODY = 10.0       # a separating / returned cell is at median + this
+
+
+def k20(paths):
+    """X1/X2 — `indala`'s NOTCHES. The inverse of K19, and `indala` only (see the power table)."""
+    runs = [(os.path.basename(p).replace(".json", ""), json.load(open(p))) for p in paths]
+    arms = sorted({a for _, d in runs for a in d})
+    print("## K20 — does `indala` have separated NOTCHES in 85-200 ms?")
+    print("   ⛔ COUNT and SEPARATION only. ⛔ A pre-registered REPLICATION on fresh seeds of a "
+          "shape seen post-hoc in K19 — it must not be scored on K19's own caps.\n")
+    for arm in arms:
+        per = [(n, d[arm]) for n, d in runs if arm in d]
+        cells = numeric_cells(per[0][1])
+        ladder = [k for k in K19_LADDER if k in cells]
+        if len(ladder) < len(K19_LADDER):
+            print("### %s ⛔ partial ladder — not scored\n" % arm); continue
+        meds, rate_ofs = [], []
+        for name, c in per:
+            r = lambda k, c=c: 100.0 * cell_rate(c[k]["scores"])[0] / len(c[k]["scores"])
+            rate_ofs.append(r)
+            vals = sorted(r(k) for k in ladder)
+            meds.append(vals[len(vals) // 2] if len(vals) % 2
+                        else 0.5 * (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]))
+        print("### %s   median %s   notch <= %s   body >= %s"
+              % (arm, "/".join("%.0f%%" % m for m in meds),
+                 "/".join("%.0f%%" % (m - K20_LOW) for m in meds),
+                 "/".join("%.0f%%" % (m + K20_BODY) for m in meds)))
+        for k in ladder:
+            marks = "".join("▽" if rate_ofs[i](k) <= meds[i] - K20_LOW else
+                            "▲" if rate_ofs[i](k) >= meds[i] + K20_BODY else "·"
+                            for i in range(len(per)))
+            print("   %5s %s %s" % (k, "  ".join("%-11s" % ("%.0f%%" % f(k)) for f in rate_ofs),
+                                    marks))
+        gated = False
+        for name, c in per:
+            allr, _, alln = pooled(c, cells)
+            halves = []
+            for lo, hi in ((0, 0.5), (0.5, 1.0)):
+                h = n = 0
+                for k in cells:
+                    sc = c[k]["scores"]
+                    part = sc[int(len(sc) * lo):int(len(sc) * hi)]
+                    h += sum(1 for _, e in part if e)
+                    n += len(part)
+                halves.append(100.0 * h / n if n else 0.0)
+            arr = max(max(c[k]["arrivals"]) for k in cells)
+            print("   gate %s: pooled %.1f%% of %d | split-half Δ %.1f | worst P1 %.2f"
+                  % (name, allr, alln, abs(halves[1] - halves[0]), arr))
+            if allr < K17_NO_POWER:
+                print("      ⛔ NO POWER"); gated = True
+            if abs(halves[1] - halves[0]) > K17_DRIFT:
+                print("      ⛔ DRIFTED"); gated = True
+            if arr > 0.6:
+                print("      ⛔ P1 — a cell reached %.2f arrivals/read" % arr)
+        if gated:
+            print("   ⇒ **NO VERDICT for %s — a gate failed.**\n" % arm); continue
+
+        seed_n = [_runs(ladder, rate_ofs[i], meds[i] - K20_LOW, below=True)
+                  for i in range(len(per))]
+        notches = []
+        for f1 in seed_n[0]:
+            for f2 in (seed_n[1] if len(seed_n) > 1 else []):
+                if set(f1) & set(f2):
+                    notches.append(sorted(set(f1) | set(f2), key=int))
+        print("   notches (>= 2 adjacent cells at median−%.0f, in BOTH seeds): %s"
+              % (K20_LOW, [",".join(f) for f in notches] or "none"))
+        sep_ok = False
+        for a_, b_ in zip(notches, notches[1:]):
+            gap = [k for k in ladder if int(k) > int(a_[-1]) and int(k) < int(b_[0])]
+            body = [k for k in gap
+                    if all(rate_ofs[i](k) >= meds[i] + K20_BODY for i in range(len(per)))]
+            print("   separation %s→%s ms: %d cells between, %d in the body in both seeds"
+                  % (a_[-1], b_[0], len(gap), len(body)))
+            sep_ok = sep_ok or len(body) >= 2
+        x1 = len(notches) >= 2 and sep_ok
+        print("   ⇒ **X1 %s for %s** — %d separated notch(es)"
+              % ("FIRES" if x1 else "REFUTED" if len(notches) < 2 else "no verdict",
+                 arm, len(notches)))
+        back = [k for k in K19_TOP if k in cells
+                and all(rate_ofs[i](k) >= meds[i] + K20_BODY for i in range(len(per)))]
+        print("   ⇒ **X2 %s for %s** — top-four cells back in the body: %s ⛔ %s\n"
+              % ("met" if back else "FAILED", arm, ",".join(back) or "none",
+                 "the profile returns, so this top edge could license a wing"
+                 if back else "this ladder's top edge licenses NO wing for this arm either"))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--table", action="store_true",
@@ -545,7 +637,12 @@ def main():
                     help="⭐ score K18's V1/V2 — is there a SECOND feature above 80 ms?")
     ap.add_argument("--k19", nargs="+", metavar="CAP",
                     help="⭐ score K19's W1/W2 — how many separated features, and is there a floor?")
+    ap.add_argument("--k20", nargs="+", metavar="CAP",
+                    help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k20:
+        k20(a.k20)
+        return 0
     if a.k19:
         k19(a.k19)
         return 0
