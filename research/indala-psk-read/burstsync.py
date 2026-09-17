@@ -1649,6 +1649,77 @@ them would be fitting.
 
 ⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐ K33-PILOT — WHERE DOES `idteck`'s BURST ACTUALLY END AT dec 2? (before K33, not after)
+
+C544 named the successor by arithmetic: **`idteck`, R4-unmoved 140-145 against R4-moved 84.7-87.7**,
+a **56 ms** separation that no skirt can bridge. ⛔ **But that test spends 89-93% of the budget**, and
+the budget's top is a number this file itself calls an **UPPER BOUND**: `_top` computes `idteck` at
+**157 nominal**, and the same formula put `nexwatch` at ~210 where **200 FAILED P1 twice** and 195 was
+clean. ⇒ **the computed top has already been measured optimistic by ~5% once**, and K33's ladder sits
+at 89-93% of it. **Running K33 without measuring the real ceiling is M81 again** — a requirement
+carried into a new shape without being re-checked against it.
+
+### ⭐⭐ THE ARITHMETIC THAT MAKES THE CEILING THE WHOLE GAME (offline, no capture)
+
+A nominal label `L` at stretch `S` costs `L*S` of elapsed primer, so `L <= B/S` where
+`B = LF_BURST_MS - K12_OVERHEAD_MS - probe_ms` = 500 - 192 - 49.2 = **258.8 ms** for `idteck`.
+The moved prediction sits at `L/S`, so **separation = `L(1 - 1/S)`**, maximised at `L = B/S`:
+
+    sep_max(S) = B(S-1)/S^2      d/dS = (2-S)/S^3      =>  PEAK AT S = 2 EXACTLY
+
+| S | max label B/S | max separation |
+|---|---|---|
+| 1.653 (dec 2, measured) | 156.6 | **61.9** |
+| 2.000 (the optimum) | 129.4 | **64.7** |
+| 2.300 (dec 4, estimated) | 112.5 | **63.6** |
+| 3.000 | 86.3 | 57.5 |
+
+⭐⭐⭐ **SO C544's SECOND OPTION IS ANSWERED WITHOUT A CAPTURE, AND THE ANSWER IS NO.** *A higher
+decimation widens the separation for the same label* is true, but the label it can afford shrinks
+faster: the separation is capped at **B/4 ≈ 65 ms for ANY decimation**, dec 2 already reaches **94%**
+of that cap, and dec 4 would reach 98% — **a 2.7% gain for the slope-fit M79 requires.** ⛔ **Do not
+slope-fit dec 4 for this purpose.** ⚠ And the conclusion is robust to `B` being wrong: a smaller `B`
+scales every row by the same factor and moves neither the peak nor the ordering.
+
+⇒ ⭐⭐ **THE SEPARATION CANNOT BE BOUGHT — IT CAN ONLY BE SPENT AT THE TOP OF THE BUDGET.** Which
+makes *where the budget really ends* the one number K33 depends on, and it has never been measured
+for this arm at this decimation.
+
+### THE PILOT
+
+`--k12 --arms idteck --dec 2 --reps 8`, one seed (**347**), ladder
+**110, 120, 130, 140, 145, 150, 155, 160, 170** (9 cells + the shuffled no-primer control), which
+**brackets the computed 157 from both sides** so it can find the top either optimistic or pessimistic.
+⛔ **It scores no band and claims no region** — it is an instrument measurement, like C539's knob
+check and C540's timing, and its product is a ceiling and a level.
+
+  **P1 IS THE INSTRUMENT**: the largest cell whose **arrivals per read stay <= 0.6**. Above the
+  burst, arrivals go to 1.00 and the probe reads a re-armed field, which is starvation and not lead
+  time.
+
+  ⭐ **AND ITS MEANINGS ARE PINNED HERE (M74):**
+  - **clean through 145 and beyond** ⇒ K33's window is inside the burst ⇒ **run K33 as C544 specified.**
+  - **breaks at or below 145** ⇒ ⛔ **R4-unmoved is not observable at dec 2 at all.** With the cap
+    above showing no decimation does better, that **CLOSES the decimation approach on this bench**
+    rather than inviting another variant — it is a real answer, not a failed run.
+  - **breaks between 145 and 157** ⇒ reachable but at the edge: K33 runs with its top clamped to the
+    measured ceiling, and carries M78's note below.
+
+  ⚠⚠ **M78 — WHICH WAY WOULD THE DEFECT PUSH?** Starvation at the top of the ladder depresses the
+  **unmoved** window (140-145) and leaves the **moved** one (84.7-87.7) untouched. ⇒ it biases toward
+  *no region at unmoved* ⇒ **toward ELAPSED**. So under K33 a **SAMPLES** fire is conservative and
+  survives a soft ceiling, while an **ELAPSED** fire is confounded with starvation and must not be
+  read as a verdict unless P1 is clean in every cell of the unmoved window. **Stated before the
+  capture, not after it.**
+
+  ⭐ **SECOND PRODUCT, AND M80 REQUIRES IT**: the decode LEVEL at 140-155, which no dec-2 run has
+  ever visited — K30/K31/K32 all stopped at 120. The 50% absolute threshold was derived from cells
+  <= 120, and K30's whole failure was a threshold imported from a level measured elsewhere. If the
+  level at K33's window is far under 50%, **the threshold is re-derived from this pilot** and K33
+  runs on fresh seeds, exactly as K31 did from K30.
+
+⛔ Ungraded — no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
