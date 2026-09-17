@@ -1150,3 +1150,38 @@ time it is reused.**
 ⭐ The cheap discipline: when a simulation produces a rate, print the n it assumed in the same
 sentence. C527's own table did carry *an 11-cell ladder at reps 8* in its header and the prose
 still over-reached — so the rate and its configuration have to be **one string**, not two lines.
+
+**M74 — A BAND THAT RETURNS *NO VERDICT* TWICE ON CONSISTENT DATA IS ASKING THE WRONG QUESTION, NOT
+LACKING POWER. RAISE n ONCE; IF THE ANSWER REPEATS, CHANGE THE QUESTION AND NEVER THE THRESHOLD.**
+
+Y1 asked whether `indala` and `keri` share ONE lead-time profile: r >= +0.52 in both runs is SHARED,
+r <= −0.52 is OPPOSED, anything else NO VERDICT. It was properly powered — **77% at `--reps 8`,
+simulated before its capture — and it returned NO VERDICT (+0.402, +0.664). C524 priced the remedy
+in the same breath: `--reps 12` takes it to 90%.** That remedy was spent. **It returned NO VERDICT
+again (+0.603, +0.490).**
+
+⭐ **Four independent measurements: +0.402, +0.490, +0.603, +0.664. Mean +0.540. All positive, none
+below the p=0.05 critical value.** ⇒ **the data is not noisy and the band is not underpowered. The
+dichotomy simply has no branch for the answer**, which is *substantially but not completely shared*
+— a shared weight near 0.6-0.8 by simulation, where a fully shared truth would have given a median
++0.83 with a 5th percentile of +0.66.
+
+⛔⛔ **THE TEMPTATION AT THIS POINT IS TO MOVE THE THRESHOLD TO +0.45 AND DECLARE SHARED, AND DOING
+SO WOULD DESTROY EVERYTHING PRE-REGISTRATION BUYS.** The threshold was the p=0.01 permutation
+critical value, chosen before any cross-arm number existed. Lowering it once the numbers are in is
+fitting, whatever justification is attached. ⇒ **The band stands, its verdict stands as NO VERDICT,
+and what changes is the next band's QUESTION.**
+
+⇒ **The sequence to follow, and it is cheap because it is decided in advance:**
+1. A pre-registered band returns NO VERDICT on data that looks consistent.
+2. **Raise n once** — this is legitimate, pre-priceable and answers *was it power?*.
+3. If it repeats, the answer is outside the band's vocabulary. **Replace a dichotomous band with an
+   ESTIMATION band** — report the quantity with an interval, pre-register the interval's method
+   rather than a pass/fail line.
+⛔ Never step 4: re-tune the original band's threshold.
+
+⭐⭐ **AND NOTE WHAT THE SPENT REMEDY DID BUY, BECAUSE IT WAS NOT WASTED.** Y1's OPPOSED branch had
+**90% power at reps 12 and 77% at reps 8** and fired **0 of 4** while all four measurements came
+back positive. ⇒ **anti-alignment is excluded**, which the first pair could only suggest. **A band
+whose middle is unusable can still have a decisive end**, and the write-up must separate the two
+rather than reporting *no verdict* and stopping.
