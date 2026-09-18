@@ -1385,6 +1385,43 @@ only be caught by the bench.
 
 ---
 
+**M86 — A WINDOW'S THRESHOLD MUST NOT EXCEED WHAT THE FEATURE CAN SUPPLY INSIDE IT. IF IT DOES,
+THE MARGINAL CELL IS NOISE AND THE POWER FIGURE HIDES IT.**
+
+K34b's band asks for `>= 2 elevated cells` in each of two windows. On the pinned 5 ms grid the
+ELAPSED window's feature is 2.7-3.2 ms wide, so it occupies **0 or 1** cells and the rule cannot
+fire on that truth at all. At 2.5 ms it occupies 2 cells only **19.1%** of the time — and there the
+failure is worse than an impossibility, because the band *does* fire: **one region cell plus one
+baseline cell that happened to clear.** It simulates at 76.4% power and the power is the noise term.
+
+⛔ **THE POWER FIGURE DOES NOT REVEAL THIS, AND NEITHER DOES THE FALSE-FIRE FIGURE.** Both were
+computed, both looked acceptable (76.4% power against 3.8%), and the band was still broken. What
+reveals it is a quantity neither of them contains: **how many cells the feature can occupy at that
+grid, over the whole range of the parameter that places it.** One function, no simulation
+(`k34bsim.py:occupancy`).
+
+⇒ **THE CHECK, AND IT IS THREE LINES BEFORE ANY DRAWS:**
+1. Compute the feature's WIDTH and the grid's SPACING in the same units.
+2. Compute the cells it occupies — **minimum, median and maximum over the uncertainty in its
+   position**, not at the point estimate, which is exactly the trap: at S = 1.71 the 2.5 ms grid
+   looks like 1 cell and at S = 1.80 it looks like 2.
+3. ⛔ **Require `k <= min(occupancy)` to fire at all, and `k <= median(occupancy)` for the fire to
+   be the feature's rather than the noise's.** A `k` between them is a band that fires on a
+   coin-toss of alignment.
+
+⭐ **AND THE GENERAL FORM, WHICH IS WHY THIS IS NOT ONLY ABOUT LADDERS: A THRESHOLD COUNTED IN
+UNITS OF THE INSTRUMENT (cells, bins, samples) IS A CLAIM ABOUT THE INSTRUMENT'S RESOLUTION
+RELATIVE TO THE FEATURE, AND NOBODY WRITES THAT CLAIM DOWN.** `>= 2 cells` reads like a statement
+about strength; it is a statement about the grid. ⚠ It is M80's relative in another register — M80
+is a threshold that hides an assumption about the LEVEL, this one hides an assumption about the
+RESOLUTION — and like M80 it only bites when the condition under test changes the hidden quantity.
+Here the stretch changes it, which is why it appeared on a dec-2 design and not on any dec-1 one.
+
+⛔ **The cost of not having this rule was going to be a flash and two caps**, and the run would
+have returned SAMPLES-or-nothing while looking like a working experiment (C557).
+
+---
+
 **M85 — GATE ON THE QUANTITY THAT DECIDES THE VERDICT, NOT ON THE ONE THE LAST RUN DIED OF.
 AND IF THAT QUANTITY IS COMPUTABLE FROM THE GATE'S OWN DATA, THE GATE HAS NO BUSINESS BEING A
 PROXY FOR IT.**
