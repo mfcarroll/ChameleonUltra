@@ -42,12 +42,18 @@ nearly THREE TIMES its own width.** Two consequences, and the first is fatal on 
 occupancy is **2-4, median 3**, so `k_E = 3` is supplied by the region itself 92% of the time.
 
     region height   FALSE-FIRE E / S   POWER E-truth / S-truth   no-verdict
-    0.725 (measured)   5.5% / 0.0%        97.7% / 98.6%           2.3% / 1.4%
-    0.50  (pessimist)  5.5% / 0.0%        71.5% / 80.2%          28.5% / 19.5%
-    0.45               5.5% / 0.0%        45.9% / 46.5%          54.1% / 52.6%
-    0.40               5.5% / 0.0%        26.4% / 14.2%          73.6% / 84.6%
+    0.725 (measured)   2.4% / 0.0%        95.6% / 99.5%           4.4% / 0.5%
+    0.65               2.4% / 0.0%        91.5% / 99.5%           8.5% / 0.5%
+    0.60               2.4% / 0.0%        83.9% / 98.8%          16.1% / 1.2%
+    0.55  ⭐ the bar   2.4% / 0.0%        70.5% / 94.6%          29.5% / 5.4%
+    0.50               2.4% / 0.0%    ⛔  53.0% / 77.9%          47.0% / 21.9%
+    0.45               2.4% / 0.0%    ⛔  33.8% / 45.3%          66.2% / 54.5%
 
-⭐ 39 cells x 32 reps x 2 seeds x 1 arm = **2,496 reads, about half of K34a's 4,864** — the finer
+⛔ **THESE FIGURES REPLACE THE FIRST SET PUBLISHED (C557), WHICH WERE COMPUTED ON A MIS-ANCHORED
+LADDER — see `ladder()`. The direction matters: the cliff is STEEPER than the first set said, and
+the gate's bar is the region height 0.55, not 0.50** (C558).
+
+⭐ 35 cells x 32 reps x 2 seeds x 1 arm = **2,240 reads, under half of K34a's 4,864** — the finer
 grid is paid for by dropping `keri` and the second condition, both of which K34b does not need.
 ⛔ **The residual false-fire asymmetry (5.5% vs 0.0%) CANNOT be equalised away**: raising `k_E` to
 4 exceeds the region's median occupancy and re-creates fault 1. It is structural — ELAPSED's window
@@ -60,7 +66,8 @@ everything turns on the region's HEIGHT at dec 2 on the new build, which falls o
 build — 5 ms over 70-150, reps 16, 336 reads — and `--from` reads it directly. ⇒ the sequence is
 **flash · verify from the air (C461) · re-fit S with `dectime.py --interval` (the window is a
 FUNCTION of it) · coarse gate pair · `k34bsim.py --from` · only then the 1 ms pair.** ⛔ Never the
-same caps for the gate and the verdict.
+same caps for the gate and the verdict. ⭐ **The gate's bar: the region's height >= 0.55** (the
+banked burst-500 value is 0.725, so it is the BUILD that is in question, not the bench).
 
 ⭐ NEITHER POINT REOPENS THE DECIMATION LINE (closed twice, C545-C548 and C556). It is the same
 quantity — the stretch's imprecision — biting K34b through the WINDOW rather than through an
@@ -170,9 +177,16 @@ def ladder(grid, span, fine, fine_grid):
     """The dec-2 nominal ladder: a coarse background plus a fine grid inside the windows."""
     lo, hi = span
     cells = {round(lo + i * grid, 3) for i in range(int((hi - lo) / grid) + 1)}
+    # ⛔⛔ THE FINE GRID IS ANCHORED ON ROUND MULTIPLES OF `fine_grid`, NOT ON THE WINDOW'S EDGE.
+    # Anchoring it at `wlo` produced cells like 76.4, 81.4, 86.4 — nominal values no ladder
+    # would actually be asked for — and, worse, it made `occupancy()` (which assumes a
+    # 0-anchored grid) describe a DIFFERENT ladder from the one simulated. At 5 ms the two
+    # disagreed on whether ELAPSED could occupy 2 cells at all. Caught by cross-checking the
+    # two against each other rather than by either one alone.
     for wlo, whi in fine:
-        n = int(round((whi - wlo) / fine_grid))
-        cells |= {round(wlo + i * fine_grid, 3) for i in range(n + 1)}
+        i0 = int(math.ceil(round(wlo / fine_grid, 6)))
+        i1 = int(math.floor(round(whi / fine_grid, 6)))
+        cells |= {round(i * fine_grid, 3) for i in range(i0, i1 + 1)}
     return sorted(c for c in cells if lo - 1e-9 <= c <= hi + 1e-9)
 
 

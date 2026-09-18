@@ -1420,6 +1420,14 @@ Here the stretch changes it, which is why it appeared on a dec-2 design and not 
 ⛔ **The cost of not having this rule was going to be a flash and two caps**, and the run would
 have returned SAMPLES-or-nothing while looking like a working experiment (C557).
 
+⭐⭐ **AND THE OCCUPANCY EARNS ITS KEEP TWICE, WHICH IS THE PART WORTH REMEMBERING: it is a SECOND
+ROUTE TO A QUANTITY THE SIMULATOR ALREADY COMPUTES IMPLICITLY, so the two can be asked whether they
+agree.** They were, and they did not — 662 disagreements out of 1,203 traced to the ladder builder
+anchoring its fine grid on a window edge instead of on round cells (C558). ⛔ **Nothing in a re-run
+would have shown it**: the power figures were internally consistent with the ladder actually
+simulated. ⇒ **when a tool can compute one quantity by two routes, make it, and make them argue.**
+That is M45 (*suspect the instrument*) with the instrument being software.
+
 ---
 
 **M85 — GATE ON THE QUANTITY THAT DECIDES THE VERDICT, NOT ON THE ONE THE LAST RUN DIED OF.
