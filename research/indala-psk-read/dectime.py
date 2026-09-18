@@ -45,6 +45,35 @@ def run(cmds, timeout=300):
     return r.stdout + r.stderr
 
 
+def fit_se(xs, ys):
+    """Slope, intercept, and the slope's STANDARD ERROR from the fit's own residuals.
+
+    ⭐⭐ THIS REPLACED A BOOTSTRAP THAT GAVE A NONSENSE ANSWER, AND THE REASON IS WORTH KEEPING.
+    The first version resampled the replicate timings inside each (dec, N) cell and refit. It
+    returned a 95% interval of **−1.545 .. 1.854** for dec 2 — a negative stretch, which is
+    impossible — while the point estimate was a clean 1.739 off medians that are monotone to
+    within 3 ms.
+
+    ⛔ The bootstrap was not measuring the stretch's precision, it was measuring the OUTLIER RATE.
+    A per-cell median over 10 timings is robust to the occasional multi-second pm3 client hiccup;
+    a bootstrap resample of those same 10 is not, because a draw can pick the outliers several
+    times over and move that cell's median by hundreds of ms. One distorted cell out of five is
+    enough to flip a fitted slope through zero, and a ratio with a near-zero denominator explodes.
+    ⇒ **resampling a statistic chosen for being robust destroys the robustness that justified it.**
+
+    The residual-based SE is the right estimator here: it runs on the five MEDIAN points, which
+    are what the fit actually uses, and their residuals (<= 3.1 ms on a 196 ms span) are what the
+    fit's uncertainty actually is.
+    """
+    n = len(xs)
+    a, b = fit(xs, ys)
+    mx = sum(xs) / n
+    den = sum((x - mx) ** 2 for x in xs)
+    resid = [y - (a * x + b) for x, y in zip(xs, ys)]
+    s2 = sum(r * r for r in resid) / (n - 2) if n > 2 else 0.0
+    return a, b, (s2 / den) ** 0.5 if den else 0.0, max((abs(r) for r in resid), default=0.0)
+
+
 def fit(xs, ys):
     """Least-squares slope and intercept of y ~ a*x + b."""
     n = len(xs)
@@ -60,6 +89,11 @@ def main():
     ap.add_argument("--counts", default="2500,5000,10000,15000,20000")
     ap.add_argument("--reps", type=int, default=4)
     ap.add_argument("--seed", type=int, default=353)
+    ap.add_argument("--interval", action="store_true",
+                    help="⭐ a 95%% CONFIDENCE INTERVAL on each stretch, from the fit's own "
+                         "residuals. C547 called the stretch *known to ~7%%* without ever "
+                         "measuring it, and an alignment design's usable resolution follows "
+                         "directly from that figure.")
     a = ap.parse_args()
     decs = [int(v) for v in a.decs.split(",")]
     counts = [int(v) for v in a.counts.split(",")]
@@ -85,7 +119,7 @@ def main():
                  else "⛔ CHECK IT"))
 
     print("\n   dec       N    median ms   n")
-    slopes = {}
+    slopes, ses, resids = {}, {}, {}
     for d in decs:
         xs, ys = [], []
         for n in counts:
@@ -97,6 +131,9 @@ def main():
             print("   %3d  %6d      %7.1f   %d" % (d, n, m, len(v)))
         if len(xs) >= 2:
             slopes[d] = fit(xs, ys)
+            sl, _, se, worst = fit_se(xs, ys)
+            ses[d] = (sl, se)
+            resids[d] = worst
         print("")
 
     base = slopes.get(1, (None, None))[0]
@@ -119,6 +156,32 @@ def main():
         if aa + xx:
             print("   ⇒ predicted stretch: " + ", ".join(
                 "dec %d = %.3f" % (d, (aa * d + xx) / (aa + xx)) for d in (2, 3, 4)))
+    if a.interval and 1 in ses and ses[1][0]:
+        # t(0.975) by residual df = len(counts) - 2
+        TT = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 8: 2.306}
+        df = max(1, len(counts) - 2)
+        t = TT.get(df, 1.96)
+        print("\n   ⭐⭐ 95%% CONFIDENCE INTERVAL ON THE STRETCH (from the fit's residuals, "
+              "t=%.3f, %d df)" % (t, df))
+        a1, se1 = ses[1]
+        print("   dec   stretch   95% CI            +/-      worst residual")
+        for d in decs:
+            if d == 1 or d not in ses:
+                continue
+            a2, se2 = ses[d]
+            if not a1 or not a2:
+                continue
+            ratio = a2 / a1
+            rel = ((se1 / a1) ** 2 + (se2 / a2) ** 2) ** 0.5
+            print("   %3d    %.3f    %.3f .. %.3f    +/- %.2f%%   %.1f ms"
+                  % (d, ratio, ratio * (1 - t * rel), ratio * (1 + t * rel), 100 * t * rel,
+                     resids.get(d, 0.0)))
+            print("      ⇒ a dec-%d cell's ELAPSED position is uncertain by %s"
+                  % (d, ", ".join("+/-%.2f cells at %d ms nominal"
+                                  % (x * ratio * t * rel / 5.0, x) for x in (50, 100, 150))))
+        print("   ⚠ Fit uncertainty only. It does NOT cover a systematic that moves every count\n"
+              "     together, and it does NOT transfer to another build (M79/C547: a new binary\n"
+              "     is a new condition).")
     print("\n⛔ Ungraded — an instrument measurement. It moves no cell and claims no region.")
     return 0
 
