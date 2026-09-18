@@ -1385,6 +1385,49 @@ only be caught by the bench.
 
 ---
 
+**M84 — A POWER SIMULATION MUST MODEL EVERY NOISE SOURCE THE RULE IS EXPOSED TO, NOT ONLY THE
+ONE THAT IS EASY TO DRAW. AND WHEN A DESIGN IS UNDERPOWERED, ASK WHICH VARIANCE BINDS BEFORE
+BUYING MORE OF THE WRONG SAMPLE.**
+
+`k34sim.py` drew each cap's cells binomially from a pooled profile. That is one noise source — the
+variation **within** a cap — and drawing it that way quietly asserts that two caps of the same
+condition sample the **same** true profile. ⛔ **This bench does not do that.** `repro.py` already
+measured seed-to-seed rank agreement wandering between **+0.57 and +0.86**, and the residual
+variance between banked same-condition pairs runs **1.1-1.8x binomial** (fitted per-cap SD 5.1
+points on C538's pair, 7.9 on K34a's). K34a's HIT rule requires a region to show in **BOTH** seeds,
+which is precisely the thing that second source attacks — so the simulation was blind in the one
+dimension the rule is most exposed in.
+
+⇒ ⭐⭐⭐ **THE CONSEQUENCE IS NOT A CORRECTION OF A FEW POINTS, IT IS A DIFFERENT REMEDY.** Within-cap
+noise falls as `1/reps`; between-cap noise does not fall with reps **at all**. So at the level
+K34a ran at, its control power **plateaus at 11-16% out to reps 128** — eight times the cost it
+already paid — while the same curve with the second source removed climbs to 55%. ⛔ **Buying more
+reps was buying down the variance that was not binding.** The remedy for a between-cap limit is
+more **caps** and a replication rule stated over k of n seeds, never more reps within two.
+
+⚠ **AND THE CURVE IS NON-MONOTONE, WHICH IS ITS OWN TRAP.** Control power went 40% / 23% / 11% /
+16% at reps 8 / 16 / 24 / 32. A design tuned by trying two reps values and taking the better one
+would have landed on 8 and called it justified. The shape has a cause — the elevation threshold is
+the cap's **own** ladder median plus a fixed 25 points, so where the real structure does not clear
+that margin the hits are supplied by noise and extra reps *remove* them — which is also the warning
+that **a threshold defined relative to the sample's own centre is not a level-invariant rule.**
+
+⇒ ⭐⭐ **THE GENERAL FORM, AND IT IS CHEAP TO OBEY: before a band is costed, sweep its power
+against the quantity it is actually sensitive to and confirm that quantity is the one being
+gated.** K34a gated on **pooled level** because that is what the round had been quoting. Over the
+range where D1's power runs 0.8% → 91.2%, the pooled level moves **32.9% → 38.0%** — nearly
+blind — while the largest region elevation moves **+40.6 → +75 points**. ⇒ **the round had been
+watching a statistic that barely responds to the thing it was deciding.** ⛔ That does not retract
+what the pooled level was used for elsewhere (C550's exoneration of `--reps` is carried by its
+agreement marker, and both its markers agreed); it says the pooled level is the wrong **gate**.
+
+⚠ **Read it beside M83, which is the half of this lesson that was already learned.** M83 says a
+power figure belongs to the level it was grounded in. M84 says it also belongs to the **noise
+model** it was drawn under, and that the second one decides what you should buy with the next
+capture.
+
+---
+
 **M83 — A POWER SIMULATION GROUNDED IN BANKED DATA IS ONLY VALID WHILE THAT DATA'S LEVEL
 HOLDS. GROUNDING IT IN REAL MEASUREMENTS MAKES IT HONEST, NOT TIMELESS.**
 
