@@ -1542,6 +1542,123 @@ def _k34_burst(cap_arm):
     return b.get("frames"), b.get("declared")
 
 
+# ⭐⭐ CALIBRATED ON THE STATISTIC THIS SCORER ACTUALLY COMPUTES, WHICH IS NOT THE ONE C552's
+# +60 CAME FROM. C552 derived +60 from the POOLED profile's contrast; this gate reads a PER-CAP
+# maximum at reps 8, and a per-cap max is upward-biased by exactly the sampling noise pooling
+# removes. Re-simulated on the right statistic (banked K34a caps, fitted cap-sigma, 800 draws):
+#
+#   gain   D1 power @reps16   P(gate >= +56)   >= +62   >= +68   >= +75
+#   1.00        0.8%               57%           48%       6%       3%
+#   1.25       14.0%               89%           79%      25%      14%
+#   1.50       39.5%               98%           94%      60%      41%
+#   2.00       77.2%              100%          100%      92%      69%
+#
+# ⛔ +60 would have passed a condition whose D1 power is 0.8% about HALF the time — it was
+# calibrated on pooled profiles and is simply the wrong number here. **+68 gives 6% false-pass
+# at the useless level and 92% pass where K34a would actually work**, which is the gate wanted.
+# ⚠ The statistic is coarse at reps 8 (rates quantise to 1/8 and it saturates at +75), so do not
+# read fine differences in it; reps 16 sharpens it (4% / 100% at +62) at double the cost, and
+# was not taken because 6%/92% is already adequate.
+# ⭐ Fixed BEFORE any gate cap existed, from banked caps and simulation only (M55).
+GATE_MIN_ELEV = 68.0
+
+
+def k34gate(paths):
+    """⭐⭐⭐⭐ THE FEASIBILITY GATE FOR K34a's RE-RUN (C552/M84). ⛔ NOT A BAND.
+
+    K34a's control failed because the bench was at a level its floor could not clear, and
+    re-grounding `k34sim.py` in the day's own caps says so in advance: the floor is met 100% of
+    the time at C538's level and 20.8-30.9% at K34a's, and ⛔ **more reps makes it worse and
+    plateaus at 11-16% out to reps 128** — the binding variance is BETWEEN caps and reps cannot
+    touch it. So the re-run must not be spent blind.
+
+    ⭐⭐ THE STATISTIC IS PEAK ELEVATION, NOT POOLED LEVEL, AND THAT IS THE WHOLE POINT. Across
+    the contrast range where D1's power runs 0.8% -> 91.2%, the pooled level moves only
+    32.9% -> 38.0% while the largest region elevation moves +40.6 -> +75 points. ⇒ the pooled
+    level is nearly blind to the thing that decides the band.
+
+    ⇒ **max, over both arms and all five K29 regions, of (the region's best cell − that arm's
+    own ladder median), required in BOTH caps.** ⛔ Both, not pooled and not the better one: one
+    cap reaching it is exactly the single-seed evidence K29's two-seed rule exists to refuse.
+
+    ⚠ PASS licenses spending the flash and K34a's four caps THAT SESSION, with the thresholds
+    re-derived by `k34sim.py --from` these two caps. It does **not** predict K34a's verdict, it
+    fires nothing, it moves no cell, and a FAIL is an honest *the bench is not at a level that
+    can answer this* — not a result about the burst."""
+    runs = []
+    for p in paths:
+        try:
+            runs.append((os.path.basename(p).replace(".json", ""), json.load(open(p))))
+        except Exception as exc:
+            print("   ⛔ %s unreadable: %s" % (os.path.basename(p), exc))
+            return
+    print("## K34a's re-run — the FEASIBILITY GATE (C552/M84). ⛔ Not a band; it fires nothing.")
+    print("   statistic: max over `%s` x 5 regions of (region peak − that arm's ladder median)"
+          % "`, `".join(K34_ARMS))
+    print("   PASS needs >= +%.0f points in BOTH caps. ⛔ Both, not pooled, not the better one."
+          % GATE_MIN_ELEV)
+    print("   calibrated on THIS statistic at reps 8: 6% pass where D1's power is 0.8%, 92% "
+          "where it is 77%.\n")
+    if len(runs) != 2:
+        print("   ⛔ the gate needs exactly two caps (two fresh seeds) — %d supplied\n" % len(runs))
+        return
+
+    per_cap = []
+    for name, d in runs:
+        best = None
+        for arm in K34_ARMS:
+            if arm not in d:
+                print("   ⛔ %s is missing `%s`\n" % (name, arm))
+                return
+            c = d[arm]
+            plan = c.get("_plan") or {}
+            if not plan.get("per_arm_shuffle"):
+                print("   ⛔ %s/%s was captured without --per-arm-shuffle (M69)\n" % (name, arm))
+                return
+            cells = numeric_cells(c)
+            if [k for k in K34_LADDER if k in cells] != K34_LADDER:
+                print("   ⛔ %s/%s is not the common 38-cell 10-195 ladder\n" % (name, arm))
+                return
+            frames, declared = _k34_burst(c)
+            if frames is None:
+                print("   ⛔ %s/%s carries no device-measured frames-per-burst — a build label "
+                      "is not evidence (C461)\n" % (name, arm))
+                return
+            ok, line = _gate(name, c, K34_LADDER)
+            print("   gate %-7s %s" % (arm, line.strip()))
+            rates = {}
+            for k in K34_LADDER:
+                h, n = cell_rate(c[k]["scores"])
+                rates[k] = 100.0 * h / n if n else 0.0
+            v = sorted(rates.values())
+            med = 0.5 * (v[len(v) // 2 - 1] + v[len(v) // 2])
+            for lbl, lo, hi in K34_REGIONS:
+                span = [k for k in K34_LADDER if int(lo) <= int(k) <= int(hi)]
+                elev = max(rates[k] for k in span) - med
+                if best is None or elev > best[0]:
+                    best = (elev, arm, lbl, med, frames)
+            print("      %-7s median %5.1f%%   %s" % (
+                arm, med, "  ".join(
+                    "%s %+5.1f" % (lbl, max(rates[k] for k in K34_LADDER
+                                            if int(lo) <= int(k) <= int(hi)) - med)
+                    for lbl, lo, hi in K34_REGIONS)))
+        per_cap.append((name, best))
+        print("   ⇒ %-22s peak elevation **%+.1f** points (%s %s, median %.1f%%, %d frames)\n"
+              % (name, best[0], best[1], best[2], best[3], best[4]))
+
+    lowest = min(b[0] for _, b in per_cap)
+    if lowest >= GATE_MIN_ELEV:
+        print("   ✅ **PASS** — both caps reach +%.0f (weakest %+.1f). K34a's flash and its four "
+              "caps are\n      licensed THIS session; re-derive the thresholds with "
+              "`k34sim.py --from` these two caps\n      (M80/M83), keep the ABBA order, and "
+              "⛔ do not inherit C538's numbers.\n" % (GATE_MIN_ELEV, lowest))
+    else:
+        print("   ⛔ **REFUSE** — weakest cap is %+.1f against +%.0f. **Do not flash and do not "
+              "capture.**\n      The bench is not at a level that can answer K34a; that is a "
+              "statement about the\n      bench today, ⛔ NOT a result about the burst. Say so "
+              "and stop.\n" % (lowest, GATE_MIN_ELEV))
+
+
 def k34(paths):
     """D1/D2/D3 — does LENGTHENING THE BURST move the lead-time regions?
 
@@ -1934,6 +2051,9 @@ def main():
                     help="⭐ K32: two dec-2 caps on the 2.5 ms 15-cell ladder")
     ap.add_argument("--k30", nargs="+", metavar="CAP",
                     help="⭐ K30: two dec-2 caps on the targeted 17-cell ladder")
+    ap.add_argument("--gate", nargs="+", metavar="CAP",
+                    help="⭐ C552: K34a's re-run FEASIBILITY GATE — two caps, peak region "
+                         "elevation, PASS licenses the flash. ⛔ Not a band.")
     ap.add_argument("--k34", nargs="+", metavar="CAP",
                     help="⭐ K34a: four caps — two seeds at burst 500 and two at burst 1000, "
                          "sorted into conditions by the frames-per-burst the DEVICE reported")
@@ -1957,6 +2077,8 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.gate:
+        k34gate(a.gate)
     if a.k34:
         k34(a.k34)
         return 0
