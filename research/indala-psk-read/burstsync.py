@@ -1869,6 +1869,95 @@ VERDICT. ⛔ It is not a band and may not be upgraded into one.
 
 ⛔ Ungraded, and UNRUN — a design. No null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐⭐ K36 — K34a's QUESTION, ASKED WITH A LEVEL-INVARIANT STATISTIC (pinned 2026-09-17, UNRUN)
+
+⛔⛔ **THIS COSTS NO NEW BENCH TIME AND NO FLASH. It rescores the SAME four caps K34a already
+defines** — two seeds at burst 500 and two at burst 1000. It is a different instrument on the
+same design, not a new capture.
+
+### Why it exists
+
+C553: with the thresholds re-derived on the day's own level (M80/M83), **D1's power is 28.6%** and
+NO VERDICT at 40.1% is the single most likely outcome even when the truth is SAME. D1 is not
+broken — its false-fire is still 0.0% — it is **unpowered**, and C552 showed why in general: every
+threshold in the K29 family is anchored to *the cap's own ladder median plus a fixed 25 points*,
+and whether real structure clears that margin depends on a level this bench does not hold still.
+
+⇒ ⭐⭐⭐ **SO STOP THRESHOLDING. Compare the two conditions' AGREEMENT against the agreement two
+seeds of ONE condition already show** — a reference measured inside the same run, which rises and
+falls with the level exactly as the thing it normalises does.
+
+### The statistic
+
+For each arm, Spearman-rank the 38-cell profiles:
+
+    within  = mean( r(A1,A2), r(B1,B2) )          the two seeds of each condition
+    cross   = mean( r(Ai,Bj) ) over all four      every burst-500 seed against every burst-1000 one
+    delta   = cross − within                      pooled over both arms
+
+**`delta >= -0.15` ⇒ SAME** — the two bursts agree with each other as well as two seeds of one
+burst do, which is all *the regions did not move* can mean. ⛔ Anything below is NOT-SAME.
+
+### Operating characteristics, simulated BEFORE any scoring (M70/M75), reps 16, 400 draws
+
+Grounded in `caps/gate1_s389` + `gate2_s397` — **the day's own level** (M83), fitted cap-sigma 0.035.
+
+| truth | fires SAME | mean delta |
+|---|---|---|
+| **A SAME** | ⭐ **100.0%** | −0.000 |
+| B SCALED | **0.0%** | −0.721 |
+| C SHIFT | **0.0%** | −1.156 |
+| D FLAT | **0.2%** | −0.403 |
+
+⭐⭐ **AND THE CONFOUND THAT WOULD BREAK A NAIVE CROSS-CONDITION COMPARISON IS MEASURED, NOT
+WAVED AT.** A flash, a power cycle and a session boundary sit between the two conditions and
+C550 made the session a known confound — so extra per-cap noise was injected into the burst-1000
+condition ONLY, which is the shape that nuisance has:
+
+| extra cap-sigma on burst 1000 | fires SAME | mean delta |
+|---|---|---|
+| 0.05 | 100.0% | −0.001 |
+| 0.10 | 100.0% | −0.003 |
+| 0.15 | 100.0% | −0.010 |
+
+⇒ **it is nearly immune, and the reason is structural rather than lucky: added noise depresses
+that condition's WITHIN agreement and the CROSS agreement together, so the difference survives.**
+That self-normalising property is the whole design, and it is why this is not just D1 with a
+different bar.
+
+### ⛔ What it does NOT do
+
+- ⛔ **It does not characterise.** B, C and D all land far below the bar and it cannot tell them
+  apart. That is unchanged from K34a, which was always *powered to license, not to characterise*.
+  ⇒ a NOT-SAME result means **the regions are not where they were**, never *they scaled* or
+  *they were abolished*.
+- ⛔ **It licenses K34b on a SAME and nothing else**, exactly as D1 did.
+- ⚠ **A change in the profile's SHAPE registers as NOT-SAME even if a human would call the regions
+  unmoved.** That is intended — a shape change is a change — but say it that way.
+- ⚠ The simulation generates both conditions from one measured profile, so under truth A `cross`
+  and `within` are identically distributed **by construction**. The nuisance rows above are what
+  break that symmetry deliberately; they do not make the −0.15 bar an empirical null.
+
+### ⛔⛔ THE FOREKNOWLEDGE, DISCLOSED BEFORE ANYTHING IS SCORED, AND IT DECIDES WHAT A VERDICT BUYS
+
+This was designed **after** K34a's region hits were known: **burst 500 hit 0 regions and burst 1000
+hit 4** (`keri` R2/R3/R4, `idteck` R4). That is knowledge of the banked caps, and it points
+**toward NOT-SAME**. ⇒ by this file's standing direction rule (the same argument that licensed
+`--notch20` off banked caps):
+
+- ⭐ **A `SAME` verdict on the banked K34a caps runs AGAINST the foreknowledge and is honestly
+  carried.**
+- ⛔ **A `NOT-SAME` verdict agrees with it and is NOT** — it must be reported as *consistent with
+  what was already visible* and may not be quoted as a fresh result, and ⛔ **it may not license
+  retiring the reader-or-field branch**, which is what a genuine *the regions moved* finding would
+  do. That needs fresh caps.
+
+⚠ And note what the statistic is NOT confounded by, which is why it is worth running on the banked
+four at all: K34a's **0-vs-4 hit difference was confounded with the level** (C549 — seed agreement
+was lower at burst 500 that day), and `delta` normalises exactly that away.
+
+⛔ Ungraded, and UNRUN — a design. No null sweep, no calibration row, no licence. It moves no cell.
+
 ## ⭐⭐⭐⭐ K35 — DID THE LEVEL STEP FOLLOW THE CLOCK OR `--reps`? (pinned 2026-09-17, UNRUN)
 
 C549/L541: the pooled level steps down between the morning block (**36.5-43.1%**, all `--reps 8`,
