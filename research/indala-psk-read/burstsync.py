@@ -1869,6 +1869,53 @@ VERDICT. ⛔ It is not a band and may not be upgraded into one.
 
 ⛔ Ungraded, and UNRUN — a design. No null sweep, no calibration row, no licence. It moves no cell.
 
+## ⭐⭐⭐⭐ K35 — DID THE LEVEL STEP FOLLOW THE CLOCK OR `--reps`? (pinned 2026-09-17, UNRUN)
+
+C549/L541: the pooled level steps down between the morning block (**36.5-43.1%**, all `--reps 8`,
+07:07-10:08) and the afternoon block (`keri` **32.6-35.4%**, `idteck` **22.0-33.2%**, all
+`--reps 16`, 14:45-17:31), and **recovers within the afternoon** — so it is a step between
+blocks, not drift through a session. ⛔⛔ **And the banked caps cannot say which, because REPS
+AND TIME-OF-DAY ARE PERFECTLY CONFOUNDED across them: no cap in `caps/` is reps 8 in the
+afternoon or reps 16 in the morning.** That is why this needs a measurement and not another plot.
+
+⚠ **It matters beyond bookkeeping**: if the step follows the CLOCK, then every band on this line
+needs counterbalancing against time — K34a's ABBA already had it, and the earlier A-then-B bands
+did not. If it follows `--reps`, then K34a's own reps choice is implicated and its re-run changes.
+
+**THE RUN.** `keri` alone, the C538 common **38-cell 10-195 ms** ladder, dec 1, **`--reps 8`**,
+`--per-arm-shuffle`, **two fresh seeds**, burst 500 (the standing build — ⛔ **no flash**, no
+bench move, ~60 min). ⭐ It is a deliberate replication of a MORNING configuration, changing only
+when it runs.
+
+**THE REFERENCES, taken from the banked caps and not from a write-up (M76):** morning `keri` pooled
+**40.5, 38.2, 42.1, 41.8%** (mean **40.6**) with seed agreement **+0.827** (k28) and **+0.784**
+(k29); afternoon `keri` pooled **32.6, 33.4, 32.4, 35.4%** (mean **33.5**) with agreement
+**+0.573** and **+0.693**. Midpoint of the two levels: **37.0%**.
+
+| band | fires when | reads as |
+|---|---|---|
+| **E1 CLOCK** | pooled **>= 37.0%** AND seed agreement **>= +0.75** | reps 8 at a non-morning hour reproduced the MORNING condition ⇒ the step is not `--reps` |
+| **E2 REPS** | pooled **<= 37.0%** AND agreement **<= +0.70** | reps 8 reproduced the AFTERNOON condition ⇒ `--reps` is not the lever either, and the step follows the clock or the session |
+| **NO VERDICT** | the two markers disagree | ⭐ **stated in advance (M74): level and agreement are not moving together**, which refutes the single-cause framing both bands assume. ⛔ Not a failed band — it is the answer that the two markers are separable, and the next design must treat them separately |
+
+⚠⚠ **THE ASYMMETRY, AND IT DECIDES WHEN THIS MAY BE RUN.** Read E2's wording carefully: it is
+NOT *reps caused the step*.
+- ⭐ **Run at ANY hour, an E1 fire is decisive**: reps 8 away from the morning giving morning
+  numbers rules `--reps` out.
+- ⛔ **An E2 fire is only decisive if the cap is taken INSIDE the morning window (~07:00-10:00).**
+  Outside it, E2 is consistent with *the clock did it* AND with *reps did it*, and says only that
+  reps 8 is not sufficient to restore the morning condition. ⇒ **Prefer a morning tick. If the
+  tick fires outside that window, run it anyway — E1 is still decisive — but record the hour in
+  the same string as the verdict (M73) and ⛔ do not report an out-of-window E2 as a cause.**
+
+⚠ **What one cap-pair cannot do**: separate *time of day* from *session boundary* (a cold start,
+a fresh USB enumeration, a power cycle). They are different hypotheses and this run confounds
+them by construction — say so rather than implying otherwise. ⭐ A morning run that FIRES E1
+makes that the next question, and it is a cheap one.
+
+⛔ **Gates unchanged** — the three K17+ gates on every cap, and a cap failing any of them is not
+scored. ⛔ Ungraded, and UNRUN: no null sweep, no calibration row, no licence. It moves no cell.
+
 ⛔⛔ UNGRADED — no null sweep, no calibration row, no licence. It moves no cell.
 """
 import argparse
