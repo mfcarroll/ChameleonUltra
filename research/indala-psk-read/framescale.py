@@ -1563,6 +1563,127 @@ def _k34_burst(cap_arm):
 GATE_MIN_ELEV = 68.0
 
 
+K36_THR = -0.15       # SAME when the two bursts agree as well as two seeds of one burst do
+
+
+def k36(paths):
+    """⭐⭐⭐⭐⭐ K34a's QUESTION, ASKED WITH A LEVEL-INVARIANT STATISTIC. Design: `burstsync.py` K36.
+
+    ⛔ **This costs NO new bench time and no flash — it rescores the SAME four caps K34a
+    defines.** C553 left D1 at **28.6%** power once its thresholds were re-derived on the day's
+    own level, with NO VERDICT the most likely outcome even under a SAME truth. D1 is not broken
+    (false-fire still 0.0%); it is **unpowered**, because every threshold in the K29 family is
+    anchored to *the cap's own median plus a fixed 25 points* and whether real structure clears
+    that margin depends on a level this bench does not hold still (C552/M84).
+
+    ⇒ **So stop thresholding.** Compare the two conditions' agreement against the agreement two
+    seeds of ONE condition already show — a reference measured inside the same run, which rises
+    and falls with the level exactly as the thing it normalises does:
+
+        within = mean( r(A1,A2), r(B1,B2) )     cross = mean r(Ai,Bj) over all four
+        delta  = cross − within,  pooled over both arms;  delta >= -0.15 is SAME
+
+    Simulated before any scoring (M70/M75), grounded in the day's own gate caps, reps 16:
+    **SAME 100.0%, SCALED 0.0%, SHIFT 0.0%, FLAT 0.2%** — and extra per-cap noise injected into
+    the burst-1000 condition alone (the shape a flash, power cycle and session boundary have,
+    which C550 made a known confound) still fires **100% at 0.05, 0.10 and 0.15**, because added
+    noise depresses that condition's WITHIN agreement and the CROSS agreement together.
+
+    ⛔ **It does not characterise**: SCALED, SHIFT and FLAT all land far below the bar and it
+    cannot tell them apart, so a NOT-SAME means *the regions are not where they were* and never
+    *they scaled* or *they were abolished*. It licenses K34b on a SAME and nothing else.
+
+    ⛔⛔ **FOREKNOWLEDGE (disclosed in the K36 section and repeated by the scorer itself): this
+    was designed AFTER K34a's hits were known — 0 regions at burst 500 against 4 at burst 1000 —
+    which points toward NOT-SAME.** ⇒ a **SAME** verdict on the banked caps runs against the
+    foreknowledge and is honestly carried; a **NOT-SAME** verdict agrees with it, is not, and
+    ⛔ may not license retiring the reader-or-field branch. That needs fresh caps."""
+    runs = []
+    for p in paths:
+        try:
+            runs.append((os.path.basename(p).replace(".json", ""), json.load(open(p))))
+        except Exception as exc:
+            print("   ⛔ %s unreadable: %s" % (os.path.basename(p), exc))
+            return
+    print("## K36 — do the two bursts agree as well as two SEEDS of one burst do?")
+    print("   delta = cross − within, pooled over `%s`. SAME when delta >= %.2f."
+          % ("`, `".join(K34_ARMS), K36_THR))
+    print("   power: SAME 100.0%, SCALED 0.0%, SHIFT 0.0%, FLAT 0.2% (reps 16, the day's level)")
+    print("   ⛔ Does NOT characterise: a NOT-SAME says the regions are not where they were, and")
+    print("      never HOW they moved. Only a SAME licenses K34b.")
+    print("   ⛔⛔ FOREKNOWLEDGE: designed after K34a's 0-vs-4 hits were known, which points at")
+    print("      NOT-SAME ⇒ a SAME here is honestly carried; a NOT-SAME is *consistent with what")
+    print("      was already visible* and licenses nothing.\n")
+
+    if len(runs) != 4:
+        print("   ⛔ K36 needs exactly four caps (two seeds x two bursts) — %d supplied\n"
+              % len(runs))
+        return
+    groups = {}
+    for name, d in runs:
+        arm0 = next((a for a in K34_ARMS if a in d), None)
+        if arm0 is None:
+            print("   ⛔ %s carries neither arm\n" % name)
+            return
+        frames, declared = _k34_burst(d[arm0])
+        if frames is None:
+            print("   ⛔ %s carries no device-measured frames-per-burst — a build label is not\n"
+                  "      evidence (C461)\n" % name)
+            return
+        groups.setdefault(frames, []).append((name, d, declared))
+    if len(groups) != 2 or sorted(len(v) for v in groups.values()) != [2, 2]:
+        print("   ⛔ the four caps must be two-and-two by MEASURED frames per burst; got %s\n"
+              % ", ".join("%d frames x%d" % (k, len(v)) for k, v in sorted(groups.items())))
+        return
+    lo, hi = sorted(groups)
+    print("   conditions: **%d frames** vs **%d frames** — the device's own answer\n" % (lo, hi))
+
+    withins, crosses = [], []
+    for arm in K34_ARMS:
+        profs = {}
+        for cond in (lo, hi):
+            got = []
+            for name, d, _ in groups[cond]:
+                if arm not in d:
+                    print("   ⛔ %s is missing `%s`\n" % (name, arm))
+                    return
+                c = d[arm]
+                plan = c.get("_plan") or {}
+                if not plan.get("per_arm_shuffle"):
+                    print("   ⛔ %s/%s was captured without --per-arm-shuffle (M69)\n"
+                          % (name, arm))
+                    return
+                cells = numeric_cells(c)
+                if [k for k in K34_LADDER if k in cells] != K34_LADDER:
+                    print("   ⛔ %s/%s is not the common 38-cell 10-195 ladder\n" % (name, arm))
+                    return
+                ok, line = _gate(name, c, K34_LADDER)
+                print("   gate %-7s %s" % (arm, line.strip()))
+                got.append(_profile(c, K34_LADDER))
+            profs[cond] = got
+        w = [_spearman(*profs[lo]), _spearman(*profs[hi])]
+        x = [_spearman(a, b) for a in profs[lo] for b in profs[hi]]
+        withins += w
+        crosses += x
+        print("      %-7s within %+.3f / %+.3f (mean %+.3f)   cross mean %+.3f   delta %+.3f"
+              % (arm, w[0], w[1], sum(w) / 2, sum(x) / len(x), sum(x) / len(x) - sum(w) / 2))
+
+    within = sum(withins) / len(withins)
+    cross = sum(crosses) / len(crosses)
+    delta = cross - within
+    print("\n   pooled: within %+.3f   cross %+.3f   **delta %+.3f**" % (within, cross, delta))
+    if delta >= K36_THR:
+        print("   ✅ **SAME** — the two bursts agree as well as two seeds of one do ⇒ the burst\n"
+              "      length is a REACH knob. ⭐ This runs AGAINST the foreknowledge and is\n"
+              "      honestly carried. It licenses K34b.\n")
+    else:
+        print("   ⛔ **NOT-SAME** (delta %+.3f < %.2f) — the regions are not where they were.\n"
+              "      ⛔ It does NOT say how they moved, and it AGREES with the foreknowledge, so\n"
+              "      report it as *consistent with what was already visible* and ⛔ do NOT let it\n"
+              "      retire the reader-or-field branch — that needs fresh caps. K34b stays\n"
+              "      unlicensed either way.\n" % (delta, K36_THR))
+
+
 def k34gate(paths):
     """⭐⭐⭐⭐ THE FEASIBILITY GATE FOR K34a's RE-RUN (C552/M84). ⛔ NOT A BAND.
 
@@ -2051,6 +2172,9 @@ def main():
                     help="⭐ K32: two dec-2 caps on the 2.5 ms 15-cell ladder")
     ap.add_argument("--k30", nargs="+", metavar="CAP",
                     help="⭐ K30: two dec-2 caps on the targeted 17-cell ladder")
+    ap.add_argument("--k36", nargs="+", metavar="CAP",
+                    help="⭐ C553/K36: K34a's four caps rescored with a LEVEL-INVARIANT "
+                         "statistic (cross-vs-within agreement). No new bench time.")
     ap.add_argument("--gate", nargs="+", metavar="CAP",
                     help="⭐ C552: K34a's re-run FEASIBILITY GATE — two caps, peak region "
                          "elevation, PASS licenses the flash. ⛔ Not a band.")
@@ -2077,6 +2201,8 @@ def main():
     ap.add_argument("--k20", nargs="+", metavar="CAP",
                     help="⭐ score K20's X1/X2 — `indala`'s NOTCHES, the inverse detector (M68)")
     a = ap.parse_args()
+    if a.k36:
+        k36(a.k36)
     if a.gate:
         k34gate(a.gate)
     if a.k34:
