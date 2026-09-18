@@ -1385,6 +1385,35 @@ only be caught by the bench.
 
 ---
 
+**M83 — A POWER SIMULATION GROUNDED IN BANKED DATA IS ONLY VALID WHILE THAT DATA'S LEVEL
+HOLDS. GROUNDING IT IN REAL MEASUREMENTS MAKES IT HONEST, NOT TIMELESS.**
+
+`k34sim.py` was the right thing to build and M70/M75 required it: K34a cost a firmware flash and
+four caps, and a band that could not tell its truths apart would have spent all of it. It took
+every cell's rate from the two banked C538 caps rather than from a smooth invented curve — the
+bench as it actually behaved — and it put **control-failure at 0.0% over 10,000 draws**.
+
+⛔ **The control then failed.** Not because the simulation was wrong about the rule, but because
+it was right about the WRONG CONDITION: today's pooled levels were **22.0-35.4%** against C538's
+**38.5-43.1%**, measured one day apart on an unmoved bench. **C497 is the standing measurement that
+this level wanders — the same arm gave 88%, 60%, 38% and 75% in one evening** — so a profile
+borrowed across days is a borrowed *shape AND level*, and only the shape was ever the point.
+
+⇒ **The rule has two halves, and the second is the one that saved this run:**
+1. ⭐ **Say which condition a simulated figure was grounded in, in the same string as the figure**
+   (M73's discipline applied to simulations, not just to rates). *93.6% power* is not a property of
+   the band; it is a property of the band **at C538's levels**.
+2. ⭐⭐ **Give the design a floor that fails when the grounding assumption fails.** K34a's
+   `|H500| >= 3` was written as routine hygiene — *a control that finds too little structure cannot
+   judge whether it moved* — and it is what turned a level shift into an honest **NO VERDICT**
+   instead of a burst effect read off **0 hits against 4**, which is the shape the raw numbers had.
+
+⚠ **Read it beside M82, which is the same error with the opposite outcome.** There, an unmeasured
+assumption at the top of a budget would have fired a pre-registered, clean and **wrong** verdict with
+nothing downstream able to catch it. Here the same class of error — a quantity assumed rather than
+re-measured in the condition the band actually ran in — was caught by a guard that cost one line.
+⇒ **Every band that leans on a borrowed number needs the guard that notices the number moved.**
+
 **M82 — WHEN A DESIGN BUYS ITS DISCRIMINATING POWER AT THE TOP OF A BUDGET, MEASURE THE BUDGET
 FIRST. A COMPUTED CEILING THAT HAS ALREADY BEEN CAUGHT OPTIMISTIC ONCE IS NOT A CEILING.**
 
