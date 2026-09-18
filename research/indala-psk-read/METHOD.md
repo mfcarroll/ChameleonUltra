@@ -1385,6 +1385,37 @@ only be caught by the bench.
 
 ---
 
+**M85 — GATE ON THE QUANTITY THAT DECIDES THE VERDICT, NOT ON THE ONE THE LAST RUN DIED OF.
+AND IF THAT QUANTITY IS COMPUTABLE FROM THE GATE'S OWN DATA, THE GATE HAS NO BUSINESS BEING A
+PROXY FOR IT.**
+
+K34a died on its CONTROL, so the gate C552 built was aimed at the control: a peak-elevation
+statistic, calibrated until it separated a bench that could clear `|H500| >= 3` from one that
+could not. It worked — the gate passed at the top of its range, and the control went from 20.8%
+to **78.4%**. ⛔ **And the run was still refused, because D1's power was 28.6%.** Fixing the last
+failure fixed the last failure, and nothing else.
+
+⇒ ⭐⭐⭐ **THE PROXY WAS NEVER NECESSARY, WHICH IS THE PART THAT STINGS.** D1's power is a
+*computable function of the gate's own two caps* — `k34sim.py --from` them prints it. A statistic
+was invented, calibrated against a simulated contrast sweep, argued about, corrected once from +60
+to +68 for being calibrated on the wrong shape, and all of it stood in for a number that was one
+command away from being read directly. ⇒ **before building a proxy, ask whether the thing itself
+is already reachable from the same data.**
+
+⚠ **AND THE SECOND HALF, WHICH IS ABOUT BANDS AND NOT GATES: A THRESHOLD WRITTEN AS A FRACTION OF
+A MEASURED QUANTITY GETS HARDER WHEN THAT QUANTITY SHRINKS, SILENTLY.** D1 asks for
+`keep >= 0.75 x |H500|`. At the level it was designed on, `|H500|` was 8-9 and keeping 75% meant
+keeping 6 or 7 of them, with slack. At today's level `|H500|` is 3-5, so it means keeping **3 of 4
+exactly** and one region failing to replicate ends it. **Nobody changed the band; the bench changed
+underneath it and made it stricter.** ⇒ a fraction-of-a-measurement threshold must be re-costed
+whenever the measurement moves, exactly as M83 requires of a power figure.
+
+⭐ **The cost of getting this right was two cheap caps and no flash**, which is the whole argument
+for gating at all — and the two caps are not wasted, because the corrected gate reads its answer
+out of those same caps. ⛔ What would have been wasted is the flash and four caps the PASS licensed.
+
+---
+
 **M84 — A POWER SIMULATION MUST MODEL EVERY NOISE SOURCE THE RULE IS EXPOSED TO, NOT ONLY THE
 ONE THAT IS EASY TO DRAW. AND WHEN A DESIGN IS UNDERPOWERED, ASK WHICH VARIANCE BINDS BEFORE
 BUYING MORE OF THE WRONG SAMPLE.**
