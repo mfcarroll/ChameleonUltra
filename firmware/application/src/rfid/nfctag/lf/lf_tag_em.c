@@ -72,7 +72,7 @@ NRF_LOG_MODULE_REGISTER();
  * ⭐ The real fix is to stop needing bursts at all — detect field loss by counting carrier
  * edges, the way the Proxmark and Flipper both stay locked to the reader's clock while
  * emulating. See NEXT.md §4. */
-#define LF_TAG_BURST_TARGET_MS   (1000)
+#define LF_TAG_BURST_TARGET_MS   (500)
 #define LF_TAG_BURST_MIN_FRAMES  (2)
 #define LF_TAG_BURST_MAX_FRAMES  (255)
 
