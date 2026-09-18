@@ -295,7 +295,10 @@ def main():
     ap.add_argument("--k-elapsed", type=int, help="override the ELAPSED window's threshold")
     ap.add_argument("--k-samples", type=int, help="override the SAMPLES window's threshold")
     ap.add_argument("--equalise", action="store_true",
-                    help="raise the wide window's threshold until its false-fire matches")
+                    help="⛔ raise the wide window's threshold until its false-fire matches — "
+                         "BOUNDED BY THE REGION'S MEDIAN OCCUPANCY, because past that the band "
+                         "is noise-assisted (C557) and equalising it would re-create the very "
+                         "fault this tool exists to catch. It reports when it cannot reach.")
     ap.add_argument("--seed", type=int, default=20260917)
     a = ap.parse_args()
 
@@ -356,11 +359,19 @@ def main():
             ks = {"ELAPSED": ke, "SAMPLES": kss}
             flat = run(g, cells, wins, reps, a.draws, ks, g["region_rate"], rng, "FLAT")
             if a.equalise:
-                while flat["ELAPSED"] + flat["BOTH"] > flat["SAMPLES"] + flat["BOTH"] + 0.01 \
-                        and ks["ELAPSED"] < max(occ):
+                # ⛔⛔ THE BOUND IS THE MEDIAN OCCUPANCY, NOT THE MAXIMUM. Raising k_E past what
+                # the region typically supplies buys a matched false-fire by making the band
+                # noise-assisted — C557's fault 2, re-created by the knob meant to improve it.
+                while flat["ELAPSED"] > flat["SAMPLES"] + 0.01 and ks["ELAPSED"] < occ_med:
                     ks["ELAPSED"] += 1
                     rng = random.Random(a.seed)
                     flat = run(g, cells, wins, reps, a.draws, ks, g["region_rate"], rng, "FLAT")
+                if flat["ELAPSED"] > flat["SAMPLES"] + 0.01:
+                    print("  ⛔ cannot equalise: k_E is at the region's median occupancy (%d) "
+                          "and E still false-fires %.1f%% against S's %.1f%%. The asymmetry is "
+                          "STRUCTURAL — E's window is wide because we are ignorant of S — so "
+                          "report it, do not threshold it away." % (
+                              ks["ELAPSED"], 100 * flat["ELAPSED"], 100 * flat["SAMPLES"]))
             for rr in a.region_rate:
                 rng = random.Random(a.seed + 1)
                 pe = run(g, cells, wins, reps, a.draws, ks, rr, rng, "ELAPSED")
