@@ -1212,7 +1212,7 @@ were re-found.
 | **3038 `LF_RADIO_DEBUG`** (`hw lfdebug`) | `data_cmd.h:259`, handler `app_cmd.c:771`, dispatch row `app_cmd.c:3969` | `chameleon_enum.py:205`, `chameleon_cmd.py:794`, `chameleon_cli_unit.py:9348` |
 | **3060 `LF_READER_CAPTURE`** | `data_cmd.h:292`, handler `app_cmd.c:855`, dispatch row `app_cmd.c:3961`, and `lf_reader_capture_probe()` at `lf_indala_data.c:270` / `.h:183` | `chameleon_enum.py:227` and nothing else |
 | **The GProxII failure-energy payload** | `app_cmd.c:1016-1040` — the gated block; `scan_gproxii_energy()` at :1023, the plain sibling `scan_gproxii()` at :1033 | `chameleon_cmd.py:1049-1051` |
-| **the gate itself** | `firmware/application/Makefile:431` — `CFLAGS += -DLF_RESEARCH_CMDS_ENABLED=1`, the single line an upstream PR deletes | — |
+| **the gate itself** | `firmware/application/Makefile` — the single line `CFLAGS += -DLF_RESEARCH_CMDS_ENABLED=1`, which is what an upstream PR deletes. ⭐ **Quote the TEXT, never the line number**: this row said `:431` and the `-D` is at **432** — 431 is its comment — checked 2026-09-17. ⛔ An off-by-one in the one pointer a maintainer would open is the cheapest possible way to look careless about a 48-id patch | ✅ **id claims re-verified against `data_cmd.h` 2026-09-17: 3033-3062 = 30 ids and 5014-5031 = 18, both CONTIGUOUS with no gaps, 48 total; `LF_EMU_DEBUG` 3037, `LF_RADIO_DEBUG` 3038, `LF_READER_CAPTURE` 3060 are exactly the three instrumentation ids named; shippable subset 41.** Every number in the row below held |
 
 ⭐ **Nothing shippable depends on any of them, and that is checked rather than hoped.**
 `lf_reader_capture_probe()` has exactly one caller (`app_cmd.c:866`); the two debug handlers are
