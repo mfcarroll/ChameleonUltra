@@ -66,8 +66,18 @@ everything turns on the region's HEIGHT at dec 2 on the new build, which falls o
 build — 5 ms over 70-150, reps 16, 336 reads — and `--from` reads it directly. ⇒ the sequence is
 **flash · verify from the air (C461) · re-fit S with `dectime.py --interval` (the window is a
 FUNCTION of it) · coarse gate pair · `k34bsim.py --from` · only then the 1 ms pair.** ⛔ Never the
-same caps for the gate and the verdict. ⭐ **The gate's bar: the region's height >= 0.55** (the
-banked burst-500 value is 0.725, so it is the BUILD that is in question, not the bench).
+same caps for the gate and the verdict.
+
+⭐⭐⭐ **THE GATE'S BAR IS THREE NUMBERS, NOT ONE — AND THE THIRD WAS ADDED AFTER EXERCISING
+`--from` (C559): E-power >= 70% AND S-power >= 70% AND E-FALSE-FIRE <= 5%.** The region's height
+>= 0.55 is what the first two come to at the six-cap grounding (the banked burst-500 value is
+0.725, so it is the BUILD in question and not the bench) — but grounding the same design in only
+the `k32` pair moves the baseline 0.188 -> 0.282, its SD 0.115 -> 0.150 and `cap_sigma`
+0.061 -> 0.092, and **E's false-fire goes 2.4% -> 16.7% while its power stays a healthy 88.3%.**
+⇒ ⛔ **a power floor alone would have passed a day on which a fire is worth little** — M70's
+original lesson (Y2: pre-registered, replicated, 41% false-firing with nobody having computed it)
+arriving by a new route. ⚠ The figures above are the SIX-CAP pooled grounding; the level wanders
+(C497/M83), so the day's own caps decide and `--from` is the only route by which they may.
 
 ⭐ NEITHER POINT REOPENS THE DECIMATION LINE (closed twice, C545-C548 and C556). It is the same
 quantity — the stretch's imprecision — biting K34b through the WINDOW rather than through an
@@ -140,9 +150,28 @@ def grounding(arm, caps=None):
 
 
 def _cap_sigma(per_cap):
-    """Per-cap offset SD: the excess over binomial between two caps of one condition."""
+    """Per-cap offset SD: the excess over binomial between two caps of one condition.
+
+    ⛔⛔ THE PAIRING IS OVER WHATEVER CAPS WERE GIVEN, NOT OVER SIX. This read `(0, 2, 4)` —
+    the six banked dec-2 caps' three same-condition pairs — and so it raised IndexError on the
+    two caps the GATE passes, which is the one call that decides whether to spend the capture.
+    ⇒ it would have failed AFTER the flash, mid-sequence, with the bench on a non-standard
+    build. Found by exercising `--from` before the flash rather than during it (M81).
+
+    ⛔ AND IT REFUSES RATHER THAN RETURNING 0 when it cannot estimate. A silent 0 removes the
+    second noise source M84 exists to model, which INFLATES every power figure — the one
+    direction a go/no-go must never be wrong in (M78).
+    """
+    if len(per_cap) < 2:
+        raise SystemExit("cap_sigma needs at least TWO same-condition caps to estimate the "
+                         "per-cap offset (M84); %d given. ⛔ A single cap cannot ground this "
+                         "simulation: returning 0 would inflate every power figure." %
+                         len(per_cap))
+    if len(per_cap) % 2:
+        print("⚠ %d caps given — pairing the leading %d and ignoring the last, since "
+              "cap_sigma is a BETWEEN-PAIR quantity" % (len(per_cap), len(per_cap) - 1))
     acc = []
-    for i in (0, 2, 4):
+    for i in range(0, len(per_cap) - 1, 2):
         r1, r2 = per_cap[i], per_cap[i + 1]
         cells = sorted(set(r1) & set(r2))
         obs = exp = 0.0
