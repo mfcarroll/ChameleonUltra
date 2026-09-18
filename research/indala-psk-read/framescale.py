@@ -1672,10 +1672,20 @@ def k36(paths):
     cross = sum(crosses) / len(crosses)
     delta = cross - within
     print("\n   pooled: within %+.3f   cross %+.3f   **delta %+.3f**" % (within, cross, delta))
+    # ⭐⭐ THE FLAT ALTERNATIVE IS EXCLUDED BY `within`, NOT BY `delta`, AND THE SCORER MUST SAY
+    # SO. Scrambling one condition's profiles on the real caps — structure destroyed, which is the
+    # FLAT truth — still reads SAME 6.5% of the time (200 draws, mean delta -0.298). ⇒ a SAME is
+    # not on its own evidence that the far condition HAS structure. What is: that condition's own
+    # seed-to-seed agreement, which a structure-free condition cannot manufacture.
     if delta >= K36_THR:
         print("   ✅ **SAME** — the two bursts agree as well as two seeds of one do ⇒ the burst\n"
               "      length is a REACH knob. ⭐ This runs AGAINST the foreknowledge and is\n"
-              "      honestly carried. It licenses K34b.\n")
+              "      honestly carried. It licenses K34b.")
+        print("   ⚠ `delta` alone does NOT exclude *structure abolished*: scrambling one\n"
+              "      condition reads SAME 6.5%% of the time. What excludes it is the LONG burst's\n"
+              "      own seed agreement of **%+.3f**, which a structure-free condition cannot\n"
+              "      produce — read the two together, never the delta alone.\n"
+              % (sum(withins[1::2]) / len(withins[1::2])))
     else:
         print("   ⛔ **NOT-SAME** (delta %+.3f < %.2f) — the regions are not where they were.\n"
               "      ⛔ It does NOT say how they moved, and it AGREES with the foreknowledge, so\n"
