@@ -1894,19 +1894,21 @@ when it runs.
 
 | band | fires when | reads as |
 |---|---|---|
-| **E1 CLOCK** | pooled **>= 37.0%** AND seed agreement **>= +0.75** | reps 8 at a non-morning hour reproduced the MORNING condition ⇒ the step is not `--reps` |
-| **E2 REPS** | pooled **<= 37.0%** AND agreement **<= +0.70** | reps 8 reproduced the AFTERNOON condition ⇒ `--reps` is not the lever either, and the step follows the clock or the session |
+| **E1 REPS** | pooled **>= 37.0%** AND seed agreement **>= +0.75** | `--reps 8` restored the MORNING condition at an afternoon/evening hour ⇒ ⭐ **`--reps 16` is the driver**, and K34a's own reps choice is implicated |
+| **E2 CLOCK/SESSION** | pooled **<= 37.0%** AND agreement **<= +0.70** | `--reps 8` did NOT restore it ⇒ **`--reps` is not the driver**; the clock or the session boundary is, and every band on this line needs counterbalancing against time |
 | **NO VERDICT** | the two markers disagree | ⭐ **stated in advance (M74): level and agreement are not moving together**, which refutes the single-cause framing both bands assume. ⛔ Not a failed band — it is the answer that the two markers are separable, and the next design must treat them separately |
 
-⚠⚠ **THE ASYMMETRY, AND IT DECIDES WHEN THIS MAY BE RUN.** Read E2's wording carefully: it is
-NOT *reps caused the step*.
-- ⭐ **Run at ANY hour, an E1 fire is decisive**: reps 8 away from the morning giving morning
-  numbers rules `--reps` out.
-- ⛔ **An E2 fire is only decisive if the cap is taken INSIDE the morning window (~07:00-10:00).**
-  Outside it, E2 is consistent with *the clock did it* AND with *reps did it*, and says only that
-  reps 8 is not sufficient to restore the morning condition. ⇒ **Prefer a morning tick. If the
-  tick fires outside that window, run it anyway — E1 is still decisive — but record the hour in
-  the same string as the verdict (M73) and ⛔ do not report an out-of-window E2 as a cause.**
+⛔⛔⛔ **AND THE TIMING RULE IS THE OPPOSITE OF THE OBVIOUS ONE — THIS RUN MUST *NOT* BE TAKEN
+IN THE MORNING WINDOW.** The first version of this section said to prefer a morning tick and had
+its two branches the wrong way round; **corrected here, before it was ever run.** The reasoning:
+
+> The morning block IS `(reps 8, morning)`. Repeating `reps 8` **inside** the morning window
+> reproduces that cell exactly, and **both hypotheses predict the morning level there** ⇒ an
+> in-window run discriminates nothing at all. The contrast only exists **outside** it.
+
+⭐ **So: run it at an AFTERNOON/EVENING hour, as close to the afternoon block's own 14:45-17:31 as
+the tick allows**, and record the hour in the same string as the verdict (M73). ⛔ A tick firing
+between ~07:00 and ~10:00 should **not** spend an hour on this — it should wait or do other work.
 
 ⚠ **What one cap-pair cannot do**: separate *time of day* from *session boundary* (a cold start,
 a fresh USB enumeration, a power cycle). They are different hypotheses and this run confounds
