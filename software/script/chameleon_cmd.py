@@ -10,8 +10,11 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 6
 
-new_key = b'\x20\x20\x66\x66'
-old_keys = [b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
+# Password for T55xx writes. All zeros leaves the tag without password protection.
+# old_keys lists passwords a tag may already carry, so it can still be rewritten;
+# 20206666 is the password earlier firmware set on every write.
+new_key = b'\x00\x00\x00\x00'
+old_keys = [b'\x20\x20\x66\x66', b'\x51\x24\x36\x48', b'\x19\x92\x04\x27']
 
 
 class ChameleonCMD:

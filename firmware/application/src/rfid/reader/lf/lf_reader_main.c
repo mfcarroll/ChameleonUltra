@@ -131,6 +131,13 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
 static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
     uint32_t passwd = bytes_to_num(new_passwd, 4);
 
+    // Password protection is opt-in: only enable it in block 0 when a non-zero password is given.
+    // The reset below still runs either way, so a tag protected with one of the old passwords is
+    // re-keyed to `passwd` first and accepts the writes that follow, including a block 0 without it.
+    if (passwd != 0 && blk_count > 0) {
+        blks[0] |= T5577_PWD;
+    }
+
     start_lf_125khz_radio();
     bsp_delay_ms(1);  // Delays for a while after starting the field
 
