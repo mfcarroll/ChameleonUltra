@@ -522,6 +522,61 @@ class T55xxPasswordArgsUnit(DeviceRequiredUnit):
                   f"password 20206666. Update the firmware to write without a password.")
         return {"password": password, "current_password": current_password}
 
+    def t55xx_verify_write(self, expected, read_back, show) -> None:
+        """
+        Read the tag back after a T55xx write and report whether it carries what was written.
+        A T55xx never acknowledges a write and the firmware leaves checking to the client, so
+        without this a write blocked by an unknown password still looks like it worked.
+        LF reads can miss or misdecode, so: any read matching is enough to verify, but a
+        failure needs the same other value read twice.
+        """
+        reads = []
+        for _ in range(3):
+            try:
+                got = read_back()
+            except UnexpectedResponseError:
+                continue
+            if got == expected:
+                print(f"{color_string((CG, 'Verified'))}: the tag reads back as written.")
+                return
+            if got in reads:
+                print(f"{color_string((CR, 'Write failed'))}: the tag reads {show(got)}, not {show(expected)}. "
+                      f"If it is password-protected, give its password with --current-password.")
+                return
+            reads.append(got)
+        if reads:
+            print(f"{color_string((CY, 'Not verified'))}: the tag read back as "
+                  f"{', '.join(show(r) for r in reads)}, not {show(expected)}, but not consistently.")
+        else:
+            print(f"{color_string((CY, 'Not verified'))}: the tag could not be read back as this type. "
+                  f"If the write was blocked by a password, give it with --current-password.")
+
+    def t55xx_verify_em410x(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, lambda: self.cmd.em410x_scan()[1], lambda v: v.hex().upper())
+
+    def t55xx_verify_hidprox(self, format: int, fc: int, cn: int, il: int, oem: int):
+        def read_back():
+            _, r_fc, cn_hi, cn_lo, r_il, r_oem = self.cmd.hidprox_scan(format)
+            return (r_fc, (cn_hi << 32) + cn_lo, r_il, r_oem)
+        self.t55xx_verify_write((fc, cn, il, oem), read_back, lambda v: f"FC {v[0]} CN {v[1]}")
+
+    def t55xx_verify_ioprox(self, raw8: bytes):
+        self.t55xx_verify_write(raw8, lambda: self.cmd.ioprox_scan()[3], lambda v: v.hex().upper())
+
+    def t55xx_verify_pac(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.pac_scan,
+                                lambda v: ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in v))
+
+    def t55xx_verify_viking(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.viking_scan, lambda v: v.hex().upper())
+
+    def t55xx_verify_jablotron(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.jablotron_scan, lambda v: v.hex().upper())
+
+    @staticmethod
+    def t55xx_verify_idteck():
+        print(f"{color_string((CY, 'Not verified'))}: this firmware has no IDTECK reader to read the tag back.")
+
 
 class LFEMIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
@@ -5901,6 +5956,7 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUn
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.em410x_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - EM410x ID write done: {id_hex}")
+        self.t55xx_verify_em410x(id_bytes)
 
 
 @lf_hid_prox.command("read")
@@ -5961,6 +6017,7 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequired
             print(f" OEM: {args.oem}")
         print(f" CN: {args.cn}")
         print("write done.")
+        self.t55xx_verify_hidprox(format.value, args.fc, args.cn, args.il, args.oem)
 
 
 @lf_hid_prox.command("econfig")
@@ -6066,6 +6123,7 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequir
         print(f"   ID: {color_string((CY, cn))}")
         print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
         print("Write done.")
+        self.t55xx_verify_ioprox(raw8)
 
 
 @lf_ioprox.command("econfig")
@@ -6290,6 +6348,7 @@ class LFPacWriteT55xx(LFPacIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit
         id_ascii = ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in id_bytes)
         raw = pac_encode_raw(id_bytes)
         print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
+        self.t55xx_verify_pac(id_bytes)
 
 
 @lf_pac.command('econfig')
@@ -6343,6 +6402,7 @@ class LFVikingWriteT55xx(LFVikingIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequir
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.viking_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Viking ID(8H): {id_hex} write done.")
+        self.t55xx_verify_viking(id_bytes)
 
 
 @lf_idteck.command("write")
@@ -6358,6 +6418,7 @@ class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequir
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.idteck_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - IDTECK frame {id_hex} written to T55xx.")
+        self.t55xx_verify_idteck()
 
 
 @lf_idteck.command("econfig")
@@ -6511,6 +6572,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 )
             id_bytes = bytes.fromhex(args.id)
             self.cmd.em410x_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_em410x(id_bytes)
             label = "EM410x Electra" if t == "electra" else "EM410x"
             print(f" - {label} ID cloned to T55xx: {args.id.upper()}")
 
@@ -6535,6 +6597,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 oem,
             )
             self.cmd.hidprox_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_hidprox(fmt.value, fc, cn, il, oem)
             print(f" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
@@ -6557,6 +6620,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 raw8 = res[3]
             payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
             self.cmd.ioprox_write_to_t55xx(payload16, **keys)
+            verify = lambda: self.t55xx_verify_ioprox(raw8)
             print(f" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
@@ -6570,6 +6634,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
             id_bytes = args.id.encode("ascii")
             self.cmd.pac_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_pac(id_bytes)
             print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
 
         elif t == "viking":
@@ -6579,6 +6644,7 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 raise ArgsParserError("--id must be exactly 8 hex characters for viking")
             id_bytes = bytes.fromhex(args.id)
             self.cmd.viking_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_viking(id_bytes)
             print(f" - Viking ID cloned to T55xx: {args.id.upper()}")
 
         elif t == "idteck":
@@ -6592,7 +6658,10 @@ class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
                 raise ArgsParserError("--id must be 8 or 16 hex characters for idteck")
             id_bytes = bytes.fromhex(id_hex)
             self.cmd.idteck_write_to_t55xx(id_bytes, **keys)
+            verify = self.t55xx_verify_idteck
             print(f" - IDTECK frame cloned to T55xx: {id_hex.upper()}")
+
+        verify()
 
 
 @lf_generic.command("adcread")
@@ -7076,6 +7145,7 @@ class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, T55xxPasswordArgsUnit, Reader
         id_bytes = bytes.fromhex(id_hex)
         self.cmd.jablotron_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Jablotron ID: {id_hex.upper()} write done.")
+        self.t55xx_verify_jablotron(id_bytes)
 
 
 @lf_jablotron.command("econfig")
