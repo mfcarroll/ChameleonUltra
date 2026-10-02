@@ -10,7 +10,8 @@ from chameleon_enum import MfcKeyType, MfcValueBlockOperator
 
 CURRENT_VERSION_SETTINGS = 6
 
-# Password for T55xx writes. All zeros leaves the tag without password protection.
+# Password for T55xx writes. Zero means "no password": the firmware leaves password
+# mode off instead of protecting the tag with 00000000, which is a valid password.
 # old_keys lists passwords a tag may already carry, so it can still be rewritten;
 # 20206666 is the password earlier firmware set on every write.
 new_key = b'\x00\x00\x00\x00'
