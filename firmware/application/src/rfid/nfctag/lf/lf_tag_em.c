@@ -95,6 +95,10 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    if (m_pwm_seq == NULL) {
+        NRF_LOG_WARNING("LF field detected, but no waveform is loaded");
+        return;
+    }
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
@@ -121,6 +125,10 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
+        if (m_pwm_seq == NULL) {
+            lf_field_lost();
+            return;
+        }
         nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
@@ -182,7 +190,9 @@ static void lf_sense_enable(void) {
 static void lf_sense_disable(void) {
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
-    m_pwm_seq = NULL;
+    // Keep m_pwm_seq: it points at the protocol's static sequence, which outlives this,
+    // and nothing reloads it when sense is enabled again. Clearing it here left the
+    // device in emulator mode with nothing to play after any `hw mode -r` / `hw mode -e`.
     m_is_lf_emulating = false;
     sd_clock_hfclk_release();
 }
