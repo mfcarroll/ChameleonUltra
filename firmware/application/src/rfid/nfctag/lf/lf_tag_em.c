@@ -41,6 +41,44 @@ const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 // The base clock pwm_init() chose, so a type change can tell whether it needs another.
 static nrf_pwm_clk_t m_pwm_clk = NRF_PWM_CLK_125kHz;
 
+// The field can only be checked between bursts: LF_RSSI follows our own load
+// modulation while a burst plays. Each check stops the PWM for ~2ms and the next
+// burst restarts the frame from its first bit, so a reader capturing across it sees
+// a gap and a frame slip. Bursts are therefore sized in time rather than frames
+// (a frame is ~16ms for a 64-bit RF/32 frame but ~33ms for EM410x), long enough
+// that boundaries are rare but short enough to notice a reader leaving.
+#define LF_TAG_BURST_TARGET_MS 500
+#define LF_TAG_BURST_MIN_FRAMES 2
+#define LF_TAG_BURST_MAX_FRAMES 255
+static uint16_t m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+
+static void update_frames_per_burst(void) {
+    m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+    if (m_pwm_seq == NULL || m_pwm_seq->values.p_wave_form == NULL) {
+        return;
+    }
+    // Wave-form mode: each entry carries its own counter_top, so a frame lasts the sum
+    // of them (times repeats + 1) at the PWM base clock.
+    const size_t entries = (size_t)m_pwm_seq->length / 4u;
+    uint64_t ticks = 0;
+    for (size_t i = 0; i < entries; i++) {
+        ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
+    }
+    ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
+    const uint32_t hz = (m_pwm_clk == NRF_PWM_CLK_1MHz) ? 1000000u : 125000u;
+    const uint64_t frame_us = ticks * 1000000u / hz;
+    if (frame_us == 0) {
+        return;
+    }
+    uint64_t n = ((uint64_t)LF_TAG_BURST_TARGET_MS * 1000u + frame_us - 1u) / frame_us;
+    if (n < LF_TAG_BURST_MIN_FRAMES) {
+        n = LF_TAG_BURST_MIN_FRAMES;
+    } else if (n > LF_TAG_BURST_MAX_FRAMES) {
+        n = LF_TAG_BURST_MAX_FRAMES;
+    }
+    m_frames_per_burst = (uint16_t)n;
+}
+
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
@@ -101,7 +139,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         NRF_LOG_WARNING("LF field detected, but no waveform is loaded");
         return;
     }
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    update_frames_per_burst();
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -131,7 +170,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
             lf_field_lost();
             return;
         }
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
