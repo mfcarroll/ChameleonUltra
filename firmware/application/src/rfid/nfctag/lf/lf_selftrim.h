@@ -7,7 +7,7 @@
 //
 // The SAADC capture and the detector run from the main loop (lf_selftrim_process); the trim is
 // written into the sequence between bursts, while the PWM is stopped (lf_selftrim_apply). A trim
-// is kept across fields and across sleep, and cleared when the slot's data is (re)loaded.
+// is kept across fields, sleep and slot changes, for the slot it was learned on (lf_selftrim.c).
 
 #include <stdbool.h>
 #include <stdint.h>

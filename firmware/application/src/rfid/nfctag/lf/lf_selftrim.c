@@ -46,12 +46,13 @@ static selftrim_result_t m_res;
 static uint16_t m_count;
 static int16_t m_last_ppm10, m_last_snr10;        // last measurement, for the status
 static uint8_t m_last_why;
-static bool m_first_load = true;                  // the load at boot or wake-up
 
-// Kept across sleep: on battery the device sleeps a few seconds after a field and wakes with a reset, which would
-// otherwise lose the learned trim, and a quick tap is shorter than learning it again (~1 s). The noinit region is
-// retained in System OFF (app_main.c). Restored only by the first load after a wake, for the same slot and type;
-// any later load (a slot change, new data) starts over. A power-on leaves garbage, which the check rejects.
+// Kept across sleep and slot changes: on battery the device sleeps a few seconds after a field and wakes with a reset,
+// which would otherwise lose the learned trim, and a quick tap is shorter than learning it again (~1 s). The noinit
+// region is retained in System OFF (app_main.c). The kept trim belongs to the slot (and type) it was learned on: any
+// load of that slot restores it (after a wake, or after a client browsed the slots), and a trim learned on another
+// slot replaces it. It is a property of the reader, not the card, so new data in the same slot keeps it. A power-on
+// leaves garbage, which the check rejects.
 typedef struct {
     uint32_t magic;
     uint8_t slot;
@@ -203,7 +204,9 @@ void lf_selftrim_process(bool emulating, bool psk1) {
         m_last_ppm10 = (int16_t)lroundf(m_res.ppm * 10.0f);
         m_last_snr10 = (int16_t)lroundf(m_res.snr_db * 10.0f);
         m_last_why = m_res.why;
-        keep_save();
+        if (m_res.valid || m_res.why == SELFTRIM_MATCHED || keep_valid_for_active()) {
+            keep_save();    // a result on another slot that found nothing leaves the kept trim alone
+        }
         NRF_LOG_INFO("selftrim: %d ppm/10, %d dB/10, why %d, target %d", (int)lroundf(m_res.ppm * 10.0f),
                      (int)lroundf(m_res.snr_db * 10.0f), m_res.why, m_target);
         return;
@@ -233,11 +236,9 @@ void lf_selftrim_on_field(void) {
     m_epoch++;
 }
 
-// The sequence is rebuilt at the nominal rate: start over, except after a wake-up for the same slot, where the kept
-// trim is restored (it is written into the sequence when the first field arrives).
+// The sequence is rebuilt at the nominal rate: start over, then restore the trim kept for this slot, if any (it is
+// written into the sequence when the next field arrives).
 void lf_selftrim_on_load(void) {
-    const bool restore = m_first_load && keep_valid_for_active();
-    m_first_load = false;
     m_target = 0;
     m_applied = 0;
     m_settled = false;
@@ -249,7 +250,7 @@ void lf_selftrim_on_load(void) {
     m_last_ppm10 = 0;
     m_last_snr10 = 0;
     m_last_why = 0;
-    if (restore) {
+    if (keep_valid_for_active()) {
         m_target = m_keep.trim;
         m_settled = m_target != 0;
         m_count = m_keep.count;
@@ -258,7 +259,6 @@ void lf_selftrim_on_load(void) {
         m_last_why = m_keep.last_why;
         NRF_LOG_INFO("selftrim: kept trim %d restored", m_target);
     }
-    keep_save();
 }
 
 void lf_selftrim_get_status(lf_selftrim_status_t *s) {
