@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
  - Fix LF reads disrupted by BLE advertising (@mfcarroll)
  - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
