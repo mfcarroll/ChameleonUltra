@@ -7,7 +7,7 @@
 //
 // The SAADC capture and the detector run from the main loop (lf_selftrim_process); the trim is
 // written into the sequence between bursts, while the PWM is stopped (lf_selftrim_apply). A trim
-// is kept across fields and cleared when the slot's data is (re)loaded.
+// is kept across fields and across sleep, and cleared when the slot's data is (re)loaded.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,7 +16,7 @@
 
 typedef struct {
     uint8_t enabled;
-    int16_t applied;        // trim in the playing sequence, in steps of 3.8 ppm
+    int16_t applied;        // the learned trim, in steps of 3.8 ppm (in the sequence from the next field on)
     int16_t last_ppm10;     // last measurement: reader vs us, ppm x 10
     int16_t last_snr10;     // its strength, dB x 10
     uint8_t last_why;       // selftrim_why_t

@@ -7608,7 +7608,7 @@ class HWSettingsSelfTrim(DeviceRequiredUnit):
             return
         s = self.cmd.get_lf_selftrim()
         print(f"PSK1 self-trim: {'enabled' if s['enabled'] else 'disabled'}")
-        print(f"  applied trim: {s['applied']:+d} steps ({s['applied'] * 3.8147:+.1f} ppm)")
+        print(f"  trim: {s['applied']:+d} steps ({s['applied'] * 3.8147:+.1f} ppm)")
         if s["measurements"]:
             why = self.WHY[s["why"]] if s["why"] < len(self.WHY) else str(s["why"])
             print(f"  last measurement: reader {s['ppm']:+.1f} ppm, {s['snr']:.1f} dB, {why}"

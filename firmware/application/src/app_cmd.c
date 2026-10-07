@@ -224,7 +224,7 @@ static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
-// Reply: enabled u8, applied trim i16 (3.8 ppm steps), last measurement ppm x10 i16, its SNR dB x10 i16,
+// Reply: enabled u8, learned trim i16 (3.8 ppm steps), last measurement ppm x10 i16, its SNR dB x10 i16,
 // its outcome u8 (selftrim_why_t), measurements since the slot was loaded u16; big-endian.
 static data_frame_tx_t *cmd_processor_get_lf_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     lf_selftrim_status_t s;

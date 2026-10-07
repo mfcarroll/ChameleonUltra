@@ -1,6 +1,7 @@
 #include "lf_selftrim.h"
 
 #include <math.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -8,6 +9,7 @@
 #include "ble_main.h"
 #include "nrf_saadc.h"
 #include "settings.h"
+#include "tag_emulation.h"
 #include "utils/psk1.h"
 #include "utils/selftrim.h"
 
@@ -42,6 +44,65 @@ static int16_t m_prev;
 static uint16_t m_invalid_run;
 static selftrim_result_t m_res;
 static uint16_t m_count;
+static int16_t m_last_ppm10, m_last_snr10;        // last measurement, for the status
+static uint8_t m_last_why;
+static bool m_first_load = true;                  // the load at boot or wake-up
+
+// Kept across sleep: on battery the device sleeps a few seconds after a field and wakes with a reset, which would
+// otherwise lose the learned trim, and a quick tap is shorter than learning it again (~1 s). The noinit region is
+// retained in System OFF (app_main.c). Restored only by the first load after a wake, for the same slot and type;
+// any later load (a slot change, new data) starts over. A power-on leaves garbage, which the check rejects.
+typedef struct {
+    uint32_t magic;
+    uint8_t slot;
+    uint16_t type;
+    int16_t trim;
+    int16_t last_ppm10;
+    int16_t last_snr10;
+    uint8_t last_why;
+    uint16_t count;
+    uint32_t check;
+} lf_selftrim_keep_t;
+#define KEEP_MAGIC 0x53544B31u  // "STK1"
+static __attribute__((section(".noinit_selftrim"))) lf_selftrim_keep_t m_keep;
+
+static uint32_t keep_check(const lf_selftrim_keep_t *k) {
+    const uint8_t *b = (const uint8_t *)k;
+    uint32_t h = 2166136261u;   // FNV-1a over everything before the check
+    for (size_t i = 0; i < offsetof(lf_selftrim_keep_t, check); i++) {
+        h = (h ^ b[i]) * 16777619u;
+    }
+    return h;
+}
+
+static void active_slot(uint8_t *slot, uint16_t *type) {
+    tag_slot_specific_type_t types;
+    *slot = tag_emulation_get_slot();
+    tag_emulation_get_specific_types_by_slot(*slot, &types);
+    *type = (uint16_t)types.tag_lf;
+}
+
+static void keep_save(void) {
+    lf_selftrim_keep_t k;
+    memset(&k, 0, sizeof(k));
+    k.magic = KEEP_MAGIC;
+    active_slot(&k.slot, &k.type);
+    k.trim = m_target;
+    k.last_ppm10 = m_last_ppm10;
+    k.last_snr10 = m_last_snr10;
+    k.last_why = m_last_why;
+    k.count = m_count;
+    k.check = keep_check(&k);
+    m_keep = k;
+}
+
+static bool keep_valid_for_active(void) {
+    uint8_t slot;
+    uint16_t type;
+    active_slot(&slot, &type);
+    return m_keep.magic == KEEP_MAGIC && m_keep.check == keep_check(&m_keep) && m_keep.slot == slot &&
+           m_keep.type == type;
+}
 
 static void adc_cb(nrf_saadc_value_t *v, size_t n) {
     if (!m_capturing) {
@@ -117,7 +178,10 @@ static void decide(void) {
 void lf_selftrim_process(bool emulating, bool psk1) {
     if (!settings_get_lf_selftrim() || !psk1) {
         lf_selftrim_abort();
-        m_target = 0;           // turned off: back to the nominal rate at the next burst boundary
+        if (m_target != 0) {
+            m_target = 0;       // turned off: back to the nominal rate at the next burst boundary
+            keep_save();
+        }
         m_settled = false;
         m_have_prev = false;
         return;
@@ -136,6 +200,10 @@ void lf_selftrim_process(bool emulating, bool psk1) {
         m_count++;
         m_last_tick = app_timer_cnt_get();
         decide();
+        m_last_ppm10 = (int16_t)lroundf(m_res.ppm * 10.0f);
+        m_last_snr10 = (int16_t)lroundf(m_res.snr_db * 10.0f);
+        m_last_why = m_res.why;
+        keep_save();
         NRF_LOG_INFO("selftrim: %d ppm/10, %d dB/10, why %d, target %d", (int)lroundf(m_res.ppm * 10.0f),
                      (int)lroundf(m_res.snr_db * 10.0f), m_res.why, m_target);
         return;
@@ -165,8 +233,11 @@ void lf_selftrim_on_field(void) {
     m_epoch++;
 }
 
-// The sequence is rebuilt at the nominal rate: start over.
+// The sequence is rebuilt at the nominal rate: start over, except after a wake-up for the same slot, where the kept
+// trim is restored (it is written into the sequence when the first field arrives).
 void lf_selftrim_on_load(void) {
+    const bool restore = m_first_load && keep_valid_for_active();
+    m_first_load = false;
     m_target = 0;
     m_applied = 0;
     m_settled = false;
@@ -175,13 +246,26 @@ void lf_selftrim_on_load(void) {
     m_count = 0;
     m_measured_epoch = 0xFFFFFFFF;
     memset(&m_res, 0, sizeof(m_res));
+    m_last_ppm10 = 0;
+    m_last_snr10 = 0;
+    m_last_why = 0;
+    if (restore) {
+        m_target = m_keep.trim;
+        m_settled = m_target != 0;
+        m_count = m_keep.count;
+        m_last_ppm10 = m_keep.last_ppm10;
+        m_last_snr10 = m_keep.last_snr10;
+        m_last_why = m_keep.last_why;
+        NRF_LOG_INFO("selftrim: kept trim %d restored", m_target);
+    }
+    keep_save();
 }
 
 void lf_selftrim_get_status(lf_selftrim_status_t *s) {
     s->enabled = settings_get_lf_selftrim();
-    s->applied = m_applied;
-    s->last_ppm10 = (int16_t)lroundf(m_res.ppm * 10.0f);
-    s->last_snr10 = (int16_t)lroundf(m_res.snr_db * 10.0f);
-    s->last_why = m_res.why;
+    s->applied = m_target;
+    s->last_ppm10 = m_last_ppm10;
+    s->last_snr10 = m_last_snr10;
+    s->last_why = m_last_why;
     s->measurements = m_count;
 }
