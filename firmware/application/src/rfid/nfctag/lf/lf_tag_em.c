@@ -4,6 +4,7 @@
 
 #include "bsp_delay.h"
 #include "fds_util.h"
+#include "lf_selftrim.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
@@ -51,6 +52,11 @@ static void lf_field_lost(void) {
     NRF_LOG_INFO("LF FIELD LOST");
 }
 
+// Main loop: PSK1 self-trim measurement (lf_selftrim.c).
+void lf_tag_em_selftrim_process(void) {
+    lf_selftrim_process(m_is_lf_emulating, IS_PSK1_TYPE(m_tag_type));
+}
+
 /**
  * @brief Judge field status
  */
@@ -95,6 +101,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    lf_selftrim_on_field();
+    lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));  // a trim kept from an earlier field
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
@@ -121,6 +129,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
+        lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));
         nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
@@ -180,6 +189,7 @@ static void lf_sense_enable(void) {
 }
 
 static void lf_sense_disable(void) {
+    lf_selftrim_abort();
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
@@ -222,6 +232,7 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    lf_selftrim_on_load();
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {

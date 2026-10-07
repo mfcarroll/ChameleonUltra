@@ -1873,6 +1873,26 @@ class ChameleonCMD:
         """
         data = struct.pack('!H', duration)
         return self.device.send_cmd_sync(Command.SET_LONG_PRESS_THRESHOLD, data)
+
+    @expect_response(Status.SUCCESS)
+    def get_lf_selftrim(self):
+        """
+        Get the PSK1 self-trim setting and its last measurement
+        """
+        resp = self.device.send_cmd_sync(Command.GET_LF_SELFTRIM)
+        if resp.status == Status.SUCCESS:
+            enabled, applied, ppm10, snr10, why, count = struct.unpack('!BhhhBH', resp.data[:10])
+            resp.parsed = {'enabled': bool(enabled), 'applied': applied, 'ppm': ppm10 / 10, 'snr': snr10 / 10,
+                           'why': why, 'measurements': count}
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def set_lf_selftrim(self, enabled: bool):
+        """
+        Enable or disable trimming PSK1 emulation to the reader's clock
+        """
+        data = struct.pack('!B', enabled)
+        return self.device.send_cmd_sync(Command.SET_LF_SELFTRIM, data)
     def seos_read_emu_data(self):
         resp = self.device.send_cmd_sync(Command.SEOS_READ_EMU_DATA, None)
         resp.parsed = {}

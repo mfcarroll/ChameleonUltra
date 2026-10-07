@@ -7585,6 +7585,38 @@ class HWSettingsLongPressThreshold(DeviceRequiredUnit):
             print(f"Current long press threshold: {current} ms")
 
 
+@hw_settings.command("selftrim")
+class HWSettingsSelfTrim(DeviceRequiredUnit):
+    WHY = ["trim", "near-matched (no trim)", "weak", "own line", "too far", "no line", "matched"]
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set PSK1 self-trim: while emulating a PSK1 tag (e.g. IDTECK), measure the reader's clock "
+            "and trim the subcarrier to match it"
+        )
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--enable", action="store_true", help="Enable self-trim")
+        group.add_argument("--disable", action="store_true", help="Disable self-trim")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.enable or args.disable:
+            self.cmd.set_lf_selftrim(args.enable)
+            print(f"PSK1 self-trim {'enabled' if args.enable else 'disabled'}.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
+            return
+        s = self.cmd.get_lf_selftrim()
+        print(f"PSK1 self-trim: {'enabled' if s['enabled'] else 'disabled'}")
+        print(f"  applied trim: {s['applied']:+d} steps ({s['applied'] * 3.8147:+.1f} ppm)")
+        if s["measurements"]:
+            why = self.WHY[s["why"]] if s["why"] < len(self.WHY) else str(s["why"])
+            print(f"  last measurement: reader {s['ppm']:+.1f} ppm, {s['snr']:.1f} dB, {why}"
+                  f" ({s['measurements']} since the slot was loaded)")
+        else:
+            print("  no measurement since the slot was loaded")
+
+
 @hw.command("raw")
 class HWRaw(DeviceRequiredUnit):
 
