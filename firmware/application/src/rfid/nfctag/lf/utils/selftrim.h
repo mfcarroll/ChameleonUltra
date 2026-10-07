@@ -5,7 +5,7 @@
 //
 // The reader's 125 kHz carrier ripples on LF_RSSI. Sampled with the SAADC at 20 kHz it aliases to
 // about 5 kHz, where an offset of 1 ppm in the reader's clock moves the line by 0.125 Hz. A
-// Goertzel scan of +/-300 ppm around the nominal alias finds the line; the trim is its offset
+// Goertzel scan of +/-400 ppm around the nominal alias finds the line; the trim is its offset
 // in steps of 3.8 ppm (lf_psk1_apply_trim). Our own modulation puts lines at the nominal alias
 // and multiples of the frame rate around it, which the scan skips.
 
