@@ -138,10 +138,10 @@ static void pwm_init(void) {
     // Base clock depends on the currently-loaded tag type. Legacy ASK/FSK
     // protocols (EM410x, HID, ioProx, Viking, PAC) use 125kHz base so that
     // their hardcoded counter_top values (8-64 range) produce the correct
-    // absolute timing. PSK1 protocols need finer resolution for the 16us
-    // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
+    // absolute timing. PSK1 protocols use a 16MHz base with counter_top=256 for
+    // the 16us subcarrier period, fine enough to trim its rate (utils/psk1.h).
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
-    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_16MHz : NRF_PWM_CLK_125kHz;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
     cfg.step_mode = NRF_PWM_STEP_AUTO;
