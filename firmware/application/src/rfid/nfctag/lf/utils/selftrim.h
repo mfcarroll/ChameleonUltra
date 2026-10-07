@@ -5,9 +5,9 @@
 //
 // The reader's 125 kHz carrier ripples on LF_RSSI. Sampled with the SAADC at 20 kHz it aliases to
 // about 5 kHz, where an offset of 1 ppm in the reader's clock moves the line by 0.125 Hz. A
-// Goertzel scan of +/-400 ppm around the nominal alias finds the line; the trim is its offset
-// in steps of 3.8 ppm (lf_psk1_apply_trim). Our own modulation puts lines at the nominal alias
-// and multiples of the frame rate around it, which the scan skips.
+// Goertzel scan of +/-320 ppm around the nominal alias finds the line, accepted up to +/-300;
+// the trim is its offset in steps of 3.8 ppm (lf_psk1_apply_trim). Our own modulation puts
+// lines at the nominal alias and multiples of the frame rate around it, which the scan skips.
 
 #include <stdint.h>
 
@@ -16,7 +16,7 @@
 #endif
 #define SELFTRIM_MIN_SNR_DB     (22.0f)
 #define SELFTRIM_MIN_PPM        (15.0f)  // just above what 4096 samples can separate from our own line (12 ppm)
-#define SELFTRIM_MAX_PPM        (400.0f)
+#define SELFTRIM_MAX_PPM        (300.0f)
 #define SELFTRIM_PPM_PER_STEP   (3.8f)
 
 typedef enum {

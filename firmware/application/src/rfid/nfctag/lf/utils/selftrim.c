@@ -3,7 +3,7 @@
 #include <math.h>
 #include <stdbool.h>
 
-#define SPAN_PPM    (400.0f)   // = SELFTRIM_MAX_PPM: the scan covers everything a result may report
+#define SPAN_PPM    (320.0f)   // past SELFTRIM_MAX_PPM, so a line at the limit still has scan points either side
 #define NOISE_HZ    (300.0f)
 #define SELF_HZ     (1.5f)
 #define FRAME_HZ    (125000.0f / 2048.0f)   // Indala frame rate, 61.04 Hz
