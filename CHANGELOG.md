@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix LF reader carrier uses crystal (HFXO) not internal RC oscillator. More accurate 125 kHz field allows reading PSK emulation from a second Chameleon (@mfcarroll)
+ - Fix LF HID Prox, ioProx, PAC and Jablotron reads disrupted by BLE advertising (@mfcarroll)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
  - Changed LF T55xx CLI write and clone commands to read the tag back and report whether the write took: verified, failed (the tag still carries something else, for example because it is password-protected), or not verified (@mfcarroll)
