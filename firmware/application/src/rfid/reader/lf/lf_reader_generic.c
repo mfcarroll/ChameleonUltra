@@ -27,11 +27,15 @@ NRF_LOG_MODULE_REGISTER();
 #define CIRCULAR_BUFFER_SIZE (2560)
 static circular_buffer cb;
 
+/* Samples lost because the ring was full. Zero unless something is wrong. */
+static volatile uint32_t m_cb_dropped = 0;
+
 static void saadc_cb(nrf_saadc_value_t *vals, size_t size) {
     for (int i = 0; i < size; i++) {
         nrf_saadc_value_t val = vals[i];
         if (!cb_push_back(&cb, &val)) {
-            return;  /* buffer full — oldest samples dropped */
+            m_cb_dropped += (uint32_t)(size - i);
+            return;
         }
     }
 }
@@ -47,7 +51,10 @@ static void uninit_saadc_hw(void) {
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
     *outlen = 0;
 
-    cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t));
+    m_cb_dropped = 0;
+    if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
+        return false;
+    }
     init_saadc_hw();
     start_lf_125khz_radio();
 
