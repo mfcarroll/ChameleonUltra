@@ -67,7 +67,7 @@ static void update_frames_per_burst(void) {
         ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
     }
     ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
-    const uint32_t hz = (m_pwm_clk == NRF_PWM_CLK_1MHz) ? 1000000u : 125000u;
+    const uint32_t hz = (m_pwm_clk == NRF_PWM_CLK_16MHz) ? 16000000u : 125000u;
     const uint64_t frame_us = ticks * 1000000u / hz;
     if (frame_us == 0) {
         return;
@@ -372,7 +372,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // enabled. A type change while emulating (e.g. `hw slot type`) would otherwise play
     // the new waveform at the previous type's clock, 8x off and unreadable.
     if (ret > 0 && m_lf_sense_state == LF_SENSE_STATE_ENABLE) {
-        nrf_pwm_clk_t want = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+        nrf_pwm_clk_t want = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_16MHz : NRF_PWM_CLK_125kHz;
         if (want != m_pwm_clk) {
             nrfx_pwm_uninit(&m_broadcast);
             m_is_lf_emulating = false;

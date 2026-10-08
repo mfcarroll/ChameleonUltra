@@ -841,16 +841,19 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.LF_TAG_OK)
-    def indala_write_to_t55xx(self, id_bytes: bytes):
+    def indala_write_to_t55xx(self, id_bytes: bytes, password: Union[bytes, None] = None,
+                              current_password: Union[bytes, None] = None):
         """
         Write Indala card number into T55XX.
 
         :param id_bytes: 8-byte raw Indala frame
+        :param password: 4-byte T55xx password to set; None (default) sets no password
+        :param current_password: 4-byte password the tag is protected with now, if known
         :return:
         """
         if len(id_bytes) != 8:
             raise ValueError("The id bytes length must equal 8")
-        data = struct.pack(f'!8s4s{4*len(old_keys)}s', id_bytes, new_key, b''.join(old_keys))
+        data = id_bytes + self._t55xx_key_tail(password, current_password)
         return self.device.send_cmd_sync(Command.INDALA_WRITE_TO_T55XX, data)
 
 

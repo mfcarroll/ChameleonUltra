@@ -1129,11 +1129,13 @@ static data_frame_tx_t *cmd_processor_indala_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
