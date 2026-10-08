@@ -39,6 +39,46 @@ static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 // The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
+// The base clock pwm_init() chose, so a type change can tell whether it needs another.
+static nrf_pwm_clk_t m_pwm_clk = NRF_PWM_CLK_125kHz;
+
+// The field can only be checked between bursts: LF_RSSI follows our own load
+// modulation while a burst plays. Each check stops the PWM for ~2ms and the next
+// burst restarts the frame from its first bit, so a reader capturing across it sees
+// a gap and a frame slip. Bursts are therefore sized in time rather than frames
+// (a frame is ~16ms for a 64-bit RF/32 frame but ~33ms for EM410x), long enough
+// that boundaries are rare but short enough to notice a reader leaving.
+#define LF_TAG_BURST_TARGET_MS 500
+#define LF_TAG_BURST_MIN_FRAMES 2
+#define LF_TAG_BURST_MAX_FRAMES 255
+static uint16_t m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+
+static void update_frames_per_burst(void) {
+    m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+    if (m_pwm_seq == NULL || m_pwm_seq->values.p_wave_form == NULL) {
+        return;
+    }
+    // Wave-form mode: each entry carries its own counter_top, so a frame lasts the sum
+    // of them (times repeats + 1) at the PWM base clock.
+    const size_t entries = (size_t)m_pwm_seq->length / 4u;
+    uint64_t ticks = 0;
+    for (size_t i = 0; i < entries; i++) {
+        ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
+    }
+    ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
+    const uint32_t hz = (m_pwm_clk == NRF_PWM_CLK_1MHz) ? 1000000u : 125000u;
+    const uint64_t frame_us = ticks * 1000000u / hz;
+    if (frame_us == 0) {
+        return;
+    }
+    uint64_t n = ((uint64_t)LF_TAG_BURST_TARGET_MS * 1000u + frame_us - 1u) / frame_us;
+    if (n < LF_TAG_BURST_MIN_FRAMES) {
+        n = LF_TAG_BURST_MIN_FRAMES;
+    } else if (n > LF_TAG_BURST_MAX_FRAMES) {
+        n = LF_TAG_BURST_MAX_FRAMES;
+    }
+    m_frames_per_burst = (uint16_t)n;
+}
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
@@ -96,7 +136,12 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    if (m_pwm_seq == NULL) {
+        NRF_LOG_WARNING("LF field detected, but no waveform is loaded");
+        return;
+    }
+    update_frames_per_burst();
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -122,7 +167,11 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        if (m_pwm_seq == NULL) {
+            lf_field_lost();
+            return;
+        }
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
@@ -143,6 +192,7 @@ static void pwm_init(void) {
     // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
     cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    m_pwm_clk = cfg.base_clock;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
     cfg.step_mode = NRF_PWM_STEP_AUTO;
@@ -183,7 +233,9 @@ static void lf_sense_enable(void) {
 static void lf_sense_disable(void) {
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
-    m_pwm_seq = NULL;
+    // Keep m_pwm_seq: it points at the protocol's static sequence, which outlives this,
+    // and nothing reloads it when sense is enabled again. Clearing it here left the
+    // device in emulator mode with nothing to play after any `hw mode -r` / `hw mode -e`.
     m_is_lf_emulating = false;
     sd_clock_hfclk_release();
 }
@@ -218,11 +270,8 @@ void lf_tag_125khz_sense_switch(bool enable) {
     }
 }
 
-/** @brief lf card data loader
- * @param type     Refined tag type
- * @param buffer   Data buffer
- */
-int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+// Builds the waveform for `type` from `buffer`; lf_tag_data_loadcb() below wraps it.
+static int lf_tag_data_load(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
@@ -300,6 +349,29 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
 
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
+}
+
+/** @brief lf card data loader
+ * @param type     Refined tag type
+ * @param buffer   Data buffer
+ */
+int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    int ret = lf_tag_data_load(type, buffer);
+    // pwm_init() picks the base clock from the tag type, but it only runs when sense is
+    // enabled. A type change while emulating (e.g. `hw slot type`) would otherwise play
+    // the new waveform at the previous type's clock, 8x off and unreadable.
+    if (ret > 0 && m_lf_sense_state == LF_SENSE_STATE_ENABLE) {
+        nrf_pwm_clk_t want = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+        if (want != m_pwm_clk) {
+            nrfx_pwm_uninit(&m_broadcast);
+            m_is_lf_emulating = false;
+            pwm_init();
+            if (is_lf_field_exists()) {
+                lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
+            }
+        }
+    }
+    return ret;
 }
 
 /** @brief Id card deposit card number before callback
