@@ -7,13 +7,14 @@
 #include "nrf_pwm.h"
 
 // Shared PSK1 (BPSK on a carrier/2 subcarrier) tag-emulation parameters for the
-// tag-emulation PWM path. The PWM base clock is set to 1MHz by pwm_init when an
+// tag-emulation PWM path. The PWM base clock is set to 16MHz by pwm_init when an
 // active PSK1 tag type is loaded (see tag_base_type.h IS_PSK1_TYPE), so one tick
-// is 1us. With counter_top=16 each PWM entry spans one 16us subcarrier cycle.
-// Nordic PS: COUNTERTOP in WaveForm mode has a minimum valid value of 3; 16 is
-// comfortably above that.
-#define LF_PSK1_SUBCARRIER_TOP          (16)
-#define LF_PSK1_SUBCARRIER_DUTY         (8)
+// is 62.5ns. With counter_top=256 each PWM entry spans one 16us subcarrier cycle.
+// The fine tick lets lf_psk1_apply_trim() adjust the subcarrier rate in steps of
+// one tick per frame (3.8 ppm for a 64-bit frame) to match a reader whose clock
+// is off ours; a 1MHz base would make that step 61 ppm.
+#define LF_PSK1_SUBCARRIER_TOP          (256)
+#define LF_PSK1_SUBCARRIER_DUTY         (128)
 #define LF_PSK1_RF32_SUBCYCLES_PER_BIT  (16)
 
 // Build a PSK1 wave-form PWM sequence for a frame transmitted MSB first.
@@ -46,3 +47,10 @@ size_t lf_psk1_build_sequence(const uint8_t *frame_bytes,
 
 // Build the sequence into a buffer shared by all PSK1 types (one LF tag is emulated at a time).
 const nrf_pwm_sequence_t *lf_psk1_sequence(const uint8_t *frame_bytes, size_t bit_count);
+
+// Trim the subcarrier rate of an already-built sequence of k entries in place:
+// +n shortens n subcarrier cycles by one tick, spread evenly across the
+// sequence (the subcarrier runs faster by n ticks per sequence); -n lengthens
+// them; 0 restores the nominal rate. Safe only while the PWM is not playing the
+// sequence.
+void lf_psk1_apply_trim(nrf_pwm_values_wave_form_t *buf, size_t k, int32_t trim);

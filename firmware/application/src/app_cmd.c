@@ -12,6 +12,7 @@
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
+#include "lf_selftrim.h"
 #include "delayed_reset.h"
 #include "netdata.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
@@ -220,6 +221,33 @@ static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t s
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     settings_set_sleep_timeout(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// Reply: enabled u8, learned trim i16 (3.8 ppm steps), last measurement ppm x10 i16, its SNR dB x10 i16,
+// its outcome u8 (selftrim_why_t), measurements since the slot was loaded u16; big-endian.
+static data_frame_tx_t *cmd_processor_get_lf_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_selftrim_status_t s;
+    lf_selftrim_get_status(&s);
+    uint8_t out[10];
+    out[0] = s.enabled;
+    out[1] = (uint8_t)((uint16_t)s.applied >> 8);
+    out[2] = (uint8_t)s.applied;
+    out[3] = (uint8_t)((uint16_t)s.last_ppm10 >> 8);
+    out[4] = (uint8_t)s.last_ppm10;
+    out[5] = (uint8_t)((uint16_t)s.last_snr10 >> 8);
+    out[6] = (uint8_t)s.last_snr10;
+    out[7] = s.last_why;
+    out[8] = (uint8_t)(s.measurements >> 8);
+    out[9] = (uint8_t)s.measurements;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
+static data_frame_tx_t *cmd_processor_set_lf_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    settings_set_lf_selftrim(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -3331,6 +3359,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
     {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_get_long_press_threshold,      NULL                   },
     {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_set_long_press_threshold,      NULL                   },
+    {    DATA_CMD_GET_LF_SELFTRIM,              NULL,                        cmd_processor_get_lf_selftrim,               NULL                   },
+    {    DATA_CMD_SET_LF_SELFTRIM,              NULL,                        cmd_processor_set_lf_selftrim,               NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 

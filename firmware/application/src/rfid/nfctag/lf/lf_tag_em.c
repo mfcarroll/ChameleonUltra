@@ -4,6 +4,7 @@
 
 #include "bsp_delay.h"
 #include "fds_util.h"
+#include "lf_selftrim.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
@@ -92,6 +93,11 @@ static void lf_field_lost(void) {
     NRF_LOG_INFO("LF FIELD LOST");
 }
 
+// Main loop: PSK1 self-trim measurement (lf_selftrim.c).
+void lf_tag_em_selftrim_process(void) {
+    lf_selftrim_process(m_is_lf_emulating, IS_PSK1_TYPE(m_tag_type));
+}
+
 /**
  * @brief Judge field status
  */
@@ -140,6 +146,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         NRF_LOG_WARNING("LF field detected, but no waveform is loaded");
         return;
     }
+    lf_selftrim_on_field();
+    lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));  // a trim kept from an earlier field
     update_frames_per_burst();
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
 
@@ -171,6 +179,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
             lf_field_lost();
             return;
         }
+        lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));
         nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
@@ -188,10 +197,10 @@ static void pwm_init(void) {
     // Base clock depends on the currently-loaded tag type. Legacy ASK/FSK
     // protocols (EM410x, HID, ioProx, Viking, PAC) use 125kHz base so that
     // their hardcoded counter_top values (8-64 range) produce the correct
-    // absolute timing. PSK1 protocols need finer resolution for the 16us
-    // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
+    // absolute timing. PSK1 protocols use a 16MHz base with counter_top=256 for
+    // the 16us subcarrier period, fine enough to trim its rate (utils/psk1.h).
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
-    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_16MHz : NRF_PWM_CLK_125kHz;
     m_pwm_clk = cfg.base_clock;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
@@ -231,6 +240,7 @@ static void lf_sense_enable(void) {
 }
 
 static void lf_sense_disable(void) {
+    lf_selftrim_abort();
     nrfx_pwm_uninit(&m_broadcast);
     nrfx_lpcomp_uninit();
     // Keep m_pwm_seq: it points at the protocol's static sequence, which outlives this,
@@ -272,6 +282,7 @@ void lf_tag_125khz_sense_switch(bool enable) {
 
 // Builds the waveform for `type` from `buffer`; lf_tag_data_loadcb() below wraps it.
 static int lf_tag_data_load(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    lf_selftrim_on_load();
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {

@@ -41,6 +41,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 #include "settings.h"
+#include "lf_tag_em.h"
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
@@ -1053,6 +1054,8 @@ int main(void) {
 
         // Data pack process
         data_frame_process();
+        // PSK1 self-trim measurement, while emulating with the setting on
+        lf_tag_em_selftrim_process();
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process

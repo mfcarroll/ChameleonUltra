@@ -63,3 +63,17 @@ const nrf_pwm_sequence_t *lf_psk1_sequence(const uint8_t *frame_bytes, size_t bi
     m_psk1_seq.length = (uint16_t)(n * 4);   // 4 uint16 fields per wave-form entry
     return &m_psk1_seq;
 }
+
+void lf_psk1_apply_trim(nrf_pwm_values_wave_form_t *buf, size_t k, int32_t trim) {
+    for (size_t i = 0; i < k; i++) {
+        buf[i].counter_top = LF_PSK1_SUBCARRIER_TOP;
+    }
+    uint32_t n = (uint32_t)(trim < 0 ? -trim : trim);
+    if (n > k) {
+        n = k;
+    }
+    for (uint32_t j = 0; j < n; j++) {
+        size_t idx = (size_t)(((uint64_t)j * k) / n);
+        buf[idx].counter_top = (uint16_t)(LF_PSK1_SUBCARRIER_TOP + (trim > 0 ? -1 : 1));
+    }
+}
