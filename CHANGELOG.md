@@ -7,6 +7,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Fix an LF card written to a slot being lost on reboot when another slot's copy of the same card was loaded just before (@mfcarroll)
  - Fix LF reader carrier uses crystal (HFXO) not internal RC oscillator. More accurate 125 kHz field allows reading PSK emulation from a second Chameleon (@mfcarroll)
  - Fix slow boot and emulation start when woken by an LF or HF field (@mfcarroll)
+ - Fix reset at boot when an interrupt arrives during the crypto RNG setup (@mfcarroll)
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
  - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
 
