@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix reset at boot when an interrupt arrives during the crypto RNG setup (@mfcarroll)
  - Added Paradox LF support for reading, emulation, and T55xx cloning. Reads validate CRC before accepting a frame. T55xx writes warn before enabling password mode and verify the result with one read-back attempt.
  - Assigned Paradox command IDs 3022/3023 and tag type 203 to avoid collisions with released Farpointe/Pyramid support.
 
