@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix reset at boot when an interrupt arrives during the crypto RNG setup (@mfcarroll)
+ - Fix emulation waiting for Bluetooth to start when woken by a field (@mfcarroll)
  - Added Paradox LF support for reading, emulation, and T55xx cloning. Reads validate CRC before accepting a frame. T55xx writes warn before enabling password mode and verify the result with one read-back attempt.
  - Assigned Paradox command IDs 3022/3023 and tag type 203 to avoid collisions with released Farpointe/Pyramid support.
 
