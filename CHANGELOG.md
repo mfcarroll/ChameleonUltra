@@ -4,6 +4,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 
 ## [unreleased][unreleased]
  - Fix reset at boot when an interrupt arrives during the crypto RNG setup (@mfcarroll)
+ - Fix emulation waiting for Bluetooth to start when woken by a field (@mfcarroll)
  - Added Paradox LF support for reading, emulation, and T55xx cloning. Reads validate CRC before accepting a frame. T55xx writes warn before enabling password mode and verify the result with one read-back attempt.
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
