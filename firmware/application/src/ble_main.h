@@ -21,5 +21,6 @@ void set_ble_connect_key(uint8_t *key);
 
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
+void register_lf_adc_callback_input(lf_adc_callback_t cb, nrf_saadc_input_t input, nrf_saadc_acqtime_t acq);
 
 #endif

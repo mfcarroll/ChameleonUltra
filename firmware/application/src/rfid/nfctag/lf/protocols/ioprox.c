@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "fskdemod.h"
+#include "fsktrim.h"
 #include "t55xx.h"
 #include "tag_base_type.h"
 
@@ -14,7 +15,7 @@
 // NOTE: These LF_FSK2a_* defines are intentionally local to this .c file
 // to allow per-protocol timing tuning (do not move to a shared header).
 #define LF_FSK2a_PWM_LO_FREQ_LOOP (6)
-#define LF_FSK2a_PWM_LO_FREQ_TOP_VALUE (11)
+#define LF_FSK2a_PWM_LO_FREQ_TOP_VALUE (10)
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (8)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
 
@@ -336,20 +337,21 @@ static bool ioprox_decoder_feed(void *codec, uint16_t val) {
     return false;
 }
 
+static uint32_t m_ioprox_cycles; // carrier cycles emitted so far in this frame
+static uint32_t m_ioprox_bits;   // bits emitted so far in this frame
+
+// Each bit ends at the subcarrier cycle nearest its 64-carrier-cycle boundary, as a T5577 switches tone.
 static inline void ioprox_emit_bit(int *k, bool bit) {
-    if (!bit) {
-        for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
-            m_ioprox_pwm_seq_vals[*k].counter_top  = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
-            (*k)++;
-        }
-    } else {
-        for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-            m_ioprox_pwm_seq_vals[*k].channel_0    = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
-            m_ioprox_pwm_seq_vals[*k].counter_top  = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
-            (*k)++;
-        }
+    const uint16_t top = bit ? LF_FSK2a_PWM_LO_FREQ_TOP_VALUE : LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
+    const uint32_t target = (m_ioprox_bits + 1) * 64;
+    while (m_ioprox_cycles + top / 2 < target) {
+        // research (exp/fsk-drvtrim): 16 MHz ticks; lf_tag_em.c applies drive mode and trim (utils/fsktrim.c)
+        m_ioprox_pwm_seq_vals[*k].channel_0   = top * LF_FSK_TICKS_PER_CYCLE / 2;
+        m_ioprox_pwm_seq_vals[*k].counter_top = top * LF_FSK_TICKS_PER_CYCLE;
+        (*k)++;
+        m_ioprox_cycles += top;
     }
+    m_ioprox_bits++;
 }
 
 // FSK2a modulator: converts the 8 raw card bytes into a PWM sequence for LF transmission.
@@ -360,6 +362,8 @@ const nrf_pwm_sequence_t *ioprox_modulator(ioprox_codec_t *d, uint8_t *buf) {
     uint8_t *raw = &buf[4];
 
     int k = 0;
+    m_ioprox_cycles = 0;
+    m_ioprox_bits = 0;
 
     // Emit 64 bits MSB-first
     for (int bi = 0; bi < 8; bi++) {

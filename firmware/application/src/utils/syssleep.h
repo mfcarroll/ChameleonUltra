@@ -19,6 +19,8 @@
 
 void sleep_timer_init(void);
 void sleep_timer_start(uint32_t time_ms);
+// research: enter System OFF at the next main-loop pass, as the sleep timer would (also with USB present)
+void sleep_system_off_now(void);
 void sleep_timer_stop(void);
 void sleep_system_run(void (*sysOffSleep)(), void (*sysOnSleep)());
 
