@@ -10,6 +10,7 @@
 #include "t55xx.h"
 #include "tag_base_type.h"
 #include "wiegand.h"
+#include "fsktrim.h"
 
 #define HIDPROX_SOF (0x1d)
 #define HIDPROX_T55XX_BLOCK_COUNT (4)
@@ -178,7 +179,8 @@ void hidprox_raw_data(wiegand_card_t *card, uint32_t *hi, uint32_t *mid, uint32_
     }
 }
 
-// fsk2a modulator
+// fsk2a modulator. research (exp/fsk-drvtrim): tops in 16 MHz ticks (carrier cycles x 128); lf_tag_em.c
+// then applies the drive mode's channel_1 and the trim (utils/fsktrim.c) before playing.
 const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
     uint64_t cn = buf[5];
     cn = (cn << 32) | (bytes_to_num(buf + 6, 4));
@@ -204,14 +206,14 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
         }
         if (!bit) {
             for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE;
+                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE / 2;
+                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE;
                 k++;
             }
         } else {
             for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE;
+                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE / 2;
+                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE;
                 k++;
             }
         }

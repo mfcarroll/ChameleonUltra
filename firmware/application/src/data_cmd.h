@@ -216,5 +216,15 @@
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
+#define DATA_CMD_LF_EMU_STATE                   (3090)  /* research: hw lfstate */
+#define DATA_CMD_LF_EMU_SETTLE                  (3091)  /* research: hw lfsettle */
+#define DATA_CMD_LF_EMU_STALL                   (3092)  /* research: hw lfstall */
+#define DATA_CMD_LF_EMU_DRIVE                   (3093)  /* research: hw lfdrive (exp/fsk-drvtrim) */
+#define DATA_CMD_LF_EMU_TRIM                    (3094)  /* research: hw lftrim (exp/fsk-drvtrim) */
+#define DATA_CMD_LF_EMU_SELFTRIM                (3095)  /* research: hw lfselftrim (exp/fsk-selftrim) */
+#define DATA_CMD_LF_EMU_PHASE                   (3096)  /* research: hw lfphase (exp/fsk-selftrim) */
+#define DATA_CMD_LF_EMU_CONT                    (3097)  /* research: hw lfcont (exp/fsk-phasecont) */
+#define DATA_CMD_RESEARCH_SLEEP                 (3098)  /* research: enter System OFF now (tests what survives a sleep) */
+#define DATA_CMD_RESEARCH_RESTORE_DUMP          (3100)  /* research: mode 9's capture after a restore (lf_selftrim_fsk.c) */
 
 #endif

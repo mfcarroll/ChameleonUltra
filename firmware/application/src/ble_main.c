@@ -779,6 +779,24 @@ void ble_slave_init(void) {
     peer_manager_init();                // Peer manager Initialization
 }
 
+// EXPERIMENT: like register_lf_adc_callback(), on any input and acquisition time.
+void register_lf_adc_callback_input(lf_adc_callback_t cb, nrf_saadc_input_t input, nrf_saadc_acqtime_t acq) {
+    m_lf_adc_callback = cb;
+    nrfx_saadc_uninit();
+    ret_code_t err_code;
+    nrfx_saadc_config_t cfg = NRFX_SAADC_DEFAULT_CONFIG;
+    err_code = nrfx_saadc_init(&cfg, saadc_event_handler);
+    APP_ERROR_CHECK(err_code);
+    nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(input);
+    ch.acq_time = acq;
+    err_code = nrfx_saadc_channel_init(ADC_CHANNEL, &ch);
+    APP_ERROR_CHECK(err_code);
+    err_code = nrfx_saadc_buffer_convert(&adc_buf[next_free_buf_index()][0], ADC_BUF_SIZE);
+    APP_ERROR_CHECK(err_code);
+    err_code = nrfx_saadc_buffer_convert(&adc_buf[next_free_buf_index()][0], ADC_BUF_SIZE);
+    APP_ERROR_CHECK(err_code);
+}
+
 void register_lf_adc_callback(lf_adc_callback_t cb) {
     m_lf_adc_callback = cb;
 

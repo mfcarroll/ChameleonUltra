@@ -18,6 +18,9 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_tag_em.h"
+#include "lf_selftrim_fsk.h"
+#include "fsktrim.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -1132,6 +1135,39 @@ static data_frame_tx_t *cmd_processor_set_active_slot(uint16_t cmd, uint16_t sta
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+// EXPERIMENT (E24): 4100 capture LF_RSSI raw. Request: cc u16 BE, acq u8, force_play u8, count u16 BE.
+// Reply: captured u16 BE. 4101 read-out. Request: offset u16 BE, count u16 BE (<= 2048). Reply: int16 BE.
+size_t lf_tag_em_alias_capture(uint16_t cc, uint8_t acq, bool force_play, size_t want);
+size_t lf_tag_em_alias_read(size_t offset, int16_t **out);
+static data_frame_tx_t *cmd_processor_alias_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 6) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t cc = (data[0] << 8) | data[1];
+    if (cc < 80 || cc > 2047 || data[2] > 5) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    size_t got = lf_tag_em_alias_capture(cc, data[2], data[3] != 0, (data[4] << 8) | data[5]);
+    uint8_t out[2] = {(uint8_t)(got >> 8), (uint8_t)got};
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+static data_frame_tx_t *cmd_processor_alias_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    static uint8_t out[4096];
+    int16_t *src;
+    size_t avail = lf_tag_em_alias_read((data[0] << 8) | data[1], &src);
+    size_t n = (data[2] << 8) | data[3];
+    if (n > avail) n = avail;
+    if (n > 2048) n = 2048;
+    for (size_t i = 0; i < n; i++) {
+        out[2 * i] = (uint8_t)((uint16_t)src[i] >> 8);
+        out[2 * i + 1] = (uint8_t)src[i];
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, 2 * n, out);
+}
+
 static data_frame_tx_t *cmd_processor_set_slot_tag_type(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t num_slot;
@@ -2233,6 +2269,107 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
+// research: hw lfstate, a read-only LF emulation snapshot (lf_tag_em_state_get)
+static data_frame_tx_t *cmd_processor_lf_emu_state(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t buf[LF_TAG_EM_STATE_MAX];
+    uint16_t n = lf_tag_em_state_get(buf);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, buf);
+}
+
+// research: hw lfsettle, the field-check settle after each burst; 2 bytes big-endian ms, 0 queries
+static data_frame_tx_t *cmd_processor_lf_emu_settle(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 2) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    uint16_t ms = lf_tag_em_settle_set((uint16_t)((data[0] << 8) | data[1]));
+    uint8_t out[2] = {(uint8_t)(ms >> 8), (uint8_t)ms};
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
+// research: hw lfstall, watchdog test hook (lf_tag_em_stall)
+static data_frame_tx_t *cmd_processor_lf_emu_stall(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t ok = lf_tag_em_stall() ? 1 : 0;
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &ok);
+}
+
+// research exp/fsk-drvtrim: hw lfdrive. Request: none (query) or u8 mode 0..4 (utils/fsktrim.h).
+// Reply: u8 requested, u8 active (the mode PWM0 is set up for; follows at the next burst start).
+static data_frame_tx_t *cmd_processor_lf_emu_drive(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length > 1 || (length == 1 && data[0] > LF_FSK_DRIVE_MAX)) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    uint8_t out[2];
+    out[0] = lf_tag_em_drive_set(length == 1 ? data[0] : 0xFF, &out[1]);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
+// research exp/fsk-drvtrim: hw lftrim. Request: none (query) or s16 BE trim, |trim| <= 2000.
+// Reply: s16 requested, s16 applied (in the sequence as last prepared, clamped to +-1000 ppm of the
+// frame; follows at the next burst start), u32 ticks per frame as last prepared (16 MHz). All BE.
+static data_frame_tx_t *cmd_processor_lf_emu_trim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 0 && length != 2) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    int16_t t = 0;
+    if (length == 2) {
+        t = (int16_t)((data[0] << 8) | data[1]);
+        if (t > 2000 || t < -2000) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    int16_t applied;
+    uint32_t ticks;
+    int16_t req = lf_tag_em_trim_set(length == 2, t, &applied, &ticks);
+    uint8_t out[8] = {(uint8_t)((uint16_t)req >> 8), (uint8_t)req, (uint8_t)((uint16_t)applied >> 8), (uint8_t)applied,
+                      (uint8_t)(ticks >> 24), (uint8_t)(ticks >> 16), (uint8_t)(ticks >> 8), (uint8_t)ticks};
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
+// research exp/fsk-selftrim: hw lfselftrim. Request: none (query) or enabled u8, residual s16 BE ppm, measure
+// drive u8. Reply: status (lf_selftrim_fsk_command, LF_SELFTRIM_FSK_STATUS_LEN bytes, BE).
+static data_frame_tx_t *cmd_processor_lf_emu_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 0 && length != 4) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    uint8_t out[LF_SELFTRIM_FSK_STATUS_LEN];
+    uint16_t n = lf_selftrim_fsk_command(data, length, out);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, out);
+}
+
+// research exp/fsk-selftrim: hw lfphase. Request: none (query) or u8 us (per-burst start delay, <= 20). Reply: u8 us.
+static data_frame_tx_t *cmd_processor_lf_emu_phase(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length > 1 || (length == 1 && data[0] > 20)) return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    uint8_t us = lf_tag_em_phase_set(length == 1, length == 1 ? data[0] : 0);
+    return data_frame_make(cmd, STATUS_SUCCESS, 1, &us);
+}
+
+// research 3100: mode 9's capture after a restore. Request: offset, count (samples, BE; offset 0xFFFF = the
+// summary). Reply: big-endian int16 samples.
+static data_frame_tx_t *cmd_processor_research_restore_dump(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[2048];
+    if (length != 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const uint16_t off = ((uint16_t)data[0] << 8) | data[1];
+    uint16_t cnt = ((uint16_t)data[2] << 8) | data[3];
+    cnt = cnt > sizeof(out) / 2 ? sizeof(out) / 2 : cnt;
+    uint16_t n = lf_selftrim_fsk_rdump(off, cnt, out);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, out);
+}
+
+// research: enter System OFF now (the reply goes out first). Wakes like a battery sleep: a field (LPCOMP), the button,
+// or USB; the noinit RAM is kept, so this tests what a sleep keeps (exp/fsk-phasecont per-slot store).
+static data_frame_tx_t *cmd_processor_research_sleep(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    sleep_system_off_now();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// research exp/fsk-phasecont: hw lfcont. Request: none (query) or mode u8 (0 off, 1 continuous, 2 + phase select,
+// 3 measure only, 4 = 2 with the per-field measured period, 5 = 2 with the trimmed grid's period, 6 = 2 measuring in LF_MOD only without detune,
+// 7 = 2 with a short measure burst, 8 = 7 with no ID in the measure burst (constant fc/8),
+// 9 = 8 finding and holding the trim itself); optional 3rd byte: the measure detune in ppm (1-255; default 100),
+// offset u8 (< 128: mode 1 first-burst ticks, mode 2 the chosen phase in 1/128 cycle).
+// Reply: lf_tag_em_cont_set (LF_TAG_EM_CONT_LEN bytes, BE).
+static data_frame_tx_t *cmd_processor_lf_emu_cont(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if ((length != 0 && length != 2 && length != 3) || (length >= 2 && (data[0] > 9 || data[1] > 127))) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint8_t out[LF_TAG_EM_CONT_LEN];
+    uint16_t n = lf_tag_em_cont_set(length >= 2, length >= 2 ? data[0] : 0, length >= 2 ? data[1] : 0,
+                                    length == 3 ? data[2] : 0, out);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, out);
+}
+
 static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
     uint32_t timeout_ms = 2000;
@@ -3250,6 +3387,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_DEVICE_MODE,              NULL,                        cmd_processor_get_device_mode,               NULL                   },
     {    DATA_CMD_SET_ACTIVE_SLOT,              NULL,                        cmd_processor_set_active_slot,               NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_TYPE,            NULL,                        cmd_processor_set_slot_tag_type,             NULL                   },
+    {    4100,                                  NULL,                        cmd_processor_alias_capture,                 NULL                   },
+    {    4101,                                  NULL,                        cmd_processor_alias_read,                    NULL                   },
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick,             NULL                   },
@@ -3341,6 +3480,16 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
     {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_LF_EMU_STATE,                 NULL,                        cmd_processor_lf_emu_state,                  NULL                   },
+    {    DATA_CMD_LF_EMU_SETTLE,                NULL,                        cmd_processor_lf_emu_settle,                 NULL                   },
+    {    DATA_CMD_LF_EMU_STALL,                 NULL,                        cmd_processor_lf_emu_stall,                  NULL                   },
+    {    DATA_CMD_LF_EMU_DRIVE,                 NULL,                        cmd_processor_lf_emu_drive,                  NULL                   },
+    {    DATA_CMD_LF_EMU_TRIM,                  NULL,                        cmd_processor_lf_emu_trim,                   NULL                   },
+    {    DATA_CMD_LF_EMU_SELFTRIM,              NULL,                        cmd_processor_lf_emu_selftrim,               NULL                   },
+    {    DATA_CMD_LF_EMU_PHASE,                 NULL,                        cmd_processor_lf_emu_phase,                  NULL                   },
+    {    DATA_CMD_LF_EMU_CONT,                  NULL,                        cmd_processor_lf_emu_cont,                   NULL                   },
+    {    DATA_CMD_RESEARCH_SLEEP,               NULL,                        cmd_processor_research_sleep,                NULL                   },
+    {    DATA_CMD_RESEARCH_RESTORE_DUMP,        NULL,                        cmd_processor_research_restore_dump,         NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

@@ -44,6 +44,10 @@ void sleep_timer_stop() {
 
 /**@brief Sleep soft timer startup
  */
+void sleep_system_off_now(void) {
+    m_system_off_enter = true;
+}
+
 void sleep_timer_start(uint32_t time_ms) {
     // Close the previous sleep timer first
     sleep_timer_stop();

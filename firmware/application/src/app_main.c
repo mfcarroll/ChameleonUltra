@@ -40,6 +40,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "rfid_main.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
+#include "lf_selftrim_fsk.h"
 #include "usb_main.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
@@ -1118,6 +1119,8 @@ int main(void) {
 
         // Data pack process
         data_frame_process();
+        // EXPERIMENT: FSK self-trim (capture, detector, decisions)
+        lf_selftrim_fsk_process();
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process
