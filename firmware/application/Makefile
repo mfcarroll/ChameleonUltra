@@ -52,6 +52,7 @@ SRC_FILES += \
   $(PROJ_DIR)/utils/battery_health.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
   $(PROJ_DIR)/utils/fds_util.c \
+  $(PROJ_DIR)/utils/hfxo_count.c \
   $(PROJ_DIR)/utils/syssleep.c \
   $(PROJ_DIR)/utils/timeslot.c \
   $(SDK_ROOT)/modules/nrfx/mdk/gcc_startup_nrf52840.S \

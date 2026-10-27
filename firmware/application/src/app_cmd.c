@@ -14,6 +14,7 @@
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
 #include "delayed_reset.h"
+#include "hfxo_count.h"
 #include "netdata.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
@@ -236,6 +237,33 @@ static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t s
     }
     settings_set_sleep_timeout(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_hfxo_count(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    if (data[0] == 0) {
+        hfxo_count_start();
+    } else if (data[0] == 2) {
+        hfxo_count_stop();
+    }
+    hfxo_count_t c;
+    hfxo_count_read(&c);
+    // v1: u64 ticks, u32 overflows, u32 raw, u16 lapses, u8 running, u8 hfxo_now (big-endian)
+    uint8_t out[20];
+    for (int i = 0; i < 8; i++) {
+        out[i] = (uint8_t)(c.ticks >> (56 - 8 * i));
+    }
+    for (int i = 0; i < 4; i++) {
+        out[8 + i] = (uint8_t)(c.overflows >> (24 - 8 * i));
+        out[12 + i] = (uint8_t)(c.raw >> (24 - 8 * i));
+    }
+    out[16] = (uint8_t)(c.lapses >> 8);
+    out[17] = (uint8_t)c.lapses;
+    out[18] = c.running;
+    out[19] = c.hfxo_now;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
 }
 
 static data_frame_tx_t *cmd_processor_get_ble_pairing_enable(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3248,6 +3276,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_DELETE_SLOT_SENSE_TYPE,       NULL,                        cmd_processor_delete_slot_sense_type,        NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO,             NULL,                        cmd_processor_get_battery_info,              NULL                   },
     {    DATA_CMD_GET_BATTERY_INFO_EX,          NULL,                        cmd_processor_get_battery_info_ex,           NULL                   },
+    {    DATA_CMD_HFXO_COUNT,                   NULL,                        cmd_processor_hfxo_count,                    NULL                   },
     {    DATA_CMD_GET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_get_button_press_config,       NULL                   },
     {    DATA_CMD_SET_BUTTON_PRESS_CONFIG,      NULL,                        cmd_processor_set_button_press_config,       NULL                   },
     {    DATA_CMD_GET_LONG_BUTTON_PRESS_CONFIG, NULL,                        cmd_processor_get_long_button_press_config,  NULL                   },
