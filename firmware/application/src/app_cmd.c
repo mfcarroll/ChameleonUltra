@@ -21,6 +21,7 @@
 #include "lf_em4x05_data.h"
 #include "lf_tag_em.h"
 #include "lf_selftrim_fsk.h"
+#include "lf_exp_fsk.h"
 #include "fsktrim.h"
 #include "rc522.h"
 #include "mf1_crapto1.h"
@@ -2373,6 +2374,14 @@ static data_frame_tx_t *cmd_processor_research_restore_dump(uint16_t cmd, uint16
 
 // research: enter System OFF now (the reply goes out first). Wakes like a battery sleep: a field (LPCOMP), the button,
 // or USB; the noinit RAM is kept, so this tests what a sleep keeps (exp/fsk-phasecont per-slot store).
+// EXPERIMENT: FSK self-trim field test, per-slot presets and what each slot learned (lf_exp_fsk.h).
+static data_frame_tx_t *cmd_processor_exp_fsk(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t out[240];
+    uint16_t st;
+    uint16_t n = lf_exp_fsk_command(data, length, out, &st);
+    return data_frame_make(cmd, st, n, out);
+}
+
 static data_frame_tx_t *cmd_processor_research_sleep(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     sleep_system_off_now();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -3516,6 +3525,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_EMU_CONT,                  NULL,                        cmd_processor_lf_emu_cont,                   NULL                   },
     {    DATA_CMD_RESEARCH_SLEEP,               NULL,                        cmd_processor_research_sleep,                NULL                   },
     {    DATA_CMD_RESEARCH_RESTORE_DUMP,        NULL,                        cmd_processor_research_restore_dump,         NULL                   },
+    {    DATA_CMD_EXP_FSK,                      NULL,                        cmd_processor_exp_fsk,                       NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

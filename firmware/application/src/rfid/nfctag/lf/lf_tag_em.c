@@ -25,6 +25,7 @@
 #include "protocols/pac.h"
 #include "protocols/paradox.h"
 #include "protocols/pyramid.h"
+#include "lf_exp_fsk.h"
 #include "protocols/viking.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
@@ -89,8 +90,9 @@ static volatile uint16_t d_lo_short = 0;   // short (2 ms) checks that read low 
 // the *_req values. The sequence and the pins are brought to them in lf_fsk_sync(), which runs right before
 // every playback start, i.e. only while PWM0 is stopped (pwm_handler at STOPPED, the LPCOMP UP handler while
 // idle, the watchdog after its stop) or from pwm_init. So a change takes effect at the next burst.
-#define IS_FSK_EMU_TYPE(t) ((t) == TAG_TYPE_IOPROX || (t) == TAG_TYPE_HID_PROX)
+#define IS_FSK_EMU_TYPE(t) ((t) == TAG_TYPE_IOPROX || (t) == TAG_TYPE_HID_PROX || (t) == TAG_TYPE_PARADOX)
 static volatile uint8_t m_fsk_drive_req = LF_FSK_DRIVE_DEFAULT;
+static void lf_exp_fsk_sync(void);
 static uint8_t m_fsk_drive_act = LF_FSK_DRIVE_DEFAULT;    // the mode PWM0's pins were set up for
 static tag_specific_type_t m_pwm_init_type = TAG_TYPE_UNDEFINED;  // m_tag_type when pwm_init last ran
 static volatile int16_t m_fsk_trim_req = 0;
@@ -458,6 +460,10 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     }
     d_det++;
     m_lf_bursts = 0;
+    if (IS_FSK_EMU_TYPE(m_tag_type)) {
+        lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset (lf_exp_fsk.h), before the field's first burst
+        lf_exp_fsk_note_field();
+    }
     if (!m_cont_kept_loaded) {
         uint8_t km, kk;
         m_cont_kept_loaded = true;
@@ -834,6 +840,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         hidprox.free(codec);
         m_fsk_seq_dirty = true;  // research exp/fsk-drvtrim: nominal tops; drive and trim applied before playing
         m_fsk_loads++;
+        lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset
         NRF_LOG_INFO("load lf hidprox data finish.");
         return LF_HIDPROX_TAG_ID_SIZE;
     }
@@ -845,6 +852,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         ioprox.free(codec);
         m_fsk_seq_dirty = true;  // research exp/fsk-drvtrim: nominal tops; drive and trim applied before playing
         m_fsk_loads++;
+        lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset
         NRF_LOG_INFO("load lf ioprox data finish.");
         return LF_IOPROX_TAG_ID_SIZE;
     }
@@ -854,6 +862,9 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         void *codec = paradox.alloc();
         m_pwm_seq = paradox.modulator(codec, buffer->buffer);
         paradox.free(codec);
+        m_fsk_seq_dirty = true;  // EXPERIMENT: as HID Prox, drive and trim applied before playing
+        m_fsk_loads++;
+        lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset
         NRF_LOG_INFO("load lf paradox data finish.");
         return LF_PARADOX_TAG_ID_SIZE;
     }
@@ -1166,6 +1177,28 @@ static void lf_cont_apply(uint8_t mode, uint8_t offset) {
     m_cont_auto = mode == 9;
     m_cont_phsel = mode >= 2;
     m_cont_req = mode >= 1;
+}
+
+// EXPERIMENT (lf_exp_fsk.h): bring drive, trim and mode 9 to the active slot's preset, if it or the slot changed.
+// From the load callback and at a field's start (LPCOMP IRQ); takes effect at the next burst, as the commands do.
+static uint8_t m_exp_slot = 0xFF, m_exp_preset = 0xFF;
+static void lf_exp_fsk_sync(void) {
+    const uint8_t slot = tag_emulation_get_slot();
+    const uint8_t preset = lf_exp_fsk_preset(slot);
+    m_cont_kept_loaded = true;  // the preset decides the mode, not the research store's kept mode
+    if (slot == m_exp_slot && preset == m_exp_preset) {
+        return;
+    }
+    m_exp_slot = slot;
+    m_exp_preset = preset;
+    m_fsk_drive_req = preset == LF_EXP_FSK_STOCK ? LF_FSK_DRIVE_LFMOD : LF_FSK_DRIVE_U1;
+    if (preset == LF_EXP_FSK_SELFTRIM) {
+        lf_cont_apply(0, 0);  // off first, so mode 9 starts over (and restores this slot's kept reader)
+        lf_cont_apply(9, LF_EXP_FSK_K);
+    } else {
+        lf_cont_apply(0, 0);
+        m_fsk_trim_req = 0;
+    }
 }
 
 uint16_t lf_tag_em_cont_set(bool set, uint8_t mode, uint8_t offset, uint8_t detune_ppm, uint8_t *o) {

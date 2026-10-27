@@ -339,6 +339,25 @@ bool lf_selftrim_fsk_kept_cont(uint8_t *mode, uint8_t *k) {
     return true;
 }
 
+// EXPERIMENT: forget every slot's kept reader (lf_exp_fsk.c's clear). The mode set with hw lfcont stays.
+void lf_selftrim_fsk_keep_clear(void) {
+    keep9_init_if_bad();
+    memset(m_keep9.slot, 0, sizeof(m_keep9.slot));
+    m_keep9.check = keep9_check();
+}
+
+// EXPERIMENT: what mode 9 kept for a slot (lf_exp_fsk.c's report). False if nothing.
+bool lf_selftrim_fsk_kept_slot(uint8_t slot, uint16_t *type, int16_t *trim, uint32_t *fp_mhz, uint16_t *n) {
+    if (slot >= KEEP9_SLOTS || !keep9_ok() || !m_keep9.slot[slot].valid) {
+        return false;
+    }
+    *type = m_keep9.slot[slot].type;
+    *trim = m_keep9.slot[slot].trim;
+    *fp_mhz = m_keep9.slot[slot].fp_mhz;
+    *n = m_keep9.slot[slot].n;
+    return true;
+}
+
 // Thread, at a new field in mode 9 while unlocked: start from the kept average, locked (no wide search).
 static bool keep9_restore(void) {
     uint8_t slot;
