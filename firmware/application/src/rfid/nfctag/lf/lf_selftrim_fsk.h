@@ -39,5 +39,8 @@ uint16_t lf_selftrim_fsk_rdump(uint16_t off, uint16_t cnt, uint8_t *o);
 bool lf_selftrim_fsk_keep_trim(int16_t *trim);
 void lf_selftrim_fsk_keep_cont(uint8_t mode, uint8_t k);
 bool lf_selftrim_fsk_kept_cont(uint8_t *mode, uint8_t *k);
+// EXPERIMENT: what mode 9 kept for a slot: LF type, trim (steps), averaged reader line (mHz), fields averaged.
+bool lf_selftrim_fsk_kept_slot(uint8_t slot, uint16_t *type, int16_t *trim, uint32_t *fp_mhz, uint16_t *n);
+void lf_selftrim_fsk_keep_clear(void);
 
 #endif

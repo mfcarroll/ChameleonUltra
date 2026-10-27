@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "nrf_pwm.h"
+#include "fsktrim.h"
 #include "t55xx.h"
 
 #define PARADOX_FRAME_BITS (96)
@@ -252,8 +253,9 @@ static void paradox_emit_bit(uint16_t *index, bool bit) {
     uint16_t counter_top = bit ? PARADOX_FSK1_TOP : PARADOX_FSK0_TOP;
 
     for (uint16_t i = 0; i < loop_count; i++) {
-        m_paradox_pwm_seq_vals[*index].channel_0 = counter_top / 2;
-        m_paradox_pwm_seq_vals[*index].counter_top = counter_top;
+        // EXPERIMENT: 16 MHz ticks, as hidprox.c; lf_tag_em.c applies the drive mode and trim (utils/fsktrim.c)
+        m_paradox_pwm_seq_vals[*index].channel_0 = counter_top * LF_FSK_TICKS_PER_CYCLE / 2;
+        m_paradox_pwm_seq_vals[*index].counter_top = counter_top * LF_FSK_TICKS_PER_CYCLE;
         (*index)++;
     }
 }
