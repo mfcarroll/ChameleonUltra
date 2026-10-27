@@ -834,6 +834,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
 
     if (type == TAG_TYPE_HID_PROX && buffer->length >= LF_HIDPROX_TAG_ID_SIZE) {
         m_tag_type = type;
+        g_lf_fsk_exact_bits = (lf_exp_fsk_preset(tag_emulation_get_slot()) & LF_EXP_FSK_EXACT_BITS) != 0;  // EXPERIMENT
         void *codec = hidprox.alloc();
         m_pwm_seq = hidprox.modulator(codec, buffer->buffer);
         hidprox.free(codec);
@@ -858,6 +859,7 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
 
     if (type == TAG_TYPE_PARADOX && buffer->length >= LF_PARADOX_TAG_ID_SIZE) {
         m_tag_type = type;
+        g_lf_fsk_exact_bits = (lf_exp_fsk_preset(tag_emulation_get_slot()) & LF_EXP_FSK_EXACT_BITS) != 0;  // EXPERIMENT
         void *codec = paradox.alloc();
         m_pwm_seq = paradox.modulator(codec, buffer->buffer);
         paradox.free(codec);
@@ -1166,8 +1168,9 @@ static void lf_exp_fsk_sync(void) {
     }
     m_exp_slot = slot;
     m_exp_preset = preset;
-    m_fsk_drive_req = preset == LF_EXP_FSK_STOCK ? LF_FSK_DRIVE_LFMOD : LF_FSK_DRIVE_U1;
-    if (preset == LF_EXP_FSK_SELFTRIM) {
+    const uint8_t mode = preset & LF_EXP_FSK_MODE_MASK;
+    m_fsk_drive_req = mode == LF_EXP_FSK_STOCK ? LF_FSK_DRIVE_LFMOD : LF_FSK_DRIVE_U1;
+    if (mode == LF_EXP_FSK_SELFTRIM) {
         lf_cont_apply(0, 0);  // off first, so mode 9 starts over (and restores this slot's kept reader)
         lf_cont_apply(9, LF_EXP_FSK_K);
     } else {

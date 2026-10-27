@@ -49,3 +49,17 @@ int32_t lf_fsk_prepare(nrf_pwm_values_wave_form_t *v, size_t k, int32_t trim, ui
     }
     return trim;
 }
+
+bool g_lf_fsk_exact_bits = false;
+
+void lf_fsk_emit_bit(nrf_pwm_values_wave_form_t *v, uint16_t *k, lf_fsk_bitclock_t *c, uint16_t top, uint16_t loops,
+                     uint16_t bit_cycles) {
+    const uint32_t target = (c->bits + 1) * bit_cycles;
+    for (uint16_t n = 0; g_lf_fsk_exact_bits ? c->cycles + top / 2 < target : n < loops; n++) {
+        v[*k].channel_0 = top * LF_FSK_TICKS_PER_CYCLE / 2;
+        v[*k].counter_top = top * LF_FSK_TICKS_PER_CYCLE;
+        (*k)++;
+        c->cycles += top;
+    }
+    c->bits++;
+}

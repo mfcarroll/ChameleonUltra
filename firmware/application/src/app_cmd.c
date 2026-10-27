@@ -2355,6 +2355,11 @@ static data_frame_tx_t *cmd_processor_exp_fsk(uint16_t cmd, uint16_t status, uin
     uint8_t out[240];
     uint16_t st;
     uint16_t n = lf_exp_fsk_command(data, length, out, &st);
+    if (st == STATUS_SUCCESS && length == 2 && data[0] == tag_emulation_get_slot()) {
+        // the active slot: reload it now (as hw slot change does), so the new preset and bit timing apply at once
+        tag_emulation_change_slot(data[0], get_device_mode() != DEVICE_MODE_READER);
+        n = lf_exp_fsk_command(NULL, 0, out, &st);
+    }
     return data_frame_make(cmd, st, n, out);
 }
 
