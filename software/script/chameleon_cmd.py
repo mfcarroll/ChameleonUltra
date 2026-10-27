@@ -1834,6 +1834,26 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def hfxo_count(self, sub: int):
+        """
+        16 MHz HFCLK tick counter with HFXO held (0 start, 1 read, 2 stop)
+        """
+        resp = self.device.send_cmd_sync(Command.HFXO_COUNT, struct.pack("!B", sub))
+        if resp.status == Status.SUCCESS:
+            ticks, overflows, raw, lapses, running, hfxo = struct.unpack(
+                "!QIIHBB", resp.data[:20]
+            )
+            resp.parsed = {
+                "ticks": ticks,
+                "overflows": overflows,
+                "raw": raw,
+                "lapses": lapses,
+                "running": bool(running),
+                "hfxo": bool(hfxo),
+            }
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def get_button_press_config(self, button: ButtonType):
         """
         Get config of button press function

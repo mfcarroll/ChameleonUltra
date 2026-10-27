@@ -123,6 +123,7 @@
 #define DATA_CMD_PYRAMID_SCAN                   (3021)
 #define DATA_CMD_PARADOX_SCAN                   (3022)
 #define DATA_CMD_PARADOX_WRITE_TO_T55XX         (3023)
+#define DATA_CMD_HFXO_COUNT                     (3125)  // u8: 0 start, 1 read, 2 stop
 
 //
 // ******************************************************************
