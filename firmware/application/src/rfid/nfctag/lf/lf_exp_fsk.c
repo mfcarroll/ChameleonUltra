@@ -25,6 +25,10 @@ static __attribute__((section(".noinit_expfsk"))) struct {
     uint16_t fields[EXP_SLOTS];
 } m_fields;
 
+static bool preset_ok(uint8_t p) {
+    return (p & LF_EXP_FSK_MODE_MASK) <= LF_EXP_FSK_SELFTRIM && (p & ~(LF_EXP_FSK_MODE_MASK | LF_EXP_FSK_EXACT_BITS)) == 0;
+}
+
 static void presets_load(void) {
     uint16_t len = sizeof(m_presets);
     if (!fds_read_sync(EXP_FDS_FILE_ID, EXP_FDS_RECORD_KEY, &len, m_presets) || len != sizeof(m_presets)) {
@@ -40,7 +44,7 @@ uint8_t lf_exp_fsk_preset(uint8_t slot) {
         }
         presets_load();
     }
-    if (slot >= EXP_SLOTS || m_presets[slot] > LF_EXP_FSK_SELFTRIM) {
+    if (slot >= EXP_SLOTS || !preset_ok(m_presets[slot])) {
         return LF_EXP_FSK_DEFAULT_PRESET;
     }
     return m_presets[slot];
@@ -84,7 +88,7 @@ uint16_t lf_exp_fsk_command(const uint8_t *req, uint16_t len, uint8_t *o, uint16
         m_fields.magic = EXP_FIELDS_MAGIC;
         lf_selftrim_fsk_keep_clear();
     } else if (len == 2) {
-        if (req[0] >= EXP_SLOTS || (req[1] > LF_EXP_FSK_SELFTRIM && req[1] != 0xFF)) {
+        if (req[0] >= EXP_SLOTS || (!preset_ok(req[1]) && req[1] != 0xFF)) {
             *status = STATUS_PAR_ERR;
             return 0;
         }

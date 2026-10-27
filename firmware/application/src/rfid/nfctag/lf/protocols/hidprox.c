@@ -24,7 +24,7 @@
 #define LF_FSK2a_PWM_HI_FREQ_LOOP (6)
 #define LF_FSK2a_PWM_HI_FREQ_TOP_VALUE (8)
 
-static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * 6] = {};
+static nrf_pwm_values_wave_form_t m_hidprox_pwm_seq_vals[HIDPROX_RAW_SIZE * 7] = {};  // EXPERIMENT: exact bits take up to 7
 
 nrf_pwm_sequence_t m_hidprox_pwm_seq = {
     .values.p_wave_form = m_hidprox_pwm_seq_vals,
@@ -200,7 +200,8 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
 
     uint32_t hi, mid, bot;
     hidprox_raw_data(&card, &hi, &mid, &bot);
-    int k = 0;
+    uint16_t k = 0;
+    lf_fsk_bitclock_t clk = {0};
     for (int i = 0; i < HIDPROX_RAW_SIZE; i++) {
         bool bit = false;
         if (i < 32) {
@@ -211,17 +212,9 @@ const nrf_pwm_sequence_t *hidprox_modulator(hidprox_codec *d, uint8_t *buf) {
             bit = (bot >> (95 - i)) & 1;
         }
         if (!bit) {
-            for (int j = 0; j < LF_FSK2a_PWM_HI_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_HI_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE;
-                k++;
-            }
+            lf_fsk_emit_bit(m_hidprox_pwm_seq_vals, &k, &clk, LF_FSK2a_PWM_HI_FREQ_TOP_VALUE, LF_FSK2a_PWM_HI_FREQ_LOOP, 50);
         } else {
-            for (int j = 0; j < LF_FSK2a_PWM_LO_FREQ_LOOP; j++) {
-                m_hidprox_pwm_seq_vals[k].channel_0 = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE / 2;
-                m_hidprox_pwm_seq_vals[k].counter_top = LF_FSK2a_PWM_LO_FREQ_TOP_VALUE * LF_FSK_TICKS_PER_CYCLE;
-                k++;
-            }
+            lf_fsk_emit_bit(m_hidprox_pwm_seq_vals, &k, &clk, LF_FSK2a_PWM_LO_FREQ_TOP_VALUE, LF_FSK2a_PWM_LO_FREQ_LOOP, 50);
         }
     }
     m_hidprox_pwm_seq.length = k * 4;

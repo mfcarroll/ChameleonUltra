@@ -13,7 +13,7 @@
 #define PARADOX_PREAMBLE_BITS (8)
 #define PARADOX_PREAMBLE (0x0F)
 #define PARADOX_DATA_BITS (44)
-#define PARADOX_PWM_MAX_ENTRIES (PARADOX_FRAME_BITS * 6)
+#define PARADOX_PWM_MAX_ENTRIES (PARADOX_FRAME_BITS * 7)  // EXPERIMENT: exact bits take up to 7
 #define PARADOX_PHASE_COUNT (2)
 #define PARADOX_PHASE_OFFSET (25)
 #define PARADOX_GOERTZEL_15625 (1.41421356237f)
@@ -248,26 +248,22 @@ static bool paradox_decoder_feed(void *codec_ptr, uint16_t sample) {
     return found;
 }
 
-static void paradox_emit_bit(uint16_t *index, bool bit) {
+static void paradox_emit_bit(uint16_t *index, lf_fsk_bitclock_t *clk, bool bit) {
     uint16_t loop_count = bit ? PARADOX_FSK1_LOOP : PARADOX_FSK0_LOOP;
     uint16_t counter_top = bit ? PARADOX_FSK1_TOP : PARADOX_FSK0_TOP;
-
-    for (uint16_t i = 0; i < loop_count; i++) {
-        // EXPERIMENT: 16 MHz ticks, as hidprox.c; lf_tag_em.c applies the drive mode and trim (utils/fsktrim.c)
-        m_paradox_pwm_seq_vals[*index].channel_0 = counter_top * LF_FSK_TICKS_PER_CYCLE / 2;
-        m_paradox_pwm_seq_vals[*index].counter_top = counter_top * LF_FSK_TICKS_PER_CYCLE;
-        (*index)++;
-    }
+    // EXPERIMENT: 16 MHz ticks, as hidprox.c; lf_tag_em.c applies the drive mode and trim (utils/fsktrim.c)
+    lf_fsk_emit_bit(m_paradox_pwm_seq_vals, index, clk, counter_top, loop_count, PARADOX_FSK_BITRATE);
 }
 
 static nrf_pwm_sequence_t *paradox_modulator(void *codec_ptr, uint8_t *data) {
     (void)codec_ptr;
     uint8_t frame[PARADOX_FRAME_BITS];
     uint16_t index = 0;
+    lf_fsk_bitclock_t clk = {0};
 
     paradox_build_frame(data, frame);
     for (uint8_t i = 0; i < PARADOX_FRAME_BITS; i++) {
-        paradox_emit_bit(&index, frame[i] != 0);
+        paradox_emit_bit(&index, &clk, frame[i] != 0);
     }
 
     m_paradox_pwm_seq.length = (uint16_t)(index * 4);
