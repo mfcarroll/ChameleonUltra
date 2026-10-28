@@ -219,6 +219,23 @@ static bool m_auto_remeasure;
 #define AUTO_WIDE_TRIES  4      // wide searches per field before waiting for the next field
 #define AUTO_AGREE_PPM   12.0f  // two wide results this close lock (a noise line at 16 dB rarely repeats)
 static uint8_t m_auto_tries;
+// research exp/fsk-selftrim-wide: the wide search covers +/-SELFTRIM_WIDE_MAX_PPM by FFT (selftrim_detect_fft). The
+// 20 kHz capture puts the reader at 5000 Hz + 0.125 Hz/ppm, so the band edges (0 and 10 kHz) are +/-40000 ppm; a real
+// reader was found at -4187 (READERS-pavilion-2026-10-28). LF_FSK_TRIM_MAX_PPM must cover it.
+#define SELFTRIM_WIDE_MAX_PPM 35000.0f
+
+// Trim (ticks per frame) <-> ppm, exactly: a trim t makes the frame N - t ticks of a nominal N (= the frame as played
+// plus the trim in it), so the subcarrier runs N / (N - t) times its rate. The linear t * 1e6 / frame is ~1e-6 ppm^2
+// out: 18 ppm at -4200, 1300 at 3.5 %.
+static double trim_ppm(const lf_tag_em_fsk_info_t *i, int32_t t) {
+    const double n = (double)i->frame_ticks + i->trim_act;
+    return 1e6 * (n / (n - t) - 1.0);
+}
+
+static int16_t ppm_trim(const lf_tag_em_fsk_info_t *i, double ppm) {
+    const double n = (double)i->frame_ticks + i->trim_act;
+    return (int16_t)lround(n * (1.0 - 1.0 / (1.0 + ppm * 1e-6)));
+}
 static bool m_auto_have_cand;
 static float m_auto_cand_ppm;   // set by ph_compute: measure again on the next burst (same field)
 static bool m_auto_locked;
@@ -472,8 +489,7 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
         y[q] = (xq - mean) * (0.5f - 0.5f * cosf(2.0f * 3.14159265358979f * q / (n - 1)));
     }
     // the reader sits where the emulate trim (assumed matched) puts our own line: 5000 Hz + ppm * 0.125 Hz
-    const float pps = 1e6f / (float)i->frame_ticks;
-    const float f_exp = 5000.0f + (float)i->trim_req * pps * 0.125f;
+    const float f_exp = 5000.0f + (float)trim_ppm(i, i->trim_req) * 0.125f;
     const int ns = (int)(PH_SCAN_HZ / PH_STEP_HZ);
     float bm = 0.0f, ma = 0.0f, mc = 0.0f;
     int bi = 0;
@@ -514,7 +530,7 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
     m_ph_fp_mhz = (uint32_t)lroundf(fp * 1000.0f);
     m_ph_count++;
     // our own line: the measure burst's trim puts it at 5000 Hz + ppm * 0.125 Hz, the detune away from f_exp
-    const float f_self = 5000.0f + (float)i->trim_act * pps * 0.125f;
+    const float f_self = 5000.0f + (float)trim_ppm(i, i->trim_act) * 0.125f;
     const float self = ph_mag(y, n, f_self, NULL, NULL);
     m_ph_self_snr10 = (int16_t)lroundf(noise > 0.0f && self > 0.0f ? 200.0f * log10f(self / noise) : 990.0f);
     float other = 0.0f;
@@ -600,8 +616,8 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
         // coarse: the wide search is good to ~10 ppm, so act on the first narrow result if it is > 1.5 steps off;
         // fine: once AUTO_MIN_N fields are averaged, beyond 0.6 of a step
         const double step_hz = 125000.0 / (double)i->frame_ticks;  // alias Hz per trim step
-        const int16_t want = (int16_t)lround((m_fp_avg - 5000.0) / step_hz);
-        const double off = fabs(m_fp_avg - (5000.0 + i->trim_req * step_hz));
+        const int16_t want = ppm_trim(i, (m_fp_avg - 5000.0) / 0.125);
+        const double off = fabs(m_fp_avg - (5000.0 + trim_ppm(i, i->trim_req) * 0.125));
         int16_t trim_now = i->trim_req;
         if (want != i->trim_req && (off > 1.5 * step_hz || (m_fp_n >= AUTO_MIN_N && off > 0.6 * step_hz))) {
             set_trim(want);
@@ -644,18 +660,31 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     }
     int16_t *x = buf + 12288;  // copy: 4000 samples; the detector's floats go to buf[4096..12096)
     memcpy(x, buf, PH_SAMPLES * sizeof(int16_t));
-    const float pps = 1e6f / (float)iv->frame_ticks;
+    memcpy(m_rdump, x, sizeof(m_rdump));  // 3100: the latest wide search's capture (outcome 4)
     selftrim_result_t r;
     const float floor_db = g_selftrim_min_snr_db;
     g_selftrim_min_snr_db = AUTO_WIDE_SNR;
     const float self_hz = g_selftrim_self_hz;
     g_selftrim_self_hz = AUTO_WIDE_SELF_HZ;
-    selftrim_detect(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, (float)iv->trim_act * pps, 0.0f,
-                    (float *)(void *)(buf + 4096), &r);
+    selftrim_detect_fft(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, (float)trim_ppm(iv, iv->trim_act),
+                        16e6f / (float)iv->frame_ticks, SELFTRIM_WIDE_MAX_PPM, (float *)(void *)(buf + 4096), &r);
     g_selftrim_min_snr_db = floor_db;
     g_selftrim_self_hz = self_hz;
     m_auto_wides++;
-    m_auto_wide_ppm10 = (int16_t)lroundf(r.ppm * 10.0f);
+    const float p10 = r.ppm * 10.0f;  // s16 telemetry: +/-3276.7 ppm, saturated
+    m_auto_wide_ppm10 = (int16_t)(p10 > 32767.0f ? 32767 : p10 < -32767.0f ? -32767 : lroundf(p10));
+    m_rdump_meta.valid = 1;
+    m_rdump_meta.outcome = 4;
+    m_rdump_meta.det = iv->det;
+    m_rdump_meta.trim_req = iv->trim_req;
+    m_rdump_meta.trim_act = iv->trim_act;
+    m_rdump_meta.frame_ticks = iv->frame_ticks;
+    m_rdump_meta.f_exp_mhz = 0;
+    m_rdump_meta.fp_mhz = (uint32_t)lroundf(r.fpk * 1000.0f);
+    m_rdump_meta.snr10 = (int16_t)lroundf(r.snr_db * 10.0f);
+    m_rdump_meta.bi = (int8_t)r.why;
+    m_rdump_meta.other_db10 = r.valid;
+    m_rdump_meta.self_snr10 = 0;
     if (r.valid && !(m_auto_have_cand && fabsf(r.ppm - m_auto_cand_ppm) < AUTO_AGREE_PPM)) {
         m_auto_have_cand = true;  // first sighting (or a disagreeing one): wait for a second that agrees
         m_auto_cand_ppm = r.ppm;
@@ -664,7 +693,7 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     if (r.valid) {
         const float ppm = 0.5f * (r.ppm + m_auto_cand_ppm);
         m_auto_have_cand = false;
-        const int16_t t = (int16_t)lroundf(ppm / pps);
+        const int16_t t = ppm_trim(iv, ppm);
         set_trim(t);
         iv->trim_req = t;
         m_fp_n = 0;  // a new reader: restart the average

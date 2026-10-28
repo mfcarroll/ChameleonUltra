@@ -36,9 +36,14 @@ int32_t lf_fsk_prepare(nrf_pwm_values_wave_form_t *v, size_t k, int32_t trim, ui
     }
     uint32_t n = (uint32_t)(trim < 0 ? -trim : trim);
     if (k != 0 && n != 0) {
+        // in proportion to each period's length (exp/fsk-selftrim-wide), so every edge stays within a tick of the
+        // whole waveform scaled; per period index gave fc/8 and fc/10 the same ticks, which at thousands of ppm
+        // (several ticks a period) puts runs of one tone off the reader's carrier
         uint32_t prev = 0;
+        uint64_t upto = 0;
         for (size_t i = 0; i < k; i++) {
-            uint32_t next = (uint32_t)(((uint64_t)(i + 1) * n) / k);
+            upto += v[i].counter_top;  // still the nominal top (the loop above), until this period's adj below
+            uint32_t next = (uint32_t)((upto * n) / nominal);
             uint16_t adj = (uint16_t)(next - prev);
             prev = next;
             v[i].counter_top = (uint16_t)(trim > 0 ? v[i].counter_top - adj : v[i].counter_top + adj);
