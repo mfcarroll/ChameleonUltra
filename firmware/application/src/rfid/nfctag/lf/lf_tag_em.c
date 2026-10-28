@@ -107,6 +107,7 @@ static uint16_t d_fsk_prep = 0, d_fsk_reinit = 0;
 // while LF_MOD switches (modes 0, 2), and the Flipper reads best in mode 1. m_fsk_measure_playing is set when a
 // burst starts in the measure drive, so the capture lines up with it.
 static volatile bool m_fsk_measure_on = false;
+static bool m_fsk_measure_alt = false;  // exp/fsk-selftrim-wide: lf_tag_em_fsk_measure_alt
 static volatile uint8_t m_fsk_measure_drive = LF_FSK_DRIVE_U1_SAME;
 static volatile bool m_fsk_measure_playing = false;
 static volatile uint16_t d_fsk_measure_bursts = 0;
@@ -162,9 +163,11 @@ static volatile bool m_cont_measure_lfmod = false;
 static volatile uint8_t m_cont_detune_ppm = 240;  // 30 Hz = 6 bins of the 200 ms capture: our own line's leakage has a
                                                    // null at the window and it sits outside the leakage check (F4)
 static volatile bool m_cont_short_measure = false;
-// Mode 8: mode 7 whose measure burst carries no ID: a constant fc/8 tone (LF_CONT_IDLE_PERIODS periods, the same
-// 4096 carrier cycles as an HID/ioProx frame, so a trim step is the same ppm), trimmed and driven like the emulate
-// sequence. The capture needs LF_MOD switching, not our data; a reader then sees no frame for ~260 ms instead of a
+// Mode 8: mode 7 whose measure burst carries no ID: a constant fc/8 tone (LF_CONT_IDLE_PERIODS periods, 4096 carrier
+// cycles), trimmed to the same ppm as the emulate sequence and driven like it. (exp/fsk-selftrim-wide: the trim was the
+// frame's tick count, the same ppm only for a 4096-cycle frame (ioProx). An HID frame is 4704 cycles, so the idle tone
+// ran 15 % further off than the frame: the -240 ppm measure detune played at -276.6, outside self-trim's exclusion of
+// our own line, which then locked on itself at a reader it could not see (Pavilion P1 elevator).) The capture needs LF_MOD switching, not our data; a reader then sees no frame for ~260 ms instead of a
 // detuned, fading one it can bit-slip into a wrong ID (NOTES-burst1 section 8).
 #define LF_CONT_IDLE_PERIODS 512u
 #define LF_CONT_IDLE_LOOPS   8u  // 8 x 32.8 ms: room for the 200 ms capture and its compute
@@ -189,8 +192,15 @@ static const nrf_pwm_sequence_t *lf_cont_idle_seq(void) {
         m_idle_vals[i].channel_1 = 0;
         m_idle_vals[i].channel_2 = v0[0].channel_2;
     }
+    // the frame's trim in ticks, scaled to the idle tone's length: the same ppm
+    const uint64_t frame_nominal = (uint64_t)((int64_t)m_fsk_frame_ticks + m_fsk_trim_act);
+    const int64_t idle_nominal = (int64_t)LF_CONT_IDLE_PERIODS * 8 * LF_FSK_TICKS_PER_CYCLE;
+    const int64_t want = fsk_trim_want();
+    const int32_t trim = frame_nominal == 0 ? (int32_t)want
+                                            : (int32_t)((want * idle_nominal * 2 + (want < 0 ? -1 : 1) * (int64_t)frame_nominal) /
+                                                        (int64_t)(frame_nominal * 2));
     uint32_t ft;
-    lf_fsk_prepare(m_idle_vals, LF_CONT_IDLE_PERIODS, fsk_trim_want(), m_fsk_drive_act, &ft);
+    lf_fsk_prepare(m_idle_vals, LF_CONT_IDLE_PERIODS, trim, m_fsk_drive_act, &ft);
     m_idle_seq.values.p_wave_form = m_idle_vals;
     m_idle_seq.length = LF_CONT_IDLE_PERIODS * 4u;
     m_idle_seq.repeats = m_pwm_seq->repeats;
@@ -484,6 +494,9 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         m_fsk_measure_detune = m_cont_measure_lfmod
                                    ? 0
                                    : -(int16_t)(((uint64_t)m_fsk_frame_ticks * m_cont_detune_ppm + 500000u) / 1000000u);
+        if (m_fsk_measure_alt) {
+            lf_tag_em_fsk_measure_alt(true);  // exp/fsk-selftrim-wide: a pair's second capture can be in a later field
+        }
         m_fsk_measure_on = true;
     } else {
         m_fsk_measure_detune = 0;  // self-trim's measure bursts are not detuned (a phase-select field left it set)
@@ -1460,6 +1473,20 @@ void lf_tag_em_fsk_info(lf_tag_em_fsk_info_t *i) {
     i->det = d_det;
     i->loads = m_fsk_loads;
     i->measure_bursts = d_fsk_measure_bursts;
+}
+
+// exp/fsk-selftrim-wide: the measure detune for the following measure bursts: the usual -m_cont_detune_ppm, or (alt)
+// +LF_CONT_ALT_DETUNE_PPM, so a second capture's idle tone runs at a different rate (the wide search keeps the lines
+// that stay put: the reader's). Kept across fields until cleared: a short field (a PM3's reads) gives one capture.
+#define LF_CONT_ALT_DETUNE_PPM 1760u  // 2000 ppm from -240: our tone's h1 moves 31 Hz (6 bins of the 200 ms capture)
+void lf_tag_em_fsk_measure_alt(bool alt) {
+    m_fsk_measure_alt = alt;
+    if (m_cont_measure_lfmod) {
+        return;
+    }
+    const uint64_t ppm = alt ? LF_CONT_ALT_DETUNE_PPM : m_cont_detune_ppm;
+    const int16_t ticks = (int16_t)(((uint64_t)m_fsk_frame_ticks * ppm + 500000u) / 1000000u);
+    m_fsk_measure_detune = alt ? ticks : (int16_t)-ticks;
 }
 
 void lf_tag_em_fsk_measure(bool on, uint8_t drive) {

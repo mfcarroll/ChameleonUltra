@@ -217,7 +217,6 @@ static bool m_auto_remeasure;
 #define AUTO_WIDE_SNR    20.0f  // the wide search's floor (default 22 dB is for a 410 ms capture; 16 let an artifact line near -216 ppm lock)
 #define AUTO_WIDE_SELF_HZ 2.5f  // +-20 ppm around our own measure line (a result at 11.6 ppm from it recurred)
 #define AUTO_WIDE_TRIES  4      // wide searches per field before waiting for the next field
-#define AUTO_AGREE_PPM   12.0f  // two wide results this close lock (a noise line at 16 dB rarely repeats)
 static uint8_t m_auto_tries;
 // research exp/fsk-selftrim-wide: the wide search covers +/-SELFTRIM_WIDE_MAX_PPM by FFT (selftrim_detect_fft). The
 // 20 kHz capture puts the reader at 5000 Hz + 0.125 Hz/ppm, so the band edges (0 and 10 kHz) are +/-40000 ppm; a real
@@ -236,8 +235,10 @@ static int16_t ppm_trim(const lf_tag_em_fsk_info_t *i, double ppm) {
     const double n = (double)i->frame_ticks + i->trim_act;
     return (int16_t)lround(n * (1.0 - 1.0 / (1.0 + ppm * 1e-6)));
 }
-static bool m_auto_have_cand;
-static float m_auto_cand_ppm;   // set by ph_compute: measure again on the next burst (same field)
+// exp/fsk-selftrim-wide: the wide search's capture A (auto_wide): its |X[k]|, field and our own line
+static float m_wide_a[SELFTRIM_FFT_N / 2];
+static bool m_wide_have_a;
+static float m_wide_a_own;
 static bool m_auto_locked;
 static uint16_t m_auto_gen_seen = 0xFFFF;
 static uint16_t m_auto_moves, m_auto_rejects, m_auto_wides, m_auto_bad_run;
@@ -388,7 +389,7 @@ static bool keep9_restore(void) {
     m_fp_n = e->n < AUTO_MIN_N ? e->n : AUTO_MIN_N;
     m_auto_locked = true;
     m_auto_bad_run = 0;
-    m_auto_have_cand = false;
+    m_wide_have_a = false;
     m_keep_fresh = true;
     m_keep_restores++;
     return true;
@@ -595,7 +596,7 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
         // a valid narrow line where the trim expects the reader is a lock too (at a weak coupling the wide search may
         // never get two agreeing results)
         m_auto_locked = true;
-        m_auto_have_cand = false;
+        m_wide_have_a = false;
     }
     // phase of the line at the window centre k_c = (n - 1) / 2, in cycles
     const double kc = (n - 1) / 2.0;
@@ -652,22 +653,40 @@ static void ph_stop(void) {
 
 // Mode 9, unlocked: the wide detector on a copy of the capture (ph_compute then reuses the raw samples). On a valid
 // result the trim is set to the reader and the narrow search below (f_exp from trim_req) looks there.
+// exp/fsk-selftrim-wide: in pairs within a field. Capture A keeps its spectrum and asks for the next measure burst with
+// our tone at another rate (lf_tag_em_fsk_measure_alt); capture B, in this field or a later one (a PM3's fields are
+// short), is searched against it, so only lines that did not move with our tone count. A and B from two different
+// readers have nothing in common: no lock, and the next capture starts a new pair. A valid B result locks: the pair replaces the two agreeing results the +-300 search waited
+// for. The 3100 dump holds capture B.
+#define WIDE_PAIR_MIN_PPM 1000.0f  // our tone must have moved this much between A and B (the pair is 2000 apart)
 static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     size_t cap;
     int16_t *buf = lf_tag_em_alias_buffer(&cap);
     if (cap < 16384u) {
         return;
     }
-    int16_t *x = buf + 12288;  // copy: 4000 samples; the detector's floats go to buf[4096..12096)
+    int16_t *x = buf + 12288;  // copy: 4000 samples; the detector's floats go to buf[4096..12288)
     memcpy(x, buf, PH_SAMPLES * sizeof(int16_t));
+    float *work = (float *)(void *)(buf + 4096);
+    const float own = (float)trim_ppm(iv, iv->trim_act);  // our own line in this capture (the measure detune included)
+    if (!m_wide_have_a || fabsf(own - m_wide_a_own) < WIDE_PAIR_MIN_PPM) {
+        // capture A (or a B whose tone did not move: a new A); the next one at the other rate
+        selftrim_fft_mags(x, PH_SAMPLES, work);
+        memcpy(m_wide_a, work, sizeof(m_wide_a));
+        m_wide_have_a = true;
+        m_wide_a_own = own;
+        lf_tag_em_fsk_measure_alt(iv->trim_act <= iv->trim_req);  // detuned down now (the usual): up next
+        return;
+    }
+    m_wide_have_a = false;
+    lf_tag_em_fsk_measure_alt(false);
     memcpy(m_rdump, x, sizeof(m_rdump));  // 3100: the latest wide search's capture (outcome 4)
     selftrim_result_t r;
     const float floor_db = g_selftrim_min_snr_db;
     g_selftrim_min_snr_db = AUTO_WIDE_SNR;
     const float self_hz = g_selftrim_self_hz;
     g_selftrim_self_hz = AUTO_WIDE_SELF_HZ;
-    selftrim_detect_fft(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, (float)trim_ppm(iv, iv->trim_act),
-                        16e6f / (float)iv->frame_ticks, SELFTRIM_WIDE_MAX_PPM, (float *)(void *)(buf + 4096), &r);
+    selftrim_detect_fft(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, own, SELFTRIM_WIDE_MAX_PPM, m_wide_a, work, &r);
     g_selftrim_min_snr_db = floor_db;
     g_selftrim_self_hz = self_hz;
     m_auto_wides++;
@@ -679,20 +698,15 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     m_rdump_meta.trim_req = iv->trim_req;
     m_rdump_meta.trim_act = iv->trim_act;
     m_rdump_meta.frame_ticks = iv->frame_ticks;
-    m_rdump_meta.f_exp_mhz = 0;
+    m_rdump_meta.f_exp_mhz = (uint32_t)lroundf((5000.0f + 0.125f * m_wide_a_own) * 1000.0f);  // capture A's own line
     m_rdump_meta.fp_mhz = (uint32_t)lroundf(r.fpk * 1000.0f);
     m_rdump_meta.snr10 = (int16_t)lroundf(r.snr_db * 10.0f);
     m_rdump_meta.bi = (int8_t)r.why;
     m_rdump_meta.other_db10 = r.valid;
     m_rdump_meta.self_snr10 = 0;
-    if (r.valid && !(m_auto_have_cand && fabsf(r.ppm - m_auto_cand_ppm) < AUTO_AGREE_PPM)) {
-        m_auto_have_cand = true;  // first sighting (or a disagreeing one): wait for a second that agrees
-        m_auto_cand_ppm = r.ppm;
-        return;
-    }
     if (r.valid) {
-        const float ppm = 0.5f * (r.ppm + m_auto_cand_ppm);
-        m_auto_have_cand = false;
+        const float ppm = r.ppm;
+        m_wide_have_a = false;
         const int16_t t = ppm_trim(iv, ppm);
         set_trim(t);
         iv->trim_req = t;

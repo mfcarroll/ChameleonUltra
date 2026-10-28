@@ -268,13 +268,18 @@ void selftrim_detect(const int16_t *x, uint16_t n, float fs, float carrier, floa
 // -4187 ppm, READERS-pavilion-2026-10-28). One real FFT of the windowed capture gives every bin; the strongest line
 // is then refined and classified by finish(), as the scan's is.
 //
-// The reader's carrier harmonics alias into the same band (harmonic h of a carrier f lands at fold(h f)). A line
-// that is the image of another line's harmonic is taken back to that fundamental, and our own line's images are
-// skipped like our own line.
+// What else is in the band (PM3 bench, NOTES-wide-2026-10-28): the measure burst's idle tone (fc/8) and all its
+// harmonics, folded, are the strongest lines; the reader's carrier mixed with them (fr +- k fc/8) can beat the carrier
+// itself, and from one capture any member of that comb is as good a reader as the carrier. So: our tone's harmonics are
+// excluded, and with a second capture whose tone ran at another rate (other), only lines in both at the same frequency
+// count (per bin, the smaller magnitude): the reader's carrier stays put, our harmonics and every product move. The
+// reader's own harmonics alias in too (harmonic h of f lands at fold(h f)); a line that is the image of another line's
+// harmonic is taken back to that fundamental.
 
 #define FFT_N       SELFTRIM_FFT_N
 #define FFT_HARM    (7)     // harmonics checked as images: 2 .. FFT_HARM
 #define FFT_CAND    (16)    // strongest local maxima considered
+#define FFT_OWN_HARM (24)   // our tone's harmonics excluded: 1 .. FFT_OWN_HARM (h8 is our own line)
 
 static float m_fft_noise[MAX_NOISE];
 
@@ -351,8 +356,24 @@ static float fold(double f, float fs) {
     return (float)(r > fs / 2.0 ? fs - r : r);
 }
 
-void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float self_ppm, float frame_hz,
-                         float max_ppm, float *work, selftrim_result_t *r) {
+void selftrim_fft_mags(const int16_t *x, uint16_t n, float *work) {
+    if (n > FFT_N) {
+        n = FFT_N;
+    }
+    hann_into(work, x, n);
+    for (int i = n; i < FFT_N; i++) {
+        work[i] = 0.0f;
+    }
+    fft_complex(work, FFT_N / 2);
+    real_mags(work);
+    for (int k = 1; k < FFT_N / 2; k++) {
+        work[k] = work[2 * k];  // compact: |X[k]| at work[k] (k < 2k: nothing unread is overwritten)
+    }
+    work[0] = 0.0f;
+}
+
+void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float own_ppm, float max_ppm,
+                         const float *other, float *work, selftrim_result_t *r) {
     if (n > FFT_N) {
         n = FFT_N;
     }
@@ -361,54 +382,66 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
     const bool mirrored = carrier < m * fs;
     const float hz_per_ppm = carrier * 1e-6f * (mirrored ? -1.0f : 1.0f);
     const float binw = fs / FFT_N;
+    // the idle tone's fc/8 on our clock, from our own line's ppm (its 8th harmonic is our own line)
+    const double fsc = (double)carrier / 8.0 * (1.0 + (double)own_ppm * 1e-6);
 
-    hann_into(work, x, n);
-    for (int i = n; i < FFT_N; i++) {
-        work[i] = 0.0f;
-    }
-    fft_complex(work, FFT_N / 2);
-    real_mags(work);
-#define MAG(k) work[2 * (k)]
+    selftrim_fft_mags(x, n, work);
+    const float *mag = work;  // |X[k]|, k < FFT_N / 2; FFT_N / 2 .. FFT_N - 1 free for the combined spectrum
+    float *cmb = work + FFT_N / 2;
 
     const float span = max_ppm * fabsf(hz_per_ppm);
     int klo = (int)floorf((f0 - span) / binw) - 1, khi = (int)ceilf((f0 + span) / binw) + 1;
     klo = klo < 2 ? 2 : klo;
     khi = khi > FFT_N / 2 - 2 ? FFT_N / 2 - 2 : khi;
 
-    // noise: the median bin across the window (lines are few), on at most MAX_NOISE bins
+    // noise: the median bin across this capture's window (lines are few), on at most MAX_NOISE bins
     const int stride = (khi - klo) / MAX_NOISE + 1;
     int nn = 0;
     for (int k = klo; k <= khi && nn < MAX_NOISE; k += stride) {
-        m_fft_noise[nn++] = MAG(k);
+        m_fft_noise[nn++] = mag[k];
     }
     const float noise = nn ? median(m_fft_noise, nn) : 0.0f;
     const float thr = noise * powf(10.0f, g_selftrim_min_snr_db / 20.0f);
 
-    // our own line, its frame sidebands and its harmonics' images are not the reader
-    const float fself = f0 + self_ppm * hz_per_ppm;
-    const double fr_self = (double)carrier * (1.0 + (double)self_ppm * 1e-6);
-    const int nsb = frame_hz > 0.0f ? 8 : 0;
-    const float excl = fmaxf(g_selftrim_self_hz, 0.6f * binw);
+    // the lines both captures have where they are: the reader's carrier; our tone's harmonics and the reader mixed
+    // with them move with our rate and drop out
+    // (the earlier capture scaled to this one's noise floor first: field strength and gain differ between captures)
+    float scale = 1.0f;
+    if (other) {
+        int no = 0;
+        for (int k = klo; k <= khi && no < MAX_NOISE; k += stride) {
+            m_fft_noise[no++] = other[k];
+        }
+        const float onoise = no ? median(m_fft_noise, no) : 0.0f;
+        scale = onoise > 0.0f ? noise / onoise : 1.0f;
+    }
+    for (int k = klo - 1; k <= khi + 1; k++) {
+        cmb[k] = other ? fminf(mag[k], other[k] * scale) : mag[k];
+    }
+#define C(k) cmb[k]
+
+    // this capture's tone harmonics are not the reader, wherever they fold: +-2.5 bins, the Hann main lobe and a little
+    // (a 50 dB line's skirt is a local maximum of its own a bin or two out). The earlier capture's need no exclusion:
+    // this one has nothing there, so the minimum drops them (and excluding them too masked a reader within ~100 ppm
+    // of the earlier tone's line: the PM3, at -140 against a -240 tone)
+    const float excl = 2.5f * binw;
     int cand[FFT_CAND];
     int nc = 0;
     for (int k = klo + 1; k < khi; k++) {
-        const float v = MAG(k);
-        if (v < MAG(k - 1) || v < MAG(k + 1)) {
+        const float v = C(k);
+        if (v < C(k - 1) || v < C(k + 1)) {
             continue;
         }
         const float f = k * binw;
         bool own = false;
-        for (int j = -nsb; j <= nsb && !own; j++) {
-            own = fabsf(f - (fself + j * frame_hz)) <= excl;
-        }
-        for (int h = 2; h <= FFT_HARM && !own; h++) {
-            own = fabsf(f - fold(h * fr_self, fs)) <= excl;
+        for (int h = 1; h <= FFT_OWN_HARM && !own; h++) {
+            own = fabsf(f - fold(h * fsc, fs)) <= excl;
         }
         if (own) {
             continue;
         }
         int p = nc < FFT_CAND ? nc++ : FFT_CAND;  // insert, strongest first
-        while (p > 0 && MAG(cand[p - 1]) < v) {
+        while (p > 0 && C(cand[p - 1]) < v) {
             if (p < FFT_CAND) {
                 cand[p] = cand[p - 1];
             }
@@ -433,7 +466,7 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
         bool moved = false;
         for (int c = 0; c < nc && !moved; c++) {
             const int k = cand[c];
-            if (k == best || MAG(k) < thr) {
+            if (k == best || C(k) < thr) {
                 continue;
             }
             const double fr = (double)carrier * (1.0 + (double)((k * binw - f0) / hz_per_ppm) * 1e-6);
@@ -448,10 +481,32 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
             break;
         }
     }
-    const float fp = parab(best * binw, MAG(best - 1), MAG(best), MAG(best + 1), binw);
-#undef MAG
+    const float fp = parab(best * binw, C(best - 1), C(best), C(best + 1), binw);
+    const bool weak = C(best) < thr;  // in the combined spectrum: present in both captures, above the floor
+#undef C
 
-    hann_into(work, x, n);  // the FFT overwrote it; finish() refines on the samples
+    // refine on this capture's samples (the spectrum overwrote them); not finish(): its "our own line is the strongest
+    // => matched" is for a trim that plays on the reader, and mode 9's measure tone is detuned from it on purpose
+    hann_into(work, x, n);
     m_y = work;
-    finish(n, fs, f0, hz_per_ppm, fself, nsb, frame_hz, noise, fp, max_ppm, self_ppm, r);
+    const float d2 = (fs / n) / 16.0f;
+    const float f3[3] = {fp - d2, fp, fp + d2};
+    float m3[3], f = fp;
+    goertzel_bank(n, f3, 3, fs, m3);
+    if (m3[1] >= m3[0] && m3[1] >= m3[2]) {
+        f = parab(fp, m3[0], m3[1], m3[2], d2);
+    }
+    const float pk = goertzel(n, f, fs);
+    r->evals += 4;
+    r->fpk = f;
+    r->ppm = (f - f0) / hz_per_ppm;
+    r->snr_db = noise > 0.0f ? 20.0f * log10f(pk / noise) : 99.0f;
+    if (weak || r->snr_db < g_selftrim_min_snr_db) {
+        r->why = SELFTRIM_WEAK;
+    } else if (fabsf(r->ppm) > max_ppm) {
+        r->why = SELFTRIM_TOO_FAR;
+    } else {
+        r->why = SELFTRIM_TRIM;
+        r->valid = 1;
+    }
 }
