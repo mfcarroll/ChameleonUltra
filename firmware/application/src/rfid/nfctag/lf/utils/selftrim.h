@@ -56,11 +56,14 @@ extern float g_selftrim_self_hz;     // default 1.5 Hz (12 ppm)
 void selftrim_detect(const int16_t *x, uint16_t n, float fs, float carrier, float self_ppm, float frame_hz,
                      float *work, selftrim_result_t *r);
 
-// research exp/fsk-selftrim-wide: the same search over +/-max_ppm by one FFT (any width the alias band allows), with
-// the reader's harmonic images resolved to their fundamental and our own line's images skipped. n <= SELFTRIM_FFT_N
-// samples (zero-padded to it); work: SELFTRIM_FFT_N floats, not overlapping x (x is not modified).
+// research exp/fsk-selftrim-wide: the same search over +/-max_ppm by one FFT (any width the alias band allows).
+// own_ppm: our own line's ppm in this capture; the idle tone (fc/8 at that rate) and its harmonics are skipped. other: |X[k]| of an earlier capture of the same reader with our tone at another rate
+// (SELFTRIM_FFT_N / 2 floats, from selftrim_fft_mags), or NULL; lines are then taken only where both have them.
+// n <= SELFTRIM_FFT_N samples (zero-padded to it); work: SELFTRIM_FFT_N floats, not overlapping x (x is not modified).
 #define SELFTRIM_FFT_N          (4096)
-void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float self_ppm, float frame_hz,
-                         float max_ppm, float *work, selftrim_result_t *r);
+void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float own_ppm, float max_ppm,
+                         const float *other, float *work, selftrim_result_t *r);
+// |X[k]| of the windowed, zero-padded capture at work[k], k < SELFTRIM_FFT_N / 2 (work: SELFTRIM_FFT_N floats).
+void selftrim_fft_mags(const int16_t *x, uint16_t n, float *work);
 
 #endif

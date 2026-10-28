@@ -87,4 +87,5 @@ typedef struct {
 int16_t *lf_tag_em_alias_buffer(size_t *cap_samples);
 void lf_tag_em_fsk_info(lf_tag_em_fsk_info_t *i);
 void lf_tag_em_fsk_measure(bool on, uint8_t drive);
+void lf_tag_em_fsk_measure_alt(bool alt);
 bool lf_tag_em_fsk_measure_playing(void);
