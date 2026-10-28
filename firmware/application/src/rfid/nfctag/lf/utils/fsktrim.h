@@ -17,7 +17,8 @@
 #include "nrf_pwm.h"
 
 #define LF_FSK_TICKS_PER_CYCLE (128u)  // 16 MHz / 125 kHz
-#define LF_FSK_TRIM_MAX_PPM (1000u)    // |trim| is clamped to this fraction of the frame's ticks
+#define LF_FSK_TRIM_MAX_PPM (36000u)   // |trim| is clamped to this fraction of the frame's ticks (exp/fsk-selftrim-wide:
+                                       // was 1000; covers the wide search, SELFTRIM_WIDE_MAX_PPM)
 
 // Drive modes (hw lfdrive, command 3093). Pins are chosen in pwm_init (lf_tag_em.c).
 #define LF_FSK_DRIVE_LFMOD (0u)       // LF_MOD only (stock path; = fc10-hard)

@@ -1288,7 +1288,7 @@ uint8_t lf_tag_em_drive_set(uint8_t mode, uint8_t *active) {
     return m_fsk_drive_req;
 }
 
-// research exp/fsk-drvtrim: hw lftrim. Sets the requested trim (if set); applied (clamped to +-1000 ppm of
+// research exp/fsk-drvtrim: hw lftrim. Sets the requested trim (if set); applied (clamped to LF_FSK_TRIM_MAX_PPM of
 // the frame) at the next burst start. Returns the requested trim; *applied / *frame_ticks describe the
 // sequence as last prepared.
 int16_t lf_tag_em_trim_set(bool set, int16_t trim, int16_t *applied, uint32_t *frame_ticks) {
