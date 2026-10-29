@@ -243,22 +243,49 @@ static float m_wide_a_own;
 // exp/fsk-selftrim-wide: the first narrow measurement after a wide lock or a restore scans PH_SCAN_WIDE_HZ: the wide
 // result is good to ~10 ppm (1.2 Hz), but one 23 ppm off (2.9 Hz) missed the +-2 Hz scan and cost 4 more pairs
 static bool m_ph_scan_wide;
-// exp/fsk-selftrim-wide: what mode 9 did, last WLOG_N events (3100 at offset 0xFFFE). Kinds: 1 wide A stored, 2 wide B
-// searched (why/valid as selftrim), 3 kept reader restored, 4 narrow failed and unlocked (why = outcome), 5 narrow locked
-// an unlocked reader, 6 trim moved to follow the average. ppm: B's result, the restored / narrow / new trim's reader;
-// own: our own line in that capture.
-#define WLOG_N 32
+// exp/fsk-selftrim-wide: what mode 9 did, last WLOG_N events (3100 at offset 0xFFFE; 0xFFFC clears). Kinds: 1 wide A
+// stored, 2 wide B searched (why/valid as selftrim), 3 kept reader restored, 4 narrow failed and unlocked (why =
+// outcome), 5 narrow locked an unlocked reader, 6 trim moved to follow the average, 7 a new field (why = slot; trim_req
+// the trim its first burst plays; ppm the slot's kept reader, 0 none). ppm: B's result, the restored / narrow / new
+// trim's reader; own: our own line in that capture. In the noinit RAM (as keep9), so a field test that sleeps between
+// presentations keeps it; each event carries the wake it happened in (counted from the first event after each boot) and
+// the time since that boot (RTC1, wraps at 512 s).
+#define WLOG_N     32
+#define WLOG_MAGIC 0x574C4F02u
 typedef struct {
     uint8_t kind, why;
     uint16_t det;
     int16_t trim_req;
     int32_t own10, ppm10;
     int16_t snr10;
+    uint16_t wake;
+    uint16_t ms;
 } wlog_t;
-static wlog_t m_wlog[WLOG_N];
-static uint16_t m_wlog_n;
+typedef struct {
+    uint32_t magic;
+    uint16_t n;     // events since the log was cleared (wraps); the ring holds the last WLOG_N
+    uint16_t wake;  // boots that logged anything
+    wlog_t e[WLOG_N];
+} wlog_store_t;
+static __attribute__((section(".noinit_fsk9log"))) wlog_store_t m_wlog;
+static bool m_wlog_woke;  // this boot has counted its wake
+
+static void wlog_clear(void) {
+    memset(&m_wlog, 0, sizeof(m_wlog));
+    m_wlog.magic = WLOG_MAGIC;
+    m_wlog_woke = false;
+}
+
 static void wlog(uint8_t kind, uint8_t why, const lf_tag_em_fsk_info_t *i, double own, double ppm, double snr) {
-    wlog_t *e = &m_wlog[m_wlog_n % WLOG_N];
+    if (m_wlog.magic != WLOG_MAGIC) {
+        wlog_clear();
+    }
+    if (!m_wlog_woke) {
+        m_wlog_woke = true;
+        m_wlog.wake++;
+    }
+    wlog_t *e = &m_wlog.e[m_wlog.n % WLOG_N];
+    const uint32_t ms = app_timer_cnt_get() * 1000u / APP_TIMER_CLOCK_FREQ;
     e->kind = kind;
     e->why = why;
     e->det = i->det;
@@ -266,7 +293,9 @@ static void wlog(uint8_t kind, uint8_t why, const lf_tag_em_fsk_info_t *i, doubl
     e->own10 = (int32_t)lround(own * 10.0);
     e->ppm10 = (int32_t)lround(ppm * 10.0);
     e->snr10 = (int16_t)lround(snr * 10.0);
-    m_wlog_n++;
+    e->wake = m_wlog.wake;
+    e->ms = (uint16_t)(ms > 0xFFFFu ? 0xFFFFu : ms);
+    m_wlog.n++;
 }
 static bool m_auto_locked;
 static uint16_t m_auto_gen_seen = 0xFFFF;
@@ -463,12 +492,22 @@ static struct {
 
 uint16_t lf_selftrim_fsk_rdump(uint16_t off, uint16_t cnt, uint8_t *o) {
     uint16_t n = 0;
-    if (off == 0xFFFE) {  // exp/fsk-selftrim-wide: the event log, oldest first: count u16, then 16 bytes per event
-        o[n++] = (uint8_t)(m_wlog_n >> 8);
-        o[n++] = (uint8_t)m_wlog_n;
-        const uint16_t have = m_wlog_n < WLOG_N ? m_wlog_n : WLOG_N;
+    if (off == 0xFFFC) {  // clear the event log
+        wlog_clear();
+        return 0;
+    }
+    if (off == 0xFFFE) {  // exp/fsk-selftrim-wide: the event log, oldest first: count u16, entry size u8, wake u16, then
+                          // 20 bytes per event (kind, why, det, trim_req, own10, ppm10, snr10, wake, ms; big-endian)
+        const bool ok = m_wlog.magic == WLOG_MAGIC;
+        const uint16_t total = ok ? m_wlog.n : 0;
+        o[n++] = (uint8_t)(total >> 8);
+        o[n++] = (uint8_t)total;
+        o[n++] = 20;
+        o[n++] = (uint8_t)((ok ? m_wlog.wake : 0) >> 8);
+        o[n++] = (uint8_t)(ok ? m_wlog.wake : 0);
+        const uint16_t have = total < WLOG_N ? total : WLOG_N;
         for (uint16_t k = 0; k < have; k++) {
-            const wlog_t *e = &m_wlog[(m_wlog_n - have + k) % WLOG_N];
+            const wlog_t *e = &m_wlog.e[(uint16_t)(total - have + k) % WLOG_N];
             const uint32_t w[2] = {(uint32_t)e->own10, (uint32_t)e->ppm10};
             o[n++] = e->kind;
             o[n++] = e->why;
@@ -484,6 +523,10 @@ uint16_t lf_selftrim_fsk_rdump(uint16_t off, uint16_t cnt, uint8_t *o) {
             }
             o[n++] = (uint8_t)((uint16_t)e->snr10 >> 8);
             o[n++] = (uint8_t)e->snr10;
+            o[n++] = (uint8_t)(e->wake >> 8);
+            o[n++] = (uint8_t)e->wake;
+            o[n++] = (uint8_t)(e->ms >> 8);
+            o[n++] = (uint8_t)e->ms;
         }
         return n;
     }
@@ -790,6 +833,17 @@ static void ph_process(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
         m_auto_tries = 0;
         m_keep_try = true;
         m_ph_remeas = false;
+        uint16_t g;
+        if (lf_tag_em_cont_auto(&g)) {
+            uint8_t slot;
+            uint16_t type;
+            keep9_active(&slot, &type);
+            double kept = 0.0;
+            if (slot < KEEP9_SLOTS && keep9_ok() && m_keep9.slot[slot].valid && m_keep9.slot[slot].type == type) {
+                kept = (m_keep9.slot[slot].fp_mhz / 1000.0 - 5000.0) / 0.125;
+            }
+            wlog(7, slot, i, trim_ppm(i, i->trim_act), kept, 0.0);  // own: the trim the first burst plays
+        }
         m_ph_valid = 0;       // the measurement (and phase_at) is per field: TIMER3 restarts at each field
         m_ph_tick = app_timer_cnt_get();
         if (m_ph == PH_CAPTURING) {
