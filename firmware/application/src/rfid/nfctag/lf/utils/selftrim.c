@@ -485,19 +485,15 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
     const bool weak = C(best) < thr;  // in the combined spectrum: present in both captures, above the floor
 #undef C
 
-    // refine on this capture's samples (the spectrum overwrote them); not finish(): its "our own line is the strongest
-    // => matched" is for a trim that plays on the reader, and mode 9's measure tone is detuned from it on purpose
-    hann_into(work, x, n);
+    // The frequency is the combined spectrum's (parabolic on the log, Hann: ~0.05 bin): refining on this capture alone
+    // can be pulled by a product next to the reader that the other capture does not have (PM3 divisor 96: a lock 23 ppm
+    // off). The SNR is this capture's line at it. Not finish(): its "our own line is the strongest => matched" is for a
+    // trim that plays on the reader, and mode 9's measure tone is detuned from it on purpose.
+    hann_into(work, x, n);  // the spectrum overwrote it
     m_y = work;
-    const float d2 = (fs / n) / 16.0f;
-    const float f3[3] = {fp - d2, fp, fp + d2};
-    float m3[3], f = fp;
-    goertzel_bank(n, f3, 3, fs, m3);
-    if (m3[1] >= m3[0] && m3[1] >= m3[2]) {
-        f = parab(fp, m3[0], m3[1], m3[2], d2);
-    }
+    const float f = fp;
     const float pk = goertzel(n, f, fs);
-    r->evals += 4;
+    r->evals += 1;
     r->fpk = f;
     r->ppm = (f - f0) / hz_per_ppm;
     r->snr_db = noise > 0.0f ? 20.0f * log10f(pk / noise) : 99.0f;
