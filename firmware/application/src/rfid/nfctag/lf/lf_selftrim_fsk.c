@@ -718,7 +718,7 @@ static void ph_stop(void) {
 // short), is searched against it, so only lines that did not move with our tone count. A and B from two different
 // readers have nothing in common: no lock, and the next capture starts a new pair. A valid B result locks: the pair replaces the two agreeing results the +-300 search waited
 // for. The 3100 dump holds capture B.
-#define WIDE_PAIR_MIN_PPM 1000.0f  // our tone must have moved this much between A and B (the pair is 2000 apart)
+#define WIDE_PAIR_MIN_PPM 2000.0f  // our tone must have moved this much between A and B (the pair is 4000 apart)
 static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     size_t cap;
     int16_t *buf = lf_tag_em_alias_buffer(&cap);
@@ -747,7 +747,8 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     g_selftrim_min_snr_db = AUTO_WIDE_SNR;
     const float self_hz = g_selftrim_self_hz;
     g_selftrim_self_hz = AUTO_WIDE_SELF_HZ;
-    selftrim_detect_fft(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, own, SELFTRIM_WIDE_MAX_PPM, m_wide_a, work, &r);
+    selftrim_detect_fft(x, PH_SAMPLES, CAPTURE_FS, 125000.0f, own, m_wide_a_own, SELFTRIM_WIDE_MAX_PPM, m_wide_a, work,
+                        &r);
     g_selftrim_min_snr_db = floor_db;
     g_selftrim_self_hz = self_hz;
     m_auto_wides++;
