@@ -1453,7 +1453,8 @@ void lf_tag_em_fsk_info(lf_tag_em_fsk_info_t *i) {
 // exp/fsk-selftrim-wide: the measure detune for the following measure bursts: the usual -m_cont_detune_ppm, or (alt)
 // +LF_CONT_ALT_DETUNE_PPM, so a second capture's idle tone runs at a different rate (the wide search keeps the lines
 // that stay put: the reader's). Kept across fields until cleared: a short field (a PM3's reads) gives one capture.
-#define LF_CONT_ALT_DETUNE_PPM 1760u  // 2000 ppm from -240: our tone's h1 moves 31 Hz (6 bins of the 200 ms capture)
+#define LF_CONT_ALT_DETUNE_PPM 3760u  // 4000 ppm from -240: our tone's h1 moves 62 Hz (13 bins of the 200 ms capture;
+                                      // at 2000 ppm, 31 Hz, its skirt survived the minimum once)
 void lf_tag_em_fsk_measure_alt(bool alt) {
     m_fsk_measure_alt = alt;
     if (m_cont_measure_lfmod) {

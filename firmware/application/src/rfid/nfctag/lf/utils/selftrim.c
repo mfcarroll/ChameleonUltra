@@ -372,8 +372,8 @@ void selftrim_fft_mags(const int16_t *x, uint16_t n, float *work) {
     work[0] = 0.0f;
 }
 
-void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float own_ppm, float max_ppm,
-                         const float *other, float *work, selftrim_result_t *r) {
+void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, float own_ppm, float other_own_ppm,
+                         float max_ppm, const float *other, float *work, selftrim_result_t *r) {
     if (n > FFT_N) {
         n = FFT_N;
     }
@@ -384,6 +384,7 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
     const float binw = fs / FFT_N;
     // the idle tone's fc/8 on our clock, from our own line's ppm (its 8th harmonic is our own line)
     const double fsc = (double)carrier / 8.0 * (1.0 + (double)own_ppm * 1e-6);
+    const double fsc_o = (double)carrier / 8.0 * (1.0 + (double)other_own_ppm * 1e-6);
 
     selftrim_fft_mags(x, n, work);
     const float *mag = work;  // |X[k]|, k < FFT_N / 2; FFT_N / 2 .. FFT_N - 1 free for the combined spectrum
@@ -421,9 +422,10 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
 #define C(k) cmb[k]
 
     // this capture's tone harmonics are not the reader, wherever they fold: +-2.5 bins, the Hann main lobe and a little
-    // (a 50 dB line's skirt is a local maximum of its own a bin or two out). The earlier capture's need no exclusion:
-    // this one has nothing there, so the minimum drops them (and excluding them too masked a reader within ~100 ppm
-    // of the earlier tone's line: the PM3, at -140 against a -240 tone)
+    // (a 50 dB line's skirt is a local maximum of its own a bin or two out). The earlier capture's too, except its h8
+    // (our own line, the one near a reader on our clock: excluding it masked the PM3 at -140 against a -240 tone; the
+    // minimum drops it, this capture's h8 being hundreds of Hz away). Its h1 moves least between the two (4000 ppm =
+    // 62 Hz) and is the strongest line, so its skirt can sit on this capture's: a pair locked on it once (-3738 ppm).
     const float excl = 2.5f * binw;
     int cand[FFT_CAND];
     int nc = 0;
@@ -435,7 +437,7 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
         const float f = k * binw;
         bool own = false;
         for (int h = 1; h <= FFT_OWN_HARM && !own; h++) {
-            own = fabsf(f - fold(h * fsc, fs)) <= excl;
+            own = fabsf(f - fold(h * fsc, fs)) <= excl || (other && h != 8 && fabsf(f - fold(h * fsc_o, fs)) <= excl);
         }
         if (own) {
             continue;
