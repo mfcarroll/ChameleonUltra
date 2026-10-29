@@ -172,6 +172,7 @@ static void decide(float pps, float applied_ppm) {
 // chosen phase K / 128 cycle; lf_tag_em places the following restarts on it. Self-trim is idle meanwhile (manual trim).
 #define PH_SAMPLES   4000                          // 200 ms: done well inside the 376 ms HID burst
 #define PH_SCAN_HZ   2.0f                          // search +/- around the expected reader line
+#define PH_SCAN_WIDE_HZ 6.0f                       // the first narrow measurement after a wide lock or a restore
 #define PH_STEP_HZ   0.25f
 // a capture is 200 ms: 5 Hz bins under the Hann window, whose first sidelobe (-31.5 dB) is 2.5 bins out
 #define PH_MIN_SNR   14.0f                         // phase error ~ +-3/128 at 15 dB; the Flipper at 30 mm gives 14-21 dB
@@ -239,6 +240,34 @@ static int16_t ppm_trim(const lf_tag_em_fsk_info_t *i, double ppm) {
 static float m_wide_a[SELFTRIM_FFT_N / 2];
 static bool m_wide_have_a;
 static float m_wide_a_own;
+// exp/fsk-selftrim-wide: the first narrow measurement after a wide lock or a restore scans PH_SCAN_WIDE_HZ: the wide
+// result is good to ~10 ppm (1.2 Hz), but one 23 ppm off (2.9 Hz) missed the +-2 Hz scan and cost 4 more pairs
+static bool m_ph_scan_wide;
+// exp/fsk-selftrim-wide: what mode 9 did, last WLOG_N events (3100 at offset 0xFFFE). Kinds: 1 wide A stored, 2 wide B
+// searched (why/valid as selftrim), 3 kept reader restored, 4 narrow failed and unlocked (why = outcome), 5 narrow locked
+// an unlocked reader, 6 trim moved to follow the average. ppm: B's result, the restored / narrow / new trim's reader;
+// own: our own line in that capture.
+#define WLOG_N 32
+typedef struct {
+    uint8_t kind, why;
+    uint16_t det;
+    int16_t trim_req;
+    int32_t own10, ppm10;
+    int16_t snr10;
+} wlog_t;
+static wlog_t m_wlog[WLOG_N];
+static uint16_t m_wlog_n;
+static void wlog(uint8_t kind, uint8_t why, const lf_tag_em_fsk_info_t *i, double own, double ppm, double snr) {
+    wlog_t *e = &m_wlog[m_wlog_n % WLOG_N];
+    e->kind = kind;
+    e->why = why;
+    e->det = i->det;
+    e->trim_req = i->trim_req;
+    e->own10 = (int32_t)lround(own * 10.0);
+    e->ppm10 = (int32_t)lround(ppm * 10.0);
+    e->snr10 = (int16_t)lround(snr * 10.0);
+    m_wlog_n++;
+}
 static bool m_auto_locked;
 static uint16_t m_auto_gen_seen = 0xFFFF;
 static uint16_t m_auto_moves, m_auto_rejects, m_auto_wides, m_auto_bad_run;
@@ -434,6 +463,30 @@ static struct {
 
 uint16_t lf_selftrim_fsk_rdump(uint16_t off, uint16_t cnt, uint8_t *o) {
     uint16_t n = 0;
+    if (off == 0xFFFE) {  // exp/fsk-selftrim-wide: the event log, oldest first: count u16, then 16 bytes per event
+        o[n++] = (uint8_t)(m_wlog_n >> 8);
+        o[n++] = (uint8_t)m_wlog_n;
+        const uint16_t have = m_wlog_n < WLOG_N ? m_wlog_n : WLOG_N;
+        for (uint16_t k = 0; k < have; k++) {
+            const wlog_t *e = &m_wlog[(m_wlog_n - have + k) % WLOG_N];
+            const uint32_t w[2] = {(uint32_t)e->own10, (uint32_t)e->ppm10};
+            o[n++] = e->kind;
+            o[n++] = e->why;
+            o[n++] = (uint8_t)(e->det >> 8);
+            o[n++] = (uint8_t)e->det;
+            o[n++] = (uint8_t)((uint16_t)e->trim_req >> 8);
+            o[n++] = (uint8_t)e->trim_req;
+            for (int j = 0; j < 2; j++) {
+                o[n++] = (uint8_t)(w[j] >> 24);
+                o[n++] = (uint8_t)(w[j] >> 16);
+                o[n++] = (uint8_t)(w[j] >> 8);
+                o[n++] = (uint8_t)w[j];
+            }
+            o[n++] = (uint8_t)((uint16_t)e->snr10 >> 8);
+            o[n++] = (uint8_t)e->snr10;
+        }
+        return n;
+    }
     if (off == 0xFFFF) {
         o[n++] = m_rdump_meta.valid;
         o[n++] = m_rdump_meta.outcome;
@@ -491,7 +544,8 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
     }
     // the reader sits where the emulate trim (assumed matched) puts our own line: 5000 Hz + ppm * 0.125 Hz
     const float f_exp = 5000.0f + (float)trim_ppm(i, i->trim_req) * 0.125f;
-    const int ns = (int)(PH_SCAN_HZ / PH_STEP_HZ);
+    const int ns = (int)((m_ph_scan_wide ? PH_SCAN_WIDE_HZ : PH_SCAN_HZ) / PH_STEP_HZ);
+    m_ph_scan_wide = false;
     float bm = 0.0f, ma = 0.0f, mc = 0.0f;
     int bi = 0;
     float prev = 0.0f;
@@ -574,8 +628,10 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
             m_auto_locked = false;  // no line where the trim expects the reader: wide search on the next burst
             m_auto_remeasure = true;
             m_auto_bad_run = 0;
+            wlog(4, leak ? 2u : 1u, i, (f_self - 5000.0f) / 0.125f, (fp - 5000.0f) / 0.125f, snr);
         } else if (autom && ++m_auto_bad_run >= AUTO_UNLOCK_RUN) {
             m_auto_locked = false;
+            wlog(4, leak ? 2u : 1u, i, (f_self - 5000.0f) / 0.125f, (fp - 5000.0f) / 0.125f, snr);
         }
         return;
     }
@@ -586,8 +642,10 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
             m_auto_locked = false;  // as an invalid line above
             m_auto_remeasure = true;
             m_auto_bad_run = 0;
+            wlog(4, 3, i, (f_self - 5000.0f) / 0.125f, (fp - 5000.0f) / 0.125f, snr);
         } else if (++m_auto_bad_run >= AUTO_UNLOCK_RUN) {
             m_auto_locked = false;
+            wlog(4, 3, i, (f_self - 5000.0f) / 0.125f, (fp - 5000.0f) / 0.125f, snr);
         }
         return;
     }
@@ -597,6 +655,7 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
         // never get two agreeing results)
         m_auto_locked = true;
         m_wide_have_a = false;
+        wlog(5, 0, i, (f_self - 5000.0f) / 0.125f, (fp - 5000.0f) / 0.125f, snr);
     }
     // phase of the line at the window centre k_c = (n - 1) / 2, in cycles
     const double kc = (n - 1) / 2.0;
@@ -624,6 +683,7 @@ static void ph_compute(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
             set_trim(want);
             m_auto_moves++;
             trim_now = want;
+            wlog(6, 0, i, trim_ppm(i, want), (m_fp_avg - 5000.0) / 0.125, (double)m_fp_n);
         }
         keep9_save_slot(trim_now, m_fp_avg, m_fp_n);  // the slot's credential remembers this reader
     }
@@ -676,6 +736,7 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
         m_wide_have_a = true;
         m_wide_a_own = own;
         lf_tag_em_fsk_measure_alt(iv->trim_act <= iv->trim_req);  // detuned down now (the usual): up next
+        wlog(1, 0, iv, own, 0.0, 0.0);
         return;
     }
     m_wide_have_a = false;
@@ -690,6 +751,7 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
     g_selftrim_min_snr_db = floor_db;
     g_selftrim_self_hz = self_hz;
     m_auto_wides++;
+    wlog(2, (uint8_t)(r.why | (r.valid ? 0x80 : 0)), iv, own, r.ppm, r.snr_db);
     const float p10 = r.ppm * 10.0f;  // s16 telemetry: +/-3276.7 ppm, saturated
     m_auto_wide_ppm10 = (int16_t)(p10 > 32767.0f ? 32767 : p10 < -32767.0f ? -32767 : lroundf(p10));
     m_rdump_meta.valid = 1;
@@ -712,6 +774,7 @@ static void auto_wide(lf_tag_em_fsk_info_t *iv) {
         iv->trim_req = t;
         m_fp_n = 0;  // a new reader: restart the average
         m_auto_locked = true;
+        m_ph_scan_wide = true;
         m_auto_bad_run = 0;
         // keep it now: the narrow measurement that confirms it needs another burst in this field, and a short field
         // that ends first would otherwise leave the old reader's entry to be restored at every field
@@ -804,6 +867,8 @@ static void ph_process(const lf_tag_em_fsk_info_t *i, uint8_t k128) {
             if (lf_selftrim_fsk_keep_trim(&kt)) {
                 iv.trim_req = kt;
             }
+            m_ph_scan_wide = true;
+            wlog(3, 0, &iv, trim_ppm(&iv, iv.trim_act), (m_fp_avg - 5000.0) / 0.125, 0.0);
         }
         m_keep_try = false;
         if (!m_auto_locked) {
