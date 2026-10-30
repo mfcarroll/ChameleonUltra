@@ -280,6 +280,8 @@ void selftrim_detect(const int16_t *x, uint16_t n, float fs, float carrier, floa
 #define FFT_HARM    (7)     // harmonics checked as images: 2 .. FFT_HARM
 #define FFT_CAND    (16)    // strongest local maxima considered
 #define FFT_OWN_HARM (24)   // our tone's harmonics excluded: 1 .. FFT_OWN_HARM (h8 is our own line)
+#define FFT_SIDE    (4)     // a line must stand FFT_SIDE_DB above the spectrum this many bins either side
+#define FFT_SIDE_DB (10.0f)
 
 static float m_fft_noise[MAX_NOISE];
 
@@ -416,7 +418,9 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
         const float onoise = no ? median(m_fft_noise, no) : 0.0f;
         scale = onoise > 0.0f ? noise / onoise : 1.0f;
     }
-    for (int k = klo - 1; k <= khi + 1; k++) {
+    const int clo = klo - FFT_SIDE < 1 ? 1 : klo - FFT_SIDE;
+    const int chi = khi + FFT_SIDE > FFT_N / 2 - 1 ? FFT_N / 2 - 1 : khi + FFT_SIDE;
+    for (int k = clo; k <= chi; k++) {
         cmb[k] = other ? fminf(mag[k], other[k] * scale) : mag[k];
     }
 #define C(k) cmb[k]
@@ -427,11 +431,19 @@ void selftrim_detect_fft(const int16_t *x, uint16_t n, float fs, float carrier, 
     // minimum drops it, this capture's h8 being hundreds of Hz away). Its h1 moves least between the two (4000 ppm =
     // 62 Hz) and is the strongest line, so its skirt can sit on this capture's: a pair locked on it once (-3738 ppm).
     const float excl = 2.5f * binw;
+    // A line is narrow: the Hann main lobe is +-2 bins, so FFT_SIDE bins out a lone line is far below its peak. A bump
+    // on the skirt of a strong line is broad and fails this. Skirt bumps beside our tone's h1 (50-60 dB) caused the
+    // remaining false locks (-3738, -4002, -5306 ppm; NOTES-wide-2026-10-28, runs 3-4).
+    const float side_ratio = powf(10.0f, FFT_SIDE_DB / 20.0f);
     int cand[FFT_CAND];
     int nc = 0;
     for (int k = klo + 1; k < khi; k++) {
         const float v = C(k);
         if (v < C(k - 1) || v < C(k + 1)) {
+            continue;
+        }
+        const int sl = k - FFT_SIDE < clo ? clo : k - FFT_SIDE, sh = k + FFT_SIDE > chi ? chi : k + FFT_SIDE;
+        if (v < side_ratio * fmaxf(C(sl), C(sh))) {
             continue;
         }
         const float f = k * binw;
