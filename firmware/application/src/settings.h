@@ -5,7 +5,7 @@
 
 #include "utils.h"
 
-#define SETTINGS_CURRENT_VERSION 7
+#define SETTINGS_CURRENT_VERSION 8
 #define SETTINGS_SLEEP_TIMEOUT_DEFAULT_S 8   // default wake timeout in seconds (matches SLEEP_DELAY_MS_BUTTON_WAKEUP)
 #define SETTINGS_SLEEP_TIMEOUT_MIN_S      5
 #define SETTINGS_SLEEP_TIMEOUT_MAX_S      60
@@ -43,7 +43,8 @@ typedef struct ALIGN_U32 {
     // 1 byte
     uint8_t animation_config : 2;
     uint8_t ble_pairing_enable : 1;
-    uint8_t reserved0 : 5; // If you are add switch field, reallocating me.
+    uint8_t lf_selftrim : 1; // add on version8: trim PSK1 emulation to the reader's clock
+    uint8_t reserved0 : 4; // If you are add switch field, reallocating me.
 
     // 1 byte
     uint8_t button_a_press : 4;
@@ -92,4 +93,7 @@ void settings_init_sleep_timeout_config(void);
 uint16_t settings_get_long_press_threshold(void);
 void settings_set_long_press_threshold(uint16_t duration);
 void settings_init_long_press_threshold_config(void);
+bool settings_get_lf_selftrim(void);
+void settings_set_lf_selftrim(bool enable);
+void settings_init_lf_selftrim_config(void);
 #endif

@@ -38,9 +38,12 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/circular_buffer.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/manchester.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/psk1.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/selftrim.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/lf_selftrim.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/em410x.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/hidprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pac.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/indala.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/jablotron.c \
@@ -342,7 +345,7 @@ INC_FOLDERS += \
 
 # Libraries common to all targets
 LIB_FILES += \
-  $(SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/libnrf_cc310_0.9.13.a \
+  $(SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/no-interrupts/libnrf_cc310_0.9.13.a \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.8.a \
 
 ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
@@ -364,6 +367,8 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_jablotron_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_pyramid_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_indala_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_indala_psk.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \

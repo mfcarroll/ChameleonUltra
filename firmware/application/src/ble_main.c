@@ -613,6 +613,10 @@ void advertising_start(bool erase_bonds) {
         // So we don't call `ble_advertising_start()` after `delete_bonds_all()`.
         delete_bonds_all();
     } else {
+        // The only peripheral link is in use, advertising restarts when it disconnects
+        if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+            return;
+        }
         if (settings_get_ble_pairing_enable_first_load()) {
             whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
         }
@@ -626,6 +630,30 @@ void advertising_start(bool erase_bonds) {
  */
 void advertising_stop(void) {
     sd_ble_gap_adv_stop(m_advertising.adv_handle);
+}
+
+/**@brief Stop advertising if it is running and nothing is connected. Returns true if it was stopped.
+ */
+bool advertising_pause(void) {
+    if (g_is_ble_connected || m_advertising.adv_mode_current == BLE_ADV_MODE_IDLE) {
+        return false;
+    }
+    return sd_ble_gap_adv_stop(m_advertising.adv_handle) == NRF_SUCCESS;
+}
+
+/**@brief Restart advertising stopped by advertising_pause(). Logs a failure instead of asserting.
+ */
+void advertising_resume(void) {
+    if (g_is_ble_connected) {
+        return;
+    }
+    if (settings_get_ble_pairing_enable_first_load()) {
+        whitelist_set(PM_PEER_ID_LIST_SKIP_NO_ID_ADDR);
+    }
+    ret_code_t ret = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    if (ret != NRF_SUCCESS) {
+        NRF_LOG_WARNING("advertising_resume: %d", ret);
+    }
 }
 
 /**@brief Function for handling Peer Manager events.
@@ -800,6 +828,11 @@ void ble_slave_init(void) {
 }
 
 void register_lf_adc_callback(lf_adc_callback_t cb) {
+    register_lf_adc_callback_input(cb, NRF_SAADC_INPUT_AIN5, NRF_SAADC_ACQTIME_5US);
+}
+
+// As register_lf_adc_callback(), sampling the given input with the given acquisition time.
+void register_lf_adc_callback_input(lf_adc_callback_t cb, nrf_saadc_input_t input, nrf_saadc_acqtime_t acq) {
     m_lf_adc_callback = cb;
 
     nrfx_saadc_uninit();
@@ -810,8 +843,8 @@ void register_lf_adc_callback(lf_adc_callback_t cb) {
     err_code = nrfx_saadc_init(&cfg, saadc_event_handler);
     APP_ERROR_CHECK(err_code);
 
-    nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN5);
-    ch.acq_time = NRF_SAADC_ACQTIME_5US;
+    nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(input);
+    ch.acq_time = acq;
     err_code = nrfx_saadc_channel_init(ADC_CHANNEL, &ch);
     APP_ERROR_CHECK(err_code);
 

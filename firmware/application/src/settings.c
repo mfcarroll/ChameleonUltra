@@ -63,6 +63,11 @@ void settings_init_long_press_threshold_config(void) {
     config.long_press_threshold = SETTINGS_LONG_PRESS_THRESHOLD_DEFAULT_MS;
 }
 
+// add on version8
+void settings_init_lf_selftrim_config(void) {
+    config.lf_selftrim = 0;
+}
+
 void settings_init_config(void) {
     settings_update_version_for_config();
     config.animation_config = SettingsAnimationModeFull; // add on version1
@@ -72,6 +77,7 @@ void settings_init_config(void) {
     settings_init_ble_pairing_enable_config();
     settings_init_sleep_timeout_config();
     settings_init_long_press_threshold_config();
+    settings_init_lf_selftrim_config();
 }
 
 void settings_migrate(void) {
@@ -97,6 +103,9 @@ void settings_migrate(void) {
 
         case 6:
             settings_init_long_press_threshold_config();
+
+        case 7:
+            settings_init_lf_selftrim_config();
 
             /*
              * Add new migration steps ABOVE THIS COMMENT
@@ -327,4 +336,12 @@ void settings_set_long_press_threshold(uint16_t duration) {
         duration = SETTINGS_LONG_PRESS_THRESHOLD_MIN_MS;
     }
     config.long_press_threshold = duration;
+}
+
+bool settings_get_lf_selftrim(void) {
+    return config.lf_selftrim;
+}
+
+void settings_set_lf_selftrim(bool enable) {
+    config.lf_selftrim = enable;
 }

@@ -3,12 +3,26 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix LF reader carrier uses crystal (HFXO) not internal RC oscillator. More accurate 125 kHz field allows reading PSK emulation from a second Chameleon (@mfcarroll)
+ - Changed LF T55xx CLI write and clone commands to read the tag back and report whether the write took: verified, failed (the tag still carries something else, for example because it is password-protected), or not verified (@mfcarroll)
+ - Fix LF reads disrupted by BLE advertising (@mfcarroll)
+ - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
+ - Added Indala LF protocol support: read, emulate and T55xx clone (@kevihiiin, @mfcarroll)
+ - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
+ - Fix frequent gaps in LF emulation that cost reads (@mfcarroll)
+ - Fix LF emulation playing at the wrong speed after changing a slot's type while emulating (@mfcarroll)
+ - Fix LF emulation going silent after switching to reader mode and back (@mfcarroll)
+ - Fix slow boot and emulation start when woken by an LF or HF field (@mfcarroll)
+ - Fix reset at boot when an interrupt arrives during the crypto RNG setup (@mfcarroll)
+ - Fix emulation waiting for Bluetooth to start when woken by a field (@mfcarroll)
+ - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
 
 ## [v2.3.0][2026-10-24]
  - Added Farpointe/Pyramid LF protocol support: read and emulate (FSK2a, RF/50)
  - Fix CLI non-interactive help and add one-shot `--command` flag; gate hardware acquisition test on `CHAMELEON_PORT` env var (@melxusgid)
  - Fix wrong data reported by hf 14a sniff on frames containing more than 7 parity bits (@DidierA)
  - Added MIFARE Ultralight C authentication and emulation (@Foxushka)
+ - Changed LF T55xx write commands to leave the tag without a password unless one is requested. Write commands take an optional trailing flags byte (0x01 no password, 0x02 set the given key as password); without it no password is set. Tags protected by earlier firmware can still be rewritten. New command 3029 reports T55xx write features. CLI write and clone commands gain `--password`, and `--current-password` to rewrite or unlock a tag protected with a password of your own (#436) (@mfcarroll, @naaraxi)
 
 ## [v2.2.0][2026-07-04]
  - Added Jablotron LF protocol support: read, emulate and T55xx clone (@midlan)

@@ -51,6 +51,8 @@
 #define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
 #define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
 #define DATA_CMD_GET_BATTERY_INFO_EX            (1043)
+#define DATA_CMD_GET_LF_SELFTRIM                (1045)
+#define DATA_CMD_SET_LF_SELFTRIM                (1046)
 
 //
 // ******************************************************************
@@ -116,11 +118,24 @@
 #define DATA_CMD_IOPROX_WRITE_TO_T55XX          (3011)
 #define DATA_CMD_IOPROX_DECODE_RAW              (3012)
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
+#define DATA_CMD_INDALA_SCAN                    (3035)
+#define DATA_CMD_INDALA_WRITE_TO_T55XX          (3036)
 #define DATA_CMD_LF_T55XX_WRITE                 (3016)
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 #define DATA_CMD_PYRAMID_SCAN                   (3021)
+// Provisional ID: 3022 and 3033-3036 are claimed by open PRs.
+#define DATA_CMD_LF_T55XX_WRITE_FEATURES        (3029)
+
+// Optional trailing byte on the *_WRITE_TO_T55XX commands, after the old keys.
+// Without it, the tag is written with no password.
+#define T55XX_WRITE_FLAG_NO_PASSWORD            (0x01)
+#define T55XX_WRITE_FLAG_SET_PASSWORD           (0x02)
+
+// Bits returned by DATA_CMD_LF_T55XX_WRITE_FEATURES.
+// Bit 0: password mode is opt-in and the trailing flag byte above is understood.
+#define T55XX_WRITE_FEATURE_PASSWORD_OPT_IN     (1 << 0)
 
 //
 // ******************************************************************
@@ -210,6 +225,8 @@
 #define DATA_CMD_JABLOTRON_GET_EMU_ID           (5011)
 #define DATA_CMD_IDTECK_SET_EMU_ID              (5012)
 #define DATA_CMD_IDTECK_GET_EMU_ID              (5013)
+#define DATA_CMD_INDALA_SET_EMU_ID              (5026)
+#define DATA_CMD_INDALA_GET_EMU_ID              (5027)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
