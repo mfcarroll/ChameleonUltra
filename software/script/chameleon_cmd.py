@@ -1012,7 +1012,7 @@ class ChameleonCMD:
         with no password or login: 1 is a T55xx read of page 1 block 1, and 2 is an EM4x05
         read of word 0. The capture starts after the command, with the tag's answer.
 
-        :param probe: 1 (T55xx trace block) or 2 (EM4x05 word 0)
+        :param probe: 1 (T55xx trace block), 2 (EM4x05 word 0) or 3 (T55xx configuration block)
         :param bits: 8, or 16 for the whole 14-bit conversion
         :param settle_ms: Field-on time before the command, 2-255 (default 20)
         :param rate_khz: 0 samples once per carrier period, 1-200 on the CU's own clock

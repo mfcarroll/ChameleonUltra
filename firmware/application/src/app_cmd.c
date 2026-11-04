@@ -2427,7 +2427,7 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
  * The reply is chunk 0 of the capture. Fetch the rest, and the description (whose last byte
  * is the probe), with DATA_CMD_LF_SNIFF chunks 1.. and 0xFF. */
 static data_frame_tx_t *cmd_processor_lf_chip_probe(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length < 1 || (data[0] != LF_PROBE_T55XX_TRACE && data[0] != LF_PROBE_EM4X05_WORD0)) {
+    if (length < 1 || (data[0] != LF_PROBE_T55XX_TRACE && data[0] != LF_PROBE_EM4X05_WORD0 && data[0] != LF_PROBE_T55XX_CONFIG)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     bool raw16 = (length >= 2 && data[1] == 16);

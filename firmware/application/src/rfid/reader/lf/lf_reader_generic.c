@@ -81,6 +81,10 @@ static void send_probe(uint8_t probe) {
             /* A regular read of page 1 block 1 (the trace block), without a password. */
             t55xx_send_cmd(T5577_OPCODE_PAGE1, NULL, 0, NULL, 1);
             break;
+        case LF_PROBE_T55XX_CONFIG:
+            /* A regular read of page 0 block 0 (the configuration block), without a password. */
+            t55xx_send_cmd(T5577_OPCODE_PAGE0, NULL, 0, NULL, 0);
+            break;
         case LF_PROBE_EM4X05_WORD0:
             request_timeslot(10 * 1000, em4x05_read_word0_timeslot_cb);
             break;

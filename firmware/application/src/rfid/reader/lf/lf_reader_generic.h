@@ -35,6 +35,7 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
 #define LF_PROBE_NONE          0
 #define LF_PROBE_T55XX_TRACE   1  /* T55xx regular read of page 1 block 1 */
 #define LF_PROBE_EM4X05_WORD0  2  /* EM4x05 read of word 0 */
+#define LF_PROBE_T55XX_CONFIG  3  /* T55xx regular read of page 0 block 0 */
 
 /* raw_read_to_buffer() with a probe. The field comes up, the tag powers for settle_ms, the
  * probe goes out, and the capture starts once it has. */

@@ -5,7 +5,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
 ## [unreleased][unreleased]
  - Added Paradox LF support for reading, emulation, and T55xx cloning. Reads validate CRC before accepting a frame. T55xx writes warn before enabling password mode and verify the result with one read-back attempt.
  - Assigned Paradox command IDs 3022/3023 and tag type 203 to avoid collisions with released Farpointe/Pyramid support.
- - Added `lf chip probe` firmware command (3140): sends one read that the Proxmark's `lf search` also uses to find the chip type (T55xx trace block, EM4x05 word 0), then captures the answer (@mfcarroll)
+ - Added `lf chip probe` firmware command (3140): sends one read that the Proxmark's `lf search` also uses to find the chip type (T55xx trace block, EM4x05 word 0), or the T55xx configuration block, then captures the answer (@mfcarroll)
  - Added long LF raw captures to `lf sniff` (`--long`): up to 28 KB fetched in slices, 16-bit samples, a free-running sample rate, sample phase, gain and settle time (@mfcarroll)
  - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
  - Fix LF reads disrupted by BLE advertising (@mfcarroll)
