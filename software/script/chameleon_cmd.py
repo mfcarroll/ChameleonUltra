@@ -894,6 +894,10 @@ class ChameleonCMD:
         resp = self.device.send_cmd_sync(
             Command.LF_SNIFF, args + b"\x00", timeout=timeout_s
         )
+        return self._lf_capture_rest(resp, args)
+
+    def _lf_capture_rest(self, resp, args: bytes):
+        """Fetch the slices after chunk 0 and the description of a long LF capture."""
         if resp.status != Status.LF_TAG_OK or not resp.data:
             return resp
         data = bytearray(resp.data)
@@ -918,9 +922,38 @@ class ChameleonCMD:
                 "rate_khz": rate,
                 "gain": g,
                 "settle_ms": settle,
+                "probe": info.data[13] if len(info.data) >= 14 else 0,
             }
         resp.data = bytes(data)
         return resp
+
+    def lf_chip_probe(
+        self, probe: int, bits: int = 16, settle_ms: int = 20, rate_khz: int = 0
+    ):
+        """
+        Send one read command to an LF tag, then capture the field.
+
+        Each probe is a read the Proxmark's `lf search` also sends to find the chip type,
+        with no password or login: 1 is a T55xx read of page 1 block 1, and 2 is an EM4x05
+        read of word 0. The capture holds the command's field gaps and then the tag's answer.
+
+        :param probe: 1 (T55xx trace block) or 2 (EM4x05 word 0)
+        :param bits: 8, or 16 for the whole 14-bit conversion
+        :param settle_ms: Field-on time before the command, 2-255 (default 20)
+        :param rate_khz: 0 samples once per carrier period, 1-200 on the CU's own clock
+        :return: Response with .data and .parsed as for lf_sniff(chunked=True)
+        """
+        req = bytes(
+            [
+                probe,
+                16 if bits == 16 else 8,
+                max(2, min(255, settle_ms)),
+                max(0, min(200, rate_khz)),
+            ]
+        )
+        resp = self.device.send_cmd_sync(Command.LF_CHIP_PROBE, req, timeout=5)
+        # Later slices come from the sniff command, so it needs a request past chunk 0.
+        return self._lf_capture_rest(resp, bytes(7))
 
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):

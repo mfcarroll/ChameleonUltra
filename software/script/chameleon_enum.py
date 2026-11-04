@@ -188,6 +188,7 @@ class Command(enum.IntEnum):
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
+    LF_CHIP_PROBE = 3140
 
 
 @enum.unique

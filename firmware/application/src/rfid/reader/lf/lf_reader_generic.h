@@ -30,6 +30,17 @@
 bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
                         bool raw16, uint16_t settle_ms, uint8_t rate_khz);
 
+/* The read command a probe capture sends before it listens. Each one is a read the
+ * Proxmark's `lf search` also sends to find the chip type, with no password or login. */
+#define LF_PROBE_NONE          0
+#define LF_PROBE_T55XX_TRACE   1  /* T55xx regular read of page 1 block 1 */
+#define LF_PROBE_EM4X05_WORD0  2  /* EM4x05 read of word 0 */
+
+/* raw_read_to_buffer() with a probe. The field comes up, the tag powers for settle_ms, the
+ * probe goes out, and the capture starts with the probe. */
+bool raw_read_probe_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                              bool raw16, uint16_t settle_ms, uint8_t rate_khz, uint8_t probe);
+
 /* Samples lost during the last capture because the ring was full. Zero means the capture
  * is continuous. */
 uint32_t raw_read_dropped(void);

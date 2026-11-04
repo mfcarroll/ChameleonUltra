@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Added `lf chip probe` firmware command (3140): sends one read that the Proxmark's `lf search` also uses to find the chip type (T55xx trace block, EM4x05 word 0), then captures the answer (@mfcarroll)
  - Added long LF raw captures to `lf sniff` (`--long`): up to 28 KB fetched in slices, 16-bit samples, a free-running sample rate, sample phase, gain and settle time (@mfcarroll)
  - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
  - Fix LF reads disrupted by BLE advertising (@mfcarroll)
