@@ -16,6 +16,14 @@ nrfx_timer_t m_pwm_timer_counter = NRFX_TIMER_INSTANCE(2);
 nrf_ppi_channel_t m_pwm_saadc_sample_ppi_channel;
 nrf_ppi_channel_t m_pwm_timer_count_ppi_channel;
 
+/* TIMER3 moves the SAADC sample point within the carrier period, or replaces the carrier
+ * as the sample clock. */
+static nrfx_timer_t m_sample_timer = NRFX_TIMER_INSTANCE(3);
+static nrf_ppi_channel_t m_pwm_sample_timer_clear_ppi_channel;
+static nrf_ppi_channel_t m_sample_timer_saadc_ppi_channel;
+static uint8_t m_saadc_phase_ticks = 0;
+static uint8_t m_saadc_rate_khz = 0;
+
 // At present, only channel 1 is used, so only one channel can be configured
 static nrf_pwm_values_individual_t m_lf_125khz_pwm_seq_val[] = {
     {2, 0, 0, 0},
@@ -117,18 +125,67 @@ static void pwm_saadc_sample_ppi_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+static void sample_timer_init(void) {
+    nrfx_timer_config_t cfg = NRFX_TIMER_DEFAULT_CONFIG;
+    cfg.frequency = NRF_TIMER_FREQ_16MHz;
+    cfg.mode = NRF_TIMER_MODE_TIMER;
+    cfg.bit_width = NRF_TIMER_BIT_WIDTH_16;
+    APP_ERROR_CHECK(nrfx_timer_init(&m_sample_timer, &cfg, NULL));
+
+    APP_ERROR_CHECK(nrfx_ppi_channel_alloc(&m_pwm_sample_timer_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_assign(
+                        m_pwm_sample_timer_clear_ppi_channel,
+                        nrfx_pwm_event_address_get(&m_pwm, NRF_PWM_EVENT_PWMPERIODEND),
+                        nrfx_timer_task_address_get(&m_sample_timer, NRF_TIMER_TASK_CLEAR)));
+
+    APP_ERROR_CHECK(nrfx_ppi_channel_alloc(&m_sample_timer_saadc_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_assign(
+                        m_sample_timer_saadc_ppi_channel,
+                        nrfx_timer_compare_event_address_get(&m_sample_timer, NRF_TIMER_CC_CHANNEL0),
+                        nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE)));
+}
+
+void lf_125khz_radio_saadc_phase_set(uint8_t ticks) {
+    /* A compare at or past one carrier period (128 ticks) would never fire. */
+    m_saadc_phase_ticks = ticks < 128 ? ticks : 127;
+}
+
+void lf_125khz_radio_saadc_rate_set(uint8_t khz) {
+    /* The SAADC needs about 5us per conversion with a 3us acquisition. */
+    m_saadc_rate_khz = khz < 200 ? khz : 200;
+}
+
 void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
+    lf_adc_set_acq_fast(m_saadc_rate_khz > 143);
     register_lf_adc_callback(cb);
 
-    nrfx_err_t err_code;
-    err_code = nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel);
-    APP_ERROR_CHECK(err_code);
+    if (m_saadc_rate_khz != 0) {
+        /* Free-running: TIMER3 alone clocks the samples, out of step with the carrier. */
+        nrfx_timer_extended_compare(&m_sample_timer, NRF_TIMER_CC_CHANNEL0, 16000u / m_saadc_rate_khz,
+                                    NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK, false);
+        nrfx_timer_enable(&m_sample_timer);
+        APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_sample_timer_saadc_ppi_channel));
+        return;
+    }
+    if (m_saadc_phase_ticks == 0) {
+        APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel));
+        return;
+    }
+    /* Each carrier period clears TIMER3, and its compare takes the sample. The PWM does the
+     * clearing, so the compare must not clear the timer as well. */
+    nrfx_timer_compare(&m_sample_timer, NRF_TIMER_CC_CHANNEL0, m_saadc_phase_ticks, false);
+    nrfx_timer_enable(&m_sample_timer);
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_pwm_sample_timer_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_sample_timer_saadc_ppi_channel));
 }
 
 void lf_125khz_radio_saadc_disable(void) {
-    nrfx_err_t err_code;
-    err_code = nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel);
-    APP_ERROR_CHECK(err_code);
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_pwm_sample_timer_clear_ppi_channel));
+    APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_sample_timer_saadc_ppi_channel));
+    nrfx_timer_disable(&m_sample_timer);
+    nrfx_timer_clear(&m_sample_timer);
+    lf_adc_set_acq_fast(false);
 
     unregister_lf_adc_callback();
 }
@@ -160,6 +217,7 @@ void lf_125khz_radio_init(void) {
         pwm_timer_counter_init();
         pwm_timer_count_ppi_init();
         pwm_saadc_sample_ppi_init();
+        sample_timer_init();
         m_reader_inited = true;
     }
 }
@@ -169,6 +227,9 @@ void lf_125khz_radio_uninit(void) {
     if (m_reader_inited) {
         nrfx_ppi_channel_free(m_pwm_saadc_sample_ppi_channel);
         nrfx_ppi_channel_free(m_pwm_timer_count_ppi_channel);
+        nrfx_ppi_channel_free(m_pwm_sample_timer_clear_ppi_channel);
+        nrfx_ppi_channel_free(m_sample_timer_saadc_ppi_channel);
+        nrfx_timer_uninit(&m_sample_timer);
         nrfx_timer_uninit(&m_pwm_timer_counter);
         nrfx_pwm_uninit(&m_pwm);
         m_reader_inited = false;

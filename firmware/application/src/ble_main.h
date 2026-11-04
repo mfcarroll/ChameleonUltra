@@ -21,6 +21,10 @@ void nus_data_response(uint8_t *p_data, uint16_t length);
 bool is_nus_working(void);
 void set_ble_connect_key(uint8_t *key);
 
+/* Settings for the next register_lf_adc_callback(). The gain divisor is 1..6, and anything
+ * else selects the default 1/6. A fast acquisition (3us) allows sampling above 143kHz. */
+void lf_adc_set_gain(uint8_t divisor);
+void lf_adc_set_acq_fast(bool fast);
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 

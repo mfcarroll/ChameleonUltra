@@ -844,20 +844,83 @@ class ChameleonCMD:
             resp.parsed = struct.unpack(">BBH8sBBBB", resp.data[:16])
         return resp
 
-    def lf_sniff(self, timeout_ms: int = 2000):
+    def lf_sniff(
+        self,
+        timeout_ms: int = 2000,
+        bits: int = 8,
+        phase: int = 0,
+        rate_khz: int = 0,
+        gain: int = 6,
+        settle_ms: int = 2,
+        chunked: bool = False,
+    ):
         """
-        Capture raw LF field ADC samples.
+        Capture raw LF field ADC samples with the reader field on.
 
-        The ChameleonUltra samples the LF antenna at 125kHz (8µs/sample).
-        Each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap/no field.
+        By default the ChameleonUltra samples the LF antenna once per carrier period (125kHz,
+        8µs per sample), and each byte is an 8-bit ADC value: ~0x80 = field on, lower = gap
+        or no field.
 
-        :param timeout_ms: Capture duration in ms (1-10000, default 2000)
-        :return: Raw response object — check .status and .data
+        Without chunked, the capture is one frame of up to 4000 8-bit samples. With chunked,
+        the firmware captures up to 28672 bytes and the client fetches them in slices.
+        Firmware without chunked captures returns only the first slice.
+
+        :param timeout_ms: Longest capture time in ms (1-10000, default 2000)
+        :param bits: 8, or 16 for the whole 14-bit conversion, big-endian (chunked only)
+        :param phase: Sample point, 0-127 ticks of 62.5ns into the carrier period (chunked only)
+        :param rate_khz: 0 samples once per carrier period. 1-200 samples at that rate on
+            the CU's own clock, out of step with the carrier (chunked only)
+        :param gain: SAADC gain divisor, 1-6 (default 6, chunked only)
+        :param settle_ms: Field-on time before the first kept sample, 2-255 (chunked only)
+        :return: Response. With chunked, .data holds the whole capture and .parsed the
+            firmware's description of it: a dict with total, dropped, bits, phase, rate_khz,
+            gain and settle_ms, or None if the firmware has no description.
         """
         timeout_ms = max(1, min(10000, timeout_ms))
-        payload = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
         timeout_s = (timeout_ms // 1000) + 2
-        return self.device.send_cmd_sync(Command.LF_SNIFF, payload, timeout=timeout_s)
+        head = bytes([(timeout_ms >> 8) & 0xFF, timeout_ms & 0xFF])
+        if not chunked:
+            return self.device.send_cmd_sync(Command.LF_SNIFF, head, timeout=timeout_s)
+
+        args = head + bytes(
+            [
+                16 if bits == 16 else 8,
+                max(0, min(127, phase)),
+                max(0, min(200, rate_khz)),
+                max(1, min(6, gain)),
+                max(2, min(255, settle_ms)),
+            ]
+        )
+        resp = self.device.send_cmd_sync(
+            Command.LF_SNIFF, args + b"\x00", timeout=timeout_s
+        )
+        if resp.status != Status.LF_TAG_OK or not resp.data:
+            return resp
+        data = bytearray(resp.data)
+        chunk = 1
+        while chunk < 0xFF:
+            part = self.device.send_cmd_sync(Command.LF_SNIFF, args + bytes([chunk]))
+            if part.status != Status.LF_TAG_OK or not part.data:
+                break
+            data += part.data
+            chunk += 1
+        info = self.device.send_cmd_sync(Command.LF_SNIFF, args + b"\xff")
+        resp.parsed = None
+        if info.status == Status.LF_TAG_OK and len(info.data) >= 13:
+            total, dropped, b, ph, rate, g, settle = struct.unpack(
+                ">IIBBBBB", info.data[:13]
+            )
+            resp.parsed = {
+                "total": total,
+                "dropped": dropped,
+                "bits": b,
+                "phase": ph,
+                "rate_khz": rate,
+                "gain": g,
+                "settle_ms": settle,
+            }
+        resp.data = bytes(data)
+        return resp
 
     @expect_response(Status.LF_TAG_OK)
     def em4x05_scan(self, pwd: int = 0):

@@ -8026,24 +8026,104 @@ class LFSniff(ReaderRequiredUnit):
         parser.add_argument(
             "--hex", action="store_true", help="Print hex dump of samples to screen"
         )
+        parser.add_argument(
+            "--long",
+            action="store_true",
+            help="Capture up to 28672 bytes, fetched in slices (needs firmware that supports it)",
+        )
+        parser.add_argument(
+            "--bits",
+            type=int,
+            choices=(8, 16),
+            default=8,
+            help="16 keeps the whole 14-bit sample, 2 bytes big-endian (implies --long)",
+        )
+        parser.add_argument(
+            "--rate",
+            type=int,
+            default=0,
+            metavar="KHZ",
+            help="Sample at this rate (1-200) on the CU's clock instead of once per carrier period (implies --long)",
+        )
+        parser.add_argument(
+            "--phase",
+            type=int,
+            default=0,
+            metavar="TICKS",
+            help="Sample this many 62.5ns ticks into each carrier period, 0-127 (implies --long)",
+        )
+        parser.add_argument(
+            "--gain",
+            type=int,
+            default=6,
+            choices=(1, 2, 3, 4, 5, 6),
+            metavar="DIV",
+            help="SAADC gain 1/DIV, 1-6 (default 6, implies --long)",
+        )
+        parser.add_argument(
+            "--settle",
+            type=int,
+            default=2,
+            metavar="MS",
+            help="Field-on time before the first kept sample, 2-255 (default 2, implies --long)",
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         timeout = max(1, min(10000, args.timeout))
-        print(f" Capturing LF field for {timeout}ms at 125kHz (8µs/sample)...")
-        resp = self.cmd.lf_sniff(timeout_ms=timeout)
+        chunked = (
+            args.long
+            or args.bits != 8
+            or args.rate != 0
+            or args.phase != 0
+            or args.gain != 6
+            or args.settle != 2
+        )
+        rate_khz = args.rate if args.rate else 125
+        print(f" Capturing LF field for up to {timeout}ms at {rate_khz}kHz...")
+        resp = self.cmd.lf_sniff(
+            timeout_ms=timeout,
+            bits=args.bits,
+            phase=args.phase,
+            rate_khz=args.rate,
+            gain=args.gain,
+            settle_ms=args.settle,
+            chunked=chunked,
+        )
 
         if resp.status != Status.LF_TAG_OK or not resp.data:
             print(f"{CR}No samples captured{C0}")
             return
 
+        data = bytes(resp.data)
+        if chunked and resp.parsed is None:
+            print(
+                f"{CY}This firmware has no long captures, so this is its usual 8-bit capture{C0}"
+            )
+        info = resp.parsed or {}
+        if info.get("dropped"):
+            print(f"{CR}The capture lost {info['dropped']} samples, so it has gaps{C0}")
+        if info.get("bits") == 16:
+            if args.out:
+                with open(args.out, "wb") as f:
+                    f.write(data)
+            samples = [(data[i] << 8) | data[i + 1] for i in range(0, len(data) - 1, 2)]
+            print(
+                f" Captured : {CG}{len(samples)}{C0} samples ({len(samples) / rate_khz:.1f}ms), "
+                f"range {min(samples)}-{max(samples)}, mean {sum(samples) // len(samples)}"
+            )
+            if args.out:
+                print(
+                    f" Saved    : {CG}{args.out}{C0} ({len(data)} bytes, 16-bit big-endian)"
+                )
+            return
+
         import chameleon_cli_unit as _self_mod
 
-        data = bytes(resp.data)
         _self_mod._last_capture = data
 
         n = len(data)
-        duration_ms = n * 8 / 1000
+        duration_ms = n / rate_khz
         print(f" Captured : {CG}{n}{C0} bytes ({duration_ms:.1f}ms)")
 
         mn = min(data)

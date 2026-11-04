@@ -48,7 +48,12 @@ static void uninit_saadc_hw(void) {
     lf_125khz_radio_saadc_disable();
 }
 
-bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen) {
+uint32_t raw_read_dropped(void) {
+    return m_cb_dropped;
+}
+
+bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
+                        bool raw16, uint16_t settle_ms, uint8_t rate_khz) {
     *outlen = 0;
 
     m_cb_dropped = 0;
@@ -58,20 +63,35 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
     init_saadc_hw();
     start_lf_125khz_radio();
 
-    /* Wait for antenna to settle before capturing.
-     * The LC circuit rings for ~400µs on field startup, then takes
-     * another ~800µs to reach steady state. Skip 2ms to be safe. */
-    bsp_delay_ms(2);
+    /* The antenna rings for about 400us after the field starts and settles over the next
+     * 800us, so the capture starts at least 2ms in. A tag can need longer to power up.
+     * The SAADC delivers samples in batches, so the settling samples are skipped by count. */
+    if (settle_ms < 2) {
+        settle_ms = 2;
+    }
+    uint32_t skip = (uint32_t)settle_ms * (rate_khz != 0 ? rate_khz : 125u);
 
     autotimer *p_at = bsp_obtain_timer(0);
-    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < maxlen) {
+    size_t step = raw16 ? 2 : 1;
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms + settle_ms) && *outlen + step <= maxlen) {
         uint16_t val = 0;
-        while (cb_pop_front(&cb, &val) && *outlen < maxlen) {
-            val = val >> 5;  /* 14-bit ADC → 9-bit, then >>5 gives 8-bit */
-            data[*outlen] = val > 0xff ? 0xff : (uint8_t)val;
-            ++(*outlen);
+        while (*outlen + step <= maxlen && cb_pop_front(&cb, &val)) {
+            if (skip != 0) {
+                skip--;
+                continue;
+            }
+            if ((int16_t)val < 0) {
+                val = 0;  /* the SAADC reads slightly below ground as a negative value */
+            }
+            if (raw16) {
+                data[(*outlen)++] = (uint8_t)(val >> 8);  /* 14 bits, big-endian */
+                data[(*outlen)++] = (uint8_t)val;
+            } else {
+                val >>= 5;  /* 14 bits to 9, clamped to 8 */
+                data[(*outlen)++] = val > 0xff ? 0xff : (uint8_t)val;
+            }
         }
-        bsp_wdt_feed();  /* prevent watchdog reset during long captures */
+        bsp_wdt_feed();
     }
 
     bsp_return_timer(p_at);

@@ -17,6 +17,7 @@
 #include "netdata.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
+#include "lf_125khz_radio.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
 #include "rc522.h"
@@ -1103,7 +1104,7 @@ static data_frame_tx_t *cmd_processor_generic_read(uint16_t cmd, uint16_t status
     }
 
     size_t outlen = 0;
-    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen)) {
+    if (!raw_read_to_buffer(outdata, GENERIC_READ_LEN, GENERIC_READ_TIMEOUT_MS, &outlen, false, 0, 0)) {
         free(outdata);
         return data_frame_make(cmd, STATUS_CMD_ERR, 0, NULL);
     };
@@ -2230,22 +2231,87 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
+/* Request, every byte optional after the first two:
+ *   [0..1] timeout in ms, big-endian (1..10000, default 2000)
+ *   [2]    16 for 16-bit samples, anything else for 8-bit
+ *   [3]    sample phase, 0..127 ticks of 62.5ns into the carrier period (0 = default)
+ *   [4]    free-running sample rate in kHz, 1..200 (0 = once per carrier period)
+ *   [5]    SAADC gain divisor, 1..6 (0 = the default 1/6)
+ *   [6]    field-on time in ms before the first kept sample (0 = 2ms)
+ *   [7]    chunk index (0 = capture)
+ * Chunk 0 captures and returns the first LF_SNIFF_CHUNK_BYTES. Chunk n returns the next
+ * slice of the same capture, and an empty reply after the last one. Chunk 0xFF returns the
+ * capture's description, LF_SNIFF_INFO_BYTES: total bytes (BE32), dropped samples (BE32),
+ * then bits, phase, rate, gain and settle as requested.
+ * A request of two bytes or fewer gets one frame of 8-bit samples, as before. */
+#define LF_SNIFF_INFO_CHUNK  0xFF
+#define LF_SNIFF_INFO_BYTES  13
+
 static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
-    uint32_t timeout_ms = 2000;
-    if (length >= 2) {
-        timeout_ms = ((uint32_t)data[0] << 8) | data[1];
-        if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
+    /* A chunk after the first must slice the capture it belongs to, never take a new one. */
+    static uint8_t sniff_buf[LF_SNIFF_MAX_BYTES];
+    static size_t sniff_len = 0;
+    static uint32_t sniff_dropped = 0;
+    static uint8_t sniff_args[5] = {8, 0, 0, 6, 2};
+
+    uint8_t chunk = (length >= 8) ? data[7] : 0;
+
+    if (chunk == LF_SNIFF_INFO_CHUNK) {
+        uint8_t info[LF_SNIFF_INFO_BYTES];
+        num_to_bytes(sniff_len, 4, info);
+        num_to_bytes(sniff_dropped, 4, info + 4);
+        memcpy(info + 8, sniff_args, sizeof(sniff_args));
+        return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(info), info);
     }
 
-    static uint8_t sniff_buf[LF_SNIFF_MAX_SAMPLES];
-    size_t outlen = 0;
-    raw_read_to_buffer(sniff_buf, LF_SNIFF_MAX_SAMPLES, timeout_ms, &outlen);
+    if (chunk == 0) {
+        uint32_t timeout_ms = 2000;
+        if (length >= 2) {
+            timeout_ms = ((uint32_t)data[0] << 8) | data[1];
+            if (timeout_ms == 0 || timeout_ms > 10000) timeout_ms = 2000;
+        }
+        bool raw16 = (length >= 3 && data[2] == 16);
+        uint8_t phase = (length >= 4) ? data[3] : 0;
+        uint8_t rate = (length >= 5) ? data[4] : 0;
+        uint8_t gain = (length >= 6 && data[5] >= 1 && data[5] <= 6) ? data[5] : 6;
+        uint8_t settle = (length >= 7 && data[6] >= 2) ? data[6] : 2;
 
-    if (outlen == 0) {
+        lf_125khz_radio_saadc_phase_set(phase);
+        lf_125khz_radio_saadc_rate_set(rate);
+        lf_adc_set_gain(gain);
+        /* An old host reads a single frame, so its capture stops at one frame's worth. */
+        size_t maxlen = (length <= 2) ? LF_SNIFF_CHUNK_BYTES : LF_SNIFF_MAX_BYTES;
+        sniff_len = 0;
+        bool ok = raw_read_to_buffer(sniff_buf, maxlen, timeout_ms, &sniff_len, raw16, settle,
+                                     rate > 200 ? 200 : rate);
+        sniff_dropped = raw_read_dropped();
+        /* Other readers expect the default sampling. */
+        lf_125khz_radio_saadc_phase_set(0);
+        lf_125khz_radio_saadc_rate_set(0);
+        lf_adc_set_gain(6);
+
+        sniff_args[0] = raw16 ? 16 : 8;
+        sniff_args[1] = phase;
+        sniff_args[2] = rate > 200 ? 200 : rate;
+        sniff_args[3] = gain;
+        sniff_args[4] = settle;
+        if (!ok) {
+            return data_frame_make(cmd, STATUS_MEM_ERR, 0, NULL);
+        }
+    }
+
+    if (sniff_len == 0) {
         return data_frame_make(cmd, STATUS_LF_TAG_NO_FOUND, 0, NULL);
     }
-    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)outlen, sniff_buf);
+    size_t off = (size_t)chunk * LF_SNIFF_CHUNK_BYTES;
+    if (off >= sniff_len) {
+        return data_frame_make(cmd, STATUS_LF_TAG_OK, 0, NULL);
+    }
+    size_t n = sniff_len - off;
+    if (n > LF_SNIFF_CHUNK_BYTES) {
+        n = LF_SNIFF_CHUNK_BYTES;
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, (uint16_t)n, sniff_buf + off);
 }
 
 /* ========================================================================
