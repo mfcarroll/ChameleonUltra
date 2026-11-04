@@ -156,3 +156,43 @@ bool raw_read_probe_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms,
 
     return true;
 }
+
+uint32_t lf_capture_dropped(void) {
+    return m_cb_dropped;
+}
+
+bool raw_read_samples(int16_t *samples, size_t count, uint32_t timeout_ms, size_t *outlen) {
+    *outlen = 0;
+    m_cb_dropped = 0;
+
+    if (!cb_init(&cb, CIRCULAR_BUFFER_SIZE, sizeof(uint16_t))) {
+        return false;
+    }
+    init_saadc_hw();
+    start_lf_125khz_radio();
+
+    /* Same settle as raw_read_to_buffer(). The SAADC delivers its first batch
+     * about 16ms after start, so this rarely drains anything and the capture
+     * includes the start-up transient. The Indala decoder relies on that: its
+     * mix and filter remove the transient, and the first frame's preamble is
+     * in those early samples. */
+    bsp_delay_ms(2);
+    uint16_t val = 0;
+    while (cb_pop_front(&cb, &val)) {
+    }
+
+    autotimer *p_at = bsp_obtain_timer(0);
+    while (NO_TIMEOUT_1MS(p_at, timeout_ms) && *outlen < count) {
+        while (*outlen < count && cb_pop_front(&cb, &val)) {
+            samples[(*outlen)++] = (int16_t)(val & 0x3FFF);
+        }
+        bsp_wdt_feed();
+    }
+
+    bsp_return_timer(p_at);
+    stop_lf_125khz_radio();
+    uninit_saadc_hw();
+    cb_free(&cb);
+
+    return *outlen == count;
+}

@@ -9,6 +9,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added long LF raw captures to `lf sniff` (`--long`): up to 28 KB fetched in slices, 16-bit samples, a free-running sample rate, sample phase, gain and settle time (@mfcarroll)
  - Fix LF Viking reads failing when nothing disturbs the field (@mfcarroll)
  - Fix LF reads disrupted by BLE advertising (@mfcarroll)
+ - Added Indala LF protocol support: read, emulate and T55xx clone (@kevihiiin, @mfcarroll)
  - Fix LF raw captures (`lf sniff`) dropping most samples: the capture buffer was smaller than one ADC batch (@mfcarroll)
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
  - Fixed ISO14443-4 (T=CL) tag emulation silently truncating any received command of 32+ bytes (e.g. an EMV GPO with a full PDOL): `nfc_tag_14a_unwrap_frame` returned the data-bit count as `uint8_t`, wrapping it mod 256 (@whitewhidow)
