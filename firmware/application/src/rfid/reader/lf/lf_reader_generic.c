@@ -114,15 +114,16 @@ bool raw_read_probe_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms,
     }
     uint32_t skip = (uint32_t)settle_ms * (rate_khz != 0 ? rate_khz : 125u);
 
-    /* A probe goes out once the tag has powered up, and the capture starts with it, so the
-     * capture holds the command's field gaps and then the tag's answer. */
+    /* A probe goes out once the tag has powered up, and the capture starts after it with the
+     * tag's answer. The command blocks this loop for longer than the ring holds, so the
+     * samples taken while it went out are discarded. */
     if (probe != LF_PROBE_NONE) {
         bsp_delay_ms(settle_ms);
+        send_probe(probe);
         uint16_t stale = 0;
         while (cb_pop_front(&cb, &stale)) {}
         m_cb_dropped = 0;
         skip = 0;
-        send_probe(probe);
     }
 
     autotimer *p_at = bsp_obtain_timer(0);

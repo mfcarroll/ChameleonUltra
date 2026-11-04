@@ -935,7 +935,7 @@ class ChameleonCMD:
 
         Each probe is a read the Proxmark's `lf search` also sends to find the chip type,
         with no password or login: 1 is a T55xx read of page 1 block 1, and 2 is an EM4x05
-        read of word 0. The capture holds the command's field gaps and then the tag's answer.
+        read of word 0. The capture starts after the command, with the tag's answer.
 
         :param probe: 1 (T55xx trace block) or 2 (EM4x05 word 0)
         :param bits: 8, or 16 for the whole 14-bit conversion

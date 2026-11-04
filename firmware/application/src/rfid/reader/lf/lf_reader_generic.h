@@ -37,7 +37,7 @@ bool raw_read_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_
 #define LF_PROBE_EM4X05_WORD0  2  /* EM4x05 read of word 0 */
 
 /* raw_read_to_buffer() with a probe. The field comes up, the tag powers for settle_ms, the
- * probe goes out, and the capture starts with the probe. */
+ * probe goes out, and the capture starts once it has. */
 bool raw_read_probe_to_buffer(uint8_t *data, size_t maxlen, uint32_t timeout_ms, size_t *outlen,
                               bool raw16, uint16_t settle_ms, uint8_t rate_khz, uint8_t probe);
 
