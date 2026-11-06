@@ -1,3 +1,4 @@
+#include "nrf_delay.h"
 #include "usb_main.h"
 #include "syssleep.h"
 #include "dataframe.h"
@@ -149,8 +150,17 @@ void usb_cdc_init(void) {
 }
 
 void usb_cdc_write(const void *p_buf, uint16_t length) {
+    // EXPERIMENT exp/field-probe: if the previous reply is still going out (a long field-probe round held up the USB
+    // events), keep processing USB events until it has gone, for up to 1 s, rather than fault on NRF_ERROR_BUSY.
     ret_code_t err_code = app_usbd_cdc_acm_write(&m_app_cdc_acm, p_buf, length);
-    APP_ERROR_CHECK(err_code);
+    for (int ms = 0; err_code == NRF_ERROR_BUSY && ms < 1000; ms++) {
+        while (app_usbd_event_queue_process());
+        nrf_delay_ms(1);
+        err_code = app_usbd_cdc_acm_write(&m_app_cdc_acm, p_buf, length);
+    }
+    if (err_code != NRF_SUCCESS) {
+        NRF_LOG_ERROR("usb_cdc_write: %d, reply dropped", err_code);
+    }
 }
 
 // override fputc to printf to cdc serial

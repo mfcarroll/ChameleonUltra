@@ -211,9 +211,15 @@ static void mags(const int16_t *x, uint32_t n, uint32_t nfft, float *work) {
 float fp_goertzel(const int16_t *x, uint32_t n, float f, float fs) {
     const float m = mean16(x, n);
     const float w = 2.0f * PI_F * f / fs, c = 2.0f * cosf(w);
+    // The Hann window's cosine by rotation: (hc, hs) turns by the window's step each sample.
+    const float step = 2.0f * PI_F / (float)(n - 1), rc = cosf(step), rs = sinf(step);
+    float hc = 1.0f, hs = 0.0f;
     float s1 = 0.0f, s2 = 0.0f;
     for (uint32_t i = 0; i < n; i++) {
-        const float y = (x[i] - m) * (0.5f - 0.5f * cosf(2.0f * PI_F * i / (n - 1)));
+        const float y = (x[i] - m) * (0.5f - 0.5f * hc);
+        const float t = hc * rc - hs * rs;
+        hs = hs * rc + hc * rs;
+        hc = t;
         const float s0 = y + c * s1 - s2;
         s2 = s1;
         s1 = s0;

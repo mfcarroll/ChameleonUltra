@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app_timer.h"
+#include "app_usbd.h"
 #include "ble_main.h"
 #include "bsp_delay.h"
 #include "bsp_wdt.h"
@@ -128,6 +129,12 @@ const fp_store_t *field_probe_store(void) {
 
 // ---------------------------------------------------------------- captures
 
+// A round holds the main loop for a few hundred ms. USB events run only there, so the round processes them itself:
+// a reply already going out finishes, and a command arriving waits in the frame buffer for the main loop.
+static void usb_keepalive(void) {
+    while (app_usbd_event_queue_process());
+}
+
 // A raw capture shares the buffer with the rounds, so the rounds wait FP_HOLD_MS after one for the host to read it.
 #define FP_HOLD_MS (10000)
 static uint32_t m_hold_until_ms = 0;
@@ -158,6 +165,7 @@ static uint32_t capture(int16_t *dst, uint32_t want, uint16_t cc, uint8_t ain, u
     for (uint32_t ms = 0; ms < limit && m_cap_len < m_cap_want; ms++) {
         bsp_delay_ms(1);
         bsp_wdt_feed();
+        usb_keepalive();
     }
     nrf_saadc_continuous_mode_disable();
     unregister_lf_adc_callback();
@@ -258,6 +266,7 @@ static void measure(fp_lf_rec_t *r) {
     // 25 kHz at 100 kHz, and the mean of 4 samples (one alias period) cancels it, leaving the field's own changes.
     smooth4(buf, env_n);
     cap_summary(&r->cap[1], buf, env_n, env_mode, CC_100K, &s);
+    usb_keepalive();
     static fp_dip_t dips[FP_DIPS];
     uint16_t total;
     r->n_dips = (uint8_t)fp_dips(buf, env_n, &s, 32, dips, FP_DIPS, &total);
@@ -291,6 +300,7 @@ static void measure(fp_lf_rec_t *r) {
     n = capture(low, TONE_N, CC_20K, 0, 6);
     lf_tag_em_probe_mod(FP_MOD_LOW);
     cap_summary(&r->cap[2], low, n, FP_MOD_TONE, CC_20K, &s);
+    usb_keepalive();
     const float binw = FS_OF(CC_20K) / TONE_N;
     const float alias = n >= TONE_N ? fp_line(low, TONE_N, TONE_N, FS_OF(CC_20K), 100.0f, own, n_own, 3.0f * binw,
                                               work, &snr)
@@ -339,6 +349,7 @@ static void measure(fp_lf_rec_t *r) {
         if (own_line || a2 < 100.0f) {
             continue;
         }
+        usb_keepalive();
         const float noise = fp_noise_near(low, SECOND_N, a2, FS_OF(CC_SECOND), 400.0f);
         const float ratio = noise > 0.0f ? fp_goertzel(low, SECOND_N, a2, FS_OF(CC_SECOND)) / noise : 0.0f;
         if (ratio > best) {
@@ -460,12 +471,12 @@ void field_probe_process(void) {
         r->round = m_round++;
         measure(r);
         bsp_delay_ms(3);
-        if (!is_lf_field_exists()) {
+        if (!lf_tag_em_probe_field()) {
             r->flags |= FP_F_ENDED;
         }
         return;
     }
-    if (is_lf_field_exists()) {
+    if (lf_tag_em_probe_field()) {
         m_absent = 0;
     } else if (++m_absent >= FP_ABSENT_CHECKS) {
         field_end(t);
@@ -483,7 +494,7 @@ bool field_probe_lf_measure_now(fp_lf_rec_t *out) {
     r->flags = FP_F_MANUAL;
     measure(r);
     bsp_delay_ms(3);
-    if (!is_lf_field_exists()) {
+    if (!lf_tag_em_probe_field()) {
         r->flags |= FP_F_ENDED;
     }
     memcpy(out, r, sizeof(*r));

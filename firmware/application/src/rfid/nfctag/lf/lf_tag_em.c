@@ -541,6 +541,16 @@ static nrf_pwm_sequence_t m_probe_tone_seq = {
     .end_delay = 0,
 };
 
+// is_lf_field_exists samples LPCOMP 30 us after enabling it, inside its 140 us start-up time, so it can read a field
+// as absent. The probe waits the start-up out.
+bool lf_tag_em_probe_field(void) {
+    ANT_NO_MOD();
+    nrfx_lpcomp_enable();
+    bsp_delay_us(200);
+    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
+    return nrf_lpcomp_result_get() == 1;
+}
+
 bool lf_tag_em_probe_ready(void) {
     return m_lf_sense_state == LF_SENSE_STATE_ENABLE;
 }
