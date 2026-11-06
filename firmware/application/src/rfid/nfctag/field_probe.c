@@ -268,7 +268,9 @@ static void measure(fp_lf_rec_t *r) {
         const float a = fp_line(spec, SPEC_N, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);
         r->cap[1].line_mhz = (uint32_t)lrintf(a * 1000.0f);
         r->cap[1].line_snr10 = snr10(snr);
-        if (a > 0.0f && snr >= 20.0f) {
+        // A field that switches during the capture puts its own on-off pattern in the spectrum, so the line counts
+        // only if the field stayed on: the envelope's p10 at least half its p90.
+        if (a > 0.0f && snr >= 20.0f && s.p10 >= s.p90 / 2 && s.p90 >= 200) {
             env_hz = 100000.0f + a;
         }
     }
