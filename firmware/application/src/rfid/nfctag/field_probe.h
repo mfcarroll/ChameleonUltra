@@ -26,10 +26,9 @@ enum { FP_MOD_LOW = 0, FP_MOD_HIGH = 1, FP_MOD_TONE = 2 };
 // How the carrier was placed among the frequencies that share its alias (fp_lf_rec_t.carrier_how).
 enum {
     FP_CARRIER_NONE = 0,
-    FP_CARRIER_TWO_RATES = 1,  // the second tone capture, at another sample rate, picked one
-    FP_CARRIER_ENVELOPE = 2,   // the 100 kHz envelope capture's line picked one
-    FP_CARRIER_ASSUMED = 3,    // nothing picked one: the nearest to 125 kHz
-    FP_CARRIER_COARSE = 4,     // no line in the tone capture: the envelope capture's line alone
+    FP_CARRIER_TWO_RATES = 1,  // no envelope line: the tone's alias, placed by a second capture at another rate
+    FP_CARRIER_ENVELOPE = 2,   // the 100 kHz envelope's line (100..150 kHz folds to 0..50 kHz one to one)
+    FP_CARRIER_ASSUMED = 3,    // no envelope line, and the second rate picked nothing: the nearest to 125 kHz
 };
 
 // fp_lf_rec_t.flags
@@ -60,7 +59,7 @@ typedef struct __attribute__((packed)) {
     uint8_t carrier_how;  // FP_CARRIER_*
     uint8_t n_dips;       // stored in dips
     uint16_t dips_total;  // found in the envelope capture
-    fp_cap_t cap[3];      // level (LF_MOD off, 20 kHz), envelope (100 kHz), tone (20 kHz)
+    fp_cap_t cap[3];      // level (LF_MOD off, 20 kHz), envelope (100 kHz, 4-sample mean), tone (20 kHz)
     fp_dip_t dips[FP_DIPS];
 } fp_lf_rec_t;
 

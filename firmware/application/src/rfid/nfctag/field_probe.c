@@ -128,6 +128,10 @@ const fp_store_t *field_probe_store(void) {
 
 // ---------------------------------------------------------------- captures
 
+// A raw capture shares the buffer with the rounds, so the rounds wait FP_HOLD_MS after one for the host to read it.
+#define FP_HOLD_MS (10000)
+static uint32_t m_hold_until_ms = 0;
+
 static int16_t *volatile m_cap;
 static volatile uint32_t m_cap_len, m_cap_want;
 
@@ -178,6 +182,7 @@ uint32_t field_probe_capture(uint8_t mod, uint16_t rate_khz, uint32_t n, uint8_t
     const uint32_t got = capture(buf, n, (uint16_t)(16000u / rate_khz), ain, gain);
     lf_tag_em_probe_mod(FP_MOD_LOW);
     lf_sniff_set_len(got * 2u);
+    m_hold_until_ms = now_ms() + FP_HOLD_MS;
     return got;
 }
 
@@ -192,6 +197,18 @@ static void cap_summary(fp_cap_t *c, const int16_t *x, uint32_t n, uint8_t mode,
     c->p90 = s->p90;
     c->max = s->max;
     c->noise = s->noise;
+}
+
+// In place: each sample becomes the mean of itself and the three before it.
+static void smooth4(int16_t *x, uint32_t n) {
+    int32_t a = 0, b = 0, c = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        const int32_t v = x[i];
+        x[i] = (int16_t)((v + a + b + c) / 4);
+        c = b;
+        b = a;
+        a = v;
+    }
 }
 
 static int16_t snr10(float db) {
@@ -233,28 +250,39 @@ static void measure(fp_lf_rec_t *r) {
     bsp_delay_ms(3);
     n = capture(buf, ENV_N, CC_100K, 0, 6);
     lf_tag_em_probe_mod(FP_MOD_LOW);
-    cap_summary(&r->cap[1], buf, n, env_mode, CC_100K, &s);
+    const uint32_t env_n = n;
+    if (env_n >= SPEC_N) {
+        memmove(spec, buf, SPEC_N * sizeof(int16_t));
+    }
+    // With the load on, the carrier's ripple swings the envelope by thousands of counts. A 125 kHz carrier aliases to
+    // 25 kHz at 100 kHz, and the mean of 4 samples (one alias period) cancels it, leaving the field's own changes.
+    smooth4(buf, env_n);
+    cap_summary(&r->cap[1], buf, env_n, env_mode, CC_100K, &s);
     static fp_dip_t dips[FP_DIPS];
     uint16_t total;
-    r->n_dips = (uint8_t)fp_dips(buf, n, &s, 32, dips, FP_DIPS, &total);
+    r->n_dips = (uint8_t)fp_dips(buf, env_n, &s, 32, dips, FP_DIPS, &total);
     r->dips_total = total;
     memcpy(r->dips, dips, sizeof(dips));
-    float coarse = 0.0f;
-    if (n >= SPEC_N) {
-        memmove(spec, buf, SPEC_N * sizeof(int16_t));
+    float env_hz = 0.0f;
+    if (env_n >= SPEC_N) {
         const float a = fp_line(spec, SPEC_N, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);
         r->cap[1].line_mhz = (uint32_t)lrintf(a * 1000.0f);
         r->cap[1].line_snr10 = snr10(snr);
         if (a > 0.0f && snr >= 20.0f) {
-            coarse = 100000.0f + a;
+            env_hz = 100000.0f + a;
         }
     }
 
     // The tone: our load modulation makes the detector recharge on the reader's carrier peaks, which puts the carrier
     // on LF_RSSI. Its alias at 20 kHz is precise, but every carrier k x 20 kHz +- alias shares it.
+    // The tone's 8th harmonic is 125 kHz on our clock, which folds next to any reader's carrier, so the multiples of
+    // 8 stay in the search. A square wave of even duty has little energy there.
     float own[FP_TONE_HARMS];
-    for (int h = 0; h < FP_TONE_HARMS; h++) {
-        own[h] = fp_fold((double)FP_TONE_HZ * (h + 1), FS_OF(CC_20K));
+    int n_own = 0;
+    for (int h = 1; h <= FP_TONE_HARMS; h++) {
+        if (h % 8 != 0) {
+            own[n_own++] = fp_fold((double)FP_TONE_HZ * h, FS_OF(CC_20K));
+        }
     }
     lf_tag_em_probe_mod(FP_MOD_TONE);
     bsp_delay_ms(3);
@@ -262,18 +290,20 @@ static void measure(fp_lf_rec_t *r) {
     lf_tag_em_probe_mod(FP_MOD_LOW);
     cap_summary(&r->cap[2], low, n, FP_MOD_TONE, CC_20K, &s);
     const float binw = FS_OF(CC_20K) / TONE_N;
-    const float alias = n >= TONE_N ? fp_line(low, TONE_N, TONE_N, FS_OF(CC_20K), 100.0f, own, FP_TONE_HARMS, 3.0f * binw,
+    const float alias = n >= TONE_N ? fp_line(low, TONE_N, TONE_N, FS_OF(CC_20K), 100.0f, own, n_own, 3.0f * binw,
                                               work, &snr)
                                     : 0.0f;
     r->cap[2].line_mhz = (uint32_t)lrintf(alias * 1000.0f);
     r->cap[2].line_snr10 = snr10(snr);
 
+    // The envelope's line places the carrier on its own, unambiguously.
+    if (env_hz > 0.0f) {
+        r->carrier_mhz = (uint32_t)lrintf(env_hz * 1000.0f);
+        r->carrier_snr10 = r->cap[1].line_snr10;
+        r->carrier_how = FP_CARRIER_ENVELOPE;
+        return;
+    }
     if (alias <= 0.0f || snr < 15.0f) {
-        if (coarse > 0.0f) {
-            r->carrier_mhz = (uint32_t)lrintf(coarse * 1000.0f);
-            r->carrier_snr10 = r->cap[1].line_snr10;
-            r->carrier_how = FP_CARRIER_COARSE;
-        }
         return;
     }
     const float tone_snr = snr;
@@ -300,7 +330,7 @@ static void measure(fp_lf_rec_t *r) {
         const float a2 = fp_fold(cand[i], FS_OF(CC_SECOND));
         bool own_line = false;
         for (int h = 1; h <= FP_TONE_HARMS; h++) {
-            if (fabsf(a2 - fp_fold((double)FP_TONE_HZ * h, FS_OF(CC_SECOND))) < 30.0f) {
+            if (h % 8 != 0 && fabsf(a2 - fp_fold((double)FP_TONE_HZ * h, FS_OF(CC_SECOND))) < 30.0f) {
                 own_line = true;
             }
         }
@@ -326,13 +356,12 @@ static void measure(fp_lf_rec_t *r) {
         if (bi >= 0 && best >= 4.0f) {
             r->flags |= FP_F_AMBIGUOUS;
         }
-        const float target = coarse > 0.0f ? coarse : 125000.0f;
         for (int i = 0; i < nc; i++) {
-            if (f == 0.0f || fabsf(cand[i] - target) < fabsf(f - target)) {
+            if (f == 0.0f || fabsf(cand[i] - 125000.0f) < fabsf(f - 125000.0f)) {
                 f = cand[i];
             }
         }
-        r->carrier_how = coarse > 0.0f ? FP_CARRIER_ENVELOPE : FP_CARRIER_ASSUMED;
+        r->carrier_how = FP_CARRIER_ASSUMED;
     }
     r->carrier_mhz = (uint32_t)lrintf(f * 1000.0f);
     r->carrier_snr10 = snr10(tone_snr);
@@ -421,7 +450,7 @@ void field_probe_process(void) {
     }
     m_next_check_ms = t + FP_CHECK_MS;
     sleep_timer_stop();
-    if (m_round < FP_ROUNDS && t - m_field_start_ms >= m_round_at_ms[m_round]) {
+    if (m_round < FP_ROUNDS && t - m_field_start_ms >= m_round_at_ms[m_round] && (int32_t)(t - m_hold_until_ms) >= 0) {
         fp_lf_rec_t *r = next_rec();
         r->wake = m_store.wake;
         r->field = m_store.lf_fields;
