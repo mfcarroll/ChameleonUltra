@@ -45,6 +45,7 @@ NRF_LOG_MODULE_REGISTER();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
+#include "field_probe.h"
 #endif
 
 // Defining soft timers
@@ -1156,6 +1157,9 @@ int main(void) {
     button_init();            // Button initialization for handling business logic
     sleep_timer_init();       // Soft timer initialization for hibernation
     tag_emulation_init();     // Analog card initialization
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    field_probe_init();       // EXPERIMENT exp/field-probe: its log and setting, before tag mode senses
+#endif
     rgb_marquee_init();       // Light effect initialization
 
     ble_passkey_init();       // init ble connect key.
@@ -1193,6 +1197,9 @@ int main(void) {
 
         // Data pack process
         data_frame_process();
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        field_probe_process();
+#endif
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process

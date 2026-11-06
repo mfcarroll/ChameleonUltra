@@ -25,6 +25,8 @@ void set_ble_connect_key(uint8_t *key);
  * else selects the default 1/6. A fast acquisition (3us) allows sampling above 143kHz. */
 void lf_adc_set_gain(uint8_t divisor);
 void lf_adc_set_acq_fast(bool fast);
+/* The analog input for the next register_lf_adc_callback(): AIN5 (LF_OA_OUT, the reader) unless set. */
+void lf_adc_set_input(nrf_saadc_input_t input);
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 

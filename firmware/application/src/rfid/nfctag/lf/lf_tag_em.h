@@ -40,3 +40,8 @@ bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 int lf_tag_indala_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer);
 bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type);
 bool is_lf_field_exists(void);
+
+// EXPERIMENT exp/field-probe (field_probe.c)
+bool lf_tag_em_probe_ready(void);
+void lf_tag_em_probe_mod(uint8_t mode);
+void lf_tag_em_probe_rearm(void);

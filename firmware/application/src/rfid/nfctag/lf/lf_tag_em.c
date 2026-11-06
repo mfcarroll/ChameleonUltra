@@ -3,6 +3,12 @@
 #include <stdint.h>
 
 #include "bsp_delay.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "field_probe.h"
+#else
+#define field_probe_enabled() (false)
+#define field_probe_lf_up()
+#endif
 #include "fds_util.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
@@ -73,6 +79,14 @@ bool is_lf_field_exists(void) {
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
+    // EXPERIMENT exp/field-probe: the probe measures the field instead, from the main loop.
+    if (field_probe_enabled()) {
+        if (event == NRF_LPCOMP_EVENT_UP) {
+            nrfx_lpcomp_disable();
+            field_probe_lf_up();
+        }
+        return;
+    }
     // Only when the lf-frequency emulation is not launched, and the analog card is started
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
@@ -115,7 +129,8 @@ static void lpcomp_init(void) {
 }
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
-    if (event_type != NRFX_PWM_EVT_STOPPED) {
+    // The probe's tone stops here too, and the probe checks the field itself.
+    if (event_type != NRFX_PWM_EVT_STOPPED || field_probe_enabled()) {
         return;
     }
     // PWM has fully stopped — LF_MOD is released back to GPIO.
@@ -514,3 +529,41 @@ bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t tag_id[8] = {0xA0, 0x00, 0x00, 0x00, 0x8F, 0x49, 0xD2, 0xA1};
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
 }
+
+#if defined(PROJECT_CHAMELEON_ULTRA)
+// EXPERIMENT exp/field-probe: LF_MOD for the probe's captures (FP_MOD_*). The tone is fc/8 on our clock, at either
+// PWM base clock.
+static nrf_pwm_values_wave_form_t m_probe_tone_val[1];
+static nrf_pwm_sequence_t m_probe_tone_seq = {
+    .values.p_wave_form = m_probe_tone_val,
+    .length = 4,
+    .repeats = 0,
+    .end_delay = 0,
+};
+
+bool lf_tag_em_probe_ready(void) {
+    return m_lf_sense_state == LF_SENSE_STATE_ENABLE;
+}
+
+void lf_tag_em_probe_mod(uint8_t mode) {
+    if (!nrfx_pwm_is_stopped(&m_broadcast)) {
+        nrfx_pwm_stop(&m_broadcast, true);
+    }
+    if (mode == FP_MOD_TONE) {
+        const uint16_t top = IS_PSK1_TYPE(m_tag_type) ? 64 : 8;
+        m_probe_tone_val[0].channel_0 = top / 2;
+        m_probe_tone_val[0].counter_top = top;
+        nrfx_pwm_simple_playback(&m_broadcast, &m_probe_tone_seq, 1, NRFX_PWM_FLAG_LOOP);
+    } else if (mode == FP_MOD_HIGH) {
+        nrf_gpio_pin_set(LF_MOD);
+    } else {
+        ANT_NO_MOD();
+    }
+}
+
+// After a field has gone: LPCOMP, enabled by the last field check, interrupts on the next field.
+void lf_tag_em_probe_rearm(void) {
+    ANT_NO_MOD();
+    NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
+}
+#endif

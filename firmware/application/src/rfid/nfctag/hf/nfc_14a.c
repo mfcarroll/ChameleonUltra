@@ -15,6 +15,13 @@ NRF_LOG_MODULE_REGISTER();
 
 #include "rfid_main.h"
 #include "syssleep.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "field_probe.h"
+#else
+#define field_probe_enabled() (false)
+#define field_probe_hf_field(on)
+#define field_probe_hf_frame(d, b, s)
+#endif
 #include "tag_emulation.h"
 
 
@@ -665,6 +672,9 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_ON()
 
             NRF_LOG_INFO("HF FIELD DETECTED");
+            if (field_probe_enabled()) {
+                field_probe_hf_field(true);
+            }
 
             //Turn off the automatic anti -collision, MCU management all the interaction process, and then enable the NFC peripherals so that Io can be performed after enable
             // 20221108 Fix the different enable switching process of NRF52840 and NRF52832
@@ -695,6 +705,9 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                 nrf_nfct_reset();
             }
 
+            if (field_probe_enabled()) {
+                field_probe_hf_field(false);
+            }
             NRF_LOG_INFO("HF FIELD LOST");
             break;
         }
@@ -724,6 +737,14 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             // TODO Remember a bug, if you do not reply to the message after receiving the message, you need to manually enable you
             //   Otherwise, the nrfx_nfct_evt_tx_frameend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
             // All the next communication will have problems. How can I play if there is a problem? Play an egg.
+            // EXPERIMENT exp/field-probe: count the frame and listen for the next, never answering.
+            if (field_probe_enabled()) {
+                uint16_t bits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
+                field_probe_hf_frame(m_nfc_rx_buffer, bits, p_event->params.rx_frameend.rx_status);
+                nfc_fdt_reset();
+                NRFX_NFCT_RX_BYTES
+                break;
+            }
             m_is_responded = false;
             // One more layer of pressure stack, but it seems to have little effect on performance
             // This function processes the data sent by the card reader, and then read that you don't need to reply to the card reader. If you need it, reply
