@@ -1157,9 +1157,6 @@ int main(void) {
     button_init();            // Button initialization for handling business logic
     sleep_timer_init();       // Soft timer initialization for hibernation
     tag_emulation_init();     // Analog card initialization
-#if defined(PROJECT_CHAMELEON_ULTRA)
-    field_probe_init();       // EXPERIMENT exp/field-probe: its log and setting, before tag mode senses
-#endif
     rgb_marquee_init();       // Light effect initialization
 
     ble_passkey_init();       // init ble connect key.
@@ -1168,6 +1165,11 @@ int main(void) {
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    // EXPERIMENT exp/field-probe: after check_wakeup_src, which fills the noinit RAM with 0xFF on a first power-up,
+    // and before tag mode senses.
+    field_probe_init();
+#endif
     tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener
