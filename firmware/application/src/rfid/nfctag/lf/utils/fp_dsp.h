@@ -16,15 +16,15 @@ typedef struct {
 
 void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s);
 
-// One drop in the envelope below the high level (p90): where it starts, how long it lasts and how deep it goes, in
-// samples and ADC counts. A dip still open at the end of the capture has FP_DIP_OPEN set in its depth.
+// One drop in the envelope below the high level (the 98th percentile): where it starts, how long it lasts and how
+// deep it goes, in samples and ADC counts. A dip still open at the end of the capture has FP_DIP_OPEN set in its depth.
 typedef struct {
     uint16_t start, width, depth;
 } fp_dip_t;
 #define FP_DIP_OPEN (0x8000)
 
-// Finds dips of at least min_depth counts (or 8 noise sigmas, whichever is larger). Stores up to max of them and
-// returns the number stored; *total counts every dip found.
+// Finds dips of at least min_depth counts, 8 noise sigmas and an eighth of the high level, whichever is largest.
+// Stores up to max of them and returns the number stored; *total counts every dip found.
 uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
                  uint16_t *total);
 

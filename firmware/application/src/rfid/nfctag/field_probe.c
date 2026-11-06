@@ -201,7 +201,7 @@ static void cap_summary(fp_cap_t *c, const int16_t *x, uint32_t n, uint8_t mode,
 
 // In place: each sample becomes the mean of itself and the three before it.
 static void smooth4(int16_t *x, uint32_t n) {
-    int32_t a = 0, b = 0, c = 0;
+    int32_t a = n ? x[0] : 0, b = a, c = a;
     for (uint32_t i = 0; i < n; i++) {
         const int32_t v = x[i];
         x[i] = (int16_t)((v + a + b + c) / 4);

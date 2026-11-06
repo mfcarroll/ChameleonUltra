@@ -82,10 +82,15 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
 
 uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
                  uint16_t *total) {
-    const int32_t high = s->p90;
+    // The high level is the 98th percentile: a reader's field can be off for most of a capture. A gap with the
+    // load on drops most of the way to zero, where a steady field wanders by about 1 %.
+    const int32_t high = percentile(x, n, 0.98f);
     int32_t enter = 8 * (int32_t)s->noise;
     if (enter < min_depth) {
         enter = min_depth;
+    }
+    if (enter < high / 8) {
+        enter = high / 8;
     }
     // A dip starts below high - enter and ends back above high - enter / 2, so noise at the threshold can't split it.
     const int32_t lo = high - enter, hi = high - enter / 2;
