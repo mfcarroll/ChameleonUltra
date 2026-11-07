@@ -542,9 +542,11 @@ static nrf_pwm_sequence_t m_probe_tone_seq = {
 };
 
 // is_lf_field_exists samples LPCOMP 30 us after enabling it, inside its 140 us start-up time, so it can read a field
-// as absent. The probe waits the start-up out.
+// as absent. The probe waits the start-up out. Enabling LPCOMP with a field present raises UP, and
+// lpcomp_event_handler then disables LPCOMP before the sample, so the probe masks UP until lf_tag_em_probe_rearm.
 bool lf_tag_em_probe_field(void) {
     ANT_NO_MOD();
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
     nrfx_lpcomp_enable();
     bsp_delay_us(200);
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
@@ -574,6 +576,7 @@ void lf_tag_em_probe_mod(uint8_t mode) {
 // After a field has gone: LPCOMP, enabled by the last field check, interrupts on the next field.
 void lf_tag_em_probe_rearm(void) {
     ANT_NO_MOD();
+    NRF_LPCOMP->EVENTS_UP = 0;
     NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
 }
 #endif
