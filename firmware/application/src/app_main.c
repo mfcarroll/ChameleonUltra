@@ -977,6 +977,13 @@ static void btn_fn_copy_ic_uid(void) {
 /**@brief Execute the corresponding logic based on the functional settings of the buttons.
  */
 static void run_button_function_by_settings(settings_button_function_t sbf) {
+#if defined(PROJECT_CHAMELEON_ULTRA)
+    // EXPERIMENT exp/field-probe: with the probe on, a button only wakes the CU. A slot change restarts the field
+    // sensing, and the reader-mode functions turn on the CU's own field, either of which would spoil a measurement.
+    if (field_probe_enabled()) {
+        return;
+    }
+#endif
     switch (sbf) {
         case SettingsButtonCycleSlot:
             cycle_slot(false);

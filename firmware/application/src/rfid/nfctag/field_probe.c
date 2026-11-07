@@ -118,8 +118,9 @@ void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
 }
 
 void field_probe_init(uint32_t resetreas) {
+    // A fresh log, after a flash or a first power-up, starts with the probe on: this firmware is for measuring.
     if (!store_valid()) {
-        store_reset(false, FP_MOD_HIGH);
+        store_reset(true, FP_MOD_HIGH);
     } else if (crashed(resetreas)) {
         if (m_store.crashes < 0xFF) m_store.crashes++;
         m_store.crash_wake = m_store.wake;
