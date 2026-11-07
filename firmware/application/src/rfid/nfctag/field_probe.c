@@ -243,20 +243,12 @@ static void measure(fp_lf_rec_t *r) {
     fp_stats_t s;
     float snr;
 
-    // The level with LF_MOD off.
-    lf_tag_em_probe_mod(FP_MOD_LOW);
-    bsp_delay_ms(3);
-    uint32_t n = capture(low, LEVEL_N, CC_20K, 0, 6);
-    cap_summary(&r->cap[0], low, n, FP_MOD_LOW, CC_20K, &s);
-    if (s.p90 >= 16000) {
-        r->flags |= FP_F_RAILED;
-    }
-
-    // The envelope: dips, and the carrier's alias at 100 kHz, where 100..150 kHz folds to 0..50 kHz one to one.
+    // The envelope first, while a reader that sends one command and stops may still be sending: dips, and the
+    // carrier's alias at 100 kHz, where 100..150 kHz folds to 0..50 kHz one to one.
     const uint8_t env_mode = m_store.env_mode;
     lf_tag_em_probe_mod(env_mode);
-    bsp_delay_ms(3);
-    n = capture(buf, ENV_N, CC_100K, 0, 6);
+    bsp_delay_ms(1);
+    uint32_t n = capture(buf, ENV_N, CC_100K, 0, 6);
     lf_tag_em_probe_mod(FP_MOD_LOW);
     const uint32_t env_n = n;
     if (env_n >= SPEC_N) {
@@ -282,6 +274,15 @@ static void measure(fp_lf_rec_t *r) {
         if (a > 0.0f && snr >= 20.0f && s.p10 >= s.p90 / 2 && s.p90 >= 200) {
             env_hz = 100000.0f + a;
         }
+    }
+
+    // The level with LF_MOD off. The envelope's spectrum work has finished with the buffer it shares.
+    lf_tag_em_probe_mod(FP_MOD_LOW);
+    bsp_delay_ms(3);
+    n = capture(low, LEVEL_N, CC_20K, 0, 6);
+    cap_summary(&r->cap[0], low, n, FP_MOD_LOW, CC_20K, &s);
+    if (s.p90 >= 16000) {
+        r->flags |= FP_F_RAILED;
     }
 
     // The tone: our load modulation makes the detector recharge on the reader's carrier peaks, which puts the carrier
