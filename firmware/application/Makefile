@@ -419,6 +419,8 @@ OPT = -O3 -g3
 
 # C flags common to all targets
 CFLAGS += $(OPT)
+# EXPERIMENT exp/field-probe: extra defines from the environment, e.g. EXTRA_CFLAGS=-DFP_CRASH_TEST for bench tests.
+CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -DAPP_TIMER_V2
 CFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
 # CFLAGS += -DCONFIG_GPIO_AS_PINRESET

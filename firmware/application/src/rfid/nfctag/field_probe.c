@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "app_error.h"
 #include "app_timer.h"
 #include "app_usbd.h"
 #include "ble_main.h"
@@ -20,6 +21,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 #define FP_MAGIC        (0x31425046u)  // "FPB1"
+#define FP_CRASH_MARK   (0x43525348u)  // "CRSH": the fault handler's reset, for the next boot
 #define FP_ROUNDS       (3)            // measurement rounds per LF field, at the start and then FP_ROUND_AT_MS
 #define FP_CHECK_MS     (50)           // how often the field is checked between rounds
 #define FP_ABSENT_CHECKS (2)           // consecutive checks without the field that end it
@@ -40,6 +42,8 @@ uint8_t *lf_sniff_buffer(size_t *cap_bytes);
 void lf_sniff_set_len(size_t bytes);
 
 static __attribute__((section(".noinit_fprobe"))) fp_store_t m_store;
+// A firmware error resets the CU the same way as a DFU reboot does (SREQ), so the fault handler leaves this mark.
+static __attribute__((section(".noinit_fprobe"))) uint32_t m_crash_mark;
 
 static const uint32_t m_round_at_ms[FP_ROUNDS] = {0, 1000, 4000};
 
@@ -85,10 +89,50 @@ static void store_reset(bool enabled, uint8_t env_mode) {
     m_store.lf_rec_size = sizeof(fp_lf_rec_t);
 }
 
-void field_probe_init(void) {
+static bool crashed(uint32_t resetreas) {
+    return (resetreas & (POWER_RESETREAS_DOG_Msk | POWER_RESETREAS_LOCKUP_Msk)) || m_crash_mark == FP_CRASH_MARK;
+}
+
+void field_probe_noinit_wipe(uint32_t resetreas) {
+    const bool keep = crashed(resetreas) && store_valid();
+    const uint8_t *lo = (const uint8_t *)&m_store, *hi = lo + sizeof(m_store);
+    for (uint32_t *p = (uint32_t *)0x20038000; p < (uint32_t *)0x20040000; p++) {
+        const bool ours = (const uint8_t *)p >= lo && (const uint8_t *)p < hi;
+        if (!(keep && ours) && p != &m_crash_mark) {
+            *p = 0xFFFFFFFFu;
+        }
+    }
+}
+
+// The SDK's handler, without its log flush: record the error in the log, then reset.
+void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
+    __disable_irq();
+    if (store_valid()) {
+        // APP_ERROR_CHECK passes no PC, only its file and line.
+        const error_info_t *e = id == NRF_FAULT_ID_SDK_ERROR ? (const error_info_t *)info : NULL;
+        m_store.crash_err = e ? e->err_code : id;
+        m_store.crash_pc = (pc == 0 && e) ? e->line_num : pc;
+        m_crash_mark = FP_CRASH_MARK;
+    }
+    NVIC_SystemReset();
+}
+
+void field_probe_init(uint32_t resetreas) {
     if (!store_valid()) {
         store_reset(false, FP_MOD_HIGH);
+    } else if (crashed(resetreas)) {
+        if (m_store.crashes < 0xFF) m_store.crashes++;
+        m_store.crash_wake = m_store.wake;
+        if (m_crash_mark == FP_CRASH_MARK) {
+            m_store.crash_kind = FP_CRASH_ERROR;
+        } else {
+            m_store.crash_kind = (resetreas & POWER_RESETREAS_DOG_Msk) ? FP_CRASH_WATCHDOG : FP_CRASH_LOCKUP;
+            m_store.crash_err = 0;
+            m_store.crash_pc = 0;
+        }
     }
+    m_crash_mark = 0;
+    m_store.boot_reason = (uint16_t)((resetreas & 0xF) | ((resetreas >> 12) & 0x1F0));
     if (m_store.enabled) {
         m_store.wake++;
     }
@@ -123,6 +167,13 @@ void field_probe_clear(void) {
     store_reset(m_store.enabled, m_store.env_mode);
 }
 
+void field_probe_usb_dropped(uint32_t err) {
+    if (store_valid()) {
+        if (m_store.usb_dropped < 0xFFFF) m_store.usb_dropped++;
+        m_store.usb_err = (uint16_t)err;
+    }
+}
+
 const fp_store_t *field_probe_store(void) {
     return &m_store;
 }
@@ -133,6 +184,7 @@ const fp_store_t *field_probe_store(void) {
 // a reply already going out finishes, and a command arriving waits in the frame buffer for the main loop.
 static void usb_keepalive(void) {
     while (app_usbd_event_queue_process());
+    bsp_wdt_feed();
 }
 
 // A raw capture shares the buffer with the rounds, so the rounds wait FP_HOLD_MS after one for the host to read it.

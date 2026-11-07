@@ -1,4 +1,7 @@
 #include "nrf_delay.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
+#include "field_probe.h"
+#endif
 #include "usb_main.h"
 #include "syssleep.h"
 #include "dataframe.h"
@@ -160,6 +163,9 @@ void usb_cdc_write(const void *p_buf, uint16_t length) {
     }
     if (err_code != NRF_SUCCESS) {
         NRF_LOG_ERROR("usb_cdc_write: %d, reply dropped", err_code);
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        field_probe_usb_dropped(err_code);
+#endif
     }
 }
 

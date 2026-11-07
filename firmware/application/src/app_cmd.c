@@ -2473,14 +2473,17 @@ static data_frame_tx_t *cmd_processor_field_probe_mode(uint16_t cmd, uint16_t st
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(o), o);
 }
 
-/* Request: [0..1] a byte offset into the log (BE). Reply: up to LF_SNIFF_CHUNK_BYTES of fp_store_t from there. */
+/* Request: [0..1] a byte offset into the log (BE), and optionally [2..3] the most bytes to return (BE).
+ * Reply: up to that many bytes of fp_store_t from there, and never more than LF_SNIFF_CHUNK_BYTES. */
 static data_frame_tx_t *cmd_processor_field_probe_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     const uint32_t off = length >= 2 ? (((uint32_t)data[0] << 8) | data[1]) : 0;
+    uint32_t max = length >= 4 ? (((uint32_t)data[2] << 8) | data[3]) : LF_SNIFF_CHUNK_BYTES;
+    max = max > LF_SNIFF_CHUNK_BYTES ? LF_SNIFF_CHUNK_BYTES : max;
     if (off >= sizeof(fp_store_t)) {
         return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
     }
     uint32_t n = sizeof(fp_store_t) - off;
-    n = n > LF_SNIFF_CHUNK_BYTES ? LF_SNIFF_CHUNK_BYTES : n;
+    n = n > max ? max : n;
     return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)n, (uint8_t *)field_probe_store() + off);
 }
 
@@ -2521,6 +2524,20 @@ static data_frame_tx_t *cmd_processor_field_probe_capture_read(uint16_t cmd, uin
     }
     return lf_sniff_chunk(cmd, data[0]);
 }
+
+#ifdef FP_CRASH_TEST
+/* Bench only: [0] 1 hangs until the watchdog resets the CU, 2 raises a firmware error. Checks that the log survives. */
+static data_frame_tx_t *cmd_processor_field_probe_crash_test(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length >= 1 && data[0] == 1) {
+        for (;;) {
+        }
+    }
+    if (length >= 1 && data[0] == 2) {
+        APP_ERROR_CHECK(NRF_ERROR_INTERNAL);
+    }
+    return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+}
+#endif
 
 /* ========================================================================
  * HF14A AUTH TRACE — full anticoll + Crypto1 auth flow, every frame returned.
@@ -3623,6 +3640,9 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_FIELD_PROBE_MEASURE,          NULL,                        cmd_processor_field_probe_measure,           NULL                   },
     {    DATA_CMD_FIELD_PROBE_CAPTURE,          NULL,                        cmd_processor_field_probe_capture,           NULL                   },
     {    DATA_CMD_FIELD_PROBE_CAPTURE_READ,     NULL,                        cmd_processor_field_probe_capture_read,      NULL                   },
+#ifdef FP_CRASH_TEST
+    {    DATA_CMD_FIELD_PROBE_CRASH_TEST,       NULL,                        cmd_processor_field_probe_crash_test,        NULL                   },
+#endif
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

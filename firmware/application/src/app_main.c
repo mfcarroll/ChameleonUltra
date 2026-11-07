@@ -546,8 +546,13 @@ static void check_wakeup_src(void) {
         NRF_LOG_INFO("First power system");
 
         // Reset the noinit ram area
+#if defined(PROJECT_CHAMELEON_ULTRA)
+        // EXPERIMENT exp/field-probe: the same fill, except that the probe's log survives a crash.
+        field_probe_noinit_wipe(m_reset_source);
+#else
         uint32_t *noinit_addr = (uint32_t *)0x20038000;
         memset(noinit_addr, 0xFF, 0x8000);
+#endif
         NRF_LOG_INFO("Reset noinit ram done.");
 
         // Initialize the default card slot data.
@@ -1168,7 +1173,7 @@ int main(void) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
     // EXPERIMENT exp/field-probe: after check_wakeup_src, which fills the noinit RAM with 0xFF on a first power-up,
     // and before tag mode senses.
-    field_probe_init();
+    field_probe_init(m_reset_source);
 #endif
     tag_mode_enter();         // Enter card emulation mode by default
 

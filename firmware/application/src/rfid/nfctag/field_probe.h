@@ -14,7 +14,7 @@
 
 #include "fp_dsp.h"
 
-#define FP_VERSION      (1)
+#define FP_VERSION      (2)
 #define FP_LF_RECS      (12)
 #define FP_DIPS         (40)
 #define FP_LF_FIELDS    (32)
@@ -22,6 +22,9 @@
 
 // LF_MOD during a capture: off, on (Q3 holds a constant load), or a tone (fc/8 on our clock).
 enum { FP_MOD_LOW = 0, FP_MOD_HIGH = 1, FP_MOD_TONE = 2 };
+
+// What reset the CU in the middle of a run (fp_store_t.crash_kind).
+enum { FP_CRASH_NONE = 0, FP_CRASH_WATCHDOG = 1, FP_CRASH_LOCKUP = 2, FP_CRASH_ERROR = 3 };
 
 // How the carrier was placed among the frequencies that share its alias (fp_lf_rec_t.carrier_how).
 enum {
@@ -86,19 +89,29 @@ typedef struct __attribute__((packed)) {
     uint8_t version;
     uint8_t enabled;
     uint8_t env_mode;     // LF_MOD during the envelope capture
-    uint8_t reserved;
+    uint8_t crashes;      // resets by the watchdog, a lockup or a firmware error since the log began (it survives them)
     uint16_t lf_rec_size; // sizeof(fp_lf_rec_t), for the page's check
     uint16_t wake;
     uint16_t lf_recs;     // written so far; the next goes to lf[lf_recs % FP_LF_RECS]
     uint16_t lf_fields;
     uint16_t hf_fields;
-    uint16_t reserved2;
+    uint16_t crash_kind;  // the last crash: FP_CRASH_*
+    uint32_t crash_err;   // its error code (FP_CRASH_ERROR)
+    uint32_t crash_pc;    // where it happened (FP_CRASH_ERROR): the PC, or for an APP_ERROR_CHECK its source line
+    uint16_t crash_wake;  // the wake it happened in
+    uint16_t boot_reason; // this boot's RESETREAS, bits 0..3 as they are and bits 16..20 at 4..8
+    uint16_t usb_dropped; // replies usb_cdc_write gave up on since the log began
+    uint16_t usb_err;     // the last of those replies' error code
     fp_lf_rec_t lf[FP_LF_RECS];
     fp_field_t lf_field[FP_LF_FIELDS];
     fp_hf_t hf[FP_HF_FIELDS];
 } fp_store_t;
 
-void field_probe_init(void);  // once at boot: checks the log and counts the wake
+// At boot, in place of the first-power fill of the noinit RAM with 0xFF. After a crash it leaves the log out of the
+// fill, so the log survives the crash and records it.
+void field_probe_noinit_wipe(uint32_t resetreas);
+void field_probe_init(uint32_t resetreas);  // once at boot: checks the log and counts the wake
+void field_probe_usb_dropped(uint32_t err);  // usb_cdc_write gave up on a reply
 bool field_probe_enabled(void);
 void field_probe_set(bool enabled, uint8_t env_mode);
 uint8_t field_probe_env_mode(void);

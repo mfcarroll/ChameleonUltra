@@ -230,5 +230,6 @@
 #define DATA_CMD_FIELD_PROBE_MEASURE            (3163)
 #define DATA_CMD_FIELD_PROBE_CAPTURE            (3164)
 #define DATA_CMD_FIELD_PROBE_CAPTURE_READ       (3165)
+#define DATA_CMD_FIELD_PROBE_CRASH_TEST         (3166)  // only with FP_CRASH_TEST defined
 
 #endif
