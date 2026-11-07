@@ -2423,13 +2423,16 @@ static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, ui
 }
 
 /* Request: [0] probe (LF_PROBE_*), [1] 16 for 16-bit samples, [2] field-on time in ms before
- * the probe (2..255), [3] free-running sample rate in kHz (0 = once per carrier period).
+ * the probe (2..255), [3] free-running sample rate in kHz (0 = once per carrier period),
+ * [4] the Hitag 2 probe's gap in us (0 or absent for the default).
  * The reply is chunk 0 of the capture. Fetch the rest, and the description (whose last byte
  * is the probe), with DATA_CMD_LF_SNIFF chunks 1.. and 0xFF. */
 static data_frame_tx_t *cmd_processor_lf_chip_probe(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    if (length < 1 || (data[0] != LF_PROBE_T55XX_TRACE && data[0] != LF_PROBE_EM4X05_WORD0 && data[0] != LF_PROBE_T55XX_CONFIG)) {
+    if (length < 1 || (data[0] != LF_PROBE_T55XX_TRACE && data[0] != LF_PROBE_EM4X05_WORD0 && data[0] != LF_PROBE_T55XX_CONFIG &&
+                       data[0] != LF_PROBE_HITAG2_START)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
+    lf_probe_set_hitag2_gap(length >= 5 ? data[4] : 0);
     bool raw16 = (length >= 2 && data[1] == 16);
     uint8_t settle = (length >= 3 && data[2] >= 2) ? data[2] : 20;
     uint8_t rate = (length >= 4) ? data[3] : 0;

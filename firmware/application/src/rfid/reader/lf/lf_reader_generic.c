@@ -75,6 +75,33 @@ static void em4x05_read_word0_timeslot_cb(void) {
     }
 }
 
+/* The Hitag 2 start command (START_AUTH) that the Proxmark's `lf search` sends: 11000, then a
+ * last gap that ends it. Each bit starts with a field gap and lasts 240 us for a 1 and 160 us
+ * for a 0, as a Proxmark3's `lf hitag reader` sends them (the spec allows 26-32 and 18-22
+ * carrier cycles). A Hitag 2 tag answers with five 1 bits and its 32-bit serial. */
+/* The antenna rings on after the field goes off, so the gap a tag sees is longer than the off
+ * time. A Proxmark3's `lf hitag sniff` decodes the command as START_AUTH from 8 to 28 us. */
+#define HITAG2_GAP_US_DEFAULT 16
+static uint16_t m_hitag2_gap_us = HITAG2_GAP_US_DEFAULT;
+
+void lf_probe_set_hitag2_gap(uint16_t us) {
+    m_hitag2_gap_us = (us == 0 || us > 150) ? HITAG2_GAP_US_DEFAULT : us;
+}
+
+static void hitag2_start_timeslot_cb(void) {
+    static const uint8_t bits[] = {1, 1, 0, 0, 0};
+    const uint16_t gap = m_hitag2_gap_us;
+    for (size_t i = 0; i < sizeof(bits); i++) {
+        stop_lf_125khz_radio();
+        bsp_delay_us(gap);
+        start_lf_125khz_radio();
+        bsp_delay_us((bits[i] ? 240 : 160) - gap);
+    }
+    stop_lf_125khz_radio();
+    bsp_delay_us(gap);
+    start_lf_125khz_radio();
+}
+
 static void send_probe(uint8_t probe) {
     switch (probe) {
         case LF_PROBE_T55XX_TRACE:
@@ -87,6 +114,9 @@ static void send_probe(uint8_t probe) {
             break;
         case LF_PROBE_EM4X05_WORD0:
             request_timeslot(10 * 1000, em4x05_read_word0_timeslot_cb);
+            break;
+        case LF_PROBE_HITAG2_START:
+            request_timeslot(10 * 1000, hitag2_start_timeslot_cb);
             break;
         default:
             break;
