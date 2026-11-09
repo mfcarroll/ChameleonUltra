@@ -5,7 +5,8 @@
 //
 // With the probe on, tag mode senses both fields whatever the active slot holds, and never answers. When an LF field
 // appears, the main loop measures it in rounds: the level, the envelope at 100 kHz (the dips are the reader's
-// commands, or its field switching off), and the carrier's frequency from its alias on LF_RSSI. When an HF field
+// commands, or its field switching off), the carrier's frequency from its alias on LF_RSSI, and the field's on and off
+// stretches over 1.8 s. While the field lasts, LPCOMP watches for it dropping, and each drop flashes the LEDs red. When an HF field
 // appears, the 14443-A receiver counts the frames the reader sends. Every result goes to a log in the noinit RAM, which
 // survives sleep, so the CU can measure on battery and report when it is next connected.
 
@@ -14,9 +15,10 @@
 
 #include "fp_dsp.h"
 
-#define FP_VERSION      (2)
+#define FP_VERSION      (3)
 #define FP_LF_RECS      (12)
 #define FP_DIPS         (40)
+#define FP_RUNS         (48)
 #define FP_LF_FIELDS    (32)
 #define FP_HF_FIELDS    (32)
 
@@ -32,6 +34,7 @@ enum {
     FP_CARRIER_TWO_RATES = 1,  // no envelope line: the tone's alias, placed by a second capture at another rate
     FP_CARRIER_ENVELOPE = 2,   // the 100 kHz envelope's line (100..150 kHz folds to 0..50 kHz one to one)
     FP_CARRIER_ASSUMED = 3,    // no envelope line, and the second rate picked nothing: the nearest to 125 kHz
+    FP_CARRIER_GATED = 4,      // the envelope's line over its longest stretch with the field on (the field switched)
 };
 
 // fp_lf_rec_t.flags
@@ -39,6 +42,7 @@ enum {
 #define FP_F_ENDED      (0x02)  // the field was gone at the end of the round
 #define FP_F_RAILED     (0x04)  // the level capture's p90 is at the ADC's top
 #define FP_F_AMBIGUOUS  (0x08)  // the two-rate check found two candidates of similar strength
+#define FP_F_SWITCHED   (0x10)  // the field went off during the envelope capture: no carrier from the load tone
 
 // Everything in the log is packed and little-endian; the page reads it with these layouts.
 typedef struct __attribute__((packed)) {
@@ -64,12 +68,21 @@ typedef struct __attribute__((packed)) {
     uint16_t dips_total;  // found in the envelope capture
     fp_cap_t cap[3];      // level (LF_MOD off, 20 kHz), envelope (100 kHz, 4-sample mean), tone (20 kHz)
     fp_dip_t dips[FP_DIPS];
+    uint16_t carrier_n;   // FP_CARRIER_ENVELOPE or _GATED: the envelope samples the line was fitted on (10 us each)
+    // The timing capture: LF_MOD off, 8 kHz for 1.79 s, as 1 ms means. The field is on above half way from the lowest
+    // mean to the highest, and off again below 35 % of the way.
+    int16_t timing_low, timing_high;
+    uint8_t timing_first_on;  // the first stretch is the field on (1) or off (0); the rest alternate
+    uint8_t n_runs;           // stored in runs
+    uint16_t runs_total;      // found; 0 with no field
+    uint16_t runs[FP_RUNS];   // each stretch, ms; the first and the last are cut by the capture's ends
 } fp_lf_rec_t;
 
 typedef struct __attribute__((packed)) {
     uint16_t wake;
     uint32_t t_ms;
     uint32_t dur_ms;      // 0xFFFFFFFF while the field lasts
+    uint16_t drops;       // LPCOMP saw the field drop while LF_MOD was off; the last may be the field's end
 } fp_field_t;
 
 typedef struct __attribute__((packed)) {
@@ -119,6 +132,7 @@ void field_probe_clear(void);
 const fp_store_t *field_probe_store(void);
 
 void field_probe_lf_up(void);   // LPCOMP saw a field (interrupt context)
+void field_probe_lf_drop(void); // LPCOMP saw the field drop while the probe watched (interrupt context)
 void field_probe_process(void); // main loop
 bool field_probe_lf_measure_now(fp_lf_rec_t *out);  // one round by command; false if LF sensing is off
 

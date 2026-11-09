@@ -8,6 +8,7 @@
 #else
 #define field_probe_enabled() (false)
 #define field_probe_lf_up()
+#define field_probe_lf_drop()
 #endif
 #include "fds_util.h"
 #include "nrf_gpio.h"
@@ -84,6 +85,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
         if (event == NRF_LPCOMP_EVENT_UP) {
             nrfx_lpcomp_disable();
             field_probe_lf_up();
+        } else if (event == NRF_LPCOMP_EVENT_DOWN) {
+            field_probe_lf_drop();
         }
         return;
     }
@@ -544,13 +547,39 @@ static nrf_pwm_sequence_t m_probe_tone_seq = {
 // is_lf_field_exists samples LPCOMP 30 us after enabling it, inside its 140 us start-up time, so it can read a field
 // as absent. The probe waits the start-up out. Enabling LPCOMP with a field present raises UP, and
 // lpcomp_event_handler then disables LPCOMP before the sample, so the probe masks UP until lf_tag_em_probe_rearm.
+// Restarting a running LPCOMP could raise DOWN for the drop watch, so a running one is only sampled.
 bool lf_tag_em_probe_field(void) {
     ANT_NO_MOD();
     NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
-    nrfx_lpcomp_enable();
-    bsp_delay_us(200);
+    if (!NRF_LPCOMP->ENABLE) {
+        nrfx_lpcomp_enable();
+        bsp_delay_us(200);
+    }
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
     return nrf_lpcomp_result_get() == 1;
+}
+
+// The drop watch: LPCOMP's DOWN interrupt while the field lasts. A load lowers LF_RSSI, so lf_tag_em_probe_mod masks
+// DOWN for any mode but LF_MOD off. Taking a load off only raises LF_RSSI, so DOWN can be unmasked at once.
+static volatile bool m_probe_watch = false;
+
+static void probe_watch_arm(void) {
+    NRF_LPCOMP->EVENTS_DOWN = 0;
+    NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_DOWN_Msk;
+}
+
+void lf_tag_em_probe_watch(bool on) {
+    m_probe_watch = on;
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
+    if (on) {
+        ANT_NO_MOD();
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+        if (!NRF_LPCOMP->ENABLE) {
+            nrfx_lpcomp_enable();
+            bsp_delay_us(200);
+        }
+        probe_watch_arm();
+    }
 }
 
 bool lf_tag_em_probe_ready(void) {
@@ -558,6 +587,7 @@ bool lf_tag_em_probe_ready(void) {
 }
 
 void lf_tag_em_probe_mod(uint8_t mode) {
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
     if (!nrfx_pwm_is_stopped(&m_broadcast)) {
         nrfx_pwm_stop(&m_broadcast, true);
     }
@@ -570,6 +600,9 @@ void lf_tag_em_probe_mod(uint8_t mode) {
         nrf_gpio_pin_set(LF_MOD);
     } else {
         ANT_NO_MOD();
+        if (m_probe_watch) {
+            probe_watch_arm();
+        }
     }
 }
 

@@ -27,11 +27,14 @@ NRF_LOG_MODULE_REGISTER();
 #define FP_ABSENT_CHECKS (2)           // consecutive checks without the field that end it
 #define FP_TONE_HZ      (125000.0f / 8.0f)
 #define FP_TONE_HARMS   (24)
+#define FP_DROP_LED_MS  (150)          // a drop shows red this long, so a 2 ms drop can be seen
+#define FP_FIELD_MIN    (200)          // ADC counts: a field's level at least this
 
 // Sample rates as SAADC internal timer counts of 16 MHz.
 #define CC_20K          (800)
 #define CC_100K         (160)
 #define CC_SECOND       (832)          // 19.23 kHz: the tone capture's second rate, to tell the carrier's aliases apart
+#define CC_TIMING       (2000)         // 8 kHz: the timing capture
 #define FS_OF(cc)       (16000000.0f / (float)(cc))
 
 extern bool g_is_tag_emulating;
@@ -188,6 +191,8 @@ static void usb_keepalive(void) {
     bsp_wdt_feed();
 }
 
+static void drop_led_poll(void);
+
 // A raw capture shares the buffer with the rounds, so the rounds wait FP_HOLD_MS after one for the host to read it.
 #define FP_HOLD_MS (10000)
 static uint32_t m_hold_until_ms = 0;
@@ -219,6 +224,7 @@ static uint32_t capture(int16_t *dst, uint32_t want, uint16_t cc, uint8_t ain, u
         bsp_delay_ms(1);
         bsp_wdt_feed();
         usb_keepalive();
+        drop_led_poll();
     }
     nrf_saadc_continuous_mode_disable();
     unregister_lf_adc_callback();
@@ -286,8 +292,104 @@ static int16_t snr10(float db) {
 #define LEVEL_N     (2048)
 #define TONE_N      (4096)
 #define SECOND_N    (2048)
+#define BLOCK_N     (64)    // the envelope's on-off blocks: 0.64 ms, 16 periods of the carrier's alias
+#define GATED_MIN_N (2000)  // 20 ms: the shortest on-stretch the carrier is fitted on
+#define TIMING_N    (14336) // 1.79 s at 8 kHz
+#define TIMING_BLK  (8)     // 1 ms
 
-static void measure(fp_lf_rec_t *r) {
+// The longest stretch of x with the field on: 64-sample means at least half the highest. A stretch that meets a
+// block with the field off loses its edge block, where the field was rising or falling. Returns whether the field
+// went off anywhere (or never came on).
+static bool longest_on(const int16_t *x, uint32_t n, uint32_t *at, uint32_t *len) {
+    static int32_t m[ENV_N / BLOCK_N];
+    const uint32_t nb = n / BLOCK_N;
+    int32_t top = 0;
+    for (uint32_t b = 0; b < nb; b++) {
+        int32_t sum = 0;
+        for (uint32_t i = 0; i < BLOCK_N; i++) {
+            sum += x[b * BLOCK_N + i];
+        }
+        m[b] = sum / BLOCK_N;
+        if (m[b] > top) top = m[b];
+    }
+    *at = 0;
+    *len = 0;
+    if (top < FP_FIELD_MIN) {
+        return true;
+    }
+    bool off_seen = false;
+    uint32_t start = 0;
+    bool in = false;
+    for (uint32_t b = 0; b <= nb; b++) {
+        const bool on = b < nb && 2 * m[b] >= top;
+        if (b < nb && !on) off_seen = true;
+        if (on && !in) {
+            in = true;
+            start = b;
+        } else if (!on && in) {
+            in = false;
+            const uint32_t a = start + (start > 0 ? 1 : 0), e = b - (b < nb ? 1 : 0);
+            if (e > a && (e - a) * BLOCK_N > *len) {
+                *at = a * BLOCK_N;
+                *len = (e - a) * BLOCK_N;
+            }
+        }
+    }
+    return off_seen;
+}
+
+// The field's on and off stretches over 1.79 s, with LF_MOD off: what a reader that pulses its field does.
+static void timing(fp_lf_rec_t *r) {
+    size_t cap_bytes;
+    int16_t *buf = (int16_t *)lf_sniff_buffer(&cap_bytes);
+    lf_tag_em_probe_mod(FP_MOD_LOW);
+    bsp_delay_ms(3);
+    const uint32_t n = capture(buf, TIMING_N, CC_TIMING, 0, 6);
+    usb_keepalive();
+    // 1 ms means, in place: block b is written at b, before anything at b is read again.
+    const uint32_t nb = n / TIMING_BLK;
+    int32_t lo = 0x7FFF, hi = -0x8000;
+    for (uint32_t b = 0; b < nb; b++) {
+        int32_t sum = 0;
+        for (uint32_t i = 0; i < TIMING_BLK; i++) {
+            sum += buf[b * TIMING_BLK + i];
+        }
+        buf[b] = (int16_t)(sum / TIMING_BLK);
+        if (buf[b] < lo) lo = buf[b];
+        if (buf[b] > hi) hi = buf[b];
+    }
+    r->timing_low = (int16_t)lo;
+    r->timing_high = (int16_t)hi;
+    if (nb == 0 || hi < FP_FIELD_MIN) {
+        return;
+    }
+    // A steady field: one stretch, on. Otherwise on above half way, off below 35 %, so noise can't split a stretch.
+    const bool steady = hi - lo < hi / 4;
+    const int32_t on_at = lo + (hi - lo) / 2, off_at = lo + (hi - lo) * 35 / 100;
+    bool on = steady || buf[0] >= on_at;
+    r->timing_first_on = on;
+    uint32_t start = 0;
+    uint16_t stored = 0, total = 0;
+    for (uint32_t b = 1; b <= nb; b++) {
+        bool now = on;
+        if (b < nb && !steady) {
+            now = on ? buf[b] >= off_at : buf[b] >= on_at;
+        }
+        if (now != on || b == nb) {
+            total++;
+            if (stored < FP_RUNS) {
+                const uint32_t ms = b - start;
+                r->runs[stored++] = (uint16_t)(ms > 0xFFFF ? 0xFFFF : ms);
+            }
+            start = b;
+            on = now;
+        }
+    }
+    r->n_runs = (uint8_t)stored;
+    r->runs_total = total;
+}
+
+static void measure_carrier(fp_lf_rec_t *r) {
     size_t cap_bytes;
     int16_t *buf = (int16_t *)lf_sniff_buffer(&cap_bytes);
     float *work = (float *)buf;
@@ -304,9 +406,18 @@ static void measure(fp_lf_rec_t *r) {
     uint32_t n = capture(buf, ENV_N, CC_100K, 0, 6);
     lf_tag_em_probe_mod(FP_MOD_LOW);
     const uint32_t env_n = n;
-    if (env_n >= SPEC_N) {
-        memmove(spec, buf, SPEC_N * sizeof(int16_t));
+    // The carrier's line comes from the longest stretch with the field on, at most SPEC_N from its middle. A field
+    // that switches puts its own on-off pattern in the spectrum of a capture that spans the switch.
+    uint32_t run_at, run_n;
+    const bool switched = longest_on(buf, env_n, &run_at, &run_n);
+    if (switched) {
+        r->flags |= FP_F_SWITCHED;
     }
+    if (run_n > SPEC_N) {
+        run_at += (run_n - SPEC_N) / 2;
+        run_n = SPEC_N;
+    }
+    memcpy(spec, buf + run_at, run_n * sizeof(int16_t));
     // With the load on, the carrier's ripple swings the envelope by thousands of counts. A 125 kHz carrier aliases to
     // 25 kHz at 100 kHz, and the mean of 4 samples (one alias period) cancels it, leaving the field's own changes.
     smooth4(buf, env_n);
@@ -318,13 +429,11 @@ static void measure(fp_lf_rec_t *r) {
     r->dips_total = total;
     memcpy(r->dips, dips, sizeof(dips));
     float env_hz = 0.0f;
-    if (env_n >= SPEC_N) {
-        const float a = fp_line(spec, SPEC_N, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);
+    if (run_n >= GATED_MIN_N) {
+        const float a = fp_line(spec, run_n, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);
         r->cap[1].line_mhz = (uint32_t)lrintf(a * 1000.0f);
         r->cap[1].line_snr10 = snr10(snr);
-        // A field that switches during the capture puts its own on-off pattern in the spectrum, so the line counts
-        // only if the field stayed on: the envelope's p10 at least half its p90.
-        if (a > 0.0f && snr >= 20.0f && s.p10 >= s.p90 / 2 && s.p90 >= 200) {
+        if (a > 0.0f && snr >= 20.0f) {
             env_hz = 100000.0f + a;
         }
     }
@@ -366,10 +475,13 @@ static void measure(fp_lf_rec_t *r) {
     if (env_hz > 0.0f) {
         r->carrier_mhz = (uint32_t)lrintf(env_hz * 1000.0f);
         r->carrier_snr10 = r->cap[1].line_snr10;
-        r->carrier_how = FP_CARRIER_ENVELOPE;
+        r->carrier_how = switched ? FP_CARRIER_GATED : FP_CARRIER_ENVELOPE;
+        r->carrier_n = (uint16_t)run_n;
         return;
     }
-    if (alias <= 0.0f || snr < 15.0f) {
+    // A switching field spreads the tone's own line, and its on-off pattern gives a line near the search's floor:
+    // on HS's door readers these read as 124.4 and 120.1 kHz. So the tone only places a steady field's carrier.
+    if (switched || alias <= 0.0f || snr < 15.0f) {
         return;
     }
     const float tone_snr = snr;
@@ -434,6 +546,11 @@ static void measure(fp_lf_rec_t *r) {
     r->carrier_snr10 = snr10(tone_snr);
 }
 
+static void measure(fp_lf_rec_t *r) {
+    measure_carrier(r);
+    timing(r);
+}
+
 // ---------------------------------------------------------------- the LF field
 
 static volatile bool m_lf_pending = false;
@@ -442,6 +559,35 @@ static uint8_t m_round = 0;
 static uint32_t m_field_start_ms = 0, m_next_check_ms = 0;
 static uint8_t m_absent = 0;
 static uint16_t m_field_slot = 0;  // index into lf_field of the field in progress
+static volatile uint16_t m_drops;  // LPCOMP's drops in the field in progress
+static volatile uint32_t m_drop_tick;
+static volatile bool m_drop_shown = false;
+
+void field_probe_lf_drop(void) {
+    if (!m_lf_active) {
+        return;
+    }
+    m_drops++;
+    m_drop_tick = app_timer_cnt_get();
+    m_drop_shown = true;
+    TAG_FIELD_LED_OFF()
+    set_slot_light_color(RGB_RED);
+}
+
+static void drop_led_restore(void) {
+    m_drop_shown = false;
+    if (m_lf_active) {
+        set_slot_light_color(RGB_CYAN);
+        TAG_FIELD_LED_ON()
+    }
+}
+
+static void drop_led_poll(void) {
+    if (m_drop_shown &&
+        app_timer_cnt_diff_compute(app_timer_cnt_get(), m_drop_tick) >= APP_TIMER_TICKS(FP_DROP_LED_MS)) {
+        drop_led_restore();
+    }
+}
 
 void field_probe_lf_up(void) {
     if (!m_lf_active) {
@@ -467,7 +613,9 @@ static void field_start(void) {
     f->wake = m_store.wake;
     f->t_ms = m_field_start_ms;
     f->dur_ms = 0xFFFFFFFFu;
+    f->drops = 0;
     m_store.lf_fields++;
+    m_drops = 0;
 
     sleep_timer_stop();
     APP_ERROR_CHECK(app_timer_start(m_check_timer, APP_TIMER_TICKS(FP_CHECK_MS), NULL));
@@ -475,14 +623,19 @@ static void field_start(void) {
     g_usb_led_marquee_enable = false;
     set_slot_light_color(RGB_CYAN);
     TAG_FIELD_LED_ON()
+    lf_tag_em_probe_watch(true);
     NRF_LOG_INFO("probe: LF field %d", m_store.lf_fields);
 }
 
 static void field_end(uint32_t t) {
+    lf_tag_em_probe_watch(false);
     m_lf_active = false;
     app_timer_stop(m_check_timer);
     m_store.lf_field[m_field_slot].dur_ms = t - m_field_start_ms;
+    m_store.lf_field[m_field_slot].drops = m_drops;
     g_is_tag_emulating = false;
+    m_drop_shown = false;
+    set_slot_light_color(RGB_CYAN);
     TAG_FIELD_LED_OFF()
     lf_tag_em_probe_rearm();
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);
@@ -493,7 +646,10 @@ static void field_end(uint32_t t) {
 static void field_abandon(void) {
     m_lf_pending = false;
     if (m_lf_active) {
+        lf_tag_em_probe_watch(false);
         m_lf_active = false;
+        m_store.lf_field[m_field_slot].drops = m_drops;
+        m_drop_shown = false;
         app_timer_stop(m_check_timer);
         g_is_tag_emulating = false;
         TAG_FIELD_LED_OFF()
@@ -511,6 +667,8 @@ void field_probe_process(void) {
         m_lf_pending = false;
         field_start();
     }
+    drop_led_poll();
+    m_store.lf_field[m_field_slot].drops = m_drops;
     const uint32_t t = now_ms();
     if ((int32_t)(t - m_next_check_ms) < 0) {
         return;

@@ -46,3 +46,4 @@ bool lf_tag_em_probe_field(void);
 bool lf_tag_em_probe_ready(void);
 void lf_tag_em_probe_mod(uint8_t mode);
 void lf_tag_em_probe_rearm(void);
+void lf_tag_em_probe_watch(bool on);
