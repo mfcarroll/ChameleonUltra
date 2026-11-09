@@ -52,26 +52,44 @@ static const uint32_t m_round_at_ms[FP_ROUNDS] = {0, 1000, 4000};
 
 // ---------------------------------------------------------------- time
 
-// app_timer's counter is 24 bits at 32768 Hz and wraps every 512 s. Each call adds the ticks since the last one, and
-// a repeating timer calls it often enough that no wrap is missed.
-static uint32_t m_last_ticks;
-static uint64_t m_ticks;
-APP_TIMER_DEF(m_clock_timer);
+// app_timer stops its RTC while no timer is due, and on USB with no field the probe's clock built on it counted 6.3 s
+// of 12.6 s. So the probe keeps its own clock on RTC2, which nothing else uses: 1024 Hz, 24 bits, overflows counted.
+#define FP_RTC          NRF_RTC2
+#define FP_RTC_HZ       (1024u)
+static volatile uint32_t m_rtc_wraps;
 // While an LF field lasts, this timer wakes the main loop for field_probe_process.
 APP_TIMER_DEF(m_check_timer);
 
-static uint32_t now_ms(void) {
-    __disable_irq();
-    const uint32_t t = app_timer_cnt_get();
-    m_ticks += app_timer_cnt_diff_compute(t, m_last_ticks);
-    m_last_ticks = t;
-    const uint64_t ticks = m_ticks;
-    __enable_irq();
-    return (uint32_t)(ticks * 1000u / APP_TIMER_CLOCK_FREQ);
+void RTC2_IRQHandler(void) {
+    if (FP_RTC->EVENTS_OVRFLW) {
+        FP_RTC->EVENTS_OVRFLW = 0;
+        m_rtc_wraps++;
+    }
 }
 
-static void clock_tick(void *ctx) {
-    (void)now_ms();
+static void clock_init(void) {
+    FP_RTC->TASKS_STOP = 1;
+    FP_RTC->TASKS_CLEAR = 1;
+    FP_RTC->PRESCALER = 32768u / FP_RTC_HZ - 1u;
+    FP_RTC->EVENTS_OVRFLW = 0;
+    FP_RTC->INTENSET = RTC_INTENSET_OVRFLW_Msk;
+    NVIC_SetPriority(RTC2_IRQn, APP_IRQ_PRIORITY_LOW);
+    NVIC_ClearPendingIRQ(RTC2_IRQn);
+    NVIC_EnableIRQ(RTC2_IRQn);
+    FP_RTC->TASKS_START = 1;
+}
+
+// Safe in interrupt context. An overflow whose interrupt hasn't run yet still counts.
+static uint32_t now_ms(void) {
+    uint32_t w, c;
+    do {
+        w = m_rtc_wraps;
+        c = FP_RTC->COUNTER;
+    } while (w != m_rtc_wraps);
+    if (FP_RTC->EVENTS_OVRFLW && c < 0x800000u) {
+        w++;
+    }
+    return (uint32_t)((((uint64_t)w << 24) | c) * 1000u / FP_RTC_HZ);
 }
 
 static void check_tick(void *ctx) {
@@ -140,9 +158,7 @@ void field_probe_init(uint32_t resetreas) {
     if (m_store.enabled) {
         m_store.wake++;
     }
-    m_last_ticks = app_timer_cnt_get();
-    APP_ERROR_CHECK(app_timer_create(&m_clock_timer, APP_TIMER_MODE_REPEATED, clock_tick));
-    APP_ERROR_CHECK(app_timer_start(m_clock_timer, APP_TIMER_TICKS(60000), NULL));
+    clock_init();
     APP_ERROR_CHECK(app_timer_create(&m_check_timer, APP_TIMER_MODE_REPEATED, check_tick));
 }
 
@@ -560,7 +576,7 @@ static uint32_t m_field_start_ms = 0, m_next_check_ms = 0;
 static uint8_t m_absent = 0;
 static uint16_t m_field_slot = 0;  // index into lf_field of the field in progress
 static volatile uint16_t m_drops;  // LPCOMP's drops in the field in progress
-static volatile uint32_t m_drop_tick;
+static volatile uint32_t m_drop_ms;
 static volatile bool m_drop_shown = false;
 
 void field_probe_lf_drop(void) {
@@ -568,7 +584,7 @@ void field_probe_lf_drop(void) {
         return;
     }
     m_drops++;
-    m_drop_tick = app_timer_cnt_get();
+    m_drop_ms = now_ms();
     m_drop_shown = true;
     TAG_FIELD_LED_OFF()
     set_slot_light_color(RGB_RED);
@@ -583,8 +599,7 @@ static void drop_led_restore(void) {
 }
 
 static void drop_led_poll(void) {
-    if (m_drop_shown &&
-        app_timer_cnt_diff_compute(app_timer_cnt_get(), m_drop_tick) >= APP_TIMER_TICKS(FP_DROP_LED_MS)) {
+    if (m_drop_shown && now_ms() - m_drop_ms >= FP_DROP_LED_MS) {
         drop_led_restore();
     }
 }
