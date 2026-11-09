@@ -44,6 +44,9 @@ const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 // pulses and starts its frame again at each one, but a burst of 10 frames (~380 ms) plays on through the gaps, so the
 // next pulse catches it mid-frame. One frame per burst, so a gap ends the emulation and the next pulse starts a frame.
 #define LF_FRAMES_PER_BURST 1
+// A T5577 starts its frame ~2.2 ms after the field comes on (PM3, 50 ms pulses), and a reader that listens from soon
+// after field-on misses a frame that starts earlier. The CU sees the field ~0.1 ms after it comes on.
+#define LF_START_DELAY_US 2100
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
@@ -101,6 +104,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    bsp_delay_us(LF_START_DELAY_US);
     nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_FRAMES_PER_BURST, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
