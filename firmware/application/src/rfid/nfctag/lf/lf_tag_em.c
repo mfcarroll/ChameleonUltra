@@ -40,6 +40,11 @@ static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
 
+// EXPERIMENT exp/lf-pulse-restart: some readers switch their field on for ~50 ms at a time. A card loses power between
+// pulses and starts its frame again at each one, but a burst of 10 frames (~380 ms) plays on through the gaps, so the
+// next pulse catches it mid-frame. One frame per burst, so a gap ends the emulation and the next pulse starts a frame.
+#define LF_FRAMES_PER_BURST 1
+
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     g_is_tag_emulating = false;  // Reset the flag in the emulation
@@ -96,7 +101,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_FRAMES_PER_BURST, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -112,6 +117,18 @@ static void lpcomp_init(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+// is_lf_field_exists samples 30 us after enabling LPCOMP, inside its 140 us start-up, so it may read a field as absent
+// (not seen on the bench). Checked after every frame, that would end the emulation mid-field, and LPCOMP, already up,
+// would raise no UP to restart it.
+static bool lf_field_present_settled(void) {
+    if (!NRF_LPCOMP->ENABLE) {
+        nrfx_lpcomp_enable();
+        bsp_delay_us(200);
+    }
+    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
+    return nrf_lpcomp_result_get() == 1;
+}
+
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (event_type != NRFX_PWM_EVT_STOPPED) {
         return;
@@ -120,9 +137,9 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     // Now ANT_NO_MOD() and the settle delay are effective.
     ANT_NO_MOD();
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
-    if (is_lf_field_exists()) {
+    if (lf_field_present_settled()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, LF_FRAMES_PER_BURST, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
