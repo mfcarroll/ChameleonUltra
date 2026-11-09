@@ -29,6 +29,22 @@ static bool preset_ok(uint8_t p) {
     return (p & LF_EXP_FSK_MODE_MASK) <= LF_EXP_FSK_SELFTRIM && (p & ~(LF_EXP_FSK_MODE_MASK | LF_EXP_FSK_EXACT_BITS)) == 0;
 }
 
+// The pulse test's slots, fixed so every tester's setup is the same: the page writes one card to slots 1-7.
+#define P LF_EXP_FSK_PULSE
+#define X LF_EXP_FSK_EXACT_BITS
+static const uint8_t m_pulse_table[EXP_SLOTS] = {
+    LF_EXP_FSK_STOCK,                           // 1 stock
+    LF_EXP_FSK_STOCK | P,                       // 2 pulse timing
+    LF_EXP_FSK_STOCK | P | X,                   // 3 + exact bits
+    LF_EXP_FSK_STOCK | P | LF_EXP_FSK_TRIM_LEARN,      // 4 + trim learned from pulses
+    LF_EXP_FSK_STOCK | P | X | LF_EXP_FSK_TRIM_LEARN,  // 5 + exact bits + learned trim
+    LF_EXP_FSK_STOCK | P | X | LF_EXP_FSK_TRIM_FIXED,  // 6 + exact bits + fixed trim
+    LF_EXP_FSK_DRIVE | P | X | LF_EXP_FSK_TRIM_FIXED,  // 7 + exact bits + fixed trim + U1 drive
+    LF_EXP_FSK_STOCK,                           // 8 stock (unused)
+};
+#undef P
+#undef X
+
 static void presets_load(void) {
     uint16_t len = sizeof(m_presets);
     if (!fds_read_sync(EXP_FDS_FILE_ID, EXP_FDS_RECORD_KEY, &len, m_presets) || len != sizeof(m_presets)) {
@@ -38,6 +54,9 @@ static void presets_load(void) {
 }
 
 uint8_t lf_exp_fsk_preset(uint8_t slot) {
+    if (slot < EXP_SLOTS) {
+        return m_pulse_table[slot];
+    }
     if (!m_presets_loaded) {
         if (__get_IPSR() != 0) {
             return LF_EXP_FSK_DEFAULT_PRESET;  // flash reads only from thread mode (the load callback runs first)
@@ -87,6 +106,7 @@ uint16_t lf_exp_fsk_command(const uint8_t *req, uint16_t len, uint8_t *o, uint16
         memset(&m_fields, 0, sizeof(m_fields));
         m_fields.magic = EXP_FIELDS_MAGIC;
         lf_selftrim_fsk_keep_clear();
+        lf_tag_em_pulse_clear();
     } else if (len == 2) {
         if (req[0] >= EXP_SLOTS || (!preset_ok(req[1]) && req[1] != 0xFF)) {
             *status = STATUS_PAR_ERR;

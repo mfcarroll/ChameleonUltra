@@ -42,6 +42,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "lf_selftrim_fsk.h"
+#include "lf_tag_em.h"
 #include "usb_main.h"
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
@@ -1256,6 +1257,7 @@ int main(void) {
         data_frame_process();
         // EXPERIMENT: FSK self-trim (capture, detector, decisions)
         lf_selftrim_fsk_process();
+        lf_tag_em_pulse_process();  // EXPERIMENT exp/fsk-selftrim-489-pulse
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process

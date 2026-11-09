@@ -88,6 +88,10 @@ typedef struct {
     uint16_t measure_bursts;  // bursts started in the measure drive
 } lf_tag_em_fsk_info_t;
 int16_t *lf_tag_em_alias_buffer(size_t *cap_samples);
+// EXPERIMENT exp/fsk-selftrim-489-pulse: the pulse-learned trim (main loop), its store and command 3130.
+void lf_tag_em_pulse_process(void);
+void lf_tag_em_pulse_clear(void);
+uint16_t lf_tag_em_pulse_status(const uint8_t *req, uint16_t len, uint8_t *o);
 void lf_tag_em_fsk_info(lf_tag_em_fsk_info_t *i);
 void lf_tag_em_fsk_measure(bool on, uint8_t drive);
 void lf_tag_em_fsk_measure_alt(bool alt);

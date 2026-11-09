@@ -1,6 +1,9 @@
 #include "lf_tag_em.h"
 
+#include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "app_timer.h"
 #include "app_util_platform.h"
@@ -30,6 +33,7 @@
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
+#include "utils/fp_dsp.h"
 #include "utils/fsktrim.h"
 #include "lf_selftrim_fsk.h"
 
@@ -83,6 +87,29 @@ static volatile uint16_t m_lf_settle_ms = 20;
 #define LF_SHORT_SETTLE_MS 2
 #define LF_LONG_CHECK_EVERY 4
 static volatile uint16_t m_lf_bursts = 0;  // bursts completed since the last detection
+// EXPERIMENT exp/fsk-selftrim-489-pulse: some readers switch their field on for ~50 ms at a time. A card loses power
+// between pulses and starts its frame again at each one, but a 10-frame burst (~380 ms) plays on through the gaps, so
+// the next pulse catches it mid-frame. In a slot with LF_EXP_FSK_PULSE, a field's first LF_SHORT_BURSTS bursts are one
+// frame each, and each is checked after m_lf_settle_ms (drvC's residual hides a 2 ms check, above), so a pulse's end
+// stops the emulation and the next pulse starts a frame. A field that stays on gets 10-frame bursts after that, so
+// frames run back to back again.
+#define LF_SHORT_BURSTS 3
+static volatile bool m_pulse = false;  // the active slot's preset has LF_EXP_FSK_PULSE
+// A T5577 starts its frame ~2.2 ms after the field comes on (PM3, 50 ms pulses), and a reader that listens from soon
+// after field-on misses a frame that starts earlier. The CU sees the field ~0.1 ms after it comes on.
+#define LF_START_DELAY_US 2100
+
+static uint16_t lf_burst_frames(void) {
+    return m_pulse && m_lf_bursts < LF_SHORT_BURSTS ? 1u : 10u;
+}
+
+// The pulse-learned trim (LF_EXP_FSK_TRIM_LEARN): while the slot has none, a field is measured instead of emulated, in
+// the main loop (lf_tag_em_pulse_process).
+static volatile bool m_pt_pending = false;
+static bool pt_needs_measure(uint8_t slot);
+static int16_t pt_trim_ticks(int32_t ppm10);
+static int16_t pt_preset_trim(uint8_t slot, uint8_t preset);
+static void pt_note_short_field(uint8_t slot);
 static volatile uint16_t d_lo_short = 0;   // short (2 ms) checks that read low (lfstate v3 'lo_short')
 
 // research exp/fsk-drvtrim: FSK emulation (ioProx, HID Prox) at a 16 MHz PWM base, with a runtime drive
@@ -316,7 +343,7 @@ static bool lf_cont_arm(void) {
         return false;
     }
     const bool idle = m_fsk_measure_on && m_cont_idle_measure;
-    const uint16_t loops = idle ? LF_CONT_IDLE_LOOPS : (m_fsk_measure_on && m_cont_short_measure) ? LF_CONT_SHORT_LOOPS : 10u;
+    const uint16_t loops = idle ? LF_CONT_IDLE_LOOPS : (m_fsk_measure_on && m_cont_short_measure) ? LF_CONT_SHORT_LOOPS : lf_burst_frames();
     uint32_t task = nrfx_pwm_simple_playback(&m_broadcast, idle ? lf_cont_idle_seq() : m_pwm_seq, loops,
                                              NRFX_PWM_FLAG_STOP | NRFX_PWM_FLAG_START_VIA_TASK);
     NRF_PPI->CH[m_cont_ch].EEP = (uint32_t)nrf_timer_event_address_get(CONT_TIMER, NRF_TIMER_EVENT_COMPARE0);
@@ -422,12 +449,15 @@ static void lf_playback(void) {
     if (m_cont_run) {
         lf_cont_disarm();
     }
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, lf_burst_frames(), NRFX_PWM_FLAG_STOP);
 }
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     d_lost++;
+    if (m_pulse && m_lf_bursts <= LF_SHORT_BURSTS) {
+        pt_note_short_field(tag_emulation_get_slot());  // exp/fsk-selftrim-489-pulse: a field that went within ~150 ms
+    }
     lf_cont_disarm();            // research exp/fsk-phasecont: the next field starts a new grid
     g_is_tag_emulating = false;  // Reset the flag in the emulation
     m_is_lf_emulating = false;
@@ -473,6 +503,18 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     if (IS_FSK_EMU_TYPE(m_tag_type)) {
         lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset (lf_exp_fsk.h), before the field's first burst
         lf_exp_fsk_note_field();
+        if (pt_needs_measure(tag_emulation_get_slot())) {
+            // exp/fsk-selftrim-489-pulse: this field is measured, not emulated (lf_tag_em_pulse_process)
+            sleep_timer_stop();
+            nrfx_lpcomp_disable();
+            m_is_lf_emulating = true;
+            g_is_tag_emulating = true;
+            g_usb_led_marquee_enable = false;
+            set_slot_light_color(RGB_BLUE);
+            TAG_FIELD_LED_ON()
+            m_pt_pending = true;
+            return;
+        }
     }
     if (!m_cont_kept_loaded) {
         uint8_t km, kk;
@@ -523,6 +565,9 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
+    if (m_pulse) {
+        bsp_delay_us(LF_START_DELAY_US);
+    }
     lf_playback();
 
     NRF_LOG_INFO("LF FIELD DETECTED");
@@ -555,7 +600,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     d_stopped++;
     m_lf_bursts++;
     // let peak detector drain: ~2 ms time constant on LF_RSSI (longer after drvC's own emission)
-    bool long_check = m_lf_bursts % LF_LONG_CHECK_EVERY == 0;
+    bool long_check = (m_pulse && m_lf_bursts <= LF_SHORT_BURSTS) || m_lf_bursts % LF_LONG_CHECK_EVERY == 0;
     bsp_delay_ms(long_check ? m_lf_settle_ms : LF_SHORT_SETTLE_MS);
     if (is_lf_field_exists() && m_pwm_seq != NULL) {
         // Field still present — play another finite burst then check again.
@@ -1201,6 +1246,11 @@ static void lf_exp_fsk_sync(void) {
     const uint8_t slot = tag_emulation_get_slot();
     const uint8_t preset = lf_exp_fsk_preset(slot);
     m_cont_kept_loaded = true;  // the preset decides the mode, not the research store's kept mode
+    // exp/fsk-selftrim-489-pulse: on every call, since the frame's length (for the ticks) may be unknown at slot load
+    // and a learned trim can arrive in the middle of a field
+    if ((preset & LF_EXP_FSK_MODE_MASK) != LF_EXP_FSK_SELFTRIM) {
+        m_fsk_trim_req = pt_preset_trim(slot, preset);
+    }
     if (slot == m_exp_slot && preset == m_exp_preset) {
         return;
     }
@@ -1208,12 +1258,12 @@ static void lf_exp_fsk_sync(void) {
     m_exp_preset = preset;
     const uint8_t mode = preset & LF_EXP_FSK_MODE_MASK;
     m_fsk_drive_req = mode == LF_EXP_FSK_STOCK ? LF_FSK_DRIVE_LFMOD : LF_FSK_DRIVE_U1;
+    m_pulse = (preset & LF_EXP_FSK_PULSE) != 0;
     if (mode == LF_EXP_FSK_SELFTRIM) {
         lf_cont_apply(0, 0);  // off first, so mode 9 starts over (and restores this slot's kept reader)
         lf_cont_apply(9, LF_EXP_FSK_K);
     } else {
         lf_cont_apply(0, 0);
-        m_fsk_trim_req = 0;
     }
 }
 
@@ -1505,4 +1555,243 @@ void lf_tag_em_fsk_measure(bool on, uint8_t drive) {
 
 bool lf_tag_em_fsk_measure_playing(void) {
     return m_fsk_measure_playing;
+}
+
+
+// ---------------------------------------------------------------- exp/fsk-selftrim-489-pulse: the pulse-learned trim
+// A slot with LF_EXP_FSK_TRIM_LEARN measures the reader's carrier before it emulates: the field probe's method
+// (exp/field-probe), which fits the carrier in 41 ms where self-trim's capture needs 410 ms of field. With LF_MOD held
+// on, the carrier's ripple reaches LF_RSSI; at 100 kHz, carriers from 100 to 150 kHz alias one to one to 0..50 kHz.
+// The line is fitted on the longest stretch with the field on. Two results within PT_AGREE_PPM10 confirm each other,
+// and the slot keeps their mean through sleep until the store is cleared.
+#define PT_MAGIC (0x50545231u)
+#define PT_SLOTS (8)
+#define PT_N (4096)            // 41 ms, inside a 50 ms pulse
+#define PT_CC (160)            // 16 MHz / 160 = 100 kHz
+#define PT_FS (100000.0f)
+#define PT_BLOCK (64)          // the on-off blocks: 0.64 ms, 16 periods of the carrier's alias
+#define PT_MIN_N (2000)        // 20 ms of field, at least
+#define PT_MIN_SNR (20.0f)
+#define PT_AGREE_PPM10 (114)   // 11.4 ppm, AGREE_PPM in lf_selftrim_fsk.c
+#define PT_FIELD_MIN (200)     // ADC counts: a field's level at least this
+#define PT_WORK (0)            // m_alias_buf layout: FFT work (4096 floats), the capture, the stretch fitted
+#define PT_CAP (8192)
+#define PT_SEG (12288)
+
+typedef struct {
+    int32_t ppm10;       // learned, if learned
+    int32_t last_ppm10;  // the last result, waiting for one that agrees
+    int16_t last_snr10;
+    uint16_t measures;   // results with a line
+    uint16_t fails;      // measurements with no line (field too short or too weak)
+    uint16_t short_fields;  // fields that went within LF_SHORT_BURSTS bursts (or while measured)
+    uint8_t learned;
+    uint8_t have_last;
+} pt_slot_t;
+
+static __attribute__((section(".noinit_pulsetrim"))) struct {
+    uint32_t magic;
+    pt_slot_t s[PT_SLOTS];
+} m_pt;
+
+static volatile uint32_t m_pt_len;
+
+static void pt_init(void) {
+    if (m_pt.magic != PT_MAGIC) {
+        memset(&m_pt, 0, sizeof(m_pt));
+        m_pt.magic = PT_MAGIC;
+    }
+}
+
+static bool pt_needs_measure(uint8_t slot) {
+    pt_init();
+    return slot < PT_SLOTS && (lf_exp_fsk_preset(slot) & LF_EXP_FSK_TRIM_LEARN) && !m_pt.s[slot].learned;
+}
+
+// The trim (ticks per frame) that runs the frame ppm faster: lf_selftrim_fsk.c's ppm_trim.
+static int16_t pt_trim_ticks(int32_t ppm10) {
+    const double n = (double)m_fsk_frame_ticks + m_fsk_trim_act;
+    if (n <= 0) {
+        return 0;
+    }
+    return (int16_t)lround(n * (1.0 - 1.0 / (1.0 + (double)ppm10 * 1e-7)));
+}
+
+static int16_t pt_preset_trim(uint8_t slot, uint8_t preset) {
+    pt_init();
+    if (preset & LF_EXP_FSK_TRIM_FIXED) {
+        return pt_trim_ticks(LF_EXP_FSK_FIXED_PPM10);
+    }
+    if ((preset & LF_EXP_FSK_TRIM_LEARN) && slot < PT_SLOTS && m_pt.s[slot].learned) {
+        return pt_trim_ticks(m_pt.s[slot].ppm10);
+    }
+    return 0;
+}
+
+static void pt_note_short_field(uint8_t slot) {
+    pt_init();
+    if (slot < PT_SLOTS && m_pt.s[slot].short_fields < 0xFFFF) {
+        m_pt.s[slot].short_fields++;
+    }
+}
+
+static void pt_adc_cb(nrf_saadc_value_t *v, size_t n) {
+    const uint32_t room = PT_N - m_pt_len;
+    const uint32_t k = n < room ? n : room;
+    memcpy(m_alias_buf + PT_CAP + m_pt_len, v, k * sizeof(int16_t));
+    m_pt_len += k;
+}
+
+// The longest stretch of x with the field on: block means at least half the highest, less an edge block where the
+// stretch meets the field off.
+static void pt_longest_on(const int16_t *x, uint32_t n, uint32_t *at, uint32_t *len) {
+    int32_t m[PT_N / PT_BLOCK];
+    const uint32_t nb = n / PT_BLOCK;
+    int32_t top = 0;
+    for (uint32_t b = 0; b < nb; b++) {
+        int32_t sum = 0;
+        for (uint32_t i = 0; i < PT_BLOCK; i++) {
+            sum += x[b * PT_BLOCK + i];
+        }
+        m[b] = sum / PT_BLOCK;
+        if (m[b] > top) top = m[b];
+    }
+    *at = 0;
+    *len = 0;
+    if (top < PT_FIELD_MIN) {
+        return;
+    }
+    uint32_t start = 0;
+    bool in = false;
+    for (uint32_t b = 0; b <= nb; b++) {
+        const bool on = b < nb && 2 * m[b] >= top;
+        if (on && !in) {
+            in = true;
+            start = b;
+        } else if (!on && in) {
+            in = false;
+            const uint32_t a = start + (start > 0 ? 1 : 0), e = b - (b < nb ? 1 : 0);
+            if (e > a && (e - a) * PT_BLOCK > *len) {
+                *at = a * PT_BLOCK;
+                *len = (e - a) * PT_BLOCK;
+            }
+        }
+    }
+}
+
+// One measurement, in the main loop (~45 ms). False if there was no line to fit.
+static bool pt_measure(int32_t *ppm10, int16_t *snr10) {
+    nrf_gpio_pin_set(LF_MOD);  // a constant load
+    bsp_delay_ms(1);
+    m_pt_len = 0;
+    register_lf_adc_callback_input(pt_adc_cb, NRF_SAADC_INPUT_AIN0, NRF_SAADC_ACQTIME_5US);
+    nrf_saadc_continuous_mode_enable(PT_CC);
+    nrf_saadc_task_trigger(NRF_SAADC_TASK_SAMPLE);
+    for (uint32_t ms = 0; ms < 60 && m_pt_len < PT_N; ms++) {
+        bsp_delay_ms(1);
+        bsp_wdt_feed();
+    }
+    nrf_saadc_continuous_mode_disable();
+    unregister_lf_adc_callback();
+    ANT_NO_MOD();
+    if (m_pt_len < PT_N) {
+        return false;
+    }
+    uint32_t at, n;
+    pt_longest_on(m_alias_buf + PT_CAP, PT_N, &at, &n);
+    if (n < PT_MIN_N) {
+        return false;
+    }
+    memcpy(m_alias_buf + PT_SEG, m_alias_buf + PT_CAP + at, n * sizeof(int16_t));
+    float snr;
+    const float a = fp_line(m_alias_buf + PT_SEG, n, PT_N, PT_FS, 2000.0f, NULL, 0, 0.0f,
+                            (float *)(m_alias_buf + PT_WORK), &snr);
+    if (a <= 0.0f || snr < PT_MIN_SNR) {
+        return false;
+    }
+    *ppm10 = (int32_t)lround(((100000.0 + a) / 125000.0 - 1.0) * 1e7);
+    *snr10 = (int16_t)lrintf(snr * 10.0f);
+    return true;
+}
+
+static bool pt_field_present(void) {
+    if (!NRF_LPCOMP->ENABLE) {
+        nrfx_lpcomp_enable();
+        bsp_delay_us(200);  // LPCOMP's start-up
+    }
+    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
+    return nrf_lpcomp_result_get() == 1;
+}
+
+void lf_tag_em_pulse_process(void) {
+    if (!m_pt_pending) {
+        return;
+    }
+    m_pt_pending = false;
+    if (m_lf_sense_state != LF_SENSE_STATE_ENABLE) {
+        m_is_lf_emulating = false;
+        g_is_tag_emulating = false;
+        TAG_FIELD_LED_OFF()
+        return;
+    }
+    const uint8_t slot = tag_emulation_get_slot();
+    pt_init();
+    pt_slot_t *e = &m_pt.s[slot < PT_SLOTS ? slot : 0];
+    int32_t ppm10;
+    int16_t snr10;
+    if (pt_measure(&ppm10, &snr10)) {
+        if (e->measures < 0xFFFF) e->measures++;
+        if (e->have_last && abs(ppm10 - e->last_ppm10) <= PT_AGREE_PPM10) {
+            e->ppm10 = (ppm10 + e->last_ppm10) / 2;
+            e->learned = 1;
+        }
+        e->last_ppm10 = ppm10;
+        e->last_snr10 = snr10;
+        e->have_last = 1;
+    } else if (e->fails < 0xFFFF) {
+        e->fails++;
+    }
+    if (!pt_field_present()) {
+        lf_field_lost();
+        return;
+    }
+    if (pt_needs_measure(slot)) {
+        m_pt_pending = true;  // a field that stays on: measure again now
+        return;
+    }
+    lf_exp_fsk_sync();  // the learned trim
+    m_lf_bursts = 0;
+    lf_playback();
+}
+
+void lf_tag_em_pulse_clear(void) {
+    memset(&m_pt, 0, sizeof(m_pt));
+    m_pt.magic = PT_MAGIC;
+}
+
+// Command 3130. Request: none, or 0xC1 to clear. Reply (big-endian): version u8 (1), active slot u8, fixed ppm x10 s32,
+// then per slot (8 x 19 bytes): preset u8, learned u8, have_last u8, learned ppm x10 s32, last ppm x10 s32,
+// last SNR x10 s16, measures u16, fails u16, short fields u16.
+uint16_t lf_tag_em_pulse_status(const uint8_t *req, uint16_t len, uint8_t *o) {
+    pt_init();
+    if (len == 1 && req[0] == 0xC1) {
+        lf_tag_em_pulse_clear();
+    }
+    uint16_t n = 0;
+    o[n++] = 1;
+    o[n++] = tag_emulation_get_slot();
+    n = put_u32(o, n, (uint32_t)LF_EXP_FSK_FIXED_PPM10);
+    for (uint8_t i = 0; i < PT_SLOTS; i++) {
+        const pt_slot_t *e = &m_pt.s[i];
+        o[n++] = lf_exp_fsk_preset(i);
+        o[n++] = e->learned;
+        o[n++] = e->have_last;
+        n = put_u32(o, n, (uint32_t)e->ppm10);
+        n = put_u32(o, n, (uint32_t)e->last_ppm10);
+        n = put_u16(o, n, (uint16_t)e->last_snr10);
+        n = put_u16(o, n, e->measures);
+        n = put_u16(o, n, e->fails);
+        n = put_u16(o, n, e->short_fields);
+    }
+    return n;
 }

@@ -9,6 +9,7 @@
 // plus a flag, LF_EXP_FSK_EXACT_BITS: HID Prox and Paradox bits at exactly RF/50 on average (utils/fsktrim.h),
 // instead of 48 carrier cycles for each fc/8 bit (the frame 2 % short).
 // Unset slots use LF_EXP_FSK_DEFAULT_PRESET. Command 3120 sets presets and reports what each slot learned.
+// exp/fsk-selftrim-489-pulse: the pulse test fixes slots 1-7 (lf_exp_fsk.c); stored presets are ignored.
 
 #include <stdint.h>
 
@@ -17,6 +18,12 @@
 #define LF_EXP_FSK_SELFTRIM (2u)
 #define LF_EXP_FSK_MODE_MASK (0x03u)
 #define LF_EXP_FSK_EXACT_BITS (0x04u)
+// EXPERIMENT exp/fsk-selftrim-489-pulse: a reader that switches its field on for ~50 ms at a time (lf_tag_em.c).
+#define LF_EXP_FSK_PULSE (0x08u)       // a fresh frame 2.1 ms into each field, one frame per burst at first
+#define LF_EXP_FSK_TRIM_LEARN (0x10u)  // trim to the reader, measured in a field's on-stretch before emulating
+#define LF_EXP_FSK_TRIM_FIXED (0x20u)  // trim to LF_EXP_FSK_FIXED_PPM10
+// HS's Paradox door reader as HS's own CU measured it (field probe, 2026-11-08): 125.6497 kHz, +5197.6 ppm.
+#define LF_EXP_FSK_FIXED_PPM10 (51976)
 #define LF_EXP_FSK_DEFAULT_PRESET LF_EXP_FSK_SELFTRIM
 #define LF_EXP_FSK_K (26u)  // mode 9's phase, 1/128 carrier cycle (research/lf/caps-fsk-why NOTES-flipk: a board constant)
 

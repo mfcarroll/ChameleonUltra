@@ -230,5 +230,6 @@
 #define DATA_CMD_RESEARCH_SLEEP                 (3098)  /* research: enter System OFF now (tests what survives a sleep) */
 #define DATA_CMD_RESEARCH_RESTORE_DUMP          (3100)  /* research: mode 9's capture after a restore (lf_selftrim_fsk.c) */
 #define DATA_CMD_EXP_FSK                        (3120)  /* EXPERIMENT: FSK self-trim presets and results (lf_exp_fsk.h) */
+#define DATA_CMD_PULSE_TEST                     (3130)  /* EXPERIMENT: pulse test, per-slot learned trim (lf_tag_em.h) */
 
 #endif

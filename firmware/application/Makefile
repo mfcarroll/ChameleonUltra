@@ -39,6 +39,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/manchester.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/psk1.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/fsktrim.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/fp_dsp.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/selftrim.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_selftrim_fsk.c \
   $(PROJ_DIR)/rfid/nfctag/lf/lf_exp_fsk.c \

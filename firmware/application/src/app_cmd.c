@@ -2415,6 +2415,13 @@ static data_frame_tx_t *cmd_processor_exp_fsk(uint16_t cmd, uint16_t status, uin
     return data_frame_make(cmd, st, n, out);
 }
 
+// EXPERIMENT exp/fsk-selftrim-489-pulse: what each slot learned from a reader's pulses; 0xC1 clears.
+static data_frame_tx_t *cmd_processor_pulse_test(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t out[200];
+    uint16_t n = lf_tag_em_pulse_status(data, length, out);
+    return data_frame_make(cmd, STATUS_SUCCESS, n, out);
+}
+
 static data_frame_tx_t *cmd_processor_research_sleep(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     sleep_system_off_now();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -3560,6 +3567,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_RESEARCH_SLEEP,               NULL,                        cmd_processor_research_sleep,                NULL                   },
     {    DATA_CMD_RESEARCH_RESTORE_DUMP,        NULL,                        cmd_processor_research_restore_dump,         NULL                   },
     {    DATA_CMD_EXP_FSK,                      NULL,                        cmd_processor_exp_fsk,                       NULL                   },
+    {    DATA_CMD_PULSE_TEST,                   NULL,                        cmd_processor_pulse_test,                    NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 
