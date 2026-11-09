@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Fix setting another slot's tag type replacing what the active slot emulates (@mfcarroll)
  - Fix an LF card written to a slot being lost on reboot when another slot's copy of the same card was loaded just before (@mfcarroll)
  - Fix LF reader carrier uses crystal (HFXO) not internal RC oscillator. More accurate 125 kHz field allows reading PSK emulation from a second Chameleon (@mfcarroll)
  - Fix reset when BLE bonds are deleted while connected (@mfcarroll)
