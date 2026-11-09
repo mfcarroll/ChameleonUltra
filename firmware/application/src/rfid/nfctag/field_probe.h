@@ -133,6 +133,7 @@ const fp_store_t *field_probe_store(void);
 
 void field_probe_lf_up(void);   // LPCOMP saw a field (interrupt context)
 void field_probe_lf_drop(void); // LPCOMP saw the field drop while the probe watched (interrupt context)
+void field_probe_lf_seen(bool on); // the drop watch found the field up or down (interrupt context or main loop)
 void field_probe_process(void); // main loop
 bool field_probe_lf_measure_now(fp_lf_rec_t *out);  // one round by command; false if LF sensing is off
 

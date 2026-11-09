@@ -12,6 +12,7 @@
 #include "hw_connect.h"
 #include "lf_tag_em.h"
 #include "nrf_saadc.h"
+#include "nrfx_power.h"
 #include "syssleep.h"
 
 #define NRF_LOG_MODULE_NAME field_probe
@@ -579,6 +580,7 @@ static volatile uint16_t m_drops;  // LPCOMP's drops in the field in progress
 static volatile uint32_t m_drop_ms;
 static volatile bool m_drop_shown = false;
 
+// The field LED follows the field while the drop watch runs; a drop also turns the slots red for FP_DROP_LED_MS.
 void field_probe_lf_drop(void) {
     if (!m_lf_active) {
         return;
@@ -590,11 +592,28 @@ void field_probe_lf_drop(void) {
     set_slot_light_color(RGB_RED);
 }
 
+void field_probe_lf_seen(bool on) {
+    if (!m_lf_active) {
+        return;
+    }
+    if (on) {
+        TAG_FIELD_LED_ON()
+    } else {
+        TAG_FIELD_LED_OFF()
+    }
+}
+
 static void drop_led_restore(void) {
     m_drop_shown = false;
     if (m_lf_active) {
         set_slot_light_color(RGB_CYAN);
-        TAG_FIELD_LED_ON()
+    }
+}
+
+// After a field, USB's light pattern comes back, as it would after the port closes. Stock tag mode leaves it off.
+static void usb_lights_back(void) {
+    if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
+        g_usb_led_marquee_enable = true;
     }
 }
 
@@ -652,6 +671,7 @@ static void field_end(uint32_t t) {
     m_drop_shown = false;
     set_slot_light_color(RGB_CYAN);
     TAG_FIELD_LED_OFF()
+    usb_lights_back();
     lf_tag_em_probe_rearm();
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);
     NRF_LOG_INFO("probe: LF field gone after %d ms", t - m_field_start_ms);
@@ -668,6 +688,7 @@ static void field_abandon(void) {
         app_timer_stop(m_check_timer);
         g_is_tag_emulating = false;
         TAG_FIELD_LED_OFF()
+        usb_lights_back();
     }
 }
 

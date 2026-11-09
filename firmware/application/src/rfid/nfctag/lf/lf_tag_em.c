@@ -9,6 +9,7 @@
 #define field_probe_enabled() (false)
 #define field_probe_lf_up()
 #define field_probe_lf_drop()
+#define field_probe_lf_seen(on)
 #endif
 #include "fds_util.h"
 #include "nrf_gpio.h"
@@ -79,14 +80,30 @@ bool is_lf_field_exists(void) {
  * It is also not allowed to call soft device functions from it (if LPCOMP IRQ
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
+// EXPERIMENT exp/field-probe: the drop watch (lf_tag_em_probe_watch) waits for UP, then for DOWN, in turn, so a DOWN
+// counts only after the field was seen up.
+static volatile bool m_probe_watch = false;
+
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // EXPERIMENT exp/field-probe: the probe measures the field instead, from the main loop.
     if (field_probe_enabled()) {
+        if (m_probe_watch) {
+            if (event == NRF_LPCOMP_EVENT_UP) {
+                NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+                NRF_LPCOMP->EVENTS_DOWN = 0;
+                NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_DOWN_Msk;
+                field_probe_lf_seen(true);
+            } else if (event == NRF_LPCOMP_EVENT_DOWN) {
+                NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
+                NRF_LPCOMP->EVENTS_UP = 0;
+                NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
+                field_probe_lf_drop();
+            }
+            return;
+        }
         if (event == NRF_LPCOMP_EVENT_UP) {
             nrfx_lpcomp_disable();
             field_probe_lf_up();
-        } else if (event == NRF_LPCOMP_EVENT_DOWN) {
-            field_probe_lf_drop();
         }
         return;
     }
@@ -550,7 +567,9 @@ static nrf_pwm_sequence_t m_probe_tone_seq = {
 // Restarting a running LPCOMP could raise DOWN for the drop watch, so a running one is only sampled.
 bool lf_tag_em_probe_field(void) {
     ANT_NO_MOD();
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+    if (!m_probe_watch) {
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
+    }
     if (!NRF_LPCOMP->ENABLE) {
         nrfx_lpcomp_enable();
         bsp_delay_us(200);
@@ -559,21 +578,22 @@ bool lf_tag_em_probe_field(void) {
     return nrf_lpcomp_result_get() == 1;
 }
 
-// The drop watch: LPCOMP's DOWN interrupt while the field lasts. A load lowers LF_RSSI, so lf_tag_em_probe_mod masks
-// DOWN for any mode but LF_MOD off. Taking a load off only raises LF_RSSI, so DOWN can be unmasked at once.
-static volatile bool m_probe_watch = false;
-
+// The drop watch, while the field lasts: LPCOMP's UP and DOWN in turn. A load lowers LF_RSSI, so lf_tag_em_probe_mod
+// masks both for any mode but LF_MOD off, and re-arms from a fresh sample when the load comes off.
 static void probe_watch_arm(void) {
     NRF_LPCOMP->EVENTS_DOWN = 0;
-    NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_DOWN_Msk;
+    NRF_LPCOMP->EVENTS_UP = 0;
+    nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
+    const bool up = nrf_lpcomp_result_get() == 1;
+    NRF_LPCOMP->INTENSET = up ? LPCOMP_INTENSET_DOWN_Msk : LPCOMP_INTENSET_UP_Msk;
+    field_probe_lf_seen(up);
 }
 
 void lf_tag_em_probe_watch(bool on) {
+    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_UP_Msk;
     m_probe_watch = on;
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
     if (on) {
         ANT_NO_MOD();
-        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
         if (!NRF_LPCOMP->ENABLE) {
             nrfx_lpcomp_enable();
             bsp_delay_us(200);
@@ -587,7 +607,9 @@ bool lf_tag_em_probe_ready(void) {
 }
 
 void lf_tag_em_probe_mod(uint8_t mode) {
-    NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
+    if (m_probe_watch) {
+        NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_UP_Msk;
+    }
     if (!nrfx_pwm_is_stopped(&m_broadcast)) {
         nrfx_pwm_stop(&m_broadcast, true);
     }
