@@ -18,9 +18,11 @@ NRF_LOG_MODULE_REGISTER();
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "field_probe.h"
 #else
+// The field probe is Ultra-only. These stubs consume their arguments, so a value passed only to the probe (the HF
+// frame's bit count) is not flagged unused on the Lite build.
 #define field_probe_enabled() (false)
-#define field_probe_hf_field(on)
-#define field_probe_hf_frame(d, b, s)
+#define field_probe_hf_field(on) ((void)(on))
+#define field_probe_hf_frame(d, b, s) ((void)(d), (void)(b), (void)(s))
 #endif
 #include "tag_emulation.h"
 
