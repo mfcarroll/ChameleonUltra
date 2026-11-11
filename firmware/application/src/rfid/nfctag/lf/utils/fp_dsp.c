@@ -80,20 +80,29 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
 
 // ---------------------------------------------------------------- dips
 
-uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
-                 uint16_t *total) {
-    // The high level is the 98th percentile: a reader's field can be off for most of a capture. A gap with the
-    // load on drops most of the way to zero, where a steady field wanders by about 1 %.
+// The thresholds a dip is found by, shared with fp_hitag_scan so both read the envelope the same way. The high level
+// is the 98th percentile: a reader's field can be off for most of a capture. A gap with the load on drops most of the
+// way to zero, where a steady field wanders by about 1 %. A dip starts below high - enter and ends back above
+// high - enter / 2, so noise at the threshold can't split it. Returns high and sets *lo, *hi.
+static int32_t dip_thresholds(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, int32_t *lo,
+                              int32_t *hi) {
     const int32_t high = percentile(x, n, 0.98f);
     int32_t enter = 8 * (int32_t)s->noise;
-    if (enter < min_depth) {
+    if (enter < (int32_t)min_depth) {
         enter = min_depth;
     }
     if (enter < high / 8) {
         enter = high / 8;
     }
-    // A dip starts below high - enter and ends back above high - enter / 2, so noise at the threshold can't split it.
-    const int32_t lo = high - enter, hi = high - enter / 2;
+    *lo = high - enter;
+    *hi = high - enter / 2;
+    return high;
+}
+
+uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
+                 uint16_t *total) {
+    int32_t lo, hi;
+    const int32_t high = dip_thresholds(x, n, s, min_depth, &lo, &hi);
     uint16_t stored = 0, found = 0;
     bool in = false;
     uint32_t start = 0;
@@ -123,6 +132,123 @@ uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min
     }
     *total = found;
     return stored;
+}
+
+// ---------------------------------------------------------------- Hitag 2 authentication mode
+
+// The reader's command gaps, segmented into bursts, as fp_hitag_scan walks them. The START_AUTH burst is the first
+// one of a few gaps; the reader's PWD/AUTH command is the first long burst after it (the quiet window between the two
+// is the tag's UID reply). Only the first exchange is kept.
+typedef struct {
+    uint32_t start_lo, start_hi;  // a START_AUTH burst has this many gaps (about 5 or 6)
+    uint32_t auth_min;            // the PWD/AUTH command has at least this many (32 or 64, far more than START_AUTH)
+    bool anchor_found;
+    uint32_t anchor_count, anchor_last;
+    bool auth_found;
+    uint32_t auth_count, auth_first, auth_last;
+} hitag_seg_t;
+
+static void seg_close(hitag_seg_t *g, uint32_t count, uint32_t first, uint32_t last) {
+    if (count == 0 || g->auth_found) {
+        return;
+    }
+    if (g->anchor_found && count >= g->auth_min) {
+        // The reader's command after the tag's UID reply: the first long burst once a START_AUTH has been seen.
+        g->auth_found = true;
+        g->auth_count = count;
+        g->auth_first = first;
+        g->auth_last = last;
+    } else if (count >= g->start_lo && count <= g->start_hi) {
+        // A START_AUTH-sized burst: keep the latest as the anchor until the command arrives (the reader may repeat
+        // START_AUTH until a tag answers).
+        g->anchor_found = true;
+        g->anchor_count = count;
+        g->anchor_last = last;
+    }
+}
+
+static uint8_t hitag_mode(bool found, uint32_t gaps) {
+    if (!found) {
+        return FP_AUTH_NONE;
+    }
+    if (gaps <= 45) {
+        return FP_AUTH_PASSWORD;  // about 32 bits: a static password
+    }
+    if (gaps >= 51 && gaps <= 85) {
+        return FP_AUTH_CRYPTO;  // about 64 bits: the 48-bit-key cipher
+    }
+    return FP_AUTH_AMBIGUOUS;  // between the two lengths, or improbably long
+}
+
+void fp_hitag_scan(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_hitag_t *out) {
+    memset(out, 0, sizeof(*out));
+    int32_t lo, hi;
+    const int32_t high = dip_thresholds(x, n, s, min_depth, &lo, &hi);
+    const int32_t cmd_depth = high * 3 / 10;  // a command gap is at least 30 % deep, deeper than ripple (HS's door)
+    const uint32_t max_width = 200;           // 2 ms at 100 kHz: a wider dip is the field off, not a command gap
+    const uint32_t split = 300;               // 3 ms between gap starts: a quiet window this long is the tag's reply
+
+    hitag_seg_t g;
+    memset(&g, 0, sizeof(g));
+    g.start_lo = 3;
+    g.start_hi = 10;
+    g.auth_min = 20;
+
+    bool in = false;
+    uint32_t start = 0;
+    int32_t deepest = 0;
+    bool burst = false;
+    uint32_t b_count = 0, b_first = 0, b_last = 0;
+
+    // The same dip detection as fp_dips, but each command gap feeds the burst segmentation instead of a store.
+    for (uint32_t i = 0; i <= n; i++) {
+        const bool end = (i == n);
+        const int32_t v = end ? high : x[i];
+        if (!in && !end && v < lo) {
+            in = true;
+            start = i;
+            deepest = v;
+            continue;
+        }
+        if (!in) {
+            continue;
+        }
+        if (v < deepest) {
+            deepest = v;
+        }
+        if (v <= hi && !end) {
+            continue;
+        }
+        in = false;
+        const uint32_t width = i - start;
+        const int32_t depth = high - deepest;
+        if (width >= max_width || depth < cmd_depth) {
+            continue;  // the field switching off, or ripple: not a reader command gap
+        }
+        if (burst && start - b_last < split) {
+            b_count++;
+            b_last = start;
+        } else {
+            if (burst) {
+                seg_close(&g, b_count, b_first, b_last);
+            }
+            burst = true;
+            b_count = 1;
+            b_first = start;
+            b_last = start;
+        }
+    }
+    if (burst) {
+        seg_close(&g, b_count, b_first, b_last);
+    }
+
+    out->start_gaps = (uint8_t)(g.anchor_count > 255 ? 255 : g.anchor_count);
+    if (g.auth_found) {
+        out->auth_gaps = (uint8_t)(g.auth_count > 255 ? 255 : g.auth_count);
+        const uint32_t span = g.auth_last - g.auth_first;
+        out->auth_span = (uint16_t)(span > 0xFFFF ? 0xFFFF : span);
+    }
+    out->mode = hitag_mode(g.auth_found, g.auth_count);
 }
 
 // ---------------------------------------------------------------- spectrum

@@ -6,16 +6,19 @@
 // With the probe on, tag mode senses both fields whatever the active slot holds, and never answers. When an LF field
 // appears, the main loop measures it in rounds: the level, the envelope at 100 kHz (the dips are the reader's
 // commands, or its field switching off), the carrier's frequency from its alias on LF_RSSI, and the field's on and off
-// stretches over 1.8 s. While the field lasts, LPCOMP watches for it dropping, and each drop flashes the LEDs red. When an HF field
-// appears, the 14443-A receiver counts the frames the reader sends. Every result goes to a log in the noinit RAM, which
-// survives sleep, so the CU can measure on battery and report when it is next connected.
+// stretches over 1.8 s. From the envelope it also classifies a Hitag 2 reader's authentication mode by the length of
+// the reader's command after the tag's UID reply (32 bits is password mode, 64 bits is crypto mode): a frame-length
+// read that classifies the install and recovers no secret. While the field lasts, LPCOMP watches for it dropping, and
+// each drop flashes the LEDs red. When an HF field appears, the 14443-A receiver counts the frames the reader sends.
+// Every result goes to a log in the noinit RAM, which survives sleep, so the CU can measure on battery and report when
+// it is next connected.
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "fp_dsp.h"
 
-#define FP_VERSION      (3)
+#define FP_VERSION      (4)
 #define FP_LF_RECS      (12)
 #define FP_DIPS         (40)
 #define FP_RUNS         (48)
@@ -76,6 +79,12 @@ typedef struct __attribute__((packed)) {
     uint8_t n_runs;           // stored in runs
     uint16_t runs_total;      // found; 0 with no field
     uint16_t runs[FP_RUNS];   // each stretch, ms; the first and the last are cut by the capture's ends
+    // The Hitag 2 reader-side authentication mode, from the envelope (fp_hitag_scan): the length of the reader's
+    // command after the tag's UID reply. Reads the frame's length only — it classifies the install, recovers no secret.
+    uint8_t auth_mode;        // FP_AUTH_*
+    uint8_t auth_start_gaps;  // the START_AUTH burst it was anchored on (0: none seen in the capture)
+    uint8_t auth_gaps;        // gaps in that command (about its bit length: ~32 password, ~64 crypto)
+    uint16_t auth_span;       // that command's span, first gap to last, in envelope samples (10 us each)
 } fp_lf_rec_t;
 
 typedef struct __attribute__((packed)) {

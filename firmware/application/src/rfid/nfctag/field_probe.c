@@ -445,6 +445,14 @@ static void measure_carrier(fp_lf_rec_t *r) {
     r->n_dips = (uint8_t)fp_dips(buf, env_n, &s, 32, dips, FP_DIPS, &total);
     r->dips_total = total;
     memcpy(r->dips, dips, sizeof(dips));
+    // The Hitag 2 authentication mode from the reader's command lengths. Runs on the whole envelope, so the 64-bit
+    // (crypto) frame is measured even though it overflows the 40 stored dips. Reads the frame's length, not its content.
+    fp_hitag_t ht;
+    fp_hitag_scan(buf, env_n, &s, 32, &ht);
+    r->auth_mode = ht.mode;
+    r->auth_start_gaps = ht.start_gaps;
+    r->auth_gaps = ht.auth_gaps;
+    r->auth_span = ht.auth_span;
     float env_hz = 0.0f;
     if (run_n >= GATED_MIN_N) {
         const float a = fp_line(spec, run_n, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);

@@ -28,6 +28,28 @@ typedef struct {
 uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
                  uint16_t *total);
 
+// ---------------------------------------------------------------- Hitag 2 authentication mode
+
+// The reader-side authentication mode of a Hitag 2 install, from the length of the reader's command that follows the
+// tag's UID. The exchange is START_AUTH (5 bits), then the tag's 32-bit UID, then a reader command that is 32 bits
+// (PWD, password mode) or 64 bits (AUTH, crypto mode). This reads the command's length only: it classifies the
+// install and recovers no secret.
+enum { FP_AUTH_NONE = 0, FP_AUTH_PASSWORD = 1, FP_AUTH_CRYPTO = 2, FP_AUTH_AMBIGUOUS = 3 };
+
+typedef struct {
+    uint8_t mode;         // FP_AUTH_*
+    uint8_t start_gaps;   // gaps in the START_AUTH burst that anchored it (0: none seen)
+    uint8_t auth_gaps;    // gaps in the reader's command after the UID reply (about its bit length, 0 if none)
+    uint16_t auth_span;   // that command's span, first gap to last, in samples (10 us each at 100 kHz)
+} fp_hitag_t;
+
+// Classifies a Hitag 2 reader's authentication mode from one envelope capture x[0..n) (the probe's 100 kHz capture,
+// already smoothed), using the same dip detection as fp_dips with min_depth as its floor. Command gaps are dips at
+// least three tenths of the high level deep and under 2 ms wide; a quiet window of at least a few ms (the tag's UID
+// reply) separates the START_AUTH burst from the reader's next command. Fills *out; mode is FP_AUTH_NONE when no
+// START_AUTH-anchored command is found. Reads the frame's length, not its content.
+void fp_hitag_scan(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_hitag_t *out);
+
 // Where a line at f Hz lands after sampling at fs: 0 .. fs / 2.
 float fp_fold(double f, float fs);
 
