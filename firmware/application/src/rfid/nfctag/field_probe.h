@@ -18,10 +18,11 @@
 
 #include "fp_dsp.h"
 
-#define FP_VERSION      (4)
+#define FP_VERSION      (5)
 #define FP_LF_RECS      (12)
 #define FP_DIPS         (40)
 #define FP_RUNS         (48)
+#define FP_LEVEL_DIPS   (32)
 #define FP_LF_FIELDS    (32)
 #define FP_HF_FIELDS    (32)
 
@@ -72,8 +73,9 @@ typedef struct __attribute__((packed)) {
     fp_cap_t cap[3];      // level (LF_MOD off, 20 kHz), envelope (100 kHz, 4-sample mean), tone (20 kHz)
     fp_dip_t dips[FP_DIPS];
     uint16_t carrier_n;   // FP_CARRIER_ENVELOPE or _GATED: the envelope samples the line was fitted on (10 us each)
-    // The timing capture: LF_MOD off, 8 kHz for 1.79 s, as 1 ms means. The field is on above half way from the lowest
-    // mean to the highest, and off again below 35 % of the way.
+    // The timing capture: LF_MOD off, 8 kHz for 1.79 s, as 1 ms means, the lowest and the highest kept here. A drop in
+    // the level that reaches timing_off_at is the field going off. runs times each off where the level crosses half of
+    // timing_full. A drop that stays above timing_off_at is a dip, kept in level_dips.
     int16_t timing_low, timing_high;
     uint8_t timing_first_on;  // the first stretch is the field on (1) or off (0); the rest alternate
     uint8_t n_runs;           // stored in runs
@@ -85,13 +87,24 @@ typedef struct __attribute__((packed)) {
     uint8_t auth_start_gaps;  // the START_AUTH burst it was anchored on (0: none seen in the capture)
     uint8_t auth_gaps;        // gaps in that command (about its bit length: ~32 password, ~64 crypto)
     uint16_t auth_span;       // that command's span, first gap to last, in envelope samples (10 us each)
+    // Log version 5. A drop starts below timing_full less an eighth and ends back above timing_full less a sixteenth
+    // (at least 32 and 16 counts). A dip's start and width are in ms, and its depth is how far below timing_full it
+    // went. FP_DIP_OPEN marks a dip cut by the capture's start or end. An off shorter than about 10 ms also lands
+    // here, because the level falls too slowly to reach timing_off_at.
+    int16_t timing_full;      // the field's full level: the 90th percentile of the 1 ms means with the field on
+    int16_t timing_off_at;    // the off level: the larger of FP_FIELD_MIN and a tenth of timing_full
+    uint8_t n_level_dips;     // stored in level_dips
+    uint16_t level_dips_total;
+    fp_dip_t level_dips[FP_LEVEL_DIPS];
 } fp_lf_rec_t;
 
 typedef struct __attribute__((packed)) {
     uint16_t wake;
     uint32_t t_ms;
     uint32_t dur_ms;      // 0xFFFFFFFF while the field lasts
-    uint16_t drops;       // LPCOMP saw the field drop while LF_MOD was off; the last may be the field's end
+    // The times LPCOMP saw LF_RSSI fall below its fixed reference (VDD/16) while LF_MOD was off. The last may be the
+    // field's end. A dip can cross that reference as well as an off, so the timing captures say which a drop was.
+    uint16_t drops;
 } fp_field_t;
 
 typedef struct __attribute__((packed)) {

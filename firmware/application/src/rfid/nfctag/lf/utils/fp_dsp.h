@@ -16,6 +16,9 @@ typedef struct {
 
 void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s);
 
+// The q-th fraction of x[0..n), exact for values 0..16383 (others are clamped to that range).
+int16_t fp_percentile(const int16_t *x, uint32_t n, float q);
+
 // One drop in the envelope below the high level (the 98th percentile): where it starts, how long it lasts and how
 // deep it goes, in samples and ADC counts. A dip still open at the end of the capture has FP_DIP_OPEN set in its depth.
 typedef struct {

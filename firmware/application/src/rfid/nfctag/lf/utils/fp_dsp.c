@@ -15,7 +15,7 @@ static int16_t clamp14(int16_t v) {
     return v < 0 ? 0 : (v > 16383 ? 16383 : v);
 }
 
-static int16_t percentile(const int16_t *x, uint32_t n, float q) {
+int16_t fp_percentile(const int16_t *x, uint32_t n, float q) {
     const uint32_t want = (uint32_t)(q * (float)(n - 1));
     memset(m_hist, 0, sizeof(m_hist));
     for (uint32_t i = 0; i < n; i++) {
@@ -56,9 +56,9 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
         if (x[i] < s->min) s->min = x[i];
         if (x[i] > s->max) s->max = x[i];
     }
-    s->p10 = percentile(x, n, 0.10f);
-    s->p50 = percentile(x, n, 0.50f);
-    s->p90 = percentile(x, n, 0.90f);
+    s->p10 = fp_percentile(x, n, 0.10f);
+    s->p50 = fp_percentile(x, n, 0.50f);
+    s->p90 = fp_percentile(x, n, 0.90f);
 
     // For independent noise of deviation sigma, the median absolute step between samples is 0.954 sigma.
     memset(m_step_hist, 0, sizeof(m_step_hist));
@@ -86,7 +86,7 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
 // high - enter / 2, so noise at the threshold can't split it. Returns high and sets *lo, *hi.
 static int32_t dip_thresholds(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, int32_t *lo,
                               int32_t *hi) {
-    const int32_t high = percentile(x, n, 0.98f);
+    const int32_t high = fp_percentile(x, n, 0.98f);
     int32_t enter = 8 * (int32_t)s->noise;
     if (enter < (int32_t)min_depth) {
         enter = min_depth;

@@ -355,7 +355,35 @@ static bool longest_on(const int16_t *x, uint32_t n, uint32_t *at, uint32_t *len
     return off_seen;
 }
 
-// The field's on and off stretches over 1.79 s, with LF_MOD off: what a reader that pulses its field does.
+// One of the timing capture's dips, from ms start to ms end. The record is packed, so the dip is copied in.
+static void level_dip(fp_lf_rec_t *r, uint16_t *stored, uint16_t *total, uint32_t start, uint32_t end, int32_t depth,
+                      bool open) {
+    (*total)++;
+    if (*stored < FP_LEVEL_DIPS) {
+        const fp_dip_t d = {
+            .start = (uint16_t)start,
+            .width = (uint16_t)(end - start),
+            .depth = (uint16_t)((depth > 0x7FFF ? 0x7FFF : depth) | (open ? FP_DIP_OPEN : 0)),
+        };
+        memcpy(&r->level_dips[(*stored)++], &d, sizeof(d));
+    }
+}
+
+// One on or off stretch of the timing capture, in ms.
+static void timing_run(fp_lf_rec_t *r, uint16_t *stored, uint16_t *total, uint32_t ms) {
+    (*total)++;
+    if (*stored < FP_RUNS) {
+        r->runs[(*stored)++] = (uint16_t)(ms > 0xFFFF ? 0xFFFF : ms);
+    }
+}
+
+// The field's on and off stretches over 1.79 s, with LF_MOD off: what a reader that pulses its field does, and the
+// dips of a field that stays on.
+//
+// With the load off, LF_RSSI falls slowly when the field goes off (a time constant of about 4.5 ms on CU1). A drop
+// that reaches the off level is an off. The off level is the larger of FP_FIELD_MIN and a tenth of the full level,
+// because a strong field takes too long to fall as far as FP_FIELD_MIN. Every other drop is a dip. An off shorter
+// than about 10 ms can't reach the off level and reads as a dip. The page compares such a dip's depth with its length.
 static void timing(fp_lf_rec_t *r) {
     size_t cap_bytes;
     int16_t *buf = (int16_t *)lf_sniff_buffer(&cap_bytes);
@@ -380,30 +408,82 @@ static void timing(fp_lf_rec_t *r) {
     if (nb == 0 || hi < FP_FIELD_MIN) {
         return;
     }
-    // A steady field: one stretch, on. Otherwise on above half way, off below 35 %, so noise can't split a stretch.
-    const bool steady = hi - lo < hi / 4;
-    const int32_t on_at = lo + (hi - lo) / 2, off_at = lo + (hi - lo) * 35 / 100;
-    bool on = steady || buf[0] >= on_at;
-    r->timing_first_on = on;
-    uint32_t start = 0;
-    uint16_t stored = 0, total = 0;
-    for (uint32_t b = 1; b <= nb; b++) {
-        bool now = on;
-        if (b < nb && !steady) {
-            now = on ? buf[b] >= off_at : buf[b] >= on_at;
+    // The full level is the 90th percentile of the 1 ms means with the field on. A field that dips for most of the
+    // capture keeps its top level as full. The means at or above FP_FIELD_MIN are copied past the means, over the raw
+    // samples.
+    int16_t *on_ms = buf + TIMING_N / 4;
+    uint32_t n_on = 0;
+    for (uint32_t b = 0; b < nb; b++) {
+        if (buf[b] >= FP_FIELD_MIN) {
+            on_ms[n_on++] = buf[b];
         }
-        if (now != on || b == nb) {
-            total++;
-            if (stored < FP_RUNS) {
-                const uint32_t ms = b - start;
-                r->runs[stored++] = (uint16_t)(ms > 0xFFFF ? 0xFFFF : ms);
+    }
+    const int32_t full = fp_percentile(on_ms, n_on, 0.9f);
+    const int32_t off_at = full / 10 > FP_FIELD_MIN ? full / 10 : FP_FIELD_MIN;
+    const int32_t half = full / 2;
+    int32_t enter = full / 8;
+    if (enter < 32) {
+        enter = 32;
+    }
+    const int32_t drop_lo = full - enter, drop_hi = full - enter / 2;
+    r->timing_full = (int16_t)full;
+    r->timing_off_at = (int16_t)off_at;
+
+    // A drop starts below drop_lo and ends back above drop_hi. The gap between the two thresholds keeps noise from
+    // splitting a drop, and it makes the field's fall and its return after an off one drop. If a drop reaches off_at,
+    // it is an off stretch, timed where the level crosses half of full. The level falls to half in about 3 ms and to
+    // off_at in about 10, so the half crossing times an off more closely. Every other drop is a dip, timed between
+    // the two thresholds.
+    bool in = false;
+    uint32_t start = 0, half_first = 0, half_last = 0, on_from = 0;
+    bool below_half = false;
+    int32_t bottom = 0;
+    uint16_t stored = 0, total = 0, dips_stored = 0, dips_total = 0;
+    r->timing_first_on = 1;
+    for (uint32_t b = 0; b <= nb; b++) {
+        const bool end = b == nb;
+        const int32_t v = end ? full : buf[b];
+        if (!in) {
+            if (end || v >= drop_lo) {
+                continue;
             }
+            in = true;
             start = b;
-            on = now;
+            bottom = v;
+            below_half = false;
         }
+        if (!end) {
+            if (v < bottom) bottom = v;
+            if (v < half) {
+                if (!below_half) half_first = b;
+                below_half = true;
+                half_last = b;
+            }
+        }
+        if (!end && v < drop_hi) {
+            continue;
+        }
+        in = false;
+        if (bottom < off_at) {
+            const uint32_t off_end = half_last + 1;
+            if (half_first == 0) {
+                r->timing_first_on = 0;
+            } else {
+                timing_run(r, &stored, &total, half_first - on_from);
+            }
+            timing_run(r, &stored, &total, off_end - half_first);
+            on_from = off_end;
+        } else {
+            level_dip(r, &dips_stored, &dips_total, start, b, full - bottom, start == 0 || end);
+        }
+    }
+    if (on_from < nb) {
+        timing_run(r, &stored, &total, nb - on_from);
     }
     r->n_runs = (uint8_t)stored;
     r->runs_total = total;
+    r->n_level_dips = (uint8_t)dips_stored;
+    r->level_dips_total = dips_total;
 }
 
 static void measure_carrier(fp_lf_rec_t *r) {
