@@ -87,20 +87,25 @@ static volatile uint16_t m_lf_settle_ms = 20;
 #define LF_SHORT_SETTLE_MS 2
 #define LF_LONG_CHECK_EVERY 4
 static volatile uint16_t m_lf_bursts = 0;  // bursts completed since the last detection
-// EXPERIMENT exp/fsk-selftrim-489-pulse: some readers switch their field on for ~50 ms at a time. A card loses power
+// EXPERIMENT exp/fsk-selftrim-489-pulse: some readers switch their field on for 50-80 ms at a time. A card loses power
 // between pulses and starts its frame again at each one, but a 10-frame burst (~380 ms) plays on through the gaps, so
-// the next pulse catches it mid-frame. In a slot with LF_EXP_FSK_PULSE, a field's first LF_SHORT_BURSTS bursts are one
-// frame each, and each is checked after m_lf_settle_ms (drvC's residual hides a 2 ms check, above), so a pulse's end
-// stops the emulation and the next pulse starts a frame. A field that stays on gets 10-frame bursts after that, so
-// frames run back to back again.
+// the next pulse catches it mid-frame. In a slot with LF_EXP_FSK_PULSE, a field's first LF_SHORT_BURSTS bursts are
+// LF_SHORT_FRAMES frames each, and each is checked after m_lf_settle_ms (drvC's residual hides a 2 ms check, above).
+// A pulse's end then stops the emulation, and the next pulse starts a frame. A field that stays on gets 10-frame
+// bursts after that, so frames run back to back again.
+// Two frames, not one: a T5577 runs straight from its first frame into the second, so the next preamble follows the
+// first whole frame. A reader may need that preamble to accept the frame. One frame left 20 ms of silence there
+// (a 77 ms Paradox reader, 2026-11-13). Two frames end ~79 ms after the field appears, so the check falls ~99 ms in:
+// inside the off of a reader that is off for more than ~60 ms between pulses.
 #define LF_SHORT_BURSTS 3
+#define LF_SHORT_FRAMES 2
 static volatile bool m_pulse = false;  // the active slot's preset has LF_EXP_FSK_PULSE
 // A T5577 starts its frame ~2.2 ms after the field comes on (PM3, 50 ms pulses), and a reader that listens from soon
 // after field-on misses a frame that starts earlier. The CU sees the field ~0.1 ms after it comes on.
 #define LF_START_DELAY_US 2100
 
 static uint16_t lf_burst_frames(void) {
-    return m_pulse && m_lf_bursts < LF_SHORT_BURSTS ? 1u : 10u;
+    return m_pulse && m_lf_bursts < LF_SHORT_BURSTS ? LF_SHORT_FRAMES : 10u;
 }
 
 // The pulse-learned trim (LF_EXP_FSK_TRIM_LEARN): while the slot has none, a field is measured instead of emulated, in
@@ -456,7 +461,7 @@ static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     d_lost++;
     if (m_pulse && m_lf_bursts <= LF_SHORT_BURSTS) {
-        pt_note_short_field(tag_emulation_get_slot());  // exp/fsk-selftrim-489-pulse: a field that went within ~150 ms
+        pt_note_short_field(tag_emulation_get_slot());  // exp/fsk-selftrim-489-pulse: a field that went within ~300 ms
     }
     lf_cont_disarm();            // research exp/fsk-phasecont: the next field starts a new grid
     g_is_tag_emulating = false;  // Reset the flag in the emulation
