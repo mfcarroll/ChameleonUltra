@@ -541,7 +541,9 @@ static void measure_carrier(fp_lf_rec_t *r) {
         const float a = fp_line(spec, run_n, SPEC_N, FS_OF(CC_100K), 2000.0f, NULL, 0, 0.0f, work, &snr);
         r->cap[1].line_mhz = (uint32_t)lrintf(a * 1000.0f);
         r->cap[1].line_snr10 = snr10(snr);
-        if (a > 0.0f && snr >= 20.0f) {
+        // Only the load on puts the carrier's ripple in the envelope. With the load off or the tone, the strongest
+        // line is something else: the tone's own 15.6 kHz, which read as a 115.6 kHz carrier.
+        if (env_mode == FP_MOD_HIGH && a > 0.0f && snr >= 20.0f) {
             env_hz = 100000.0f + a;
         }
     }
@@ -831,10 +833,18 @@ bool field_probe_lf_measure_now(fp_lf_rec_t *out) {
     r->field = m_store.lf_fields;
     r->t_ms = now_ms();
     r->flags = FP_F_MANUAL;
+    const bool active = m_lf_active;
     measure(r);
     bsp_delay_ms(3);
     if (!lf_tag_em_probe_field()) {
         r->flags |= FP_F_ENDED;
+        // With no field, the measurement's own LF_MOD changes can raise LPCOMP's UP, and the main loop would then
+        // run a field's rounds on nothing. lf_tag_em_probe_field() also masked UP, so it is armed again here for the
+        // next real field.
+        if (!active) {
+            m_lf_pending = false;
+            lf_tag_em_probe_rearm();
+        }
     }
     memcpy(out, r, sizeof(*r));
     return true;
