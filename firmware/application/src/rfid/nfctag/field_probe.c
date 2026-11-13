@@ -380,8 +380,8 @@ static void timing_run(fp_lf_rec_t *r, uint16_t *stored, uint16_t *total, uint32
 // The field's on and off stretches over 1.79 s, with LF_MOD off: what a reader that pulses its field does, and the
 // dips of a field that stays on.
 //
-// With the load off, LF_RSSI falls slowly when the field goes off (a time constant of about 4.5 ms on CU1). A drop
-// that reaches the off level is an off. The off level is the larger of FP_FIELD_MIN and a tenth of the full level,
+// With the load off, LF_RSSI falls slowly when the field goes off (a time constant of about 4.5 ms on a bench CU). A
+// drop that reaches the off level is an off. The off level is the larger of FP_FIELD_MIN and a tenth of the full level,
 // because a strong field takes too long to fall as far as FP_FIELD_MIN. Every other drop is a dip. An off shorter
 // than about 10 ms can't reach the off level and reads as a dip. The page compares such a dip's depth with its length.
 static void timing(fp_lf_rec_t *r) {
