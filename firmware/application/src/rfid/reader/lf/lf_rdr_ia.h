@@ -18,12 +18,16 @@
 #define LF_RDR_CAPTURE_MAX  (4096u)  // carrier periods, 32.8 ms
 #define LF_RDR_MAX_RUNS     (600u)
 
+// Bench diagnosis, in eof_gap: start the capture before the command instead of after it, so the reader's own
+// field gaps show in the samples.
+#define LF_RDR_CAPTURE_COMMAND (0x02u)
+
 typedef struct __attribute__((packed)) {
     // Command: pulse-interval coding. Each bit is a gap of gap_us, then field on until the bit's period ends.
     uint16_t gap_us;
     uint16_t bit0_us;   // a 0's period, from its gap's start to the next gap's start
     uint16_t bit1_us;
-    uint8_t eof_gap;    // 1: one more gap after the last bit
+    uint8_t eof_gap;    // bit 0: one more gap after the last bit. LF_RDR_CAPTURE_COMMAND: see below
     uint16_t stop_us;   // field on after the frame. The answer window counts from the end of it
     // Answer.
     uint8_t coding;     // lf_ia_coding_t

@@ -58,6 +58,9 @@ static void gap(uint32_t us) {
 // Runs inside the timeslot: the command, then the capture's start.
 static void send_cb(void) {
     const lf_rdr_link_t *l = m_link;
+    if (l->eof_gap & LF_RDR_CAPTURE_COMMAND) {
+        lf_125khz_radio_sample_link(true);
+    }
     if (m_power_up_us) {
         field_on();
         bsp_delay_us(m_power_up_us);
@@ -67,11 +70,13 @@ static void send_cb(void) {
         gap(l->gap_us);
         bsp_delay_us(period - l->gap_us);
     }
-    if (l->eof_gap) {
+    if (l->eof_gap & 1u) {
         gap(l->gap_us);
     }
     bsp_delay_us(l->stop_us);
-    lf_125khz_radio_sample_link(true);
+    if (!(l->eof_gap & LF_RDR_CAPTURE_COMMAND)) {
+        lf_125khz_radio_sample_link(true);
+    }
     m_sent = true;
 }
 
