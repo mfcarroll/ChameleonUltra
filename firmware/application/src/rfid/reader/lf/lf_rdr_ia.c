@@ -156,6 +156,7 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     const uint16_t half = link->bit_fc / 2u;
     const size_t window = link->window_us / 8u;
     m_runs_n = lf_ia_envelope_runs(m_cap, n, SKIP_FC, window > SKIP_FC ? window : SKIP_FC + 1u, link->min_depth,
+                                   link->slice_pct ? link->slice_pct : 50u,
                                    half, (uint16_t)(3u * half), m_runs, LF_RDR_MAX_RUNS, &rx->env);
     rx->n_runs = m_runs_n;
     rx->n_bits = lf_ia_decode_runs(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc, link->coding_flags,

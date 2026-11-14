@@ -83,14 +83,17 @@ typedef struct {
     size_t first;       // the answer's first loaded sample
     int32_t idle;       // the line's level with no load
     int32_t load;       // the level the load takes it to
-    int32_t threshold;  // midway between the two
+    int32_t threshold;  // the level the runs are sliced at
 } lf_ia_envelope_info_t;
 
 // Turns a reader's envelope, sampled once per carrier period, into load runs. Samples [skip, window) are taken as the
 // idle line (no load), so the answer must start at or after window. The load level is the extreme after window on
-// either side of idle. If it is less than min_depth away, there is no answer and the result is 0. The runs start at
-// the first loaded sample and end at a no-load stretch longer than max_idle_fc. That last no-load run is cut to
-// half_fc, because it may still hold a final half-bit. Returns the number of runs.
-size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth,
+// either side of idle. If it is less than min_depth away, there is no answer and the result is 0. The answer starts at
+// the first sample past the midpoint between idle and load. The runs are sliced slice_pct percent of the way from the
+// answer's other extreme to the load level: 50 is the middle of the swing, and a lower value suits a detector that
+// returns from load slowly. The runs end at a stretch of either level longer than max_idle_fc, which is not part of
+// the answer. A last no-load run is cut to half_fc, because it may still hold a final half-bit. Returns the number of
+// runs.
+size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth, uint8_t slice_pct,
                            uint16_t half_fc, uint16_t max_idle_fc, uint16_t *runs, size_t max_runs,
                            lf_ia_envelope_info_t *info);

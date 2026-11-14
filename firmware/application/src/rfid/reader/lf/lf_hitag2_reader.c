@@ -19,8 +19,10 @@
 
 static lf_rdr_link_t m_link = {
     .gap_us = 6u * 8u,
-    .bit0_us = 20u * 8u,
-    .bit1_us = 30u * 8u,
+    // Stopping and restarting the drive adds about 14 µs to each bit, measured on the Flipper, so a 0 of 20 periods and
+    // a 1 of 30 are asked for that much shorter.
+    .bit0_us = 20u * 8u - 14u,
+    .bit1_us = 30u * 8u - 14u,
     .eof_gap = 1 | LF_RDR_DAMP_GAPS,
     .stop_us = 36u * 8u,
     .coding = LF_IA_CODING_MANCHESTER,
@@ -29,6 +31,8 @@ static lf_rdr_link_t m_link = {
     .window_us = 1000,
     .capture_n = 2048,
     .min_depth = 40,
+    // The reader's detector falls back from a load slowly, so slice near the low rail.
+    .slice_pct = 25,
 };
 
 lf_rdr_link_t *lf_hitag2_reader_link(void) {

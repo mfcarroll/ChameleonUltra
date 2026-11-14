@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../lf_ia_codec.h"
+#include "ht2_answer_capture.h"
 
 static int m_failed = 0;
 static int m_checks = 0;
@@ -238,7 +239,7 @@ static void test_envelope(void) {
         synth_answer(s, 2048, sent, 38, load_low, 40, 2);
         uint16_t runs[200];
         lf_ia_envelope_info_t info;
-        size_t nr = lf_ia_envelope_runs(s, 2048, 80, 150, 100, 16, 48, runs, 200, &info);
+        size_t nr = lf_ia_envelope_runs(s, 2048, 80, 150, 100, 50, 16, 48, runs, 200, &info);
         size_t nb = lf_ia_decode_runs(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 128);
         CHECK(nb == 38 && memcmp(sent, got, 5) == 0 && info.first >= 203 && info.first <= 207,
               "envelope trial %d low=%d: nr=%zu nb=%zu first=%zu", trial, load_low, nr, nb, info.first);
@@ -247,8 +248,27 @@ static void test_envelope(void) {
     synth_answer(s, 2048, (const uint8_t *)"", 0, 1, 40, 0);
     uint16_t runs[200];
     lf_ia_envelope_info_t info;
-    CHECK(lf_ia_envelope_runs(s, 2048, 80, 150, 100, 16, 48, runs, 200, &info) == 0, "no answer");
-    CHECK(lf_ia_envelope_runs(s, 100, 80, 150, 100, 16, 48, runs, 200, &info) == 0, "window past the end");
+    CHECK(lf_ia_envelope_runs(s, 2048, 80, 150, 100, 50, 16, 48, runs, 200, &info) == 0, "no answer");
+    CHECK(lf_ia_envelope_runs(s, 100, 80, 150, 100, 50, 16, 48, runs, 200, &info) == 0, "window past the end");
+}
+
+static void test_envelope_real_answer(void) {
+    // Sliced near the low rail, the bench capture decodes to its 38 bits. Sliced midway, the slow fall from each load
+    // stretches the runs and it does not.
+    uint16_t runs[400];
+    lf_ia_envelope_info_t info;
+    const size_t n = sizeof(HT2_ANSWER_CAPTURE) / sizeof(HT2_ANSWER_CAPTURE[0]);
+    size_t nr = lf_ia_envelope_runs(HT2_ANSWER_CAPTURE, n, 40, 125, 100, 25, 16, 48, runs, 400, &info);
+    uint8_t got[8] = {0};
+    size_t nb = lf_ia_decode_runs(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 64);
+    char s[65];
+    bits_to_string(got, nb, s);
+    CHECK(nb == 38 && strcmp(s, "11111100000001000000100000001100000100") == 0, "real answer: %zu bits %s", nb, s);
+
+    nr = lf_ia_envelope_runs(HT2_ANSWER_CAPTURE, n, 40, 125, 100, 50, 16, 48, runs, 400, &info);
+    nb = lf_ia_decode_runs(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 64);
+    bits_to_string(got, nb, s);
+    CHECK(strcmp(s, "11111100000001000000100000001100000100") != 0, "midway slicing should not decode it: %s", s);
 }
 
 int main(void) {
@@ -259,6 +279,7 @@ int main(void) {
     test_runs_known();
     test_runs_roundtrip();
     test_runs_violation();
+    test_envelope_real_answer();
     test_envelope();
     printf("%d checks, %d failed\n", m_checks, m_failed);
     return m_failed ? 1 : 0;

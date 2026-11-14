@@ -40,6 +40,7 @@ typedef struct __attribute__((packed)) {
     uint16_t window_us; // the answer starts no earlier than this. The line before it is taken as idle
     uint16_t capture_n; // carrier periods to capture after the frame, at most LF_RDR_CAPTURE_MAX
     int16_t min_depth;  // ADC counts: a smaller swing from idle is no answer
+    uint8_t slice_pct;  // where the answer is sliced, see lf_ia_envelope_runs. 0 means 50
 } lf_rdr_link_t;
 
 typedef struct {

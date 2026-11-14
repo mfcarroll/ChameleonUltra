@@ -185,7 +185,7 @@ uint32_t lf_ia_runs_total_fc(const uint16_t *runs, size_t n_runs) {
     return t;
 }
 
-size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth,
+size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth, uint8_t slice_pct,
                            uint16_t half_fc, uint16_t max_idle_fc, uint16_t *runs, size_t max_runs,
                            lf_ia_envelope_info_t *info) {
     memset(info, 0, sizeof(*info));
@@ -212,12 +212,14 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
     if (depth < min_depth || depth == 0) {
         return 0;
     }
-    const int32_t thr = idle + (load - idle) / 2;
-    info->threshold = thr;
     const bool load_low = load < idle;
+    const int32_t first_thr = idle + (load - idle) / 2;
+    const int32_t other = load_low ? hi : lo;
+    const int32_t thr = other + (int32_t)(((int64_t)(load - other) * slice_pct) / 100);
+    info->threshold = thr;
 
     size_t i = window;
-    while (i < n && ((s[i] < thr) != load_low)) {
+    while (i < n && ((s[i] < first_thr) != load_low)) {
         i++;
     }
     if (i >= n) {
@@ -232,7 +234,7 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
         const bool l = (s[i] < thr) == load_low;
         if (l == level) {
             len++;
-            if (!level && len > max_idle_fc) {
+            if (len > max_idle_fc) {
                 break;
             }
             continue;
@@ -244,7 +246,9 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
         level = l;
         len = 1;
     }
-    if (len > 0 && nr < max_runs) {
+    // A stretch past max_idle_fc ends the answer. A loaded one is not part of it, and a no-load one may still hold a
+    // final half-bit.
+    if (len > 0 && nr < max_runs && !(level && len > max_idle_fc)) {
         if (!level && len > half_fc) {
             len = half_fc;
         }
