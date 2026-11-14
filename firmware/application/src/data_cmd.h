@@ -210,6 +210,8 @@
 #define DATA_CMD_JABLOTRON_GET_EMU_ID           (5011)
 #define DATA_CMD_IDTECK_SET_EMU_ID              (5012)
 #define DATA_CMD_IDTECK_GET_EMU_ID              (5013)
+#define DATA_CMD_HITAG2_SET_EMU_DATA            (5040)
+#define DATA_CMD_HITAG2_GET_EMU_DATA            (5041)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)

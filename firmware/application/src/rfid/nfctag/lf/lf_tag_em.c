@@ -249,8 +249,8 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
-    lf_ia_set_module(NULL);
-
+    // The interactive types replace the module in one step: the engine may be using the old one from an interrupt, so
+    // it must never see NULL between the two.
     if (type == TAG_TYPE_HITAG2 && buffer->length >= LF_HITAG2_DATA_SIZE) {
         m_tag_type = type;
         lf_ia_set_module(lf_ia_hitag2_load(buffer->buffer));
@@ -264,6 +264,8 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         NRF_LOG_INFO("load lf interactive test data finish.");
         return LF_IA_TEST_FRAME_SIZE;
     }
+
+    lf_ia_set_module(NULL);
 
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
