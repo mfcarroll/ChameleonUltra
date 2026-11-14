@@ -51,6 +51,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_codec.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_engine.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_trace.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_test_module.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/battery_health.c \
   $(PROJ_DIR)/utils/delayed_reset.c \

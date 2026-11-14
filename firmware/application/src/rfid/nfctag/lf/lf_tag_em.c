@@ -5,6 +5,7 @@
 #include "bsp_delay.h"
 #include "fds_util.h"
 #include "interactive/lf_ia.h"
+#include "interactive/lf_ia_test_module.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
@@ -248,6 +249,13 @@ void lf_tag_125khz_sense_switch(bool enable) {
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     lf_ia_set_module(NULL);
+
+    if (type == TAG_TYPE_LF_IA_TEST && buffer->length >= LF_IA_TEST_FRAME_SIZE) {
+        m_tag_type = type;
+        lf_ia_set_module(lf_ia_test_module_load(buffer->buffer));
+        NRF_LOG_INFO("load lf interactive test data finish.");
+        return LF_IA_TEST_FRAME_SIZE;
+    }
 
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
@@ -495,4 +503,13 @@ bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x01, 0x01, 0x01, 0x4A, 0xE3, 0x5E, 0x7F, 0x4F,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_ia_test_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_LF_IA_TEST ? LF_IA_TEST_FRAME_SIZE : 0;
+}
+
+bool lf_tag_ia_test_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t frame[LF_IA_TEST_FRAME_SIZE] = {0xA5, 0x5A, 0xF0, 0x0F};
+    return lf_tag_data_factory(slot, tag_type, frame, sizeof(frame));
 }
