@@ -51,7 +51,7 @@ bool is_tag_specific_type_valid(tag_specific_type_t tag_type) {
 /**
  * Tag data stored in flash. Total length must be aligned by 4 bytes (whole words).
  */
-static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
+static uint8_t m_tag_data_buffer_lf[32];  // LF card data buffer: the largest is a Hitag 2 tag's eight pages
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
