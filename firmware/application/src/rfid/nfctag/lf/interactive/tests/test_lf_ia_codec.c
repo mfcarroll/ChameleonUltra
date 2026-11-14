@@ -1,0 +1,207 @@
+// Host tests for lf_ia_codec. Build and run with `make` in this directory.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../lf_ia_codec.h"
+
+static int m_failed = 0;
+static int m_checks = 0;
+
+#define CHECK(cond, ...)                                  \
+    do {                                                  \
+        m_checks++;                                       \
+        if (!(cond)) {                                    \
+            m_failed++;                                   \
+            printf("FAIL %s:%d: ", __FILE__, __LINE__);   \
+            printf(__VA_ARGS__);                          \
+            printf("\n");                                 \
+        }                                                 \
+    } while (0)
+
+// A fixed generator, so a failure repeats.
+static uint32_t m_rng = 0x12345678u;
+static uint32_t rnd(void) {
+    m_rng ^= m_rng << 13;
+    m_rng ^= m_rng >> 17;
+    m_rng ^= m_rng << 5;
+    return m_rng;
+}
+
+static void bits_from_string(const char *s, uint8_t *bits, size_t *n) {
+    *n = 0;
+    for (; *s; s++) {
+        if (*s == '0' || *s == '1') {
+            lf_ia_bit_put(bits, (*n)++, *s == '1');
+        }
+    }
+}
+
+static void bits_to_string(const uint8_t *bits, size_t n, char *out) {
+    for (size_t i = 0; i < n; i++) {
+        out[i] = lf_ia_bit_get(bits, i) ? '1' : '0';
+    }
+    out[n] = 0;
+}
+
+static void test_decode_bench_capture(void) {
+    // The field probe's Hitag 2 start from a PM3 `lf cmdread`, as captured on CU2 on 2026-11-06.
+    const uint32_t iv[] = {230, 230, 180, 190, 180};
+    const lf_ia_decode_cfg_t cfg = LF_IA_DECODE_CFG_DEFAULT;
+    uint8_t bits[4] = {0};
+    size_t n;
+    uint32_t split;
+    char s[64];
+    lf_ia_decode_status_t st = lf_ia_decode_intervals(iv, 5, &cfg, bits, 32, &n, &split);
+    bits_to_string(bits, n, s);
+    CHECK(st == LF_IA_DECODE_OK && n == 5 && strcmp(s, "11000") == 0, "bench start: st=%d n=%zu bits=%s", st, n, s);
+    CHECK(split == 205, "bench start split %u", split);
+}
+
+static void test_decode_jitter(void) {
+    // PM3 `lf cmdread -d 50 -z 116 -o 166`: a 0 is a 166 µs interval and a 1 is 216 µs, read here with up to ±12 µs of
+    // capture jitter.
+    const lf_ia_decode_cfg_t cfg = LF_IA_DECODE_CFG_DEFAULT;
+    for (int trial = 0; trial < 2000; trial++) {
+        uint8_t sent[8] = {0}, got[8] = {0};
+        const size_t nb = 2 + rnd() % 60;
+        bool any0 = false, any1 = false;
+        for (size_t i = 0; i < nb; i++) {
+            const bool b = rnd() & 1u;
+            any0 |= !b;
+            any1 |= b;
+            lf_ia_bit_put(sent, i, b);
+        }
+        if (!any0 || !any1) {
+            continue;
+        }
+        uint32_t iv[64];
+        CHECK(lf_ia_encode_intervals(sent, nb, 166, 216, iv, 64) == nb, "encode intervals");
+        for (size_t i = 0; i < nb; i++) {
+            iv[i] = (uint32_t)((int32_t)iv[i] + (int32_t)(rnd() % 25) - 12);
+        }
+        size_t n;
+        lf_ia_decode_status_t st = lf_ia_decode_intervals(iv, nb, &cfg, got, 64, &n, NULL);
+        CHECK(st == LF_IA_DECODE_OK && n == nb && memcmp(sent, got, (nb + 7) / 8) == 0, "jitter trial %d", trial);
+    }
+}
+
+static void test_decode_one_class(void) {
+    // 32 zeros, as the earlier password-length test sent: one interval class, so no bits.
+    const lf_ia_decode_cfg_t cfg = LF_IA_DECODE_CFG_DEFAULT;
+    uint32_t iv[32];
+    for (int i = 0; i < 32; i++) {
+        iv[i] = 166 + (uint32_t)(rnd() % 21) - 10;
+    }
+    uint8_t bits[4] = {0};
+    size_t n = 99;
+    uint32_t mean = 0;
+    lf_ia_decode_status_t st = lf_ia_decode_intervals(iv, 32, &cfg, bits, 32, &n, &mean);
+    CHECK(st == LF_IA_DECODE_ONE_CLASS && n == 0, "one class: st=%d n=%zu", st, n);
+    CHECK(mean > 155 && mean < 177, "one class mean %u", mean);
+}
+
+static void test_decode_edges(void) {
+    const lf_ia_decode_cfg_t cfg = LF_IA_DECODE_CFG_DEFAULT;
+    uint8_t bits[1] = {0};
+    size_t n;
+    CHECK(lf_ia_decode_intervals(NULL, 0, &cfg, bits, 8, &n, NULL) == LF_IA_DECODE_TOO_FEW, "too few");
+    const uint32_t iv[9] = {100, 200, 100, 200, 100, 200, 100, 200, 100};
+    CHECK(lf_ia_decode_intervals(iv, 9, &cfg, bits, 8, &n, NULL) == LF_IA_DECODE_OVERFLOW, "overflow");
+
+    const lf_ia_decode_cfg_t inv = {.min_ratio_pct = 115, .short_is_one = true};
+    uint8_t b2[2] = {0};
+    char s[16];
+    lf_ia_decode_intervals(iv, 9, &inv, b2, 16, &n, NULL);
+    bits_to_string(b2, n, s);
+    CHECK(strcmp(s, "101010101") == 0, "short_is_one: %s", s);
+}
+
+static void test_runs_known(void) {
+    uint8_t bits[2] = {0};
+    size_t nb;
+    uint16_t runs[16];
+
+    // Manchester "10" at RF/32: load 16, then no load for 16 + 16 (merged), then load 16.
+    bits_from_string("10", bits, &nb);
+    size_t n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, runs, 16);
+    CHECK(n == 3 && runs[0] == LF_IA_RUN(1, 16) && runs[1] == LF_IA_RUN(0, 32) && runs[2] == LF_IA_RUN(1, 16),
+          "manchester 10: n=%zu %04x %04x %04x", n, runs[0], runs[1], runs[2]);
+
+    // ASK "1100" at RF/32: load 64, no load 64.
+    bits_from_string("1100", bits, &nb);
+    n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_ASK, 32, 0, runs, 16);
+    CHECK(n == 2 && runs[0] == LF_IA_RUN(1, 64) && runs[1] == LF_IA_RUN(0, 64), "ask 1100: n=%zu", n);
+
+    // Biphase "10" at RF/32, 0 flips mid-bit: load 32 (the 1), then no load 16, load 16 (the 0).
+    bits_from_string("10", bits, &nb);
+    n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_BIPHASE, 32, 0, runs, 16);
+    CHECK(n == 3 && runs[0] == LF_IA_RUN(1, 32) && runs[1] == LF_IA_RUN(0, 16) && runs[2] == LF_IA_RUN(1, 16),
+          "biphase 10: n=%zu %04x %04x %04x", n, runs[0], runs[1], runs[2]);
+
+    // Too small an output, and an odd bit length for a two-half coding.
+    CHECK(lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, runs, 2) == 0, "max_runs");
+    CHECK(lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 33, 0, runs, 16) == 0, "odd bit_fc");
+    CHECK(lf_ia_runs_total_fc(runs, 3) == 64, "total fc");
+}
+
+static void test_runs_roundtrip(void) {
+    const lf_ia_coding_t codings[] = {LF_IA_CODING_ASK, LF_IA_CODING_MANCHESTER, LF_IA_CODING_BIPHASE};
+    const uint32_t flag_sets[] = {0, LF_IA_INVERT, LF_IA_BIPHASE_ONE_FLIPS, LF_IA_INVERT | LF_IA_BIPHASE_ONE_FLIPS};
+    const uint16_t rates[] = {16, 32, 64};
+
+    for (size_t c = 0; c < 3; c++) {
+        for (size_t f = 0; f < 4; f++) {
+            for (size_t r = 0; r < 3; r++) {
+                for (int trial = 0; trial < 300; trial++) {
+                    uint8_t sent[16] = {0}, got[16] = {0};
+                    const size_t nb = 1 + rnd() % 128;
+                    for (size_t i = 0; i < nb; i++) {
+                        lf_ia_bit_put(sent, i, rnd() & 1u);
+                    }
+                    // ASK cannot mark a frame's trailing zeros apart from the idle, so it always ends on a 1 here.
+                    if (codings[c] == LF_IA_CODING_ASK) {
+                        lf_ia_bit_put(sent, nb - 1, !(flag_sets[f] & LF_IA_INVERT));
+                    }
+                    uint16_t runs[300];
+                    size_t n = lf_ia_encode_runs(sent, nb, codings[c], rates[r], flag_sets[f], runs, 300);
+                    CHECK(n > 0, "encode c=%zu f=%zu r=%zu", c, f, r);
+                    CHECK(lf_ia_runs_total_fc(runs, n) == nb * rates[r], "length c=%zu", c);
+
+                    // Up to a quarter of a half-bit of jitter on each run still rounds to the same half-bits.
+                    const int j = rates[r] / 8;
+                    for (size_t i = 0; i < n; i++) {
+                        const int len = (int)LF_IA_RUN_LEN(runs[i]) + (int)(rnd() % (2 * j + 1)) - j;
+                        runs[i] = LF_IA_RUN(LF_IA_RUN_IS_LOAD(runs[i]), (uint16_t)len);
+                    }
+                    size_t m = lf_ia_decode_runs(runs, n, codings[c], rates[r], flag_sets[f], got, 128);
+                    CHECK(m == nb && memcmp(sent, got, (nb + 7) / 8) == 0,
+                          "roundtrip c=%zu f=%zu r=%zu nb=%zu m=%zu", c, f, r, nb, m);
+                }
+            }
+        }
+    }
+}
+
+static void test_runs_violation(void) {
+    // A Manchester bit with no mid-bit transition is invalid.
+    const uint16_t runs[] = {LF_IA_RUN(1, 32), LF_IA_RUN(0, 16)};
+    uint8_t got[2];
+    CHECK(lf_ia_decode_runs(runs, 2, LF_IA_CODING_MANCHESTER, 32, 0, got, 16) == 0, "manchester violation");
+    // A biphase bit with no flip at its start is invalid.
+    const uint16_t bp[] = {LF_IA_RUN(1, 64)};
+    CHECK(lf_ia_decode_runs(bp, 1, LF_IA_CODING_BIPHASE, 32, 0, got, 16) == 0, "biphase violation");
+}
+
+int main(void) {
+    test_decode_bench_capture();
+    test_decode_jitter();
+    test_decode_one_class();
+    test_decode_edges();
+    test_runs_known();
+    test_runs_roundtrip();
+    test_runs_violation();
+    printf("%d checks, %d failed\n", m_checks, m_failed);
+    return m_failed ? 1 : 0;
+}
