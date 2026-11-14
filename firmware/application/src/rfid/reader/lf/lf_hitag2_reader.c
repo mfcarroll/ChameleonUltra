@@ -1,0 +1,129 @@
+// Hitag 2 password-mode reading. The command timings follow a Hitag 2 reader's (the PM3's armsrc/hitag2.c): a gap of
+// 6 carrier periods starts each bit, a 0 is 20 periods gap to gap and a 1 is 30, and a stop gap and 36 periods of
+// field end the command. The tag answers 199 to about 230 periods later, in Manchester at RF/32 behind 5 or 6
+// start-of-frame ones.
+
+#include "lf_hitag2_reader.h"
+
+#include <string.h>
+
+#include "app_status.h"
+#include "bsp_delay.h"
+#include "lf_125khz_radio.h"
+
+#define HT2_RESET_MS      (20u)    // field off, so the tag starts from power-up
+// The tag takes 313 periods to power up and then waits 232 for START_AUTH, so it must come 2.5 to 4.3 ms after the
+// field. 371 periods matches the PM3's reader.
+#define HT2_POWER_UP_US   (371u * 8u)
+#define HT2_TRIES         (4u)     // a tag answers only every second START_AUTH, so try again on silence
+
+static lf_rdr_link_t m_link = {
+    .gap_us = 6u * 8u,
+    .bit0_us = 20u * 8u,
+    .bit1_us = 30u * 8u,
+    .eof_gap = 1,
+    .stop_us = 36u * 8u,
+    .coding = LF_IA_CODING_MANCHESTER,
+    .coding_flags = 0,
+    .bit_fc = 32,
+    .window_us = 1000,
+    .capture_n = 2048,
+    .min_depth = 40,
+};
+
+lf_rdr_link_t *lf_hitag2_reader_link(void) {
+    return &m_link;
+}
+
+static void bits_put(uint8_t *bits, size_t first, uint32_t v, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        lf_ia_bit_put(bits, first + i, (v >> (n - 1u - i)) & 1u);
+    }
+}
+
+// Takes the 32-bit page out of an answer: 4 to 7 start-of-frame ones, then the page. The length decides how many ones
+// are start-of-frame, because a page that starts with ones would otherwise look like a longer start-of-frame.
+static bool answer_page(const lf_rdr_reply_t *rx, uint32_t *page) {
+    if (rx->n_bits < 36u || rx->n_bits > 39u) {
+        return false;
+    }
+    const size_t sof = rx->n_bits - 32u;
+    for (size_t i = 0; i < sof; i++) {
+        if (!lf_ia_bit_get(rx->bits, i)) {
+            return false;
+        }
+    }
+    uint32_t v = 0;
+    for (size_t i = 0; i < 32; i++) {
+        v = v << 1 | (lf_ia_bit_get(rx->bits, sof + i) ? 1u : 0u);
+    }
+    *page = v;
+    return true;
+}
+
+// Sends a command of n bits and returns its 32-bit answer.
+static bool exchange(uint32_t cmd, size_t n, uint32_t power_up_us, uint32_t *page) {
+    uint8_t tx[4] = {0};
+    bits_put(tx, 0, cmd, n);
+    lf_rdr_reply_t rx;
+    if (!lf_rdr_transact(&m_link, tx, n, power_up_us, &rx)) {
+        return false;
+    }
+    return answer_page(&rx, page);
+}
+
+static bool start_auth(uint32_t *uid) {
+    lf_rdr_field(false);
+    bsp_delay_ms(HT2_RESET_MS);
+    for (uint32_t i = 0; i < HT2_TRIES; i++) {
+        if (exchange(0x18u, 5, i == 0 ? HT2_POWER_UP_US : 0, uid)) {  // START_AUTH, 11000
+            return true;
+        }
+    }
+    return false;
+}
+
+uint8_t lf_hitag2_reader_uid(uint32_t *uid) {
+    const bool ok = start_auth(uid);
+    lf_rdr_field(false);
+    return ok ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t lf_hitag2_reader_read(uint32_t password, uint32_t pages[8], uint8_t *read_mask) {
+    *read_mask = 0;
+    memset(pages, 0, 8u * sizeof(uint32_t));
+    uint32_t uid;
+    if (!start_auth(&uid)) {
+        lf_rdr_field(false);
+        return STATUS_LF_TAG_NO_FOUND;
+    }
+    pages[0] = uid;
+    *read_mask = 1u;
+
+    uint32_t page3;
+    bool authed = false;
+    for (uint32_t i = 0; i < 3 && !authed; i++) {
+        authed = exchange(password, 32, 0, &page3);
+    }
+    if (!authed) {
+        lf_rdr_field(false);
+        return STATUS_MF_ERR_AUTH;
+    }
+    pages[3] = page3;
+    *read_mask |= 1u << 3;
+
+    // READ PAGE is 11 nnn 00 ~nnn.
+    for (uint32_t p = 0; p < 8; p++) {
+        const uint32_t cmd = 3u << 8 | p << 5 | (~p & 7u);
+        for (uint32_t i = 0; i < 3; i++) {
+            uint32_t v;
+            if (exchange(cmd, 10, 0, &v)) {
+                pages[p] = v;
+                *read_mask |= 1u << p;
+                break;
+            }
+        }
+    }
+    lf_rdr_field(false);
+    return *read_mask == 0xFFu ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
+}

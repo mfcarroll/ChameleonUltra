@@ -125,6 +125,16 @@ void lf_125khz_radio_saadc_enable(lf_adc_callback_t cb) {
     APP_ERROR_CHECK(err_code);
 }
 
+// Turns the field PWM's per-period ADC sampling on or off without touching the ADC's own set-up, for a caller that
+// drives the ADC directly.
+void lf_125khz_radio_sample_link(bool on) {
+    if (on) {
+        APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_pwm_saadc_sample_ppi_channel));
+    } else {
+        APP_ERROR_CHECK(nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel));
+    }
+}
+
 void lf_125khz_radio_saadc_disable(void) {
     nrfx_err_t err_code;
     err_code = nrfx_ppi_channel_disable(m_pwm_saadc_sample_ppi_channel);

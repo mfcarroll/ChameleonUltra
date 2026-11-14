@@ -19,6 +19,8 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_hitag2_reader.h"
+#include "lf_rdr_ia.h"
 #endif
 #include "lf_ia_debug.h"
 #include "lf_ia_hitag2.h"
@@ -2237,6 +2239,103 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
 }
 
+// Out: the UID (u32, big-endian).
+static data_frame_tx_t *cmd_processor_hitag2_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t uid = 0;
+    status = lf_hitag2_reader_uid(&uid);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    uid = U32HTONL(uid);
+    return data_frame_make(cmd, status, sizeof(uid), (uint8_t *)&uid);
+}
+
+// In: the password (u32, big-endian). Out: the eight pages (u32 each, big-endian), then a mask of the pages read
+// (u8), also when the status says the read was incomplete.
+static data_frame_tx_t *cmd_processor_hitag2_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const uint32_t pwd = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3];
+    uint32_t pages[8];
+    uint8_t out[33];
+    status = lf_hitag2_reader_read(pwd, pages, &out[32]);
+    for (int i = 0; i < 8; i++) {
+        const uint32_t be = U32HTONL(pages[i]);
+        memcpy(&out[4 * i], &be, 4);
+    }
+    return data_frame_make(cmd, status, sizeof(out), out);
+}
+
+// In: an lf_rdr_link_t, the power-up time (u16 µs, 0 for a field already on), the number of command bits (u8), then
+// the command bits packed first-bit-first. All little-endian. Out: the answer's bit count (u16), 32 bytes of bits,
+// the envelope's first loaded sample (u16), idle, load and threshold levels (i16 each), the run count (u16), then up
+// to 400 runs (u16 each).
+static data_frame_tx_t *cmd_processor_lf_rdr_transact(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[2 + 32 + 10 + 400 * 2];
+    if (length < sizeof(lf_rdr_link_t) + 3) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_rdr_link_t link;
+    memcpy(&link, data, sizeof(link));
+    uint16_t power_up;
+    memcpy(&power_up, data + sizeof(link), 2);
+    const uint8_t n_tx = data[sizeof(link) + 2];
+    const uint8_t *tx = data + sizeof(link) + 3;
+    if (length < sizeof(link) + 3 + (n_tx + 7u) / 8u) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_rdr_field(true);
+    lf_rdr_reply_t rx;
+    const bool ok = lf_rdr_transact(&link, tx, n_tx, power_up, &rx);
+    lf_rdr_field(false);
+    if (!ok) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    size_t n_runs;
+    const uint16_t *runs = lf_rdr_runs(&n_runs);
+    const uint16_t nb = (uint16_t)rx.n_bits, nr = (uint16_t)n_runs;
+    const uint16_t first = (uint16_t)rx.env.first;
+    const int16_t lv[3] = {(int16_t)rx.env.idle, (int16_t)rx.env.load, (int16_t)rx.env.threshold};
+    const size_t keep = n_runs < 400 ? n_runs : 400;
+    memcpy(out, &nb, 2);
+    memcpy(out + 2, rx.bits, 32);
+    memcpy(out + 34, &first, 2);
+    memcpy(out + 36, lv, 6);
+    memcpy(out + 42, &nr, 2);
+    memcpy(out + 44, runs, keep * 2);
+    return data_frame_make(cmd, rx.n_bits ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, (uint16_t)(44 + keep * 2), out);
+}
+
+// In: the offset (u16, big-endian). Out: the total sample count (u16), the count here (u16), then the samples (i16),
+// all little-endian.
+static data_frame_tx_t *cmd_processor_lf_rdr_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[4 + 1900 * 2];
+    if (length < 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const size_t offset = (size_t)data[0] << 8 | data[1];
+    size_t total;
+    const int16_t *cap = lf_rdr_capture(&total);
+    const size_t n = offset < total ? (total - offset < 1900 ? total - offset : 1900) : 0;
+    const uint16_t t16 = (uint16_t)total, n16 = (uint16_t)n;
+    memcpy(out, &t16, 2);
+    memcpy(out + 2, &n16, 2);
+    memcpy(out + 4, cap + offset, n * 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(4 + n * 2), out);
+}
+
+// In: nothing to read, or a whole lf_rdr_link_t (little-endian) to set. Out: the Hitag 2 reader's link.
+static data_frame_tx_t *cmd_processor_hitag2_reader_link(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_rdr_link_t *link = lf_hitag2_reader_link();
+    if (length == sizeof(lf_rdr_link_t)) {
+        memcpy(link, data, sizeof(lf_rdr_link_t));
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(lf_rdr_link_t), (uint8_t *)link);
+}
+
 static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     /* Optional 2-byte big-endian timeout in ms from host (default 2000ms) */
     uint32_t timeout_ms = 2000;
@@ -3409,6 +3508,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
     {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
     {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_HITAG2_SCAN,                  before_reader_run,           cmd_processor_hitag2_scan,                   NULL                   },
+    {    DATA_CMD_HITAG2_READ,                  before_reader_run,           cmd_processor_hitag2_read,                   NULL                   },
+    {    DATA_CMD_LF_RDR_TRANSACT,              before_reader_run,           cmd_processor_lf_rdr_transact,               NULL                   },
+    {    DATA_CMD_LF_RDR_CAPTURE,               NULL,                        cmd_processor_lf_rdr_capture,                NULL                   },
+    {    DATA_CMD_HITAG2_READER_LINK,           NULL,                        cmd_processor_hitag2_reader_link,            NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

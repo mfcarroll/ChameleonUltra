@@ -216,6 +216,8 @@
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
+#define DATA_CMD_HITAG2_SCAN                    (3036)
+#define DATA_CMD_HITAG2_READ                    (3037)
 
 // The interactive LF engine's trace and bench instrumentation. Payloads are the firmware's packed structs,
 // little-endian.
@@ -224,5 +226,9 @@
 #define DATA_CMD_LF_IA_ENV_ARM                  (3182)
 #define DATA_CMD_LF_IA_ENV_READ                 (3183)
 #define DATA_CMD_LF_IA_TUNING                   (3184)
+// The interactive LF reader engine's bench commands.
+#define DATA_CMD_LF_RDR_TRANSACT                (3185)
+#define DATA_CMD_LF_RDR_CAPTURE                 (3186)
+#define DATA_CMD_HITAG2_READER_LINK             (3187)
 
 #endif
