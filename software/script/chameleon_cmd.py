@@ -1220,6 +1220,53 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.IDTECK_SET_EMU_ID, id)
 
     @expect_response(Status.SUCCESS)
+    def hitag2_set_emu_data(self, pages: bytes):
+        """
+        Set the eight Hitag 2 pages emulated on the active slot.
+
+        :param pages: 32 bytes, page 0 (the UID) first, each page most significant byte first
+        """
+        if len(pages) != 32:
+            raise ValueError("The pages must be exactly 32 bytes")
+        return self.device.send_cmd_sync(Command.HITAG2_SET_EMU_DATA, pages)
+
+    @expect_response(Status.SUCCESS)
+    def hitag2_get_emu_data(self):
+        """
+        Get the eight Hitag 2 pages emulated on the active slot.
+        """
+        resp = self.device.send_cmd_sync(Command.HITAG2_GET_EMU_DATA)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = resp.data[:32]
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def lf_ia_trace_read(self, first: int = 0):
+        """
+        Read records of the interactive LF exchange trace, from index first (oldest kept is 0).
+
+        :return: (records written since the clear, record size, list of raw records)
+        """
+        resp = self.device.send_cmd_sync(
+            Command.LF_IA_TRACE_READ, struct.pack(">H", first)
+        )
+        if resp.status == Status.SUCCESS:
+            total, size, n = struct.unpack_from("<IHB", resp.data)
+            resp.parsed = (
+                total,
+                size,
+                [resp.data[7 + i * size : 7 + (i + 1) * size] for i in range(n)],
+            )
+        return resp
+
+    @expect_response(Status.SUCCESS)
+    def lf_ia_trace_clear(self):
+        """
+        Clear the interactive LF exchange trace and its counters.
+        """
+        return self.device.send_cmd_sync(Command.LF_IA_TRACE_CLEAR)
+
+    @expect_response(Status.SUCCESS)
     def idteck_get_emu_id(self):
         """
         Get the emulated IDTECK 64-bit frame.

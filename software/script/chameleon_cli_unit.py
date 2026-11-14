@@ -950,6 +950,8 @@ lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+lf_hitag2 = lf.subgroup("hitag2", "Hitag 2 commands")
+lf_interactive = lf.subgroup("interactive", "Interactive LF emulation commands")
 
 
 @root.command("clear")
@@ -6745,6 +6747,197 @@ class LFADCGenericRead(ReaderRequiredUnit):
             print("generic read error")
 
 
+HITAG2_PAGE_NAMES = (
+    "UID",
+    "Password",
+    "Key/Pwd",
+    "Config + tag password",
+    "User",
+    "User",
+    "User",
+    "User",
+)
+
+
+def _hitag2_print_pages(pages: bytes):
+    for n in range(8):
+        print(
+            f"   {n}  {pages[4 * n : 4 * n + 4].hex(' ').upper()}  {HITAG2_PAGE_NAMES[n]}"
+        )
+    config = pages[12]
+    mode = "crypto" if config & 0x08 else "password"
+    print(
+        f"   Config 0x{config:02X}: {mode} mode. The emulation answers password mode only."
+    )
+
+
+def _hex_arg(value: str, nbytes: int, name: str) -> bytes:
+    try:
+        b = bytes.fromhex(value)
+    except ValueError:
+        raise ArgsParserError(f"{name} must be hex")
+    if len(b) != nbytes:
+        raise ArgsParserError(f"{name} must be {2 * nbytes} hex digits")
+    return b
+
+
+@lf_hitag2.command("econfig")
+class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set the Hitag 2 pages emulated on a slot. Give any of the options to change those pages; "
+            "give none to show them. The slot's LF type must be HITAG2 (hw slot type -s <n> -t HITAG2)."
+        )
+        self.add_slot_args(parser)
+        parser.add_argument("--uid", metavar="<hex8>", help="page 0, the UID")
+        parser.add_argument(
+            "--pwd", metavar="<hex8>", help="page 1, the password the reader must send"
+        )
+        parser.add_argument(
+            "--config",
+            metavar="<hex2>",
+            help="the configuration byte, page 3's first byte",
+        )
+        parser.add_argument(
+            "--tag-pwd",
+            metavar="<hex6>",
+            help="the tag password, page 3's last three bytes",
+        )
+        parser.add_argument(
+            "--page",
+            nargs=2,
+            action="append",
+            metavar=("<0-7>", "<hex8>"),
+            help="set any page, repeatable",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        if TagSpecificType(slotinfo[self.slot_num - 1]["lf"]) != TagSpecificType.HITAG2:
+            print(
+                f"{color_string((CR, 'ERROR'))}: Slot {self.slot_num} LF type is not HITAG2. "
+                f"Set it with: hw slot type -s {self.slot_num} -t HITAG2"
+            )
+            return
+        pages = bytearray(self.cmd.hitag2_get_emu_data())
+        changed = False
+        for n, value in args.page or []:
+            if not n.isdigit() or not 0 <= int(n) <= 7:
+                raise ArgsParserError("page number must be 0 to 7")
+            pages[4 * int(n) : 4 * int(n) + 4] = _hex_arg(value, 4, "page data")
+            changed = True
+        if args.uid is not None:
+            pages[0:4] = _hex_arg(args.uid, 4, "--uid")
+            changed = True
+        if args.pwd is not None:
+            pages[4:8] = _hex_arg(args.pwd, 4, "--pwd")
+            changed = True
+        if args.config is not None:
+            pages[12:13] = _hex_arg(args.config, 1, "--config")
+            changed = True
+        if args.tag_pwd is not None:
+            pages[13:16] = _hex_arg(args.tag_pwd, 3, "--tag-pwd")
+            changed = True
+        if changed:
+            self.cmd.hitag2_set_emu_data(bytes(pages))
+            print(
+                f" - Slot {self.slot_num} Hitag 2 pages set. Save them with: hw slot store"
+            )
+        print(f" - Slot {self.slot_num} Hitag 2 pages:")
+        _hitag2_print_pages(bytes(pages))
+
+
+LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96H")
+LF_IA_VERDICTS = {0: "ignored", 1: "answered", 2: "ended the exchange"}
+LF_IA_DECODES = {
+    0: "ok",
+    1: "one interval class",
+    2: "too few gaps",
+    3: "too many gaps",
+}
+
+
+def _lf_ia_bits(raw: bytes, n: int) -> str:
+    n = min(n, 8 * len(raw))
+    return "".join("1" if raw[i // 8] >> (7 - i % 8) & 1 else "0" for i in range(n))
+
+
+@lf_interactive.command("trace")
+class LFInteractiveTrace(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Show the exchange trace of an interactive LF emulation (such as Hitag 2): each field on and off, and "
+            "each reader command with its decoded bits, what the slot answered, and when. It shows a reader's "
+            "password in full."
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        recs, total = [], 0
+        while True:
+            total, size, chunk = self.cmd.lf_ia_trace_read(len(recs))
+            if size != LF_IA_TRACE_REC.size:
+                print(
+                    f"{color_string((CR, 'ERROR'))}: trace record size {size}, this client reads {LF_IA_TRACE_REC.size}"
+                )
+                return
+            if not chunk:
+                break
+            recs += chunk
+        print(f" - {total} trace records since the clear, {len(recs)} kept")
+        for raw in recs:
+            v = LF_IA_TRACE_REC.unpack(raw)
+            (
+                kind,
+                verdict,
+                decode,
+                flags,
+                t_us,
+                t_detect,
+                t_ready,
+                t_due,
+                t_tx,
+                t_tx_end,
+            ) = v[:10]
+            n_gaps, n_bits, n_tx_bits = v[10:13]
+            bits, tx_bits = v[17], v[18]
+            if kind == 1:
+                print(f"   {t_us / 1e6:12.6f} s  field on")
+            elif kind == 2:
+                print(
+                    f"   {t_us / 1e6:12.6f} s  field off"
+                    + ("  (came back)" if flags & 8 else "")
+                )
+            elif kind == 3:
+                line = f"   {t_us / 1e6:12.6f} s  command, {n_gaps} gaps"
+                if decode == 0:
+                    line += f", {n_bits} bits {_lf_ia_bits(bits, n_bits)}"
+                else:
+                    line += f", decode: {LF_IA_DECODES.get(decode, decode)}"
+                print(line + f", {LF_IA_VERDICTS.get(verdict, verdict)}")
+                if verdict == 1:
+                    late = color_string((CR, " LATE")) if flags & 1 else ""
+                    print(
+                        f"{'':18}answer {n_tx_bits} bits {_lf_ia_bits(tx_bits, n_tx_bits)}, ready {t_ready - t_us} us "
+                        f"after the command, sent at {t_tx - t_us} us (due {t_due - t_us}){late}"
+                    )
+
+
+@lf_interactive.command("clear")
+class LFInteractiveClear(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Clear the interactive LF emulation's exchange trace"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd.lf_ia_trace_clear()
+        print(" - Trace cleared")
+
+
 @hw_slot.command("list")
 class HWSlotList(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -6973,6 +7166,14 @@ class HWSlotList(DeviceRequiredUnit):
                         f"      {'Frame:':40}{color_string((CY, frame.hex().upper()))}"
                     )
                     print(f"      {'Card ID:':40}{color_string((CG, card_id_str))}")
+                if lf_tag_type == TagSpecificType.HITAG2:
+                    pages = self.cmd.hitag2_get_emu_data()
+                    print(
+                        f"      {'UID:':40}{color_string((CY, pages[0:4].hex().upper()))}"
+                    )
+                    print(
+                        f"      {'Config:':40}{color_string((CY, f'0x{pages[12]:02X}'))}"
+                    )
         if current != selected:
             self.cmd.set_active_slot(selected)
 
