@@ -838,6 +838,12 @@ void lf_adc_claim(void) {
     nrfx_saadc_uninit();
 }
 
+// Hands the SAADC back to the battery timer after a claim. The caller has left the nrfx driver uninitialised.
+void lf_adc_release(void) {
+    adc_configure();
+    m_lf_adc_callback = NULL;
+}
+
 void unregister_lf_adc_callback(void) {
     nrfx_saadc_uninit();
     adc_configure();

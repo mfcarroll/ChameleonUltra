@@ -2,14 +2,16 @@
 // (C6).
 //
 // Hardware it owns while a module is active:
-// - SAADC on the field line (AIN0) at 100 kHz in 16-sample buffers. LF_MOD holds the load on while listening,
-//   because with the load off the field line rails and a reader's gaps do not show.
-// - TIMER3 at 1 MHz, free running: the time base. PPI captures each ADC buffer's end into it, so a buffer that starts
-//   late (a sample lost to interrupt latency) still gets the right times.
+// - SAADC on the field line (AIN0) at 100 kHz into a ring buffer. LF_MOD holds the load on while listening, because
+//   with the load off the field line rails and a reader's gaps do not show. PPI restarts the buffer at its END, so
+//   sampling never waits for an interrupt, and a TIMER3 compare starts it, so sample k is at exactly start + 10k µs
+//   (the ADC's sample timer and TIMER3 both divide the 16 MHz clock). A TIMER3 tick reads the samples written so far.
+// - TIMER3 at 1 MHz, free running: the time base.
 // - PWM0 on LF_MOD at the 125 kHz base clock: one period per load run. A TIMER3 compare starts it through PPI, so the
 //   answer's start does not depend on interrupt latency.
 //
-// The ADC, PWM and TIMER3 interrupts share one priority, so their handlers never preempt each other.
+// The PWM and TIMER3 interrupts share one priority, so their handlers never preempt each other. The SAADC interrupt
+// stays off.
 
 #include <string.h>
 
@@ -24,6 +26,7 @@
 #include "nrfx_lpcomp.h"
 #include "nrfx_ppi.h"
 #include "nrfx_pwm.h"
+#include "nrf_saadc.h"
 #include "nrfx_saadc.h"
 #include "nrfx_timer.h"
 
@@ -33,7 +36,9 @@ NRF_LOG_MODULE_REGISTER();
 
 #define SAMPLE_US     (10u)
 #define SAADC_CC      (160u)  // 16 MHz / 160: 100 kHz
-#define BUF_N         (16u)   // 160 µs per buffer: the step in which the engine sees a command's end
+#define RING_N        (512u)  // 5.12 ms of samples: the longest a tick may be late before samples are overwritten
+#define TICK_US       (160u)  // the step in which the engine sees a command's end
+#define CONV_US       (20u)   // a sample is in RAM well within this after its time
 #define SMOOTH_LAG_US (15)    // the 4-sample mean lags the field by 1.5 samples
 #define FIELD_MIN     (200)   // ADC counts after smoothing: a field-on level at least this
 #define RECHECK_US    (2000u) // with the load off, the field line's detector drains in about 2 ms
@@ -42,8 +47,9 @@ NRF_LOG_MODULE_REGISTER();
 #define SETTLE_MIN_US (40u)   // the 4-sample mean needs 3 samples of history before it means anything
 
 #define CC_TX       NRF_TIMER_CC_CHANNEL0  // compare: starts the answer through PPI
-#define CC_RECHECK  NRF_TIMER_CC_CHANNEL1  // compare, with interrupt: the field recheck
-#define CC_ADC_END  NRF_TIMER_CC_CHANNEL2  // capture: each ADC buffer's end
+#define CC_ADC_GO   NRF_TIMER_CC_CHANNEL0  // compare: the first ADC sample, through PPI, while listening
+#define CC_TICK     NRF_TIMER_CC_CHANNEL1  // compare, with interrupt: the listen tick, or the field recheck
+#define CC_ADC_END  NRF_TIMER_CC_CHANNEL2  // capture: each ADC ring wrap, to check the sample times
 #define CC_TX_START NRF_TIMER_CC_CHANNEL3  // capture: the answer's first PWM period
 #define CC_TX_END   NRF_TIMER_CC_CHANNEL4  // capture: the PWM's stop
 #define CC_NOW      NRF_TIMER_CC_CHANNEL5  // capture: software reads of the time
@@ -64,9 +70,9 @@ static volatile state_t m_state = ST_OFF;
 static bool m_ended;  // the module returned LF_IA_END: listen only for the field to drop
 static bool m_adc_on;
 
-static nrf_ppi_channel_t m_ppi_adc_end, m_ppi_tx, m_ppi_tx_start, m_ppi_tx_end;
+static nrf_ppi_channel_t m_ppi_adc_end, m_ppi_adc_restart, m_ppi_adc_go, m_ppi_tx, m_ppi_tx_start, m_ppi_tx_end;
 
-static nrf_saadc_value_t m_adc_buf[2][BUF_N];
+static nrf_saadc_value_t m_ring[RING_N];
 static nrf_pwm_values_wave_form_t m_pwm_vals[MAX_RUNS];
 static nrf_pwm_sequence_t m_pwm_seq;
 static uint16_t m_runs[MAX_RUNS];
@@ -99,8 +105,9 @@ static struct {
     size_t n_gaps;
     bool dropped;
     uint16_t noise;
-    uint32_t last_buf_end;
-    bool have_buf;
+    uint32_t t0;         // the time of sample 0
+    uint32_t k_done;     // samples processed
+    uint32_t last_wrap;  // the ADC END capture last checked
 } m_det;
 
 static struct {
@@ -129,32 +136,50 @@ static uint32_t eof_us(void) {
 
 // ---- C1: downlink capture -------------------------------------------------------------------------------------
 
-static void saadc_handler(nrfx_saadc_evt_t const *e);
-
 static void det_reset(void) {
     memset(&m_det, 0, sizeof(m_det));
 }
 
 static void adc_listen_start(uint32_t settle_us) {
-    nrfx_saadc_config_t cfg = NRFX_SAADC_DEFAULT_CONFIG;
-    APP_ERROR_CHECK(nrfx_saadc_init(&cfg, saadc_handler));
+    nrf_saadc_int_disable(NRF_SAADC_INT_ALL);
+    nrf_saadc_resolution_set(NRF_SAADC_RESOLUTION_14BIT);
+    nrf_saadc_oversample_set(NRF_SAADC_OVERSAMPLE_DISABLED);
     nrf_saadc_channel_config_t ch = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
     ch.acq_time = NRF_SAADC_ACQTIME_5US;
-    APP_ERROR_CHECK(nrfx_saadc_channel_init(0, &ch));
+    nrf_saadc_channel_init(0, &ch);
+    nrf_saadc_enable();
+    nrf_saadc_buffer_init(m_ring, RING_N);
+    nrf_saadc_continuous_mode_enable(SAADC_CC);
+    nrf_saadc_event_clear(NRF_SAADC_EVENT_STARTED);
+    nrf_saadc_event_clear(NRF_SAADC_EVENT_END);
+    nrf_saadc_task_trigger(NRF_SAADC_TASK_START);
+    while (!nrf_saadc_event_check(NRF_SAADC_EVENT_STARTED)) {
+    }
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_ppi_adc_restart));
 
     det_reset();
-    APP_ERROR_CHECK(nrfx_saadc_buffer_convert(m_adc_buf[0], BUF_N));
-    APP_ERROR_CHECK(nrfx_saadc_buffer_convert(m_adc_buf[1], BUF_N));
-    nrf_saadc_continuous_mode_enable(SAADC_CC);
-    m_det.settle_until = now_us() + (settle_us < SETTLE_MIN_US ? SETTLE_MIN_US : settle_us);
+    const uint32_t go = now_us() + 20u;
+    m_det.t0 = go;
+    m_det.last_wrap = nrfx_timer_capture_get(&m_ia_timer, CC_ADC_END);
+    m_det.settle_until = go + (settle_us < SETTLE_MIN_US ? SETTLE_MIN_US : settle_us);
+    nrf_timer_event_clear(m_ia_timer.p_reg, nrf_timer_compare_event_get(CC_ADC_GO));
+    nrfx_timer_compare(&m_ia_timer, CC_ADC_GO, go, false);
+    APP_ERROR_CHECK(nrfx_ppi_channel_enable(m_ppi_adc_go));
+    nrfx_timer_compare(&m_ia_timer, CC_TICK, go + TICK_US, true);
     m_adc_on = true;
-    nrf_saadc_task_trigger(NRF_SAADC_TASK_SAMPLE);
 }
 
 static void adc_listen_stop(void) {
     if (m_adc_on) {
+        nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
+        nrfx_ppi_channel_disable(m_ppi_adc_go);
+        nrfx_ppi_channel_disable(m_ppi_adc_restart);
         nrf_saadc_continuous_mode_disable();
-        nrfx_saadc_uninit();
+        nrf_saadc_event_clear(NRF_SAADC_EVENT_STOPPED);
+        nrf_saadc_task_trigger(NRF_SAADC_TASK_STOP);
+        for (int i = 0; i < 1000 && !nrf_saadc_event_check(NRF_SAADC_EVENT_STOPPED); i++) {
+        }
+        nrf_saadc_disable();
         m_adc_on = false;
     }
 }
@@ -260,7 +285,7 @@ static void field_gone(uint32_t t) {
     lf_ia_trace_commit();
 
     m_state = ST_RECHECK;
-    nrfx_timer_compare(&m_ia_timer, CC_RECHECK, now_us() + RECHECK_US, true);
+    nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + RECHECK_US, true);
 }
 
 // Builds the PWM sequence for the answer and arms TIMER3 to start it at end_us + delay_us. Returns false if the
@@ -387,33 +412,48 @@ static void command_end(uint32_t t_detect) {
     }
 }
 
-static void saadc_handler(nrfx_saadc_evt_t const *e) {
-    if (e->type != NRFX_SAADC_EVT_DONE || m_state != ST_LISTEN) {
+// Processes the samples written since the last tick, then checks for a command's end.
+static void listen_tick(void) {
+    const uint32_t t_in = now_us();
+    nrfx_timer_compare(&m_ia_timer, CC_TICK, t_in + TICK_US, true);
+    if (m_det.k_done == 0) {
+        nrfx_ppi_channel_disable(m_ppi_adc_go);
+    }
+
+    // Each ring wrap's END should land one sample period after a multiple of RING_N samples. If not, the ring
+    // restarted late and the sample times are off.
+    const uint32_t wrap = nrfx_timer_capture_get(&m_ia_timer, CC_ADC_END);
+    if (wrap != m_det.last_wrap) {
+        m_det.last_wrap = wrap;
+        const uint32_t r = (wrap - m_det.t0 + SAMPLE_US) % (RING_N * SAMPLE_US);
+        if (r > CONV_US && r < RING_N * SAMPLE_US - CONV_US) {
+            m_stats.buffer_slips++;
+        }
+    }
+
+    const int32_t ready = (int32_t)(t_in - m_det.t0 - CONV_US);
+    if (ready < 0) {
         return;
     }
-    const uint32_t t_in = now_us();
-    const uint32_t t_end = nrfx_timer_capture_get(&m_ia_timer, CC_ADC_END);
-    nrf_saadc_value_t *buf = e->data.done.p_buffer;
-    APP_ERROR_CHECK(nrfx_saadc_buffer_convert(buf, BUF_N));
-
-    m_stats.buffers++;
-    if (m_det.have_buf && t_end - m_det.last_buf_end > BUF_N * SAMPLE_US + 3u) {
-        m_stats.buffer_slips++;
+    uint32_t k_end = (uint32_t)ready / SAMPLE_US + 1u;
+    if (k_end - m_det.k_done > RING_N - TICK_US / SAMPLE_US) {
+        m_stats.buffer_slips++;  // the tick was too late: skip what the ring has already overwritten
+        m_det.k_done = k_end - (RING_N - TICK_US / SAMPLE_US);
     }
-    m_det.last_buf_end = t_end;
-    m_det.have_buf = true;
+    m_stats.buffers++;
 
-    for (uint32_t i = 0; i < BUF_N; i++) {
-        const uint32_t t = t_end - (BUF_N - 1u - i) * SAMPLE_US - SMOOTH_LAG_US;
-        if (!det_sample(buf[i], t)) {
+    for (uint32_t k = m_det.k_done; k < k_end; k++) {
+        const uint32_t t = m_det.t0 + k * SAMPLE_US - SMOOTH_LAG_US;
+        if (!det_sample(m_ring[k % RING_N], t)) {
             field_gone(t);
             return;
         }
     }
+    m_det.k_done = k_end;
 
-    const uint32_t t_last = t_end - SMOOTH_LAG_US;
+    const uint32_t t_last = m_det.t0 + (k_end - 1u) * SAMPLE_US - SMOOTH_LAG_US;
     if (m_det.n_gaps > 0 && !m_det.in_gap && t_last - m_det.last_end >= eof_us()) {
-        command_end(t_end);
+        command_end(t_in);
     }
 
     const uint32_t spent = now_us() - t_in;
@@ -441,10 +481,17 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
 }
 
 static void timer_handler(nrf_timer_event_t ev, void *ctx) {
-    if (ev != NRF_TIMER_EVENT_COMPARE1 || m_state != ST_RECHECK) {
+    if (ev != NRF_TIMER_EVENT_COMPARE1) {
         return;
     }
-    nrfx_timer_compare_int_disable(&m_ia_timer, CC_RECHECK);
+    if (m_state == ST_LISTEN) {
+        listen_tick();
+        return;
+    }
+    nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
+    if (m_state != ST_RECHECK) {
+        return;
+    }
     if (is_lf_field_exists()) {
         // The field came back, or never left: a reader that drops its field this long has reset the tag.
         lf_ia_trace_rec_t *r = lf_ia_trace_last();
@@ -456,7 +503,7 @@ static void timer_handler(nrf_timer_event_t ev, void *ctx) {
         return;
     }
     m_state = ST_IDLE;
-    unregister_lf_adc_callback();
+    lf_adc_release();
     lf_tag_em_ia_field_lost();
 }
 
@@ -504,6 +551,12 @@ void lf_ia_sense_enable(void) {
              nrfx_timer_capture_task_address_get(&m_ia_timer, CC_TX_START));
     ppi_link(&m_ppi_tx_end, nrf_pwm_event_address_get(m_ia_pwm.p_registers, NRF_PWM_EVENT_STOPPED),
              nrfx_timer_capture_task_address_get(&m_ia_timer, CC_TX_END));
+    ppi_link(&m_ppi_adc_restart, nrf_saadc_event_address_get(NRF_SAADC_EVENT_END),
+             nrf_saadc_task_address_get(NRF_SAADC_TASK_START));
+    nrfx_ppi_channel_disable(m_ppi_adc_restart);
+    ppi_link(&m_ppi_adc_go, nrfx_timer_compare_event_address_get(&m_ia_timer, CC_ADC_GO),
+             nrf_saadc_task_address_get(NRF_SAADC_TASK_SAMPLE));
+    nrfx_ppi_channel_disable(m_ppi_adc_go);
     ppi_link(&m_ppi_tx, 0, 0);  // assigned per answer
 
     load_set(false);
@@ -518,10 +571,12 @@ void lf_ia_sense_disable(void) {
     m_state = ST_OFF;
     adc_listen_stop();
     if (claimed) {
-        unregister_lf_adc_callback();
+        lf_adc_release();
     }
     nrfx_pwm_uninit(&m_ia_pwm);
     nrfx_ppi_channel_free(m_ppi_adc_end);
+    nrfx_ppi_channel_free(m_ppi_adc_restart);
+    nrfx_ppi_channel_free(m_ppi_adc_go);
     nrfx_ppi_channel_free(m_ppi_tx);
     nrfx_ppi_channel_free(m_ppi_tx_start);
     nrfx_ppi_channel_free(m_ppi_tx_end);

@@ -22,5 +22,6 @@ void set_ble_connect_key(uint8_t *key);
 void register_lf_adc_callback(lf_adc_callback_t cb);
 void unregister_lf_adc_callback(void);
 void lf_adc_claim(void);
+void lf_adc_release(void);
 
 #endif
