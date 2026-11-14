@@ -6869,9 +6869,11 @@ class LFInteractiveTrace(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
-            "Show the exchange trace of an interactive LF emulation (such as Hitag 2): each field on and off, and "
-            "each reader command with its decoded bits, what the slot answered, and when. It shows a reader's "
-            "password in full."
+            "Show the exchange trace of an interactive LF emulation (such as Hitag 2): each reader command with "
+            "its decoded bits, what the slot answered and when, grouped by boot and field session, with the "
+            "counters since the last clear. The trace survives sleep. A session with no command only counts in "
+            "the counters. If the trace has filled, it keeps the first 8 records and the latest 24. It shows a "
+            "reader's password in full."
         )
         return parser
 
