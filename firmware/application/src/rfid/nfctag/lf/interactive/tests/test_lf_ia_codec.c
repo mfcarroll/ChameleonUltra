@@ -194,6 +194,63 @@ static void test_runs_violation(void) {
     CHECK(lf_ia_decode_runs(bp, 1, LF_IA_CODING_BIPHASE, 32, 0, got, 16) == 0, "biphase violation");
 }
 
+
+// A reader's envelope of a Hitag 2-style answer: idle line, a start-up transient before the window, then a 6-bit
+// start-of-frame and a payload, Manchester at RF/32, one sample per carrier period, with noise and edge jitter.
+static size_t synth_answer(int16_t *s, size_t n, const uint8_t *bits, size_t nb, int load_low, int noise,
+                           int jitter) {
+    uint16_t runs[400];
+    size_t nr = lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, runs, 400);
+    const int idle = 2000, load = load_low ? 1700 : 2300;
+    size_t i = 0;
+    for (; i < 60; i++) {
+        s[i] = (int16_t)(idle + 400 - (int)i * 6);  // the field settling
+    }
+    for (; i < 205; i++) {
+        s[i] = (int16_t)idle;
+    }
+    for (size_t r = 0; r < nr; r++) {
+        int len = (int)LF_IA_RUN_LEN(runs[r]) + (jitter ? (int)(rnd() % (2 * jitter + 1)) - jitter : 0);
+        for (int k = 0; k < len && i < n; k++) {
+            s[i++] = (int16_t)(LF_IA_RUN_IS_LOAD(runs[r]) ? load : idle);
+        }
+    }
+    for (; i < n; i++) {
+        s[i] = (int16_t)idle;
+    }
+    for (i = 0; i < n; i++) {
+        s[i] = (int16_t)(s[i] + (noise ? (int)(rnd() % (2 * noise + 1)) - noise : 0));
+    }
+    return nr;
+}
+
+static void test_envelope(void) {
+    static int16_t s[2048];
+    for (int trial = 0; trial < 400; trial++) {
+        uint8_t sent[8] = {0}, got[16] = {0};
+        for (size_t i = 0; i < 6; i++) {
+            lf_ia_bit_put(sent, i, 1);
+        }
+        for (size_t i = 6; i < 38; i++) {
+            lf_ia_bit_put(sent, i, rnd() & 1u);
+        }
+        const int load_low = trial & 1;
+        synth_answer(s, 2048, sent, 38, load_low, 40, 2);
+        uint16_t runs[200];
+        lf_ia_envelope_info_t info;
+        size_t nr = lf_ia_envelope_runs(s, 2048, 80, 150, 100, 16, 48, runs, 200, &info);
+        size_t nb = lf_ia_decode_runs(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 128);
+        CHECK(nb == 38 && memcmp(sent, got, 5) == 0 && info.first >= 203 && info.first <= 207,
+              "envelope trial %d low=%d: nr=%zu nb=%zu first=%zu", trial, load_low, nr, nb, info.first);
+    }
+    // No answer: noise only.
+    synth_answer(s, 2048, (const uint8_t *)"", 0, 1, 40, 0);
+    uint16_t runs[200];
+    lf_ia_envelope_info_t info;
+    CHECK(lf_ia_envelope_runs(s, 2048, 80, 150, 100, 16, 48, runs, 200, &info) == 0, "no answer");
+    CHECK(lf_ia_envelope_runs(s, 100, 80, 150, 100, 16, 48, runs, 200, &info) == 0, "window past the end");
+}
+
 int main(void) {
     test_decode_bench_capture();
     test_decode_jitter();
@@ -202,6 +259,7 @@ int main(void) {
     test_runs_known();
     test_runs_roundtrip();
     test_runs_violation();
+    test_envelope();
     printf("%d checks, %d failed\n", m_checks, m_failed);
     return m_failed ? 1 : 0;
 }

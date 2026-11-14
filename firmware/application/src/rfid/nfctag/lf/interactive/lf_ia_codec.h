@@ -70,11 +70,27 @@ size_t lf_ia_encode_intervals(const uint8_t *bits, size_t n_bits, uint32_t t0, u
 size_t lf_ia_encode_runs(const uint8_t *bits, size_t n_bits, lf_ia_coding_t coding, uint16_t bit_fc, uint32_t flags,
                          uint16_t *runs, size_t max_runs);
 
-// Decodes load runs back to bits: each run is rounded to whole half-bits, then read per coding. Returns the number of
-// bits written, or 0 if the runs break the coding (a Manchester bit with both halves equal, a biphase bit with no
-// flip at its start).
+// Decodes load runs back to bits: each run is rounded to whole half-bits, then read per coding. A trailing lone
+// half-bit is dropped. Returns the number of bits written, or 0 if the runs break the coding (a Manchester bit with
+// both halves equal, a biphase bit with no flip at its start).
 size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t coding, uint16_t bit_fc, uint32_t flags,
                          uint8_t *bits, size_t max_bits);
 
 // The frame's length in carrier periods.
 uint32_t lf_ia_runs_total_fc(const uint16_t *runs, size_t n_runs);
+
+typedef struct {
+    size_t first;       // the answer's first loaded sample
+    int32_t idle;       // the line's level with no load
+    int32_t load;       // the level the load takes it to
+    int32_t threshold;  // midway between the two
+} lf_ia_envelope_info_t;
+
+// Turns a reader's envelope, sampled once per carrier period, into load runs. Samples [skip, window) are taken as the
+// idle line (no load), so the answer must start at or after window. The load level is the extreme after window on
+// either side of idle. If it is less than min_depth away, there is no answer and the result is 0. The runs start at
+// the first loaded sample and end at a no-load stretch longer than max_idle_fc. That last no-load run is cut to
+// half_fc, because it may still hold a final half-bit. Returns the number of runs.
+size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth,
+                           uint16_t half_fc, uint16_t max_idle_fc, uint16_t *runs, size_t max_runs,
+                           lf_ia_envelope_info_t *info);

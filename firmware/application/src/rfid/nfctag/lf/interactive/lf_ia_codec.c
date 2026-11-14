@@ -1,5 +1,7 @@
 #include "lf_ia_codec.h"
 
+#include <string.h>
+
 lf_ia_decode_status_t lf_ia_decode_intervals(const uint32_t *intervals, size_t n, const lf_ia_decode_cfg_t *cfg,
                                              uint8_t *bits, size_t max_bits, size_t *n_bits, uint32_t *split_out) {
     *n_bits = 0;
@@ -136,7 +138,7 @@ size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t cod
         for (size_t k = 0; k < per_bit; k++) {
             while (left == 0) {
                 if (r >= n_runs) {
-                    return k == 0 ? n : 0;
+                    return n;  // a trailing half-bit is dropped
                 }
                 left = (LF_IA_RUN_LEN(runs[r]) + unit / 2u) / unit;
                 level = LF_IA_RUN_IS_LOAD(runs[r]) != inv;
@@ -181,4 +183,72 @@ uint32_t lf_ia_runs_total_fc(const uint16_t *runs, size_t n_runs) {
         t += LF_IA_RUN_LEN(runs[i]);
     }
     return t;
+}
+
+size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t window, int32_t min_depth,
+                           uint16_t half_fc, uint16_t max_idle_fc, uint16_t *runs, size_t max_runs,
+                           lf_ia_envelope_info_t *info) {
+    memset(info, 0, sizeof(*info));
+    if (skip >= window || window + 3 > n) {
+        return 0;
+    }
+    int64_t sum = 0;
+    for (size_t i = skip; i < window; i++) {
+        sum += s[i];
+    }
+    const int32_t idle = (int32_t)(sum / (int64_t)(window - skip));
+
+    // The extreme of a 3-sample mean, so one noisy sample cannot set the load level.
+    int32_t lo = INT32_MAX, hi = INT32_MIN;
+    for (size_t i = window + 1; i + 1 < n; i++) {
+        const int32_t m = (s[i - 1] + s[i] + s[i + 1]) / 3;
+        lo = m < lo ? m : lo;
+        hi = m > hi ? m : hi;
+    }
+    const int32_t load = (idle - lo) > (hi - idle) ? lo : hi;
+    const int32_t depth = load > idle ? load - idle : idle - load;
+    info->idle = idle;
+    info->load = load;
+    if (depth < min_depth || depth == 0) {
+        return 0;
+    }
+    const int32_t thr = idle + (load - idle) / 2;
+    info->threshold = thr;
+    const bool load_low = load < idle;
+
+    size_t i = window;
+    while (i < n && ((s[i] < thr) != load_low)) {
+        i++;
+    }
+    if (i >= n) {
+        return 0;
+    }
+    info->first = i;
+
+    size_t nr = 0;
+    bool level = true;
+    uint32_t len = 0;
+    for (; i < n; i++) {
+        const bool l = (s[i] < thr) == load_low;
+        if (l == level) {
+            len++;
+            if (!level && len > max_idle_fc) {
+                break;
+            }
+            continue;
+        }
+        if (nr >= max_runs || len > LF_IA_RUN_LEN_MAX) {
+            return 0;
+        }
+        runs[nr++] = LF_IA_RUN(level, len);
+        level = l;
+        len = 1;
+    }
+    if (len > 0 && nr < max_runs) {
+        if (!level && len > half_fc) {
+            len = half_fc;
+        }
+        runs[nr++] = LF_IA_RUN(level, len);
+    }
+    return nr;
 }
