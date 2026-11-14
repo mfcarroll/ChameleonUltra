@@ -45,7 +45,7 @@ NRF_LOG_MODULE_REGISTER();
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
-#include "field_probe.h"
+#include "field_measure.h"
 #endif
 
 // Defining soft timers
@@ -547,8 +547,8 @@ static void check_wakeup_src(void) {
 
         // Reset the noinit ram area
 #if defined(PROJECT_CHAMELEON_ULTRA)
-        // EXPERIMENT exp/field-probe: the same fill, except that the probe's log survives a crash.
-        field_probe_noinit_wipe(m_reset_source);
+        // EXPERIMENT exp/field-measure: the same fill, except that the probe's log survives a crash.
+        field_measure_noinit_wipe(m_reset_source);
 #else
         uint32_t *noinit_addr = (uint32_t *)0x20038000;
         memset(noinit_addr, 0xFF, 0x8000);
@@ -978,9 +978,9 @@ static void btn_fn_copy_ic_uid(void) {
  */
 static void run_button_function_by_settings(settings_button_function_t sbf) {
 #if defined(PROJECT_CHAMELEON_ULTRA)
-    // EXPERIMENT exp/field-probe: with the probe on, a button only wakes the CU. A slot change restarts the field
+    // EXPERIMENT exp/field-measure: with the probe on, a button only wakes the CU. A slot change restarts the field
     // sensing, and the reader-mode functions turn on the CU's own field, either of which would spoil a measurement.
-    if (field_probe_enabled()) {
+    if (field_measure_enabled()) {
         return;
     }
 #endif
@@ -1178,9 +1178,9 @@ int main(void) {
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
 #if defined(PROJECT_CHAMELEON_ULTRA)
-    // EXPERIMENT exp/field-probe: after check_wakeup_src, which fills the noinit RAM with 0xFF on a first power-up,
+    // EXPERIMENT exp/field-measure: after check_wakeup_src, which fills the noinit RAM with 0xFF on a first power-up,
     // and before tag mode senses.
-    field_probe_init(m_reset_source);
+    field_measure_init(m_reset_source);
 #endif
     tag_mode_enter();         // Enter card emulation mode by default
 
@@ -1212,7 +1212,7 @@ int main(void) {
         // Data pack process
         data_frame_process();
 #if defined(PROJECT_CHAMELEON_ULTRA)
-        field_probe_process();
+        field_measure_process();
 #endif
         // Log print process
         while (NRF_LOG_PROCESS());

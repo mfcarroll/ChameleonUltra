@@ -4,12 +4,12 @@
 
 #include "bsp_delay.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
-#include "field_probe.h"
+#include "field_measure.h"
 #else
-#define field_probe_enabled() (false)
-#define field_probe_lf_up()
-#define field_probe_lf_drop()
-#define field_probe_lf_seen(on)
+#define field_measure_enabled() (false)
+#define field_measure_lf_up()
+#define field_measure_lf_drop()
+#define field_measure_lf_seen(on)
 #endif
 #include "fds_util.h"
 #include "nrf_gpio.h"
@@ -80,30 +80,30 @@ bool is_lf_field_exists(void) {
  * It is also not allowed to call soft device functions from it (if LPCOMP IRQ
  * priority is set to APP_IRQ_PRIORITY_HIGH).
  */
-// EXPERIMENT exp/field-probe: the drop watch (lf_tag_em_probe_watch) waits for UP, then for DOWN, in turn, so a DOWN
+// EXPERIMENT exp/field-measure: the drop watch (lf_tag_em_probe_watch) waits for UP, then for DOWN, in turn, so a DOWN
 // counts only after the field was seen up.
 static volatile bool m_probe_watch = false;
 
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
-    // EXPERIMENT exp/field-probe: the probe measures the field instead, from the main loop.
-    if (field_probe_enabled()) {
+    // EXPERIMENT exp/field-measure: the probe measures the field instead, from the main loop.
+    if (field_measure_enabled()) {
         if (m_probe_watch) {
             if (event == NRF_LPCOMP_EVENT_UP) {
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_UP_Msk;
                 NRF_LPCOMP->EVENTS_DOWN = 0;
                 NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_DOWN_Msk;
-                field_probe_lf_seen(true);
+                field_measure_lf_seen(true);
             } else if (event == NRF_LPCOMP_EVENT_DOWN) {
                 NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_DOWN_Msk;
                 NRF_LPCOMP->EVENTS_UP = 0;
                 NRF_LPCOMP->INTENSET = LPCOMP_INTENSET_UP_Msk;
-                field_probe_lf_drop();
+                field_measure_lf_drop();
             }
             return;
         }
         if (event == NRF_LPCOMP_EVENT_UP) {
             nrfx_lpcomp_disable();
-            field_probe_lf_up();
+            field_measure_lf_up();
         }
         return;
     }
@@ -150,7 +150,7 @@ static void lpcomp_init(void) {
 
 static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     // The probe's tone stops here too, and the probe checks the field itself.
-    if (event_type != NRFX_PWM_EVT_STOPPED || field_probe_enabled()) {
+    if (event_type != NRFX_PWM_EVT_STOPPED || field_measure_enabled()) {
         return;
     }
     // PWM has fully stopped — LF_MOD is released back to GPIO.
@@ -551,7 +551,7 @@ bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
 }
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
-// EXPERIMENT exp/field-probe: LF_MOD for the probe's captures (FP_MOD_*). The tone is fc/8 on our clock, at either
+// EXPERIMENT exp/field-measure: LF_MOD for the probe's captures (FM_MOD_*). The tone is fc/8 on our clock, at either
 // PWM base clock.
 static nrf_pwm_values_wave_form_t m_probe_tone_val[1];
 static nrf_pwm_sequence_t m_probe_tone_seq = {
@@ -586,7 +586,7 @@ static void probe_watch_arm(void) {
     nrf_lpcomp_task_trigger(NRF_LPCOMP_TASK_SAMPLE);
     const bool up = nrf_lpcomp_result_get() == 1;
     NRF_LPCOMP->INTENSET = up ? LPCOMP_INTENSET_DOWN_Msk : LPCOMP_INTENSET_UP_Msk;
-    field_probe_lf_seen(up);
+    field_measure_lf_seen(up);
 }
 
 void lf_tag_em_probe_watch(bool on) {
@@ -613,12 +613,12 @@ void lf_tag_em_probe_mod(uint8_t mode) {
     if (!nrfx_pwm_is_stopped(&m_broadcast)) {
         nrfx_pwm_stop(&m_broadcast, true);
     }
-    if (mode == FP_MOD_TONE) {
+    if (mode == FM_MOD_TONE) {
         const uint16_t top = IS_PSK1_TYPE(m_tag_type) ? 64 : 8;
         m_probe_tone_val[0].channel_0 = top / 2;
         m_probe_tone_val[0].counter_top = top;
         nrfx_pwm_simple_playback(&m_broadcast, &m_probe_tone_seq, 1, NRFX_PWM_FLAG_LOOP);
-    } else if (mode == FP_MOD_HIGH) {
+    } else if (mode == FM_MOD_HIGH) {
         nrf_gpio_pin_set(LF_MOD);
     } else {
         ANT_NO_MOD();

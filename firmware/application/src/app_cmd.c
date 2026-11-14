@@ -23,7 +23,7 @@
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
-#include "field_probe.h"
+#include "field_measure.h"
 #include "tag_emulation.h"
 #endif
 #include "nfc_14a.h"
@@ -2442,7 +2442,7 @@ static data_frame_tx_t *cmd_processor_lf_chip_probe(uint16_t cmd, uint16_t statu
     return lf_sniff_chunk(cmd, 0);
 }
 
-/* EXPERIMENT exp/field-probe (field_probe.c). The probe borrows the LF sniff buffer for its captures. */
+/* EXPERIMENT exp/field-measure (field_measure.c). The probe borrows the LF sniff buffer for its captures. */
 uint8_t *lf_sniff_buffer(size_t *cap_bytes) {
     *cap_bytes = sizeof(m_lf_sniff_buf);
     return m_lf_sniff_buf;
@@ -2453,62 +2453,62 @@ void lf_sniff_set_len(size_t bytes) {
     m_lf_sniff_dropped = 0;
 }
 
-/* Request: empty to read, or [0] on (0 or 1) and optionally [1] LF_MOD for the envelope capture (FP_MOD_*).
- * Reply: on, envelope mode, the log's version, then sizeof(fp_lf_rec_t) and sizeof(fp_store_t) (BE16 each).
+/* Request: empty to read, or [0] on (0 or 1) and optionally [1] LF_MOD for the envelope capture (FM_MOD_*).
+ * Reply: on, envelope mode, the log's version, then sizeof(fm_lf_rec_t) and sizeof(fm_store_t) (BE16 each).
  * In tag mode the sensing restarts, so the change applies at once. */
-static data_frame_tx_t *cmd_processor_field_probe_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static data_frame_tx_t *cmd_processor_field_measure_mode(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length >= 1) {
-        field_probe_set(data[0] != 0, length >= 2 ? data[1] : field_probe_env_mode());
+        field_measure_set(data[0] != 0, length >= 2 ? data[1] : field_measure_env_mode());
         if (get_device_mode() == DEVICE_MODE_TAG) {
             tag_emulation_sense_end();
             tag_emulation_sense_run();
         }
     }
     uint8_t o[7];
-    o[0] = field_probe_enabled() ? 1 : 0;
-    o[1] = field_probe_env_mode();
-    o[2] = FP_VERSION;
-    num_to_bytes(sizeof(fp_lf_rec_t), 2, o + 3);
-    num_to_bytes(sizeof(fp_store_t), 2, o + 5);
+    o[0] = field_measure_enabled() ? 1 : 0;
+    o[1] = field_measure_env_mode();
+    o[2] = FM_VERSION;
+    num_to_bytes(sizeof(fm_lf_rec_t), 2, o + 3);
+    num_to_bytes(sizeof(fm_store_t), 2, o + 5);
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(o), o);
 }
 
 /* Request: [0..1] a byte offset into the log (BE), and optionally [2..3] the most bytes to return (BE).
- * Reply: up to that many bytes of fp_store_t from there, and never more than LF_SNIFF_CHUNK_BYTES. */
-static data_frame_tx_t *cmd_processor_field_probe_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+ * Reply: up to that many bytes of fm_store_t from there, and never more than LF_SNIFF_CHUNK_BYTES. */
+static data_frame_tx_t *cmd_processor_field_measure_log(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     const uint32_t off = length >= 2 ? (((uint32_t)data[0] << 8) | data[1]) : 0;
     uint32_t max = length >= 4 ? (((uint32_t)data[2] << 8) | data[3]) : LF_SNIFF_CHUNK_BYTES;
     max = max > LF_SNIFF_CHUNK_BYTES ? LF_SNIFF_CHUNK_BYTES : max;
-    if (off >= sizeof(fp_store_t)) {
+    if (off >= sizeof(fm_store_t)) {
         return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
     }
-    uint32_t n = sizeof(fp_store_t) - off;
+    uint32_t n = sizeof(fm_store_t) - off;
     n = n > max ? max : n;
-    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)n, (uint8_t *)field_probe_store() + off);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)n, (uint8_t *)field_measure_store() + off);
 }
 
-static data_frame_tx_t *cmd_processor_field_probe_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    field_probe_clear();
+static data_frame_tx_t *cmd_processor_field_measure_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    field_measure_clear();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
-/* One measurement round now, logged and returned (fp_lf_rec_t). Needs tag mode with the probe on. */
-static data_frame_tx_t *cmd_processor_field_probe_measure(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    static fp_lf_rec_t rec;
-    if (!field_probe_lf_measure_now(&rec)) {
+/* One measurement round now, logged and returned (fm_lf_rec_t). Needs tag mode with the probe on. */
+static data_frame_tx_t *cmd_processor_field_measure_measure(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static fm_lf_rec_t rec;
+    if (!field_measure_lf_measure_now(&rec)) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
     return data_frame_make(cmd, STATUS_SUCCESS, sizeof(rec), (uint8_t *)&rec);
 }
 
-/* Request: [0] LF_MOD (FP_MOD_*), [1] sample rate in kHz (1..200), [2..3] samples (BE, rounded up to 2048),
+/* Request: [0] LF_MOD (FM_MOD_*), [1] sample rate in kHz (1..200), [2..3] samples (BE, rounded up to 2048),
  * [4] analog input (0 = AIN0, LF_RSSI), [5] SAADC gain divisor (1..6). Reply: samples taken (BE32).
- * Read them with DATA_CMD_FIELD_PROBE_CAPTURE_READ: 16-bit little-endian, as the SAADC wrote them. */
-static data_frame_tx_t *cmd_processor_field_probe_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+ * Read them with DATA_CMD_FIELD_MEASURE_CAPTURE_READ: 16-bit little-endian, as the SAADC wrote them. */
+static data_frame_tx_t *cmd_processor_field_measure_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 6) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    const uint32_t got = field_probe_capture(data[0], data[1], ((uint32_t)data[2] << 8) | data[3], data[4], data[5]);
+    const uint32_t got = field_measure_capture(data[0], data[1], ((uint32_t)data[2] << 8) | data[3], data[4], data[5]);
     if (got == 0) {
         return data_frame_make(cmd, STATUS_DEVICE_MODE_ERROR, 0, NULL);
     }
@@ -2518,16 +2518,16 @@ static data_frame_tx_t *cmd_processor_field_probe_capture(uint16_t cmd, uint16_t
 }
 
 /* Request: [0] chunk. Reply: that LF_SNIFF_CHUNK_BYTES slice of the last capture, empty after the end. */
-static data_frame_tx_t *cmd_processor_field_probe_capture_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static data_frame_tx_t *cmd_processor_field_measure_capture_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length < 1 || data[0] == LF_SNIFF_INFO_CHUNK) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     return lf_sniff_chunk(cmd, data[0]);
 }
 
-#ifdef FP_CRASH_TEST
+#ifdef FM_CRASH_TEST
 /* Bench only: [0] 1 hangs until the watchdog resets the CU, 2 raises a firmware error. Checks that the log survives. */
-static data_frame_tx_t *cmd_processor_field_probe_crash_test(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+static data_frame_tx_t *cmd_processor_field_measure_crash_test(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     if (length >= 1 && data[0] == 1) {
         for (;;) {
         }
@@ -3634,14 +3634,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_EM4X05_SCAN,                  before_lf_reader_run,        cmd_processor_em4x05_scan,                   after_lf_reader_run    },
     {    DATA_CMD_LF_SNIFF,                     before_lf_reader_run,        cmd_processor_lf_sniff,                      after_lf_reader_run    },
     {    DATA_CMD_LF_CHIP_PROBE,                before_lf_reader_run,        cmd_processor_lf_chip_probe,                 after_lf_reader_run    },
-    {    DATA_CMD_FIELD_PROBE_MODE,             NULL,                        cmd_processor_field_probe_mode,              NULL                   },
-    {    DATA_CMD_FIELD_PROBE_LOG,              NULL,                        cmd_processor_field_probe_log,               NULL                   },
-    {    DATA_CMD_FIELD_PROBE_CLEAR,            NULL,                        cmd_processor_field_probe_clear,             NULL                   },
-    {    DATA_CMD_FIELD_PROBE_MEASURE,          NULL,                        cmd_processor_field_probe_measure,           NULL                   },
-    {    DATA_CMD_FIELD_PROBE_CAPTURE,          NULL,                        cmd_processor_field_probe_capture,           NULL                   },
-    {    DATA_CMD_FIELD_PROBE_CAPTURE_READ,     NULL,                        cmd_processor_field_probe_capture_read,      NULL                   },
-#ifdef FP_CRASH_TEST
-    {    DATA_CMD_FIELD_PROBE_CRASH_TEST,       NULL,                        cmd_processor_field_probe_crash_test,        NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_MODE,             NULL,                        cmd_processor_field_measure_mode,              NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_LOG,              NULL,                        cmd_processor_field_measure_log,               NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_CLEAR,            NULL,                        cmd_processor_field_measure_clear,             NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_NOW,          NULL,                        cmd_processor_field_measure_measure,           NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_CAPTURE,          NULL,                        cmd_processor_field_measure_capture,           NULL                   },
+    {    DATA_CMD_FIELD_MEASURE_CAPTURE_READ,     NULL,                        cmd_processor_field_measure_capture_read,      NULL                   },
+#ifdef FM_CRASH_TEST
+    {    DATA_CMD_FIELD_MEASURE_CRASH_TEST,       NULL,                        cmd_processor_field_measure_crash_test,        NULL                   },
 #endif
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },

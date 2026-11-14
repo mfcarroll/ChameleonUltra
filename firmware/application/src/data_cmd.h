@@ -223,13 +223,13 @@
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
 #define DATA_CMD_LF_CHIP_PROBE                  (3140)
-// EXPERIMENT exp/field-probe
-#define DATA_CMD_FIELD_PROBE_MODE               (3160)
-#define DATA_CMD_FIELD_PROBE_LOG                (3161)
-#define DATA_CMD_FIELD_PROBE_CLEAR              (3162)
-#define DATA_CMD_FIELD_PROBE_MEASURE            (3163)
-#define DATA_CMD_FIELD_PROBE_CAPTURE            (3164)
-#define DATA_CMD_FIELD_PROBE_CAPTURE_READ       (3165)
-#define DATA_CMD_FIELD_PROBE_CRASH_TEST         (3166)  // only with FP_CRASH_TEST defined
+// EXPERIMENT exp/field-measure
+#define DATA_CMD_FIELD_MEASURE_MODE             (3160)
+#define DATA_CMD_FIELD_MEASURE_LOG              (3161)
+#define DATA_CMD_FIELD_MEASURE_CLEAR            (3162)
+#define DATA_CMD_FIELD_MEASURE_NOW              (3163)
+#define DATA_CMD_FIELD_MEASURE_CAPTURE          (3164)
+#define DATA_CMD_FIELD_MEASURE_CAPTURE_READ     (3165)
+#define DATA_CMD_FIELD_MEASURE_CRASH_TEST       (3166)  // only with FM_CRASH_TEST defined
 
 #endif

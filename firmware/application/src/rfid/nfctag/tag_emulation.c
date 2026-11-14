@@ -12,9 +12,9 @@
 #include "rgb_marquee.h"
 #include "tag_persistence.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
-#include "field_probe.h"
+#include "field_measure.h"
 #else
-#define field_probe_enabled() (false)
+#define field_measure_enabled() (false)
 #endif
 
 #define NRF_LOG_MODULE_NAME tag_emu
@@ -404,14 +404,14 @@ bool tag_emulation_factory_data(uint8_t slot, tag_specific_type_t tag_type) {
 static void tag_emulation_sense_switch_all(bool enable) {
     uint8_t slot = tag_emulation_get_slot();
     // NRF_LOG_INFO("Slot %d tag type hf %d, lf %d", slot, slotConfig.slots[slot].tag_hf, slotConfig.slots[slot].tag_lf);
-    // EXPERIMENT exp/field-probe: the probe senses both fields whatever the slot holds.
-    if (enable && (field_probe_enabled() ||
+    // EXPERIMENT exp/field-measure: the probe senses both fields whatever the slot holds.
+    if (enable && (field_measure_enabled() ||
                    ((slotConfig.slots[slot].enabled_hf) && (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)))) {
         nfc_tag_14a_sense_switch(true);
     } else {
         nfc_tag_14a_sense_switch(false);
     }
-    if (enable && (field_probe_enabled() ||
+    if (enable && (field_measure_enabled() ||
                    ((slotConfig.slots[slot].enabled_lf) && (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)))) {
         lf_tag_125khz_sense_switch(true);
     } else {
@@ -432,7 +432,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             APP_ERROR_CHECK(NRF_ERROR_INVALID_PARAM);
             break;
         case TAG_SENSE_HF:
-            if (enable && (field_probe_enabled() || ((slotConfig.slots[slot].enabled_hf) &&
+            if (enable && (field_measure_enabled() || ((slotConfig.slots[slot].enabled_hf) &&
                                                      (slotConfig.slots[slot].tag_hf != TAG_TYPE_UNDEFINED)))) {
                 nfc_tag_14a_sense_switch(true);
             } else {
@@ -440,7 +440,7 @@ void tag_emulation_sense_switch(tag_sense_type_t type, bool enable) {
             }
             break;
         case TAG_SENSE_LF:
-            if (enable && (field_probe_enabled() || ((slotConfig.slots[slot].enabled_lf) &&
+            if (enable && (field_measure_enabled() || ((slotConfig.slots[slot].enabled_lf) &&
                                                      (slotConfig.slots[slot].tag_lf != TAG_TYPE_UNDEFINED)))) {
                 lf_tag_125khz_sense_switch(true);
             } else {

@@ -1,4 +1,4 @@
-#include "fp_dsp.h"
+#include "fm_dsp.h"
 
 #include <math.h>
 #include <string.h>
@@ -15,7 +15,7 @@ static int16_t clamp14(int16_t v) {
     return v < 0 ? 0 : (v > 16383 ? 16383 : v);
 }
 
-int16_t fp_percentile(const int16_t *x, uint32_t n, float q) {
+int16_t fm_percentile(const int16_t *x, uint32_t n, float q) {
     const uint32_t want = (uint32_t)(q * (float)(n - 1));
     memset(m_hist, 0, sizeof(m_hist));
     for (uint32_t i = 0; i < n; i++) {
@@ -45,7 +45,7 @@ int16_t fp_percentile(const int16_t *x, uint32_t n, float q) {
     return (int16_t)((b << 6) | 63);
 }
 
-void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
+void fm_stats(const int16_t *x, uint32_t n, fm_stats_t *s) {
     memset(s, 0, sizeof(*s));
     if (n < 2) {
         return;
@@ -56,9 +56,9 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
         if (x[i] < s->min) s->min = x[i];
         if (x[i] > s->max) s->max = x[i];
     }
-    s->p10 = fp_percentile(x, n, 0.10f);
-    s->p50 = fp_percentile(x, n, 0.50f);
-    s->p90 = fp_percentile(x, n, 0.90f);
+    s->p10 = fm_percentile(x, n, 0.10f);
+    s->p50 = fm_percentile(x, n, 0.50f);
+    s->p90 = fm_percentile(x, n, 0.90f);
 
     // For independent noise of deviation sigma, the median absolute step between samples is 0.954 sigma.
     memset(m_step_hist, 0, sizeof(m_step_hist));
@@ -80,13 +80,13 @@ void fp_stats(const int16_t *x, uint32_t n, fp_stats_t *s) {
 
 // ---------------------------------------------------------------- dips
 
-// The thresholds a dip is found by, shared with fp_hitag_scan so both read the envelope the same way. The high level
+// The thresholds a dip is found by, shared with fm_hitag_scan so both read the envelope the same way. The high level
 // is the 98th percentile: a reader's field can be off for most of a capture. A gap with the load on drops most of the
 // way to zero, where a steady field wanders by about 1 %. A dip starts below high - enter and ends back above
 // high - enter / 2, so noise at the threshold can't split it. Returns high and sets *lo, *hi.
-static int32_t dip_thresholds(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, int32_t *lo,
+static int32_t dip_thresholds(const int16_t *x, uint32_t n, const fm_stats_t *s, uint16_t min_depth, int32_t *lo,
                               int32_t *hi) {
-    const int32_t high = fp_percentile(x, n, 0.98f);
+    const int32_t high = fm_percentile(x, n, 0.98f);
     int32_t enter = 8 * (int32_t)s->noise;
     if (enter < (int32_t)min_depth) {
         enter = min_depth;
@@ -99,7 +99,7 @@ static int32_t dip_thresholds(const int16_t *x, uint32_t n, const fp_stats_t *s,
     return high;
 }
 
-uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_dip_t *out, uint16_t max,
+uint16_t fm_dips(const int16_t *x, uint32_t n, const fm_stats_t *s, uint16_t min_depth, fm_dip_t *out, uint16_t max,
                  uint16_t *total) {
     int32_t lo, hi;
     const int32_t high = dip_thresholds(x, n, s, min_depth, &lo, &hi);
@@ -124,7 +124,7 @@ uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min
                     depth = depth > 0x7FFF ? 0x7FFF : depth;
                     out[stored].start = (uint16_t)(start > 0xFFFF ? 0xFFFF : start);
                     out[stored].width = (uint16_t)((i - start) > 0xFFFF ? 0xFFFF : (i - start));
-                    out[stored].depth = (uint16_t)(depth | (end ? FP_DIP_OPEN : 0));
+                    out[stored].depth = (uint16_t)(depth | (end ? FM_DIP_OPEN : 0));
                     stored++;
                 }
             }
@@ -136,7 +136,7 @@ uint16_t fp_dips(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min
 
 // ---------------------------------------------------------------- Hitag 2 authentication mode
 
-// The reader's command gaps, segmented into bursts, as fp_hitag_scan walks them. The START_AUTH burst is the first
+// The reader's command gaps, segmented into bursts, as fm_hitag_scan walks them. The START_AUTH burst is the first
 // one of a few gaps; the reader's PWD/AUTH command is the first long burst after it (the quiet window between the two
 // is the tag's UID reply). Only the first exchange is kept.
 typedef struct {
@@ -169,18 +169,18 @@ static void seg_close(hitag_seg_t *g, uint32_t count, uint32_t first, uint32_t l
 
 static uint8_t hitag_mode(bool found, uint32_t gaps) {
     if (!found) {
-        return FP_AUTH_NONE;
+        return FM_AUTH_NONE;
     }
     if (gaps <= 45) {
-        return FP_AUTH_PASSWORD;  // about 32 bits: a static password
+        return FM_AUTH_PASSWORD;  // about 32 bits: a static password
     }
     if (gaps >= 51 && gaps <= 85) {
-        return FP_AUTH_CRYPTO;  // about 64 bits: the 48-bit-key cipher
+        return FM_AUTH_CRYPTO;  // about 64 bits: the 48-bit-key cipher
     }
-    return FP_AUTH_AMBIGUOUS;  // between the two lengths, or improbably long
+    return FM_AUTH_AMBIGUOUS;  // between the two lengths, or improbably long
 }
 
-void fp_hitag_scan(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t min_depth, fp_hitag_t *out) {
+void fm_hitag_scan(const int16_t *x, uint32_t n, const fm_stats_t *s, uint16_t min_depth, fm_hitag_t *out) {
     memset(out, 0, sizeof(*out));
     int32_t lo, hi;
     const int32_t high = dip_thresholds(x, n, s, min_depth, &lo, &hi);
@@ -200,7 +200,7 @@ void fp_hitag_scan(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t m
     bool burst = false;
     uint32_t b_count = 0, b_first = 0, b_last = 0;
 
-    // The same dip detection as fp_dips, but each command gap feeds the burst segmentation instead of a store.
+    // The same dip detection as fm_dips, but each command gap feeds the burst segmentation instead of a store.
     for (uint32_t i = 0; i <= n; i++) {
         const bool end = (i == n);
         const int32_t v = end ? high : x[i];
@@ -253,7 +253,7 @@ void fp_hitag_scan(const int16_t *x, uint32_t n, const fp_stats_t *s, uint16_t m
 
 // ---------------------------------------------------------------- spectrum
 
-float fp_fold(double f, float fs) {
+float fm_fold(double f, float fs) {
     double r = fmod(f, (double)fs);
     if (r < 0) r += fs;
     return (float)(r > fs / 2.0 ? fs - r : r);
@@ -334,7 +334,7 @@ static void mags(const int16_t *x, uint32_t n, uint32_t nfft, float *work) {
     work[0] = 0.0f;
 }
 
-float fp_goertzel(const int16_t *x, uint32_t n, float f, float fs) {
+float fm_goertzel(const int16_t *x, uint32_t n, float f, float fs) {
     const float m = mean16(x, n);
     const float w = 2.0f * PI_F * f / fs, c = 2.0f * cosf(w);
     // The Hann window's cosine by rotation: (hc, hs) turns by the window's step each sample.
@@ -367,14 +367,14 @@ static float median_f(float *v, int n) {
     return (n & 1) ? v[n / 2] : 0.5f * (v[n / 2 - 1] + v[n / 2]);
 }
 
-float fp_noise_near(const int16_t *x, uint32_t n, float f, float fs, float span_hz) {
+float fm_noise_near(const int16_t *x, uint32_t n, float f, float fs, float span_hz) {
     float v[16];
     int k = 0;
     for (int i = -8; i <= 8; i++) {
         if (i == 0) continue;
         float g = f + span_hz * i / 8.0f;
         if (g <= 0.0f || g >= fs / 2) continue;
-        v[k++] = fp_goertzel(x, n, g, fs);
+        v[k++] = fm_goertzel(x, n, g, fs);
     }
     return k ? median_f(v, k) : 0.0f;
 }
@@ -388,10 +388,10 @@ static bool excluded(float f, const float *excl, int n_excl, float excl_hz) {
     return false;
 }
 
-float fp_line(const int16_t *x, uint32_t n, uint32_t nfft, float fs, float min_hz, const float *excl, int n_excl,
+float fm_line(const int16_t *x, uint32_t n, uint32_t nfft, float fs, float min_hz, const float *excl, int n_excl,
               float excl_hz, float *work, float *snr_db) {
     *snr_db = 0.0f;
-    if (n < 64 || nfft > FP_FFT_MAX) {
+    if (n < 64 || nfft > FM_FFT_MAX) {
         return 0.0f;
     }
     const uint32_t used = n < nfft ? n : nfft;
@@ -414,7 +414,7 @@ float fp_line(const int16_t *x, uint32_t n, uint32_t nfft, float fs, float min_h
     float m[17];
     int bi = 0;
     for (int i = 0; i < 17; i++) {
-        m[i] = fp_goertzel(x, used, f0 + (i - 8) * step, fs);
+        m[i] = fm_goertzel(x, used, f0 + (i - 8) * step, fs);
         if (m[i] > m[bi]) bi = i;
     }
     float fp = f0 + (bi - 8) * step;
@@ -423,7 +423,7 @@ float fp_line(const int16_t *x, uint32_t n, uint32_t nfft, float fs, float min_h
         const float a = m[bi - 1], b = m[bi], c = m[bi + 1], den = a - 2.0f * b + c;
         if (den < 0.0f) {
             fp += 0.5f * (a - c) / den * step;
-            pk = fp_goertzel(x, used, fp, fs);
+            pk = fm_goertzel(x, used, fp, fs);
         }
     }
     // The noise is the median bin of the band the search covered.

@@ -16,13 +16,13 @@ NRF_LOG_MODULE_REGISTER();
 #include "rfid_main.h"
 #include "syssleep.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
-#include "field_probe.h"
+#include "field_measure.h"
 #else
-// The field probe is Ultra-only. These stubs consume their arguments, so a value passed only to the probe (the HF
+// Field measurement is Ultra-only. These stubs consume their arguments, so a value passed only to the probe (the HF
 // frame's bit count) is not flagged unused on the Lite build.
-#define field_probe_enabled() (false)
-#define field_probe_hf_field(on) ((void)(on))
-#define field_probe_hf_frame(d, b, s) ((void)(d), (void)(b), (void)(s))
+#define field_measure_enabled() (false)
+#define field_measure_hf_field(on) ((void)(on))
+#define field_measure_hf_frame(d, b, s) ((void)(d), (void)(b), (void)(s))
 #endif
 #include "tag_emulation.h"
 
@@ -674,8 +674,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             TAG_FIELD_LED_ON()
 
             NRF_LOG_INFO("HF FIELD DETECTED");
-            if (field_probe_enabled()) {
-                field_probe_hf_field(true);
+            if (field_measure_enabled()) {
+                field_measure_hf_field(true);
             }
 
             //Turn off the automatic anti -collision, MCU management all the interaction process, and then enable the NFC peripherals so that Io can be performed after enable
@@ -707,8 +707,8 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
                 nrf_nfct_reset();
             }
 
-            if (field_probe_enabled()) {
-                field_probe_hf_field(false);
+            if (field_measure_enabled()) {
+                field_measure_hf_field(false);
             }
             NRF_LOG_INFO("HF FIELD LOST");
             break;
@@ -739,10 +739,10 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
             // TODO Remember a bug, if you do not reply to the message after receiving the message, you need to manually enable you
             //   Otherwise, the nrfx_nfct_evt_tx_frameend conditions above will not be triggered, and nrfx_nfct_rx_bytes will not be called
             // All the next communication will have problems. How can I play if there is a problem? Play an egg.
-            // EXPERIMENT exp/field-probe: count the frame and listen for the next, never answering.
-            if (field_probe_enabled()) {
+            // EXPERIMENT exp/field-measure: count the frame and listen for the next, never answering.
+            if (field_measure_enabled()) {
                 uint16_t bits = (NRF_NFCT->RXD.AMOUNT & (NFCT_RXD_AMOUNT_RXDATABITS_Msk | NFCT_RXD_AMOUNT_RXDATABYTES_Msk));
-                field_probe_hf_frame(m_nfc_rx_buffer, bits, p_event->params.rx_frameend.rx_status);
+                field_measure_hf_frame(m_nfc_rx_buffer, bits, p_event->params.rx_frameend.rx_status);
                 nfc_fdt_reset();
                 NRFX_NFCT_RX_BYTES
                 break;

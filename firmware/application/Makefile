@@ -369,8 +369,8 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_pyramid_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_indala_psk.c \
-    $(PROJ_DIR)/rfid/nfctag/field_probe.c \
-    $(PROJ_DIR)/rfid/nfctag/lf/utils/fp_dsp.c \
+    $(PROJ_DIR)/rfid/nfctag/field_measure.c \
+    $(PROJ_DIR)/rfid/nfctag/lf/utils/fm_dsp.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \
@@ -419,7 +419,7 @@ OPT = -O3 -g3
 
 # C flags common to all targets
 CFLAGS += $(OPT)
-# EXPERIMENT exp/field-probe: extra defines from the environment, e.g. EXTRA_CFLAGS=-DFP_CRASH_TEST for bench tests.
+# EXPERIMENT exp/field-measure: extra defines from the environment, e.g. EXTRA_CFLAGS=-DFP_CRASH_TEST for bench tests.
 CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -DAPP_TIMER_V2
 CFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
