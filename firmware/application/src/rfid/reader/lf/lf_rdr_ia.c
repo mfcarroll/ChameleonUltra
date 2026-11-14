@@ -124,9 +124,12 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
         return false;
     }
 
-    uint32_t slot_us = power_up_us + link->stop_us + link->gap_us + 300u;
+    // Each gap's PWM stop and restart adds about 14 µs to its bit, so a long command overran a slot sized from the
+    // nominal periods. When the slot ran out during the stop, the SoftDevice's return disturbed the field, and a tag
+    // read two extra bits after a 32-bit command. Budget 40 µs a bit, and a larger margin.
+    uint32_t slot_us = power_up_us + link->stop_us + link->gap_us + 1000u;
     for (size_t i = 0; i < n_tx; i++) {
-        slot_us += lf_ia_bit_get(tx, i) ? link->bit1_us : link->bit0_us;
+        slot_us += (lf_ia_bit_get(tx, i) ? link->bit1_us : link->bit0_us) + 40u;
     }
 
     adc_arm(n);
