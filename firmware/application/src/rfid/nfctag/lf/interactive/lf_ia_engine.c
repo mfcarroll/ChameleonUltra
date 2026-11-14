@@ -68,6 +68,7 @@ static const nrfx_timer_t m_ia_timer = NRFX_TIMER_INSTANCE(3);
 static const lf_ia_module_t *m_module;
 static volatile state_t m_state = ST_OFF;
 static bool m_ended;  // the module returned LF_IA_END: listen only for the field to drop
+static lf_ia_trace_rec_t *m_off_rec;  // the FIELD_OFF record of the session that just ended, if it had one
 static bool m_adc_on;
 
 static nrf_ppi_channel_t m_ppi_adc_end, m_ppi_adc_restart, m_ppi_adc_go, m_ppi_tx, m_ppi_tx_start, m_ppi_tx_end;
@@ -91,7 +92,6 @@ static lf_ia_tuning_t m_tuning = {
     .eof_us = 0,
     .rsp_delay_us = 0,
 };
-static lf_ia_stats_t m_stats;
 
 // The gap detector's state for one listen.
 static struct {
@@ -264,10 +264,7 @@ static void listen(uint32_t settle_us) {
 
 static void session_start(void) {
     m_ended = false;
-    m_stats.sessions++;
-    lf_ia_trace_rec_t *r = lf_ia_trace_begin(LF_IA_TR_FIELD_ON);
-    r->t_us = now_us();
-    lf_ia_trace_commit();
+    lf_ia_trace_session_start(now_us());
     if (m_module->field_on) {
         m_module->field_on(m_module->ctx);
     }
@@ -280,10 +277,7 @@ static void field_gone(uint32_t t) {
     if (m_module->field_off) {
         m_module->field_off(m_module->ctx);
     }
-    lf_ia_trace_rec_t *r = lf_ia_trace_begin(LF_IA_TR_FIELD_OFF);
-    r->t_us = t;
-    r->level = (uint16_t)m_det.level;
-    lf_ia_trace_commit();
+    m_off_rec = lf_ia_trace_session_end(t, (uint16_t)m_det.level);
 
     m_state = ST_RECHECK;
     nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + RECHECK_US, true);
@@ -340,7 +334,7 @@ static bool arm_answer(const lf_ia_response_t *rsp, uint32_t end_us, lf_ia_trace
     }
     if ((int32_t)(due - now) < 0) {
         r->flags |= LF_IA_TRF_LATE;
-        m_stats.late++;
+        lf_ia_trace_stats()->late++;
     }
     return true;
 }
@@ -361,7 +355,7 @@ static void command_end(uint32_t t_detect) {
         load_set(false);
     }
     m_state = ST_ANSWER;
-    m_stats.commands++;
+    lf_ia_trace_stats()->commands++;
 
     lf_ia_trace_rec_t *r = lf_ia_trace_begin(LF_IA_TR_COMMAND);
     r->t_us = m_det.last_end;
@@ -431,7 +425,7 @@ static void listen_tick(void) {
         m_det.last_wrap = wrap;
         const uint32_t r = (wrap - m_det.t0 + SAMPLE_US) % (RING_N * SAMPLE_US);
         if (r > CONV_US && r < RING_N * SAMPLE_US - CONV_US) {
-            m_stats.buffer_slips++;
+            lf_ia_trace_stats()->buffer_slips++;
         }
     }
 
@@ -441,10 +435,10 @@ static void listen_tick(void) {
     }
     uint32_t k_end = (uint32_t)ready / SAMPLE_US + 1u;
     if (k_end - m_det.k_done > RING_N - TICK_US / SAMPLE_US) {
-        m_stats.buffer_slips++;  // the tick was too late: skip what the ring has already overwritten
+        lf_ia_trace_stats()->buffer_slips++;  // the tick was too late: skip what the ring has already overwritten
         m_det.k_done = k_end - (RING_N - TICK_US / SAMPLE_US);
     }
-    m_stats.buffers++;
+    lf_ia_trace_stats()->buffers++;
 
     for (uint32_t k = m_det.k_done; k < k_end; k++) {
         const uint32_t t = m_det.t0 + k * SAMPLE_US - SMOOTH_LAG_US;
@@ -461,8 +455,8 @@ static void listen_tick(void) {
     }
 
     const uint32_t spent = now_us() - t_in;
-    if (spent > m_stats.max_handler_us) {
-        m_stats.max_handler_us = spent;
+    if (spent > lf_ia_trace_stats()->max_handler_us) {
+        lf_ia_trace_stats()->max_handler_us = spent;
     }
 }
 
@@ -478,7 +472,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
         r->t_tx_us = nrfx_timer_capture_get(&m_ia_timer, CC_TX_START);
         r->t_tx_end_us = nrfx_timer_capture_get(&m_ia_timer, CC_TX_END);
     }
-    m_stats.responses++;
+    lf_ia_trace_stats()->responses++;
     if (m_state == ST_ANSWER) {
         listen(m_tuning.settle_us);
     }
@@ -498,9 +492,8 @@ static void timer_handler(nrf_timer_event_t ev, void *ctx) {
     }
     if (is_lf_field_exists()) {
         // The field came back, or never left: a reader that drops its field this long has reset the tag.
-        lf_ia_trace_rec_t *r = lf_ia_trace_last();
-        if (r && r->type == LF_IA_TR_FIELD_OFF) {
-            r->flags |= LF_IA_TRF_FIELD_BACK;
+        if (m_off_rec) {
+            m_off_rec->flags |= LF_IA_TRF_FIELD_BACK;
         }
         nrfx_lpcomp_disable();
         session_start();
@@ -603,13 +596,7 @@ lf_ia_tuning_t *lf_ia_tuning(void) {
 }
 
 const lf_ia_stats_t *lf_ia_stats(void) {
-    return &m_stats;
-}
-
-void lf_ia_stats_clear(void) {
-    CRITICAL_REGION_ENTER();
-    memset(&m_stats, 0, sizeof(m_stats));
-    CRITICAL_REGION_EXIT();
+    return lf_ia_trace_stats();
 }
 
 void lf_ia_env_arm(void) {

@@ -3250,22 +3250,25 @@ static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint1
 #endif
 
 // In: the index of the first record (u16, big-endian, optional). Out: the count written since the clear (u32), the
-// record size (u16), the number of records here (u8), then the records.
+// record size (u16), the number of records here (u8), the number of first records kept (u8), the current boot (u16),
+// then the records.
 static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    static uint8_t out[7 + 14 * sizeof(lf_ia_trace_rec_t)];
+    static uint8_t out[10 + 14 * sizeof(lf_ia_trace_rec_t)];
     const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
     uint32_t total;
-    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 7), 14, &total);
+    uint16_t boot;
+    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 10), 14, &total, &boot);
     const uint16_t size = sizeof(lf_ia_trace_rec_t);
     memcpy(out, &total, 4);
     memcpy(out + 4, &size, 2);
     out[6] = (uint8_t)n;
-    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(7 + n * size), out);
+    out[7] = LF_IA_TRACE_KEEP;
+    memcpy(out + 8, &boot, 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(10 + n * size), out);
 }
 
 static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     lf_ia_trace_clear();
-    lf_ia_stats_clear();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 

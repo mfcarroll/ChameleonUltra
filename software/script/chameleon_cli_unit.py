@@ -6849,7 +6849,7 @@ class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
         _hitag2_print_pages(bytes(pages))
 
 
-LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96H")
+LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHI")
 LF_IA_VERDICTS = {0: "ignored", 1: "answered", 2: "ended the exchange"}
 LF_IA_DECODES = {
     0: "ok",
@@ -6876,9 +6876,9 @@ class LFInteractiveTrace(DeviceRequiredUnit):
         return parser
 
     def on_exec(self, args: argparse.Namespace):
-        recs, total = [], 0
+        recs, total, keep, boot = [], 0, 0, 0
         while True:
-            total, size, chunk = self.cmd.lf_ia_trace_read(len(recs))
+            total, size, chunk, keep, boot = self.cmd.lf_ia_trace_read(len(recs))
             if size != LF_IA_TRACE_REC.size:
                 print(
                     f"{color_string((CR, 'ERROR'))}: trace record size {size}, this client reads {LF_IA_TRACE_REC.size}"
@@ -6887,8 +6887,23 @@ class LFInteractiveTrace(DeviceRequiredUnit):
             if not chunk:
                 break
             recs += chunk
-        print(f" - {total} trace records since the clear, {len(recs)} kept")
-        for raw in recs:
+        c = self.cmd.lf_ia_counters()
+        print(
+            f" - {c['sessions']} field sessions, {c['commands']} commands, {c['responses']} answered, "
+            f"{c['late']} late, since the clear. This is boot {boot} since the clear."
+        )
+        lost = total - len(recs)
+        if lost > 0:
+            print(
+                f" - {total} records: the first {keep} and the latest {len(recs) - keep} are kept"
+            )
+        else:
+            print(f" - {total} records")
+        last_session = None
+        for i, raw in enumerate(recs):
+            if lost > 0 and i == keep:
+                print(f"   ... {lost} records overwritten ...")
+                last_session = None
             v = LF_IA_TRACE_REC.unpack(raw)
             (
                 kind,
@@ -6904,9 +6919,13 @@ class LFInteractiveTrace(DeviceRequiredUnit):
             ) = v[:10]
             n_gaps, n_bits, n_tx_bits = v[10:13]
             bits, tx_bits = v[17], v[18]
-            if kind == 1:
-                print(f"   {t_us / 1e6:12.6f} s  field on")
-            elif kind == 2:
+            rec_boot, session, t_session = v[-3:]
+            if (rec_boot, session) != last_session:
+                last_session = (rec_boot, session)
+                print(
+                    f"   boot {rec_boot}, field session {session}, field on at {t_session / 1e6:.6f} s"
+                )
+            if kind == 2:
                 print(
                     f"   {t_us / 1e6:12.6f} s  field off"
                     + ("  (came back)" if flags & 8 else "")
@@ -6930,12 +6949,14 @@ class LFInteractiveTrace(DeviceRequiredUnit):
 class LFInteractiveClear(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
-        parser.description = "Clear the interactive LF emulation's exchange trace"
+        parser.description = (
+            "Clear the interactive LF emulation's exchange trace and its counters"
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         self.cmd.lf_ia_trace_clear()
-        print(" - Trace cleared")
+        print(" - Trace and counters cleared")
 
 
 @hw_slot.command("list")

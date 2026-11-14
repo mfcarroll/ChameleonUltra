@@ -31,7 +31,6 @@ typedef struct __attribute__((packed)) {
 
 lf_ia_tuning_t *lf_ia_tuning(void);
 const lf_ia_stats_t *lf_ia_stats(void);
-void lf_ia_stats_clear(void);
 
 // The envelope ring keeps the latest smoothed samples (10 µs apart) while the engine listens. Once armed, it freezes
 // at the next command's end, so it holds that command.
