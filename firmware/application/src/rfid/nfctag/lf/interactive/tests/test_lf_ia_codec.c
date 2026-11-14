@@ -186,13 +186,27 @@ static void test_runs_roundtrip(void) {
 }
 
 static void test_runs_violation(void) {
-    // A Manchester bit with no mid-bit transition is invalid.
+    // A Manchester bit with no mid-bit transition is invalid, so a frame that starts with one decodes to nothing.
     const uint16_t runs[] = {LF_IA_RUN(1, 32), LF_IA_RUN(0, 16)};
     uint8_t got[2];
     CHECK(lf_ia_decode_runs(runs, 2, LF_IA_CODING_MANCHESTER, 32, 0, got, 16) == 0, "manchester violation");
-    // A biphase bit with no flip at its start is invalid.
+    // A biphase bit with no flip at its start is invalid: the decode keeps the bit before it.
     const uint16_t bp[] = {LF_IA_RUN(1, 64)};
-    CHECK(lf_ia_decode_runs(bp, 1, LF_IA_CODING_BIPHASE, 32, 0, got, 16) == 0, "biphase violation");
+    CHECK(lf_ia_decode_runs(bp, 1, LF_IA_CODING_BIPHASE, 32, 0, got, 16) == 1, "biphase violation");
+
+    // A valid frame followed by junk (here a whole bit of load, as when another burst follows an answer) decodes to
+    // the frame.
+    uint8_t bits[2] = {0}, back[4] = {0};
+    size_t nb;
+    bits_from_string("1011001110", bits, &nb);
+    uint16_t r[40];
+    size_t n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, r, 38);
+    r[n++] = LF_IA_RUN(1, 32);
+    r[n++] = LF_IA_RUN(0, 16);
+    char s[33];
+    const size_t m = lf_ia_decode_runs(r, n, LF_IA_CODING_MANCHESTER, 32, 0, back, 32);
+    bits_to_string(back, m, s);
+    CHECK(m == 10 && strcmp(s, "1011001110") == 0, "frame then junk: %zu bits %s", m, s);
 }
 
 

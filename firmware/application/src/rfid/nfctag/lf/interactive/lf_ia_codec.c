@@ -155,13 +155,13 @@ size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t cod
         switch (coding) {
             case LF_IA_CODING_MANCHESTER:
                 if (h[0] == h[1]) {
-                    return 0;
+                    return n;
                 }
                 bit = h[0];
                 break;
             case LF_IA_CODING_BIPHASE: {
                 if (n > 0 && h[0] == prev) {
-                    return 0;
+                    return n;
                 }
                 const bool mid_flip = h[0] != h[1];
                 bit = (flags & LF_IA_BIPHASE_ONE_FLIPS) ? mid_flip : !mid_flip;
