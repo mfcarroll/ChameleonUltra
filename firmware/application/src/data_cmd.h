@@ -215,4 +215,12 @@
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
 
+// The interactive LF engine's trace and bench instrumentation. Payloads are the firmware's packed structs,
+// little-endian.
+#define DATA_CMD_LF_IA_TRACE_READ               (3180)
+#define DATA_CMD_LF_IA_TRACE_CLEAR              (3181)
+#define DATA_CMD_LF_IA_ENV_ARM                  (3182)
+#define DATA_CMD_LF_IA_ENV_READ                 (3183)
+#define DATA_CMD_LF_IA_TUNING                   (3184)
+
 #endif

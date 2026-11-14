@@ -826,6 +826,18 @@ void register_lf_adc_callback(lf_adc_callback_t cb) {
     APP_ERROR_CHECK(err_code);
 }
 
+static void lf_adc_claimed(nrf_saadc_value_t *samples, size_t n) {
+    (void)samples;
+    (void)n;
+}
+
+// Keeps the battery timer off the SAADC while the caller drives it directly. unregister_lf_adc_callback() hands it
+// back.
+void lf_adc_claim(void) {
+    m_lf_adc_callback = lf_adc_claimed;
+    nrfx_saadc_uninit();
+}
+
 void unregister_lf_adc_callback(void) {
     nrfx_saadc_uninit();
     adc_configure();

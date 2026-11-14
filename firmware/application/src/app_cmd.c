@@ -19,6 +19,10 @@
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#endif
+#include "lf_ia_debug.h"
+#include "lf_ia_trace.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -3221,6 +3225,62 @@ static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint1
     return data_frame_make(cmd, STATUS_SUCCESS, 4, buf);
 }
 #endif
+
+// In: the index of the first record (u16, big-endian, optional). Out: the count written since the clear (u32), the
+// record size (u16), the number of records here (u8), then the records.
+static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[7 + 14 * sizeof(lf_ia_trace_rec_t)];
+    const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
+    uint32_t total;
+    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 7), 14, &total);
+    const uint16_t size = sizeof(lf_ia_trace_rec_t);
+    memcpy(out, &total, 4);
+    memcpy(out + 4, &size, 2);
+    out[6] = (uint8_t)n;
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(7 + n * size), out);
+}
+
+static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_ia_trace_clear();
+    lf_ia_stats_clear();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_lf_ia_env_arm(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_ia_env_arm();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// In: the offset (u16, big-endian). Out: frozen (u8), the newest sample's time (u32), the number of samples here
+// (u16), then the samples (i16), oldest first.
+static data_frame_tx_t *cmd_processor_lf_ia_env_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[7 + 2000 * 2];
+    if (length < 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const size_t offset = (size_t)data[0] << 8 | data[1];
+    uint32_t last_us;
+    uint8_t frozen;
+    const uint16_t n = (uint16_t)lf_ia_env_read(offset, (int16_t *)(out + 7), 2000, &last_us, &frozen);
+    out[0] = frozen;
+    memcpy(out + 1, &last_us, 4);
+    memcpy(out + 5, &n, 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(7 + n * 2u), out);
+}
+
+// In: nothing to read, or a whole lf_ia_tuning_t to set. Out: the tuning, then the counters.
+static data_frame_tx_t *cmd_processor_lf_ia_tuning(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[sizeof(lf_ia_tuning_t) + sizeof(lf_ia_stats_t)];
+    if (length == sizeof(lf_ia_tuning_t)) {
+        memcpy(lf_ia_tuning(), data, sizeof(lf_ia_tuning_t));
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    memcpy(out, lf_ia_tuning(), sizeof(lf_ia_tuning_t));
+    memcpy(out + sizeof(lf_ia_tuning_t), lf_ia_stats(), sizeof(lf_ia_stats_t));
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
@@ -3230,6 +3290,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick,             NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_READ,             NULL,                        cmd_processor_lf_ia_trace_read,              NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_CLEAR,            NULL,                        cmd_processor_lf_ia_trace_clear,             NULL                   },
+    {    DATA_CMD_LF_IA_ENV_ARM,                NULL,                        cmd_processor_lf_ia_env_arm,                 NULL                   },
+    {    DATA_CMD_LF_IA_ENV_READ,               NULL,                        cmd_processor_lf_ia_env_read,                NULL                   },
+    {    DATA_CMD_LF_IA_TUNING,                 NULL,                        cmd_processor_lf_ia_tuning,                  NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick,             NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },

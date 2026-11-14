@@ -4,6 +4,7 @@
 
 #include "bsp_delay.h"
 #include "fds_util.h"
+#include "interactive/lf_ia.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
@@ -36,6 +37,9 @@ static volatile bool m_is_lf_emulating = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
 
+// The interactive engine, instead of the broadcast, owns the PWM while sense is enabled.
+static bool m_ia_active = false;
+
 // The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
@@ -50,6 +54,10 @@ static void lf_field_lost(void) {
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
+}
+
+void lf_tag_em_ia_field_lost(void) {
+    lf_field_lost();
 }
 
 /**
@@ -91,6 +99,12 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // LED status update
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
+
+    if (m_ia_active) {
+        lf_ia_field_detected();
+        NRF_LOG_INFO("LF FIELD DETECTED, interactive");
+        return;
+    }
 
     // Play a finite burst then stop — field check happens in EVT_STOPPED after
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
@@ -174,14 +188,24 @@ static void lf_sense_enable(void) {
     }
 
     lpcomp_init();
-    pwm_init();  // use precise hardware pwm to broadcast card id
+    m_ia_active = lf_ia_get_module() != NULL;
+    if (m_ia_active) {
+        lf_ia_sense_enable();
+    } else {
+        pwm_init();  // use precise hardware pwm to broadcast card id
+    }
     if (is_lf_field_exists()) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }
 
 static void lf_sense_disable(void) {
-    nrfx_pwm_uninit(&m_broadcast);
+    if (m_ia_active) {
+        lf_ia_sense_disable();
+        m_ia_active = false;
+    } else {
+        nrfx_pwm_uninit(&m_broadcast);
+    }
     nrfx_lpcomp_uninit();
     m_pwm_seq = NULL;
     m_is_lf_emulating = false;
@@ -223,6 +247,8 @@ void lf_tag_125khz_sense_switch(bool enable) {
  * @param buffer   Data buffer
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    lf_ia_set_module(NULL);
+
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
