@@ -10,12 +10,17 @@
 #include "app_status.h"
 #include "bsp_delay.h"
 #include "lf_125khz_radio.h"
+#include "lf_hitag2_frame.h"
 
 #define HT2_RESET_MS      (20u)    // field off, so the tag starts from power-up
 // The tag takes 313 periods to power up and then waits 232 for START_AUTH, so it must come 2.5 to 4.3 ms after the
 // field. 371 periods matches the PM3's reader.
 #define HT2_POWER_UP_US   (371u * 8u)
-#define HT2_TRIES         (4u)     // a tag answers only every second START_AUTH, so try again on silence
+#define HT2_TRIES         (8u)     // START_AUTHs per use: a tag answers only every second one, and a scan wants two
+#define HT2_PAGE_TRIES    (6u)     // READ PAGEs per page, for two answers that agree
+
+// The framing learned in this use (a scan or a read). Each use starts from a field reset, and may meet another tag.
+static ht2_frame_t m_frame;
 
 static lf_rdr_link_t m_link = {
     .gap_us = 6u * 8u,
@@ -45,26 +50,6 @@ static void bits_put(uint8_t *bits, size_t first, uint32_t v, size_t n) {
     }
 }
 
-// Takes the 32-bit page out of an answer: 4 to 7 start-of-frame ones, then the page. The length decides how many ones
-// are start-of-frame, because a page that starts with ones would otherwise look like a longer start-of-frame.
-static bool answer_page(const lf_rdr_reply_t *rx, uint32_t *page) {
-    if (rx->n_bits < 36u || rx->n_bits > 39u) {
-        return false;
-    }
-    const size_t sof = rx->n_bits - 32u;
-    for (size_t i = 0; i < sof; i++) {
-        if (!lf_ia_bit_get(rx->bits, i)) {
-            return false;
-        }
-    }
-    uint32_t v = 0;
-    for (size_t i = 0; i < 32; i++) {
-        v = v << 1 | (lf_ia_bit_get(rx->bits, sof + i) ? 1u : 0u);
-    }
-    *page = v;
-    return true;
-}
-
 // Sends a command of n bits and returns its 32-bit answer.
 static bool exchange(uint32_t cmd, size_t n, uint32_t power_up_us, uint32_t *page) {
     uint8_t tx[4] = {0};
@@ -73,14 +58,24 @@ static bool exchange(uint32_t cmd, size_t n, uint32_t power_up_us, uint32_t *pag
     if (!lf_rdr_transact(&m_link, tx, n, power_up_us, &rx)) {
         return false;
     }
-    return answer_page(&rx, page);
+    return ht2_frame_page(&m_frame, rx.bits, rx.n_bits, rx.clean, page);
 }
 
-static bool start_auth(uint32_t *uid) {
+// Powers the tag up and sends START_AUTH (11000) until it has answered with its UID `need` times alike. The last
+// answered START_AUTH leaves the tag waiting for the password.
+static bool start_auth(uint32_t *uid, uint32_t need) {
     lf_rdr_field(false);
     bsp_delay_ms(HT2_RESET_MS);
+    ht2_frame_reset(&m_frame);
+    ht2_agree_t agree;
+    ht2_agree_reset(&agree);
     for (uint32_t i = 0; i < HT2_TRIES; i++) {
-        if (exchange(0x18u, 5, i == 0 ? HT2_POWER_UP_US : 0, uid)) {  // START_AUTH, 11000
+        uint32_t v;
+        if (!exchange(0x18u, 5, i == 0 ? HT2_POWER_UP_US : 0, &v)) {
+            continue;
+        }
+        if (need < 2 || ht2_agree_add(&agree, v, uid)) {
+            *uid = v;
             return true;
         }
     }
@@ -88,7 +83,8 @@ static bool start_auth(uint32_t *uid) {
 }
 
 uint8_t lf_hitag2_reader_uid(uint32_t *uid) {
-    const bool ok = start_auth(uid);
+    // Password mode has no CRC: a UID counts once two answers agree.
+    const bool ok = start_auth(uid, 2);
     lf_rdr_field(false);
     return ok ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
 }
@@ -96,37 +92,41 @@ uint8_t lf_hitag2_reader_uid(uint32_t *uid) {
 uint8_t lf_hitag2_reader_read(uint32_t password, uint32_t pages[8], uint8_t *read_mask) {
     *read_mask = 0;
     memset(pages, 0, 8u * sizeof(uint32_t));
+    // One START_AUTH answer is enough here: page 0, read twice alike below, has to match it.
     uint32_t uid;
-    if (!start_auth(&uid)) {
+    if (!start_auth(&uid, 1)) {
         lf_rdr_field(false);
         return STATUS_LF_TAG_NO_FOUND;
     }
-    pages[0] = uid;
-    *read_mask = 1u;
 
+    // The tag's answer to the password is page 3. It only shows the password was taken: page 3 is read below.
     uint32_t page3;
     bool authed = false;
     for (uint32_t i = 0; i < 3 && !authed; i++) {
         authed = exchange(password, 32, 0, &page3);
     }
     if (!authed) {
+        pages[0] = uid;
+        *read_mask = 1u;
         lf_rdr_field(false);
         return STATUS_MF_ERR_AUTH;
     }
-    pages[3] = page3;
-    *read_mask |= 1u << 3;
 
-    // READ PAGE is 11 nnn 00 ~nnn.
+    // READ PAGE is 11 nnn 00 ~nnn. Password mode has no CRC: a page counts once two answers agree.
     for (uint32_t p = 0; p < 8; p++) {
         const uint32_t cmd = 3u << 8 | p << 5 | (~p & 7u);
-        for (uint32_t i = 0; i < 3; i++) {
+        ht2_agree_t agree;
+        ht2_agree_reset(&agree);
+        for (uint32_t i = 0; i < HT2_PAGE_TRIES; i++) {
             uint32_t v;
-            if (exchange(cmd, 10, 0, &v)) {
-                pages[p] = v;
+            if (exchange(cmd, 10, 0, &v) && ht2_agree_add(&agree, v, &pages[p])) {
                 *read_mask |= 1u << p;
                 break;
             }
         }
+    }
+    if ((*read_mask & 1u) && pages[0] != uid) {
+        *read_mask &= (uint8_t)~1u;  // the UID and page 0 disagree: trust neither
     }
     lf_rdr_field(false);
     return *read_mask == 0xFFu ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;

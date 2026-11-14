@@ -75,8 +75,13 @@ size_t lf_ia_encode_runs(const uint8_t *bits, size_t n_bits, lf_ia_coding_t codi
 // equal, a biphase bit with no flip at its start), because whatever follows a frame (noise, or another device
 // answering) is not part of it. Returns the number of bits written before that, which a caller checks against the
 // frame length it expects. Returns 0 if the bits do not fit in max_bits.
+//
+// lf_ia_decode_runs_ex also sets clean: true if the decode ran to the end of the runs (so the frame ended in quiet),
+// false if it stopped at a bit that broke the coding.
 size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t coding, uint16_t bit_fc, uint32_t flags,
                          uint8_t *bits, size_t max_bits);
+size_t lf_ia_decode_runs_ex(const uint16_t *runs, size_t n_runs, lf_ia_coding_t coding, uint16_t bit_fc,
+                            uint32_t flags, uint8_t *bits, size_t max_bits, bool *clean);
 
 // The frame's length in carrier periods.
 uint32_t lf_ia_runs_total_fc(const uint16_t *runs, size_t n_runs);

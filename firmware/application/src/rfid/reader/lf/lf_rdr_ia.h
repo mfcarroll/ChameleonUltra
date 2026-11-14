@@ -45,6 +45,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct {
     size_t n_bits;
+    bool clean;  // the decode ran to the answer's end, rather than stopping at junk after it
     uint8_t bits[LF_RDR_MAX_RX_BITS / 8];
     size_t n_runs;
     lf_ia_envelope_info_t env;

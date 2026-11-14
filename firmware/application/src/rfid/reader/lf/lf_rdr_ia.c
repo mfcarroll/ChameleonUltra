@@ -162,8 +162,8 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
                                    link->slice_pct ? link->slice_pct : 50u,
                                    half, (uint16_t)(3u * half), m_runs, LF_RDR_MAX_RUNS, &rx->env);
     rx->n_runs = m_runs_n;
-    rx->n_bits = lf_ia_decode_runs(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc, link->coding_flags,
-                                   rx->bits, LF_RDR_MAX_RX_BITS);
+    rx->n_bits = lf_ia_decode_runs_ex(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc,
+                                      link->coding_flags, rx->bits, LF_RDR_MAX_RX_BITS, &rx->clean);
     return true;
 }
 

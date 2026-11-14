@@ -207,6 +207,11 @@ static void test_runs_violation(void) {
     const size_t m = lf_ia_decode_runs(r, n, LF_IA_CODING_MANCHESTER, 32, 0, back, 32);
     bits_to_string(back, m, s);
     CHECK(m == 10 && strcmp(s, "1011001110") == 0, "frame then junk: %zu bits %s", m, s);
+    bool clean = true;
+    lf_ia_decode_runs_ex(r, n, LF_IA_CODING_MANCHESTER, 32, 0, back, 32, &clean);
+    CHECK(!clean, "frame then junk is not a clean end");
+    lf_ia_decode_runs_ex(r, n - 2, LF_IA_CODING_MANCHESTER, 32, 0, back, 32, &clean);
+    CHECK(clean, "the frame alone is a clean end");
 }
 
 

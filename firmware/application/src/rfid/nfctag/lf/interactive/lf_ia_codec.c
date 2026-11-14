@@ -119,6 +119,16 @@ size_t lf_ia_encode_runs(const uint8_t *bits, size_t n_bits, lf_ia_coding_t codi
 
 size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t coding, uint16_t bit_fc, uint32_t flags,
                          uint8_t *bits, size_t max_bits) {
+    return lf_ia_decode_runs_ex(runs, n_runs, coding, bit_fc, flags, bits, max_bits, NULL);
+}
+
+size_t lf_ia_decode_runs_ex(const uint16_t *runs, size_t n_runs, lf_ia_coding_t coding, uint16_t bit_fc,
+                            uint32_t flags, uint8_t *bits, size_t max_bits, bool *clean) {
+    bool dummy;
+    if (clean == NULL) {
+        clean = &dummy;
+    }
+    *clean = false;
     if (bit_fc == 0 || (coding != LF_IA_CODING_ASK && (bit_fc & 1u))) {
         return 0;
     }
@@ -138,6 +148,7 @@ size_t lf_ia_decode_runs(const uint16_t *runs, size_t n_runs, lf_ia_coding_t cod
         for (size_t k = 0; k < per_bit; k++) {
             while (left == 0) {
                 if (r >= n_runs) {
+                    *clean = true;
                     return n;  // a trailing half-bit is dropped
                 }
                 left = (LF_IA_RUN_LEN(runs[r]) + unit / 2u) / unit;
