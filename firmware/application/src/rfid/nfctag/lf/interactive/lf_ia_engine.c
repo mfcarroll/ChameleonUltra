@@ -89,6 +89,7 @@ static lf_ia_tuning_t m_tuning = {
     .quiet_after_cmd = 1,
     .tx_lead_us = 0,
     .eof_us = 0,
+    .rsp_delay_us = 0,
 };
 static lf_ia_stats_t m_stats;
 
@@ -402,6 +403,9 @@ static void command_end(uint32_t t_detect) {
     const lf_ia_verdict_t v = m_module->on_command(m_module->ctx, &cmd, &m_rsp);
     r->verdict = (uint8_t)v;
 
+    if (m_tuning.rsp_delay_us) {
+        m_rsp.delay_us = m_tuning.rsp_delay_us;
+    }
     const bool armed = v == LF_IA_RESPOND && arm_answer(&m_rsp, cmd.end_us, r);
     lf_ia_trace_commit();
     if (v == LF_IA_END) {

@@ -14,6 +14,7 @@ typedef struct __attribute__((packed)) {
     uint8_t quiet_after_cmd;  // 1: drop the load as soon as a command ends; 0: hold it until the answer starts
     int16_t tx_lead_us;       // the answer is armed this much early, to cancel the modulator's start latency
     uint16_t eof_us;          // overrides the module's eof_us if not 0
+    uint16_t rsp_delay_us;    // overrides the module's answer delay if not 0
 } lf_ia_tuning_t;
 
 typedef struct __attribute__((packed)) {
