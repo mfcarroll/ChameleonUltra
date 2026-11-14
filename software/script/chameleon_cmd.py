@@ -729,6 +729,35 @@ class ChameleonCMD:
         return self.device.send_cmd_sync(Command.HF14A_SET_CONFIG, data)
 
     @expect_response(Status.LF_TAG_OK)
+    def hitag2_scan(self):
+        """
+        Read a Hitag 2 tag's UID (START_AUTH).
+
+        :return: the UID, 4 bytes
+        """
+        resp = self.device.send_cmd_sync(Command.HITAG2_SCAN, timeout=5)
+        if resp.status == Status.LF_TAG_OK:
+            resp.parsed = resp.data[:4]
+        return resp
+
+    def hitag2_read(self, password: bytes):
+        """
+        Read a Hitag 2 tag in password mode: the UID, then the password, then the eight pages.
+
+        :param password: 4 bytes
+        :return: the response, parsed as (pages read, a list of 8 entries of 4 bytes or None)
+        """
+        resp = self.device.send_cmd_sync(Command.HITAG2_READ, password, timeout=10)
+        if len(resp.data) >= 33:
+            mask = resp.data[32]
+            pages = [
+                resp.data[4 * p : 4 * p + 4] if mask >> p & 1 else None
+                for p in range(8)
+            ]
+            resp.parsed = (bin(mask).count("1"), pages)
+        return resp
+
+    @expect_response(Status.LF_TAG_OK)
     def em410x_scan(self):
         """
         Read the card number of EM410X.

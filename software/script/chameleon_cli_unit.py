@@ -6781,6 +6781,67 @@ def _hex_arg(value: str, nbytes: int, name: str) -> bytes:
     return b
 
 
+@lf_hitag2.command("reader")
+class LFHitag2Reader(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Read a Hitag 2 tag's UID"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        uid = self.cmd.hitag2_scan()
+        print(f" - UID: {color_string((CG, uid.hex().upper()))}")
+
+
+@lf_hitag2.command("read")
+class LFHitag2Read(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Read a Hitag 2 tag in password mode: its UID, then its eight pages. It shows the tag's passwords "
+            "in full. Crypto mode is not supported."
+        )
+        parser.add_argument(
+            "-k",
+            "--key",
+            required=True,
+            metavar="<hex8>",
+            help="the reader password, page 1",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if not re.fullmatch(r"[0-9a-fA-F]{8}", args.key):
+            raise ArgsParserError("key must be 8 hex digits")
+        resp = self.cmd.hitag2_read(bytes.fromhex(args.key))
+        if resp.status == Status.MF_ERR_AUTH:
+            print(f" - {color_string((CR, 'The tag did not accept the password'))}")
+        elif (
+            resp.status not in (Status.LF_TAG_OK, Status.LF_TAG_NO_FOUND)
+            or resp.parsed is None
+        ):
+            print(f" - {color_string((CR, 'No Hitag 2 tag found'))}")
+            return
+        _, pages = resp.parsed
+        names = [
+            "UID",
+            "Password",
+            "Key/Pwd",
+            "Config + tag password",
+            "User",
+            "User",
+            "User",
+            "User",
+        ]
+        for p, page in enumerate(pages):
+            value = page.hex().upper() if page is not None else "-- -- -- --"
+            if page is not None:
+                value = " ".join(value[i : i + 2] for i in range(0, 8, 2))
+            print(f"   {p}  {value}  {names[p]}")
+        if resp.status == Status.LF_TAG_NO_FOUND:
+            print(f" - {color_string((CY, 'Some pages could not be read'))}")
+
+
 @lf_hitag2.command("econfig")
 class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
     def args_parser(self) -> ArgumentParserNoExit:
