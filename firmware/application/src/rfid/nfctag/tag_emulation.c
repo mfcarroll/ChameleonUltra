@@ -100,6 +100,7 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_LF, TAG_TYPE_JABLOTRON,   lf_tag_data_loadcb,           lf_tag_jablotron_data_savecb, lf_tag_jablotron_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_IDTECK,      lf_tag_data_loadcb,           lf_tag_idteck_data_savecb,    lf_tag_idteck_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_FARPOINTE_PYRAMID, lf_tag_data_loadcb,     lf_tag_pyramid_data_savecb,   lf_tag_pyramid_data_factory,   &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_HITAG2,      lf_tag_data_loadcb,           lf_tag_hitag2_data_savecb,    lf_tag_hitag2_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_LF_IA_TEST,  lf_tag_data_loadcb,           lf_tag_ia_test_data_savecb,   lf_tag_ia_test_data_factory,   &m_tag_data_lf},
     // MF1 tag emulation
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_Mini, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},

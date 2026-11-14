@@ -5,6 +5,7 @@
 #include "bsp_delay.h"
 #include "fds_util.h"
 #include "interactive/lf_ia.h"
+#include "interactive/lf_ia_hitag2.h"
 #include "interactive/lf_ia_test_module.h"
 #include "nrf_gpio.h"
 #include "nrf_soc.h"
@@ -249,6 +250,13 @@ void lf_tag_125khz_sense_switch(bool enable) {
  */
 int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
     lf_ia_set_module(NULL);
+
+    if (type == TAG_TYPE_HITAG2 && buffer->length >= LF_HITAG2_DATA_SIZE) {
+        m_tag_type = type;
+        lf_ia_set_module(lf_ia_hitag2_load(buffer->buffer));
+        NRF_LOG_INFO("load lf hitag2 data finish.");
+        return LF_HITAG2_DATA_SIZE;
+    }
 
     if (type == TAG_TYPE_LF_IA_TEST && buffer->length >= LF_IA_TEST_FRAME_SIZE) {
         m_tag_type = type;
@@ -512,4 +520,24 @@ int lf_tag_ia_test_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buff
 bool lf_tag_ia_test_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
     uint8_t frame[LF_IA_TEST_FRAME_SIZE] = {0xA5, 0x5A, 0xF0, 0x0F};
     return lf_tag_data_factory(slot, tag_type, frame, sizeof(frame));
+}
+
+int lf_tag_hitag2_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_HITAG2 ? LF_HITAG2_DATA_SIZE : 0;
+}
+
+// A made-up tag: UID 01020304, reader password 0A0B0C0D, configuration 06 (Hitag 2, Manchester, password mode) with
+// tag password 0E0F10, and every other page its own number repeated.
+bool lf_tag_hitag2_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t pages[LF_HITAG2_DATA_SIZE] = {
+        0x01, 0x02, 0x03, 0x04,
+        0x0A, 0x0B, 0x0C, 0x0D,
+        0x02, 0x02, 0x02, 0x02,
+        0x06, 0x0E, 0x0F, 0x10,
+        0x04, 0x04, 0x04, 0x04,
+        0x05, 0x05, 0x05, 0x05,
+        0x06, 0x06, 0x06, 0x06,
+        0x07, 0x07, 0x07, 0x07,
+    };
+    return lf_tag_data_factory(slot, tag_type, pages, sizeof(pages));
 }
