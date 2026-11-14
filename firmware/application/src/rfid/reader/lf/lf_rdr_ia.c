@@ -51,7 +51,14 @@ void lf_rdr_field(bool on) {
 
 static void gap(uint32_t us) {
     field_off();
+    const bool damp = (m_link->eof_gap & LF_RDR_DAMP_GAPS) != 0;
+    if (damp) {
+        nrf_gpio_pin_set(LF_MOD);
+    }
     bsp_delay_us(us);
+    if (damp) {
+        nrf_gpio_pin_clear(LF_MOD);
+    }
     field_on();
 }
 

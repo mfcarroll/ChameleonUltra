@@ -21,6 +21,10 @@
 // Bench diagnosis, in eof_gap: start the capture before the command instead of after it, so the reader's own
 // field gaps show in the samples.
 #define LF_RDR_CAPTURE_COMMAND (0x02u)
+// In eof_gap: load the antenna through Q3 (LF_MOD) during each gap. With only the drive stopped, the antenna's tuned
+// circuit keeps ringing at its own resonance for over 200 µs, so a gap is a shallow dip rather than the field going
+// off. The load drains it through VD1 and R11 within a few cycles.
+#define LF_RDR_DAMP_GAPS (0x04u)
 
 typedef struct __attribute__((packed)) {
     // Command: pulse-interval coding. Each bit is a gap of gap_us, then field on until the bit's period ends.
