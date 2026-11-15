@@ -6747,10 +6747,11 @@ class LFADCGenericRead(ReaderRequiredUnit):
             print("generic read error")
 
 
+# Page 2 is not used in password mode. In crypto mode its last two bytes and page 1 hold the 48-bit key.
 HITAG2_PAGE_NAMES = (
     "UID",
-    "Password",
-    "Key/Pwd",
+    "Password (reader's)",
+    "Key, high bytes (crypto mode only)",
     "Config + tag password",
     "User",
     "User",
@@ -6823,21 +6824,11 @@ class LFHitag2Read(ReaderRequiredUnit):
             print(f" - {color_string((CR, 'No Hitag 2 tag found'))}")
             return
         _, pages = resp.parsed
-        names = [
-            "UID",
-            "Password",
-            "Key/Pwd",
-            "Config + tag password",
-            "User",
-            "User",
-            "User",
-            "User",
-        ]
         for p, page in enumerate(pages):
             value = page.hex().upper() if page is not None else "-- -- -- --"
             if page is not None:
                 value = " ".join(value[i : i + 2] for i in range(0, 8, 2))
-            print(f"   {p}  {value}  {names[p]}")
+            print(f"   {p}  {value}  {HITAG2_PAGE_NAMES[p]}")
         if resp.status == Status.LF_TAG_NO_FOUND:
             print(f" - {color_string((CY, 'Some pages could not be read'))}")
 
