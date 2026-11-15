@@ -105,6 +105,7 @@ static struct {
     float fc_hz;      // the measurement, valid if measured
     lf_ia_carrier_t last;
     bool last_ran;
+    uint32_t last_us;  // how long the last measurement took
 } m_timing;
 
 // Raw samples of one listen, from the end of its settle to its first gap, for the carrier measurement.
@@ -323,11 +324,14 @@ void lf_ia_process(void) {
         return;
     }
     lf_ia_carrier_t c;
+    const uint32_t t0 = now_us();
     lf_ia_carrier_estimate(m_meas_copy, m_meas_copy_n, FS_HZ, FC_LO_HZ, FC_HI_HZ, FC_NOMINAL, &c);
+    const uint32_t took = now_us() - t0;
     CRITICAL_REGION_ENTER();
     if (m_meas_session == m_session_id && m_state != ST_OFF) {
         m_timing.last = c;
         m_timing.last_ran = true;
+        m_timing.last_us = took;
         if (c.status == LF_IA_CARRIER_OK) {
             m_timing.measured = true;
             m_timing.fc_hz = c.carrier_hz;
@@ -495,6 +499,7 @@ static void command_end(uint32_t t_detect) {
     r->fc_measured_dhz = m_timing.measured ? (uint32_t)lroundf(m_timing.fc_hz * 10.0f) : 0u;
     r->meas_status = m_timing.last_ran ? (uint8_t)m_timing.last.status : 255u;
     r->meas_snr_db10 = (int16_t)lroundf(m_timing.last.snr_db * 10.0f);
+    r->meas_us32 = (uint8_t)(m_timing.last_us / 32u > UINT8_MAX ? UINT8_MAX : m_timing.last_us / 32u);
     uint32_t split = 0;
     if (m_module->want_decode && n >= 2) {
         for (size_t i = 0; i + 1 < n; i++) {

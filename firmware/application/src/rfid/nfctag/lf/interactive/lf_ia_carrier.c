@@ -3,15 +3,15 @@
 #include <math.h>
 
 #define TWO_PI       (6.28318530718f)
-// Two passes keep the cost down (it runs in the engine's interrupt): a coarse scan of the band, then a fine one
-// around the coarse peak. Hann's main lobe is 4 fs / n wide (2 kHz at 200 samples), so a 500 Hz coarse step
-// cannot miss the line.
-#define COARSE_STEP_HZ (500.0f)
-#define FINE_STEP_HZ   (50.0f)
-#define FINE_HALF      (10u)     // fine points each side of the coarse peak
+// Two passes keep the cost down, because the answer waits on the result: a coarse scan of the band, then a fine one
+// around the coarse peak. Hann's main lobe is 4 fs / n wide (2 kHz at 200 samples), so a coarse step of half that
+// cannot miss the line. The fine pass steps an eighth of the coarse step and covers 3/4 of it each side.
+#define FINE_HALF      (6u)      // fine points each side of the coarse peak
 #define SCAN_MAX       (128u)    // coarse points kept for the median
 
-static float m_win[LF_IA_CARRIER_MAX_SAMPLES];  // the windowed, mean-free samples
+static float m_win[LF_IA_CARRIER_MAX_SAMPLES];   // the windowed, mean-free samples
+static float m_hann[LF_IA_CARRIER_MAX_SAMPLES];  // the window for m_hann_n samples, kept between calls
+static size_t m_hann_n;
 static float m_pow[SCAN_MAX];
 
 // Power at f Hz of the n windowed samples (Goertzel).
@@ -59,14 +59,19 @@ void lf_ia_carrier_estimate(const int16_t *x, size_t n, float fs, float lo_hz, f
     }
     mean /= (float)n;
     // A Hann window keeps the field's slow drift and the DC out of the band.
+    if (m_hann_n != n) {
+        for (size_t i = 0; i < n; i++) {
+            m_hann[i] = 0.5f - 0.5f * cosf(TWO_PI * (float)i / (float)(n - 1));
+        }
+        m_hann_n = n;
+    }
     for (size_t i = 0; i < n; i++) {
-        const float h = 0.5f - 0.5f * cosf(TWO_PI * (float)i / (float)(n - 1));
-        m_win[i] = ((float)x[i] - mean) * h;
+        m_win[i] = ((float)x[i] - mean) * m_hann[i];
     }
 
     // The band, folded: carrier f lands at f - fs. Coarse pass.
     const float a_lo = lo_hz - fs, a_hi = hi_hz - fs;
-    size_t k_n = (size_t)((a_hi - a_lo) / COARSE_STEP_HZ) + 1u;
+    size_t k_n = (size_t)((a_hi - a_lo) * (float)n / (2.0f * fs)) + 2u;
     if (k_n > SCAN_MAX) {
         k_n = SCAN_MAX;
     }
@@ -83,22 +88,23 @@ void lf_ia_carrier_estimate(const int16_t *x, size_t n, float fs, float lo_hz, f
 
     // Fine pass around the coarse peak, then a parabola through the fine peak and its neighbours, on log power.
     const float centre = a_lo + step * (float)k_pk;
+    const float fine = step / 8.0f;
     float fpow[2u * FINE_HALF + 1u];
     size_t f_pk = 0;
     float fp_pk = -1.0f;
     for (size_t k = 0; k < 2u * FINE_HALF + 1u; k++) {
-        fpow[k] = power_at(n, fs, centre + FINE_STEP_HZ * ((float)k - (float)FINE_HALF));
+        fpow[k] = power_at(n, fs, centre + fine * ((float)k - (float)FINE_HALF));
         if (fpow[k] > fp_pk) {
             fp_pk = fpow[k];
             f_pk = k;
         }
     }
-    float a_pk = centre + FINE_STEP_HZ * ((float)f_pk - (float)FINE_HALF);
+    float a_pk = centre + fine * ((float)f_pk - (float)FINE_HALF);
     if (f_pk > 0 && f_pk + 1u < 2u * FINE_HALF + 1u) {
         const float l = logf(fpow[f_pk - 1] + 1e-9f), m = logf(fpow[f_pk] + 1e-9f), r = logf(fpow[f_pk + 1] + 1e-9f);
         const float d = l - 2.0f * m + r;
         if (d < 0.0f) {
-            a_pk += FINE_STEP_HZ * 0.5f * (l - r) / d;
+            a_pk += fine * 0.5f * (l - r) / d;
         }
     }
     p_pk = fp_pk > p_pk ? fp_pk : p_pk;

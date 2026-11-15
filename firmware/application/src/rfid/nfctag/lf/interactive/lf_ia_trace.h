@@ -63,7 +63,7 @@ typedef struct __attribute__((packed)) {
     uint8_t meas_status;       // the last measurement's lf_ia_carrier_status_t, 255 if none ran
     uint8_t mode;              // the slot's LF_IA_MODE_ flags
     uint8_t slot;              // the active slot, 1 to 8
-    uint8_t rsv;
+    uint8_t meas_us32;         // how long the last measurement took in the main loop, in 32 µs units
 } lf_ia_trace_rec_t;
 
 // Field sessions. session_start counts the session. session_end writes its FIELD_OFF record, committed, if the
