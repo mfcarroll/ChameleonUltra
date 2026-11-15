@@ -216,8 +216,9 @@
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
-#define DATA_CMD_HITAG2_SCAN                    (3036)
+// 3036 is DATA_CMD_INDALA_WRITE_TO_T55XX in PR #509, so the Hitag 2 scan is 3038.
 #define DATA_CMD_HITAG2_READ                    (3037)
+#define DATA_CMD_HITAG2_SCAN                    (3038)
 
 // The interactive LF engine's trace and bench instrumentation. Payloads are the firmware's packed structs,
 // little-endian.
