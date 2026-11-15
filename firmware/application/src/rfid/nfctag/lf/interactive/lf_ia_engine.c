@@ -49,7 +49,7 @@ NRF_LOG_MODULE_REGISTER();
 #define SETTLE_MIN_US (40u)   // the 4-sample mean needs 3 samples of history before it means anything
 #define FC_NOMINAL    (125000.0f)
 #define FS_HZ         (1000000.0f / SAMPLE_US)
-#define MEAS_N        (200u)  // raw samples measured per listen at most: 2 ms, inside a Hitag reader's power-up wait
+#define MEAS_N        (100u)  // raw samples measured per listen: 1 ms, so the result is in before a PM3 sends START_AUTH
 #define FC_LO_HZ      (115000.0f)  // the carriers searched: 125 kHz -8 % to +8 %
 #define FC_HI_HZ      (135000.0f)
 #define PWM_TICKS_MAX (32767u)
@@ -346,6 +346,16 @@ static float fc_used(void) {
     return ((m_timing.mode & LF_IA_MODE_SCALE) && m_timing.measured) ? m_timing.fc_hz : FC_NOMINAL;
 }
 
+static void timing_to_trace(lf_ia_trace_rec_t *r) {
+    r->mode = m_timing.mode;
+    r->slot = (uint8_t)(m_timing.slot + 1u);
+    r->fc_used_dhz = (uint32_t)lroundf(fc_used() * 10.0f);
+    r->fc_measured_dhz = m_timing.measured ? (uint32_t)lroundf(m_timing.fc_hz * 10.0f) : 0u;
+    r->meas_status = m_timing.last_ran ? (uint8_t)m_timing.last.status : 255u;
+    r->meas_snr_db10 = (int16_t)lroundf(m_timing.last.snr_db * 10.0f);
+    r->meas_us32 = (uint8_t)(m_timing.last_us / 32u > UINT8_MAX ? UINT8_MAX : m_timing.last_us / 32u);
+}
+
 static void session_start(void) {
     m_ended = false;
     memset(&m_timing, 0, sizeof(m_timing));
@@ -368,6 +378,9 @@ static void field_gone(uint32_t t) {
         m_module->field_off(m_module->ctx);
     }
     m_off_rec = lf_ia_trace_session_end(t, (uint16_t)m_det.level);
+    if (m_off_rec) {
+        timing_to_trace(m_off_rec);  // a measurement that finished after the last answer shows here
+    }
 
     m_state = ST_RECHECK;
     nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + RECHECK_US, true);
@@ -493,13 +506,7 @@ static void command_end(uint32_t t_detect) {
         .n_bits = 0,
         .mode = m_timing.mode,
     };
-    r->mode = m_timing.mode;
-    r->slot = (uint8_t)(m_timing.slot + 1u);
-    r->fc_used_dhz = (uint32_t)lroundf(fc_used() * 10.0f);
-    r->fc_measured_dhz = m_timing.measured ? (uint32_t)lroundf(m_timing.fc_hz * 10.0f) : 0u;
-    r->meas_status = m_timing.last_ran ? (uint8_t)m_timing.last.status : 255u;
-    r->meas_snr_db10 = (int16_t)lroundf(m_timing.last.snr_db * 10.0f);
-    r->meas_us32 = (uint8_t)(m_timing.last_us / 32u > UINT8_MAX ? UINT8_MAX : m_timing.last_us / 32u);
+    timing_to_trace(r);
     uint32_t split = 0;
     if (m_module->want_decode && n >= 2) {
         for (size_t i = 0; i + 1 < n; i++) {
