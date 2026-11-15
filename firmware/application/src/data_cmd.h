@@ -227,6 +227,7 @@
 #define DATA_CMD_LF_IA_ENV_ARM                  (3182)
 #define DATA_CMD_LF_IA_ENV_READ                 (3183)
 #define DATA_CMD_LF_IA_TUNING                   (3184)
+#define DATA_CMD_LF_IA_SLOT_MODES               (3188)
 // The interactive LF reader engine's bench commands.
 #define DATA_CMD_LF_RDR_TRANSACT                (3185)
 #define DATA_CMD_LF_RDR_CAPTURE                 (3186)

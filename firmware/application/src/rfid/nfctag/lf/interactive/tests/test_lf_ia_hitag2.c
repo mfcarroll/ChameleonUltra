@@ -7,6 +7,7 @@
 
 static int m_failed = 0;
 static int m_checks = 0;
+static uint8_t m_mode = 0;
 
 #define CHECK(cond, ...)                                \
     do {                                                \
@@ -32,7 +33,7 @@ static lf_ia_verdict_t send(const lf_ia_module_t *m, uint64_t v, size_t n, lf_ia
     }
     uint32_t iv[64];
     lf_ia_encode_intervals(sent, n, 160, 240, iv, 64);
-    lf_ia_command_t cmd = {.n_gaps = n + 1, .bits = bits};
+    lf_ia_command_t cmd = {.n_gaps = n + 1, .bits = bits, .mode = m_mode};
     cmd.decode_status = lf_ia_decode_intervals(iv, n, &m->decode, bits, 128, &cmd.n_bits, NULL);
     memset(rsp, 0, sizeof(*rsp));
     return m->on_command(m->ctx, &cmd, rsp);
@@ -68,8 +69,11 @@ int main(void) {
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_IGNORE, "password before START_AUTH");
     CHECK(send(m, read_cmd(4, 0), 10, &rsp) == LF_IA_IGNORE, "read before authentication");
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x01020304, "START_AUTH gives the UID");
-    CHECK(rsp.delay_us == 1920, "delay %u", rsp.delay_us);
+    CHECK(rsp.delay_fc == 240 && rsp.delay_us == 0, "delay %u fc", rsp.delay_fc);
     CHECK(send(m, 0x1F, 5, &rsp) == LF_IA_IGNORE, "other 5-bit frame");
+    m_mode = LF_IA_MODE_ALT_DELAY;
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && rsp.delay_fc == 292, "alt delay %u fc", rsp.delay_fc);
+    m_mode = 0;
     CHECK(send(m, 0x2AB, 11, &rsp) == LF_IA_IGNORE, "an 11-bit frame is noise");
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x060E0F10, "password gives page 3");
     for (uint32_t n = 0; n < 8; n++) {

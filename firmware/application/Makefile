@@ -49,6 +49,7 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pyramid.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_codec.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_carrier.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_engine.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_trace.c \
   $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_test_module.c \

@@ -34,6 +34,8 @@ typedef struct {
     lf_ia_decode_status_t decode_status;
     const uint8_t *bits;
     size_t n_bits;
+
+    uint8_t mode;  // the slot's LF_IA_MODE_ flags, for a module that offers LF_IA_MODE_ALT_DELAY
 } lf_ia_command_t;
 
 typedef enum {
@@ -48,7 +50,10 @@ typedef struct {
     lf_ia_coding_t coding;
     uint32_t coding_flags;  // LF_IA_INVERT, LF_IA_BIPHASE_ONE_FLIPS
     uint16_t bit_fc;        // carrier periods per bit, for example 32 for RF/32
-    uint32_t delay_us;      // from the command's end_us to the first half-bit of the answer
+    // From the command's end_us to the first half-bit of the answer: in carrier periods if delay_fc is set, which the
+    // engine converts with the carrier it is using (see LF_IA_MODE_SCALE), else in µs.
+    uint32_t delay_fc;
+    uint32_t delay_us;
 } lf_ia_response_t;
 
 typedef struct {
@@ -67,6 +72,21 @@ typedef struct {
     void (*field_off)(void *ctx);
     void *ctx;
 } lf_ia_module_t;
+
+// Per-slot timing modes, a research test of how the answer's timing should follow the reader.
+//
+// LF_IA_MODE_SCALE: the engine measures the reader's carrier at the start of each listen (lf_ia_carrier.h) and times
+// the answer's bits and delay in that reader's carrier periods. Without it, a carrier period is taken as 8 µs
+// (125 kHz). LF_IA_MODE_ALT_DELAY: the module answers at its alternative delay (Hitag 2: the middle of the reader's
+// listening window, rather than a genuine fob's timing).
+//
+// The modes are kept in retained RAM, so they survive sleep (a test runs at a reader on battery) but not a power-on
+// reset or a flash, which set every slot to 0.
+#define LF_IA_MODE_SCALE     (1u << 0)
+#define LF_IA_MODE_ALT_DELAY (1u << 1)
+#define LF_IA_SLOTS          (8u)
+void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]);
+void lf_ia_slot_modes_set(const uint8_t modes[LF_IA_SLOTS]);
 
 // Registers the module the engine runs while the slot's LF tag type is this module's. NULL clears it.
 void lf_ia_set_module(const lf_ia_module_t *module);

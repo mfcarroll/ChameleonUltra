@@ -3366,6 +3366,18 @@ static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t st
     return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(10 + n * size), out);
 }
 
+// In: nothing to read, or 8 bytes to set (one per slot, LF_IA_MODE_ flags). Out: the 8 slot modes.
+static data_frame_tx_t *cmd_processor_lf_ia_slot_modes(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t modes[LF_IA_SLOTS];
+    if (length == LF_IA_SLOTS) {
+        lf_ia_slot_modes_set(data);
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_ia_slot_modes_get(modes);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_IA_SLOTS, modes);
+}
+
 static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     lf_ia_trace_clear();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
@@ -3420,6 +3432,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_IA_ENV_ARM,                NULL,                        cmd_processor_lf_ia_env_arm,                 NULL                   },
     {    DATA_CMD_LF_IA_ENV_READ,               NULL,                        cmd_processor_lf_ia_env_read,                NULL                   },
     {    DATA_CMD_LF_IA_TUNING,                 NULL,                        cmd_processor_lf_ia_tuning,                  NULL                   },
+    {    DATA_CMD_LF_IA_SLOT_MODES,             NULL,                        cmd_processor_lf_ia_slot_modes,              NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick,             NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },

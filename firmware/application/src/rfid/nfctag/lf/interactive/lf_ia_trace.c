@@ -11,7 +11,7 @@
 // the header below invalid, so the store is reset on the next use, like the MIFARE log's count guard. The magic,
 // version and record size reject a layout left by an earlier flash, which the count-only guard would not catch.
 #define LF_IA_TRACE_MAGIC   (0x32414C46u)  // "FLA2": interactive LF trace, layout 2
-#define LF_IA_TRACE_VERSION (2u)
+#define LF_IA_TRACE_VERSION (3u)
 #define LF_IA_TRACE_ROLL    (LF_IA_TRACE_RECORDS - LF_IA_TRACE_KEEP)
 
 typedef struct {

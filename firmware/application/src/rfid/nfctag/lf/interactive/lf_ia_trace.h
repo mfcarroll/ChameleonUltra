@@ -56,6 +56,14 @@ typedef struct __attribute__((packed)) {
     uint16_t boot;          // the boot the record was made in, counted since the clear
     uint16_t session;       // the field session, counted since the clear
     uint32_t t_session_us;  // when that session's field came on
+    // Timing (lf_ia.h, LF_IA_MODE_): the carrier the answer was timed by, and what the measurement found.
+    uint32_t fc_used_dhz;      // in 0.1 Hz: the measured carrier with LF_IA_MODE_SCALE, else 125 kHz
+    uint32_t fc_measured_dhz;  // in 0.1 Hz, 0 if no measurement succeeded yet in this session
+    int16_t meas_snr_db10;     // the last measurement's line against the band, in 0.1 dB
+    uint8_t meas_status;       // the last measurement's lf_ia_carrier_status_t, 255 if none ran
+    uint8_t mode;              // the slot's LF_IA_MODE_ flags
+    uint8_t slot;              // the active slot, 1 to 8
+    uint8_t rsv;
 } lf_ia_trace_rec_t;
 
 // Field sessions. session_start counts the session. session_end writes its FIELD_OFF record, committed, if the

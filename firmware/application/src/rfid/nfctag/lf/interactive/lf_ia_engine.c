@@ -13,12 +13,14 @@
 // The PWM and TIMER3 interrupts share one priority, so their handlers never preempt each other. The SAADC interrupt
 // stays off.
 
+#include <math.h>
 #include <string.h>
 
 #include "app_util_platform.h"
 #include "ble_main.h"
 #include "hw_connect.h"
 #include "lf_ia.h"
+#include "lf_ia_carrier.h"
 #include "lf_ia_debug.h"
 #include "lf_ia_trace.h"
 #include "lf_tag_em.h"
@@ -45,6 +47,12 @@ NRF_LOG_MODULE_REGISTER();
 #define MAX_RUNS      (2u * LF_IA_MAX_RESPONSE_BITS)
 #define PWM_TOP_MIN   (3u)    // the PWM's smallest counter top
 #define SETTLE_MIN_US (40u)   // the 4-sample mean needs 3 samples of history before it means anything
+#define FC_NOMINAL    (125000.0f)
+#define FS_HZ         (1000000.0f / SAMPLE_US)
+#define MEAS_N        (256u)  // raw samples measured per listen at most: 2.56 ms, about a Hitag reader's power-up wait
+#define FC_LO_HZ      (115000.0f)  // the carriers searched: 125 kHz -8 % to +8 %
+#define FC_HI_HZ      (135000.0f)
+#define PWM_TICKS_MAX (32767u)
 
 #define CC_TX       NRF_TIMER_CC_CHANNEL0  // compare: starts the answer through PPI
 #define CC_ADC_GO   NRF_TIMER_CC_CHANNEL0  // compare: the first ADC sample, through PPI, while listening
@@ -81,6 +89,28 @@ static lf_ia_gap_t m_gaps[LF_IA_MAX_GAPS];
 static uint32_t m_intervals[LF_IA_MAX_GAPS];
 static uint8_t m_bits[LF_IA_MAX_BITS / 8];
 static lf_ia_response_t m_rsp;
+
+// The slot modes, in retained RAM (lf_ia.h).
+#define SLOT_MODES_MAGIC (0x4D41494Cu)  // "LIAM"
+static __attribute__((section(".noinit_lfiam"))) struct {
+    uint32_t magic;
+    uint8_t modes[LF_IA_SLOTS];
+} m_slot_modes;
+
+// This session's timing: the slot's mode and the reader's carrier, once measured.
+static struct {
+    uint8_t slot;     // 0-based
+    uint8_t mode;
+    bool measured;
+    float fc_hz;      // the measurement, valid if measured
+    lf_ia_carrier_t last;
+    bool last_ran;
+} m_timing;
+
+// Raw samples of one listen, from the end of its settle to its first gap, for the carrier measurement.
+static int16_t m_meas[MEAS_N];
+static size_t m_meas_n;
+static bool m_meas_done;  // this listen's measurement has run, or will not
 
 static lf_ia_tuning_t m_tuning = {
     .settle_us = 300,
@@ -215,6 +245,9 @@ static bool det_sample(int32_t x, uint32_t t) {
         m_det.prev_t = t;
         return true;
     }
+    if (!m_meas_done && !m_det.in_gap && m_det.n_gaps == 0 && m_meas_n < MEAS_N) {
+        m_meas[m_meas_n++] = (int16_t)x;
+    }
 
     int32_t thr = m_det.level * m_tuning.thr_pct / 100;
     if (thr < FIELD_MIN / 2) {
@@ -259,11 +292,38 @@ static bool det_sample(int32_t x, uint32_t t) {
 static void listen(uint32_t settle_us) {
     load_set(true);
     m_state = ST_LISTEN;
+    m_meas_n = 0;
+    m_meas_done = m_timing.measured;
     adc_listen_start(settle_us);
+}
+
+// Runs this listen's carrier measurement once its quiet stretch is over: the first gap has begun, or the buffer is
+// full. Its cost (about 1 ms) falls in a listen tick, which the ring absorbs.
+static void measure_carrier(void) {
+    if (m_meas_done || (m_meas_n < MEAS_N && !m_det.in_gap && m_det.n_gaps == 0)) {
+        return;
+    }
+    m_meas_done = true;
+    lf_ia_carrier_estimate(m_meas, m_meas_n, FS_HZ, FC_LO_HZ, FC_HI_HZ, FC_NOMINAL, &m_timing.last);
+    m_timing.last_ran = true;
+    if (m_timing.last.status == LF_IA_CARRIER_OK) {
+        m_timing.measured = true;
+        m_timing.fc_hz = m_timing.last.carrier_hz;
+    }
+}
+
+// The carrier the answer is timed by.
+static float fc_used(void) {
+    return ((m_timing.mode & LF_IA_MODE_SCALE) && m_timing.measured) ? m_timing.fc_hz : FC_NOMINAL;
 }
 
 static void session_start(void) {
     m_ended = false;
+    memset(&m_timing, 0, sizeof(m_timing));
+    m_timing.slot = tag_emulation_get_slot();
+    if (m_slot_modes.magic == SLOT_MODES_MAGIC && m_timing.slot < LF_IA_SLOTS) {
+        m_timing.mode = m_slot_modes.modes[m_timing.slot];
+    }
     lf_ia_trace_session_start(now_us());
     if (m_module->field_on) {
         m_module->field_on(m_module->ctx);
@@ -295,9 +355,26 @@ static bool arm_answer(const lf_ia_response_t *rsp, uint32_t end_us, lf_ia_trace
         r->flags |= LF_IA_TRF_ENCODE_FAILED;
         return false;
     }
+    // Each run is a whole number of carrier periods, played in ticks of the PWM's base clock at the carrier in use.
+    // The run ends are placed cumulatively, so rounding does not add up over the frame. The base clock is the fastest
+    // (from 16 MHz down) at which the longest run still fits the PWM's counter.
+    const float fc = fc_used();
+    uint32_t longest = 0;
     for (size_t i = 0; i < n; i++) {
-        const uint16_t len = LF_IA_RUN_LEN(m_runs[i]);
-        if (len < PWM_TOP_MIN) {
+        longest = LF_IA_RUN_LEN(m_runs[i]) > longest ? LF_IA_RUN_LEN(m_runs[i]) : longest;
+    }
+    uint8_t prescale = 0;  // base clock 16 MHz >> prescale
+    while (prescale < 7u && (float)longest * (16e6f / (float)(1u << prescale)) / fc > (float)PWM_TICKS_MAX * 0.99f) {
+        prescale++;
+    }
+    const float ticks_per_fc = (16e6f / (float)(1u << prescale)) / fc;
+    uint32_t cum_fc = 0, cum_ticks = 0;
+    for (size_t i = 0; i < n; i++) {
+        cum_fc += LF_IA_RUN_LEN(m_runs[i]);
+        const uint32_t end_ticks = (uint32_t)lroundf((float)cum_fc * ticks_per_fc);
+        const uint32_t len = end_ticks - cum_ticks;
+        cum_ticks = end_ticks;
+        if (len < PWM_TOP_MIN || len > PWM_TICKS_MAX) {
             r->flags |= LF_IA_TRF_ENCODE_FAILED;
             return false;
         }
@@ -306,8 +383,9 @@ static bool arm_answer(const lf_ia_response_t *rsp, uint32_t end_us, lf_ia_trace
         m_pwm_vals[i].channel_0 = (uint16_t)(0x8000u | (LF_IA_RUN_IS_LOAD(m_runs[i]) ? len : 0u));
         m_pwm_vals[i].channel_1 = 0;
         m_pwm_vals[i].channel_2 = 0;
-        m_pwm_vals[i].counter_top = len;
+        m_pwm_vals[i].counter_top = (uint16_t)len;
     }
+    nrf_pwm_configure(m_ia_pwm.p_registers, (nrf_pwm_clk_t)prescale, NRF_PWM_MODE_UP, PWM_TOP_MIN);
     m_pwm_seq.values.p_wave_form = m_pwm_vals;
     m_pwm_seq.length = (uint16_t)(n * 4u);
     m_pwm_seq.repeats = 0;
@@ -318,7 +396,8 @@ static bool arm_answer(const lf_ia_response_t *rsp, uint32_t end_us, lf_ia_trace
                                                    NRFX_PWM_FLAG_STOP | NRFX_PWM_FLAG_START_VIA_TASK);
     APP_ERROR_CHECK(nrfx_ppi_channel_assign(m_ppi_tx, nrfx_timer_compare_event_address_get(&m_ia_timer, CC_TX), task));
 
-    const uint32_t due = end_us + rsp->delay_us;
+    const uint32_t delay_us = rsp->delay_fc ? (uint32_t)lroundf((float)rsp->delay_fc * 1e6f / fc) : rsp->delay_us;
+    const uint32_t due = end_us + delay_us;
     const uint32_t fire = due - (uint32_t)(int32_t)m_tuning.tx_lead_us;
     nrf_timer_event_clear(m_ia_timer.p_reg, nrf_timer_compare_event_get(CC_TX));
     nrfx_timer_compare(&m_ia_timer, CC_TX, fire, false);
@@ -378,7 +457,14 @@ static void command_end(uint32_t t_detect) {
         .decode_status = LF_IA_DECODE_TOO_FEW,
         .bits = m_bits,
         .n_bits = 0,
+        .mode = m_timing.mode,
     };
+    r->mode = m_timing.mode;
+    r->slot = (uint8_t)(m_timing.slot + 1u);
+    r->fc_used_dhz = (uint32_t)lroundf(fc_used() * 10.0f);
+    r->fc_measured_dhz = m_timing.measured ? (uint32_t)lroundf(m_timing.fc_hz * 10.0f) : 0u;
+    r->meas_status = m_timing.last_ran ? (uint8_t)m_timing.last.status : 255u;
+    r->meas_snr_db10 = (int16_t)lroundf(m_timing.last.snr_db * 10.0f);
     uint32_t split = 0;
     if (m_module->want_decode && n >= 2) {
         for (size_t i = 0; i + 1 < n; i++) {
@@ -399,6 +485,7 @@ static void command_end(uint32_t t_detect) {
 
     if (m_tuning.rsp_delay_us) {
         m_rsp.delay_us = m_tuning.rsp_delay_us;
+        m_rsp.delay_fc = 0;
     }
     const bool armed = v == LF_IA_RESPOND && arm_answer(&m_rsp, cmd.end_us, r);
     lf_ia_trace_commit();
@@ -448,6 +535,7 @@ static void listen_tick(void) {
         }
     }
     m_det.k_done = k_end;
+    measure_carrier();
 
     const uint32_t t_last = m_det.t0 + (k_end - 1u) * SAMPLE_US - SMOOTH_LAG_US;
     if (m_det.n_gaps > 0 && !m_det.in_gap && t_last - m_det.last_end >= eof_us()) {
@@ -587,6 +675,21 @@ void lf_ia_field_detected(void) {
     }
     lf_adc_claim();
     session_start();
+}
+
+void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]) {
+    if (m_slot_modes.magic == SLOT_MODES_MAGIC) {
+        memcpy(modes, m_slot_modes.modes, LF_IA_SLOTS);
+    } else {
+        memset(modes, 0, LF_IA_SLOTS);
+    }
+}
+
+void lf_ia_slot_modes_set(const uint8_t modes[LF_IA_SLOTS]) {
+    CRITICAL_REGION_ENTER();
+    memcpy(m_slot_modes.modes, modes, LF_IA_SLOTS);
+    m_slot_modes.magic = SLOT_MODES_MAGIC;
+    CRITICAL_REGION_EXIT();
 }
 
 // ---- Instrumentation ------------------------------------------------------------------------------------------------

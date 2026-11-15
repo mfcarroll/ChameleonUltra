@@ -13,10 +13,12 @@
 #include <string.h>
 
 #define HT2_EOF_US    (300u)   // longer than a 1 bit's field-on time (30 - 6 periods, 192 µs)
-// The reader samples from 192 to about 320 periods after its command, which ends 36 periods after the stop gap. A
-// genuine fob answers 227 periods after the reader's last edge. 240 periods after the stop gap sits early in the
-// reader's window, near the fob.
-#define HT2_DELAY_US  (240u * LF_IA_US_PER_FC)
+// The reader samples from 192 to about 320 periods after its command, which ends 36 periods after the stop gap, so
+// from about 228 to 356 periods after the stop gap. A genuine fob answers 227 periods after the reader's last edge.
+// HT2_DELAY_FC sits early in the reader's window, near the fob. HT2_DELAY_ALT_FC (LF_IA_MODE_ALT_DELAY) is the
+// window's middle.
+#define HT2_DELAY_FC      (240u)
+#define HT2_DELAY_ALT_FC  (292u)
 #define HT2_BIT_FC    (32u)
 #define HT2_SOF_BITS  (5u)
 
@@ -43,7 +45,7 @@ static uint32_t page(size_t n) {
 }
 
 // Sets rsp to a start-of-frame and one 32-bit page, sent at the module's delay.
-static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value) {
+static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value, uint8_t mode) {
     memset(rsp->bits, 0, sizeof(rsp->bits));
     for (size_t i = 0; i < HT2_SOF_BITS; i++) {
         lf_ia_bit_put(rsp->bits, i, true);
@@ -55,7 +57,7 @@ static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value) {
     rsp->coding = LF_IA_CODING_MANCHESTER;
     rsp->coding_flags = 0;
     rsp->bit_fc = HT2_BIT_FC;
-    rsp->delay_us = HT2_DELAY_US;
+    rsp->delay_fc = (mode & LF_IA_MODE_ALT_DELAY) ? HT2_DELAY_ALT_FC : HT2_DELAY_FC;
     return LF_IA_RESPOND;
 }
 
@@ -82,7 +84,7 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             m_state = HT2_UID_SENT;
-            return answer(rsp, page(0));
+            return answer(rsp, page(0), cmd->mode);
 
         case 32:
             if (m_state != HT2_UID_SENT) {
@@ -93,7 +95,7 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             m_state = HT2_AUTHENTICATED;
-            return answer(rsp, page(3));
+            return answer(rsp, page(3), cmd->mode);
 
         case 10: {
             if (m_state != HT2_AUTHENTICATED) {
@@ -106,10 +108,10 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             if (op == 0xCu) {
-                return answer(rsp, page(n));
+                return answer(rsp, page(n), cmd->mode);
             }
             if (op == 0x6u) {
-                return answer(rsp, ~page(n));
+                return answer(rsp, ~page(n), cmd->mode);
             }
             return LF_IA_IGNORE;
         }
