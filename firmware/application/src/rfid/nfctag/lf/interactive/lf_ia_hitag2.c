@@ -7,6 +7,11 @@
 // The exchange: START_AUTH (5 bits, 11000) gets the UID. The reader then sends its 32-bit password. If it matches
 // page 1, the tag answers with page 3 (the configuration byte and the tag password) and then serves READ PAGE commands
 // (10 bits). Crypto mode and writes are not handled.
+//
+// The HT2 datasheet (rev 2.1, 4.2.2) says a second START_AUTH resets the tag's state machine, so a genuine tag
+// answers only every second one. With LF_IA_MODE_ALT_PROTOCOL the module does the same: a START_AUTH that arrives
+// while the tag is idle gets the UID, and one that arrives in any other state resets the tag to idle, unanswered.
+// Without the mode it answers every START_AUTH, which is what most emulators do.
 
 #include "lf_ia_hitag2.h"
 
@@ -81,6 +86,10 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
     switch (cmd->n_bits) {
         case 5:
             if (bits_value(cmd->bits, 0, 5) != 0x18u) {  // START_AUTH, 11000
+                return LF_IA_IGNORE;
+            }
+            if ((cmd->mode & LF_IA_MODE_ALT_PROTOCOL) && m_state != HT2_IDLE) {
+                m_state = HT2_IDLE;
                 return LF_IA_IGNORE;
             }
             m_state = HT2_UID_SENT;

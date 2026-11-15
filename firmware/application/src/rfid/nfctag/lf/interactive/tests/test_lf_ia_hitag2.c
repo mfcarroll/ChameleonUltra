@@ -92,6 +92,24 @@ int main(void) {
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_IGNORE, "the right password after a wrong one needs START_AUTH");
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "START_AUTH after the wrong password");
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_RESPOND, "then the right password");
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "without the mode, START_AUTH after authentication answers");
+
+    // LF_IA_MODE_ALT_PROTOCOL: every second START_AUTH, counted from a fresh field.
+    m_mode = LF_IA_MODE_ALT_PROTOCOL;
+    m->field_off(m->ctx);
+    m->field_on(m->ctx);
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "alt: the first START_AUTH answers");
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_IGNORE, "alt: the second resets, unanswered");
+    CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_IGNORE, "alt: the reset tag ignores the password");
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "alt: the third answers");
+    CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_RESPOND, "alt: then the password");
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_IGNORE, "alt: START_AUTH after authentication resets");
+    CHECK(send(m, read_cmd(4, 0), 10, &rsp) == LF_IA_IGNORE, "alt: and the reads stop");
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "alt: the next START_AUTH answers");
+    m->field_off(m->ctx);
+    m->field_on(m->ctx);
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "alt: a field drop starts the count again");
+    m_mode = 0;
 
     printf("%d checks, %d failed\n", m_checks, m_failed);
     return m_failed ? 1 : 0;

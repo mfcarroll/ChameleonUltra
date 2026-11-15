@@ -6904,6 +6904,17 @@ class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
 LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHIIIhBBBB")
 LF_IA_MODES = {0: "baseline", 1: "scale", 2: "mid-window", 3: "scale + mid-window"}
 LF_IA_MODE_NAMES = {"baseline": 0, "scale": 1, "mid": 2, "both": 3}
+LF_IA_TIMING_BITS = 0x03
+LF_IA_ALT_PROTOCOL = 0x04  # Hitag 2: answers only every second START_AUTH
+
+
+def lf_ia_mode_name(mode: int) -> str:
+    name = LF_IA_MODES[mode & LF_IA_TIMING_BITS]
+    if mode & LF_IA_ALT_PROTOCOL:
+        name += ", every second START_AUTH"
+    return name
+
+
 LF_IA_VERDICTS = {0: "ignored", 1: "answered", 2: "ended the exchange"}
 LF_IA_DECODES = {
     0: "ok",
@@ -6981,7 +6992,7 @@ class LFInteractiveTrace(DeviceRequiredUnit):
                 last_session = (rec_boot, session)
                 print(
                     f"   boot {rec_boot}, field session {session}, field on at {t_session / 1e6:.6f} s, "
-                    f"slot {slot}, timing {LF_IA_MODES.get(mode, mode)}"
+                    f"slot {slot}, mode {lf_ia_mode_name(mode)}"
                 )
             if kind == 2:
                 print(
@@ -7015,10 +7026,11 @@ class LFInteractiveTiming(DeviceRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = (
-            "Show or set each slot's answer timing for interactive LF emulation (such as Hitag 2), a research test. "
+            "Show or set each slot's mode for interactive LF emulation (such as Hitag 2), a research test. "
             "baseline: a carrier period is taken as 8 µs. scale: the answer is timed by the reader's carrier, "
-            "measured at the start of each listen. mid: the answer comes at the middle of the reader's window. "
-            "both: scale and mid. The modes survive sleep but not a power-on reset or a flash."
+            "measured at the start of each field. mid: the answer comes at the middle of the reader's window. "
+            "both: scale and mid. --every-second on: a Hitag 2 slot answers only every second START_AUTH, as the "
+            "datasheet says a genuine tag does. The modes survive sleep but not a power-on reset or a flash."
         )
         parser.add_argument(
             "-s",
@@ -7031,17 +7043,32 @@ class LFInteractiveTiming(DeviceRequiredUnit):
         parser.add_argument(
             "--mode", choices=sorted(LF_IA_MODE_NAMES), help="the timing for that slot"
         )
+        parser.add_argument(
+            "--every-second",
+            choices=("on", "off"),
+            help="answer only every second START_AUTH in that slot",
+        )
         return parser
 
     def on_exec(self, args: argparse.Namespace):
         modes = self.cmd.lf_ia_slot_modes()
-        if args.slot is not None or args.mode is not None:
-            if args.slot is None or args.mode is None:
-                raise ArgsParserError("give both --slot and --mode")
-            modes[args.slot - 1] = LF_IA_MODE_NAMES[args.mode]
+        changes = args.mode is not None or args.every_second is not None
+        if args.slot is not None or changes:
+            if args.slot is None or not changes:
+                raise ArgsParserError("give --slot with --mode or --every-second")
+            m = modes[args.slot - 1]
+            if args.mode is not None:
+                m = (m & ~LF_IA_TIMING_BITS) | LF_IA_MODE_NAMES[args.mode]
+            if args.every_second is not None:
+                m = (
+                    (m | LF_IA_ALT_PROTOCOL)
+                    if args.every_second == "on"
+                    else (m & ~LF_IA_ALT_PROTOCOL)
+                )
+            modes[args.slot - 1] = m
             modes = self.cmd.lf_ia_slot_modes(modes)
         for i, m in enumerate(modes):
-            print(f"   slot {i + 1}  {LF_IA_MODES.get(m, m)}")
+            print(f"   slot {i + 1}  {lf_ia_mode_name(m)}")
 
 
 @lf_interactive.command("clear")
