@@ -1291,6 +1291,21 @@ class ChameleonCMD:
         return resp
 
     @expect_response(Status.SUCCESS)
+    def lf_ia_slot_modes(self, modes: list = None):
+        """
+        Get, or set and get, the interactive LF engine's timing mode for each slot (bit 0: time the answer by the
+        reader's measured carrier; bit 1: the module's alternative answer delay).
+
+        :param modes: 8 values to set, or None to read
+        :return: the 8 modes
+        """
+        data = bytes(modes) if modes is not None else None
+        resp = self.device.send_cmd_sync(Command.LF_IA_SLOT_MODES, data)
+        if resp.status == Status.SUCCESS:
+            resp.parsed = list(resp.data[:8])
+        return resp
+
+    @expect_response(Status.SUCCESS)
     def lf_ia_counters(self):
         """
         Read the interactive LF engine's counters, which survive sleep until the trace is cleared.

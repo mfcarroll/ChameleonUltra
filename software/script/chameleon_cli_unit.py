@@ -6901,7 +6901,9 @@ class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
         _hitag2_print_pages(bytes(pages))
 
 
-LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHI")
+LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHIIIhBBBB")
+LF_IA_MODES = {0: "baseline", 1: "scale", 2: "mid-window", 3: "scale + mid-window"}
+LF_IA_MODE_NAMES = {"baseline": 0, "scale": 1, "mid": 2, "both": 3}
 LF_IA_VERDICTS = {0: "ignored", 1: "answered", 2: "ended the exchange"}
 LF_IA_DECODES = {
     0: "ok",
@@ -6973,11 +6975,13 @@ class LFInteractiveTrace(DeviceRequiredUnit):
             ) = v[:10]
             n_gaps, n_bits, n_tx_bits = v[10:13]
             bits, tx_bits = v[17], v[18]
-            rec_boot, session, t_session = v[-3:]
+            rec_boot, session, t_session = v[-10:-7]
+            fc_used, fc_meas, snr10, mstat, mode, slot = v[-7:-1]
             if (rec_boot, session) != last_session:
                 last_session = (rec_boot, session)
                 print(
-                    f"   boot {rec_boot}, field session {session}, field on at {t_session / 1e6:.6f} s"
+                    f"   boot {rec_boot}, field session {session}, field on at {t_session / 1e6:.6f} s, "
+                    f"slot {slot}, timing {LF_IA_MODES.get(mode, mode)}"
                 )
             if kind == 2:
                 print(
@@ -6997,6 +7001,47 @@ class LFInteractiveTrace(DeviceRequiredUnit):
                         f"{'':18}answer {n_tx_bits} bits {_lf_ia_bits(tx_bits, n_tx_bits)}, ready {t_ready - t_us} us "
                         f"after the command, sent at {t_tx - t_us} us (due {t_due - t_us}){late}"
                     )
+                    meas = (
+                        f"measured {fc_meas / 10:.1f} Hz ({snr10 / 10:.0f} dB)"
+                        if fc_meas
+                        else "not measured"
+                        + (f" (status {mstat})" if mstat != 255 else "")
+                    )
+                    print(f"{'':18}timed at {fc_used / 10:.1f} Hz, carrier {meas}")
+
+
+@lf_interactive.command("timing")
+class LFInteractiveTiming(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Show or set each slot's answer timing for interactive LF emulation (such as Hitag 2), a research test. "
+            "baseline: a carrier period is taken as 8 µs. scale: the answer is timed by the reader's carrier, "
+            "measured at the start of each listen. mid: the answer comes at the middle of the reader's window. "
+            "both: scale and mid. The modes survive sleep but not a power-on reset or a flash."
+        )
+        parser.add_argument(
+            "-s",
+            "--slot",
+            type=int,
+            choices=range(1, 9),
+            metavar="<1-8>",
+            help="the slot to set",
+        )
+        parser.add_argument(
+            "--mode", choices=sorted(LF_IA_MODE_NAMES), help="the timing for that slot"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        modes = self.cmd.lf_ia_slot_modes()
+        if args.slot is not None or args.mode is not None:
+            if args.slot is None or args.mode is None:
+                raise ArgsParserError("give both --slot and --mode")
+            modes[args.slot - 1] = LF_IA_MODE_NAMES[args.mode]
+            modes = self.cmd.lf_ia_slot_modes(modes)
+        for i, m in enumerate(modes):
+            print(f"   slot {i + 1}  {LF_IA_MODES.get(m, m)}")
 
 
 @lf_interactive.command("clear")

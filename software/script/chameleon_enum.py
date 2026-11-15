@@ -195,6 +195,7 @@ class Command(enum.IntEnum):
     LF_IA_TRACE_READ = 3180
     LF_IA_TRACE_CLEAR = 3181
     LF_IA_TUNING = 3184
+    LF_IA_SLOT_MODES = 3188
 
 
 @enum.unique
