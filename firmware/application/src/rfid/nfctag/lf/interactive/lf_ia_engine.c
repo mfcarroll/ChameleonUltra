@@ -49,7 +49,7 @@ NRF_LOG_MODULE_REGISTER();
 #define SETTLE_MIN_US (40u)   // the 4-sample mean needs 3 samples of history before it means anything
 #define FC_NOMINAL    (125000.0f)
 #define FS_HZ         (1000000.0f / SAMPLE_US)
-#define MEAS_N        (256u)  // raw samples measured per listen at most: 2.56 ms, about a Hitag reader's power-up wait
+#define MEAS_N        (200u)  // raw samples measured per listen at most: 2 ms, inside a Hitag reader's power-up wait
 #define FC_LO_HZ      (115000.0f)  // the carriers searched: 125 kHz -8 % to +8 %
 #define FC_HI_HZ      (135000.0f)
 #define PWM_TICKS_MAX (32767u)
@@ -297,10 +297,11 @@ static void listen(uint32_t settle_us) {
     adc_listen_start(settle_us);
 }
 
-// Runs this listen's carrier measurement once its quiet stretch is over: the first gap has begun, or the buffer is
-// full. Its cost (about 1 ms) falls in a listen tick, which the ring absorbs.
-static void measure_carrier(void) {
-    if (m_meas_done || (m_meas_n < MEAS_N && !m_det.in_gap && m_det.n_gaps == 0)) {
+// Runs this listen's carrier measurement. From a listen tick (force false) it runs only when the buffer filled in
+// the quiet before the first gap, so its cost falls between commands. At a command's end (force true) it runs on the
+// samples gathered before that command's first gap, if there are enough.
+static void measure_carrier(bool force) {
+    if (m_meas_done || (!force && m_meas_n < MEAS_N) || m_meas_n < LF_IA_CARRIER_MIN_SAMPLES) {
         return;
     }
     m_meas_done = true;
@@ -436,6 +437,12 @@ static void command_end(uint32_t t_detect) {
     m_state = ST_ANSWER;
     lf_ia_trace_stats()->commands++;
 
+    // A slot that times its answer by the reader needs the carrier now, if the quiet before this command was too
+    // short for the listen ticks to measure it.
+    if (m_timing.mode & LF_IA_MODE_SCALE) {
+        measure_carrier(true);
+    }
+
     lf_ia_trace_rec_t *r = lf_ia_trace_begin(LF_IA_TR_COMMAND);
     r->t_us = m_det.last_end;
     r->t_detect_us = t_detect;
@@ -535,7 +542,7 @@ static void listen_tick(void) {
         }
     }
     m_det.k_done = k_end;
-    measure_carrier();
+    measure_carrier(false);
 
     const uint32_t t_last = m_det.t0 + (k_end - 1u) * SAMPLE_US - SMOOTH_LAG_US;
     if (m_det.n_gaps > 0 && !m_det.in_gap && t_last - m_det.last_end >= eof_us()) {

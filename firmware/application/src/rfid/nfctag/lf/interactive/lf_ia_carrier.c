@@ -3,8 +3,13 @@
 #include <math.h>
 
 #define TWO_PI       (6.28318530718f)
-#define SCAN_STEP_HZ (100.0f)  // a quarter of a Hann main lobe or less for n up to 1000
-#define SCAN_MAX     (256u)    // scan points kept for the median
+// Two passes keep the cost down (it runs in the engine's interrupt): a coarse scan of the band, then a fine one
+// around the coarse peak. Hann's main lobe is 4 fs / n wide (2 kHz at 200 samples), so a 500 Hz coarse step
+// cannot miss the line.
+#define COARSE_STEP_HZ (500.0f)
+#define FINE_STEP_HZ   (50.0f)
+#define FINE_HALF      (10u)     // fine points each side of the coarse peak
+#define SCAN_MAX       (128u)    // coarse points kept for the median
 
 static float m_win[LF_IA_CARRIER_MAX_SAMPLES];  // the windowed, mean-free samples
 static float m_pow[SCAN_MAX];
@@ -59,9 +64,9 @@ void lf_ia_carrier_estimate(const int16_t *x, size_t n, float fs, float lo_hz, f
         m_win[i] = ((float)x[i] - mean) * h;
     }
 
-    // The band, folded: carrier f lands at f - fs.
+    // The band, folded: carrier f lands at f - fs. Coarse pass.
     const float a_lo = lo_hz - fs, a_hi = hi_hz - fs;
-    size_t k_n = (size_t)((a_hi - a_lo) / SCAN_STEP_HZ) + 1u;
+    size_t k_n = (size_t)((a_hi - a_lo) / COARSE_STEP_HZ) + 1u;
     if (k_n > SCAN_MAX) {
         k_n = SCAN_MAX;
     }
@@ -76,15 +81,27 @@ void lf_ia_carrier_estimate(const int16_t *x, size_t n, float fs, float lo_hz, f
         }
     }
 
-    // A parabola through the peak and its neighbours, on log power, places the line between scan points.
-    float a_pk = a_lo + step * (float)k_pk;
-    if (k_pk > 0 && k_pk + 1u < k_n) {
-        const float l = logf(m_pow[k_pk - 1] + 1e-9f), c = logf(m_pow[k_pk] + 1e-9f), r = logf(m_pow[k_pk + 1] + 1e-9f);
-        const float d = l - 2.0f * c + r;
-        if (d < 0.0f) {
-            a_pk += step * 0.5f * (l - r) / d;
+    // Fine pass around the coarse peak, then a parabola through the fine peak and its neighbours, on log power.
+    const float centre = a_lo + step * (float)k_pk;
+    float fpow[2u * FINE_HALF + 1u];
+    size_t f_pk = 0;
+    float fp_pk = -1.0f;
+    for (size_t k = 0; k < 2u * FINE_HALF + 1u; k++) {
+        fpow[k] = power_at(n, fs, centre + FINE_STEP_HZ * ((float)k - (float)FINE_HALF));
+        if (fpow[k] > fp_pk) {
+            fp_pk = fpow[k];
+            f_pk = k;
         }
     }
+    float a_pk = centre + FINE_STEP_HZ * ((float)f_pk - (float)FINE_HALF);
+    if (f_pk > 0 && f_pk + 1u < 2u * FINE_HALF + 1u) {
+        const float l = logf(fpow[f_pk - 1] + 1e-9f), m = logf(fpow[f_pk] + 1e-9f), r = logf(fpow[f_pk + 1] + 1e-9f);
+        const float d = l - 2.0f * m + r;
+        if (d < 0.0f) {
+            a_pk += FINE_STEP_HZ * 0.5f * (l - r) / d;
+        }
+    }
+    p_pk = fp_pk > p_pk ? fp_pk : p_pk;
 
     const float med = median(m_pow, k_n);
     out->snr_db = 10.0f * log10f((p_pk + 1e-9f) / (med + 1e-9f));
