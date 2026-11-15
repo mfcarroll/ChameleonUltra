@@ -110,7 +110,15 @@ static struct {
 // Raw samples of one listen, from the end of its settle to its first gap, for the carrier measurement.
 static int16_t m_meas[MEAS_N];
 static size_t m_meas_n;
-static bool m_meas_done;  // this listen's measurement has run, or will not
+static bool m_meas_done;  // this listen's samples have been handed over, or will not be
+
+// The measurement runs in the main loop (lf_ia_process), at the lowest priority: it takes milliseconds, and in the
+// engine's interrupts it delayed seeing a command's end. The interrupt copies the samples here and sets pending.
+static int16_t m_meas_copy[MEAS_N];
+static size_t m_meas_copy_n;
+static volatile bool m_meas_pending;
+static volatile uint32_t m_meas_session;  // the session the copy belongs to, so a late result is not applied to another
+static uint32_t m_session_id;
 
 static lf_ia_tuning_t m_tuning = {
     .settle_us = 300,
@@ -297,20 +305,36 @@ static void listen(uint32_t settle_us) {
     adc_listen_start(settle_us);
 }
 
-// Runs this listen's carrier measurement. From a listen tick (force false) it runs only when the buffer filled in
-// the quiet before the first gap, so its cost falls between commands. At a command's end (force true) it runs on the
-// samples gathered before that command's first gap, if there are enough.
+// Hands this listen's quiet samples to the main loop for the carrier measurement: from a listen tick (force false)
+// once the buffer is full, or at a command's end (force true) with what came before its first gap, if enough.
 static void measure_carrier(bool force) {
-    if (m_meas_done || (!force && m_meas_n < MEAS_N) || m_meas_n < LF_IA_CARRIER_MIN_SAMPLES) {
+    if (m_meas_done || m_meas_pending || (!force && m_meas_n < MEAS_N) || m_meas_n < LF_IA_CARRIER_MIN_SAMPLES) {
         return;
     }
     m_meas_done = true;
-    lf_ia_carrier_estimate(m_meas, m_meas_n, FS_HZ, FC_LO_HZ, FC_HI_HZ, FC_NOMINAL, &m_timing.last);
-    m_timing.last_ran = true;
-    if (m_timing.last.status == LF_IA_CARRIER_OK) {
-        m_timing.measured = true;
-        m_timing.fc_hz = m_timing.last.carrier_hz;
+    memcpy(m_meas_copy, m_meas, m_meas_n * sizeof(m_meas[0]));
+    m_meas_copy_n = m_meas_n;
+    m_meas_session = m_session_id;
+    m_meas_pending = true;
+}
+
+void lf_ia_process(void) {
+    if (!m_meas_pending) {
+        return;
     }
+    lf_ia_carrier_t c;
+    lf_ia_carrier_estimate(m_meas_copy, m_meas_copy_n, FS_HZ, FC_LO_HZ, FC_HI_HZ, FC_NOMINAL, &c);
+    CRITICAL_REGION_ENTER();
+    if (m_meas_session == m_session_id && m_state != ST_OFF) {
+        m_timing.last = c;
+        m_timing.last_ran = true;
+        if (c.status == LF_IA_CARRIER_OK) {
+            m_timing.measured = true;
+            m_timing.fc_hz = c.carrier_hz;
+        }
+    }
+    m_meas_pending = false;
+    CRITICAL_REGION_EXIT();
 }
 
 // The carrier the answer is timed by.
@@ -321,6 +345,7 @@ static float fc_used(void) {
 static void session_start(void) {
     m_ended = false;
     memset(&m_timing, 0, sizeof(m_timing));
+    m_session_id++;
     m_timing.slot = tag_emulation_get_slot();
     if (m_slot_modes.magic == SLOT_MODES_MAGIC && m_timing.slot < LF_IA_SLOTS) {
         m_timing.mode = m_slot_modes.modes[m_timing.slot];
@@ -437,11 +462,9 @@ static void command_end(uint32_t t_detect) {
     m_state = ST_ANSWER;
     lf_ia_trace_stats()->commands++;
 
-    // A slot that times its answer by the reader needs the carrier now, if the quiet before this command was too
-    // short for the listen ticks to measure it.
-    if (m_timing.mode & LF_IA_MODE_SCALE) {
-        measure_carrier(true);
-    }
+    // If the quiet before this command was too short to fill the buffer, measure what there was. The result comes
+    // from the main loop, so this answer may still go out at the nominal carrier (its trace record says which).
+    measure_carrier(true);
 
     lf_ia_trace_rec_t *r = lf_ia_trace_begin(LF_IA_TR_COMMAND);
     r->t_us = m_det.last_end;

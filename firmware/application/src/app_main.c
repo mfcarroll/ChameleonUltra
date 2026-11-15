@@ -1,3 +1,4 @@
+#include "lf_ia.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1186,6 +1187,8 @@ int main(void) {
             blink_usb_led_status();
         }
 
+        // Interactive LF: work too slow for its interrupts (the reader's carrier)
+        lf_ia_process();
         // Data pack process
         data_frame_process();
         // Log print process

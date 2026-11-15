@@ -86,6 +86,8 @@ typedef struct {
 #define LF_IA_MODE_ALT_DELAY (1u << 1)
 #define LF_IA_SLOTS          (8u)
 void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]);
+// Runs the engine's slow work (the carrier measurement) from the main loop.
+void lf_ia_process(void);
 void lf_ia_slot_modes_set(const uint8_t modes[LF_IA_SLOTS]);
 
 // Registers the module the engine runs while the slot's LF tag type is this module's. NULL clears it.
