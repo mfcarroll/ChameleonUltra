@@ -7,6 +7,7 @@
 #include "bsp_time.h"
 #include "hw_connect.h"
 #include "lf_125khz_radio.h"
+#include "lf_rdr_trace.h"
 #include "nrf_gpio.h"
 #include "nrf_saadc.h"
 #include "nrfx_saadc.h"
@@ -167,6 +168,7 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     rx->n_bits = lf_ia_decode_runs_ex(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc,
                                       link->coding_flags, rx->bits, LF_RDR_MAX_RX_BITS, &rx->clean);
     m_last = *rx;
+    lf_rdr_trace_add(tx, n_tx, power_up_us, rx, m_runs, m_runs_n);
     return true;
 }
 

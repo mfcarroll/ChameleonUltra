@@ -24,8 +24,10 @@ test_lf_ia_carrier: test_lf_ia_carrier.c ../lf_ia_carrier.c ../lf_ia_carrier.h
 
 RDR_FRAME = ../../../../reader/lf/lf_rdr_frame
 
-test_lf_rdr_frame: test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_FRAME).h ../../../../reader/lf/lf_rdr_ia.h ../lf_ia_codec.h
-	$(CC) $(CFLAGS) -I.. -I../../../../reader/lf -o $@ test_lf_rdr_frame.c $(RDR_FRAME).c
+RDR_TRACE = ../../../../reader/lf/lf_rdr_trace
+
+test_lf_rdr_frame: test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_FRAME).h $(RDR_TRACE).c $(RDR_TRACE).h ../../../../reader/lf/lf_rdr_ia.h ../lf_ia_codec.h
+	$(CC) $(CFLAGS) -I.. -I../../../../reader/lf -o $@ test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_TRACE).c
 
 clean:
 	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame

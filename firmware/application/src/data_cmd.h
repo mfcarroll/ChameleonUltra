@@ -233,5 +233,7 @@
 #define DATA_CMD_LF_RDR_CAPTURE                 (3186)
 #define DATA_CMD_HITAG2_READER_LINK             (3187)
 #define DATA_CMD_LF_RDR_LAST                    (3189)
+#define DATA_CMD_LF_RDR_TRACE_READ              (3190)
+#define DATA_CMD_LF_RDR_TRACE_CLEAR             (3191)
 
 #endif

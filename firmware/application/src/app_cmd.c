@@ -22,6 +22,7 @@
 #include "lf_hitag2_reader.h"
 #include "lf_rdr_frame.h"
 #include "lf_rdr_ia.h"
+#include "lf_rdr_trace.h"
 #endif
 #include "lf_ia_debug.h"
 #include "lf_ia_hitag2.h"
@@ -2308,6 +2309,27 @@ static data_frame_tx_t *cmd_processor_lf_rdr_last(uint16_t cmd, uint16_t status,
     return lf_rdr_reply_frame(cmd, lf_rdr_last());
 }
 
+// In: the first record (u16, big-endian), counted from the oldest held. Out: the records added since the clear (u16),
+// the record size (u16), the count here (u8), then the records (see lf_rdr_trace_pack), all little-endian.
+static data_frame_tx_t *cmd_processor_lf_rdr_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[5 + 14 * LF_RDR_TRACE_REC_SIZE];
+    const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
+    uint16_t total;
+    const size_t n = lf_rdr_trace_read(first, out + 5, 14, &total);
+    const uint16_t size = LF_RDR_TRACE_REC_SIZE;
+    out[0] = (uint8_t)total;
+    out[1] = (uint8_t)(total >> 8);
+    out[2] = (uint8_t)size;
+    out[3] = (uint8_t)(size >> 8);
+    out[4] = (uint8_t)n;
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(5 + n * LF_RDR_TRACE_REC_SIZE), out);
+}
+
+static data_frame_tx_t *cmd_processor_lf_rdr_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_rdr_trace_clear();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
 // In: the offset (u16, big-endian). Out: the total sample count (u16), the count here (u16), then the samples (i16),
 // all little-endian.
 static data_frame_tx_t *cmd_processor_lf_rdr_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3528,6 +3550,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_RDR_CAPTURE,               NULL,                        cmd_processor_lf_rdr_capture,                NULL                   },
     {    DATA_CMD_HITAG2_READER_LINK,           NULL,                        cmd_processor_hitag2_reader_link,            NULL                   },
     {    DATA_CMD_LF_RDR_LAST,                  NULL,                        cmd_processor_lf_rdr_last,                   NULL                   },
+    {    DATA_CMD_LF_RDR_TRACE_READ,            NULL,                        cmd_processor_lf_rdr_trace_read,             NULL                   },
+    {    DATA_CMD_LF_RDR_TRACE_CLEAR,           NULL,                        cmd_processor_lf_rdr_trace_clear,            NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 
