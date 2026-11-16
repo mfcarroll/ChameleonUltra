@@ -35,7 +35,7 @@ static lf_rdr_link_t m_link = {
     .bit_fc = 32,
     .window_us = 1000,
     .capture_n = 2048,
-    .min_depth = 40,
+    .min_depth = HT2_MIN_DEPTH,
     // The reader's detector falls back from a load slowly, so slice near the low rail.
     .slice_pct = 25,
 };

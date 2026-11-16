@@ -16,7 +16,7 @@ test_lf_ia_hitag2: test_lf_ia_hitag2.c ../lf_ia_hitag2.c ../lf_ia_hitag2.h ../lf
 
 FRAME = ../../../../reader/lf/lf_hitag2_frame
 
-test_lf_hitag2_frame: test_lf_hitag2_frame.c $(FRAME).c $(FRAME).h ../lf_ia_codec.c ../lf_ia_codec.h
+test_lf_hitag2_frame: test_lf_hitag2_frame.c ht2_answer_capture.h ht2_no_tag_capture.h $(FRAME).c $(FRAME).h ../lf_ia_codec.c ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -I.. -o $@ test_lf_hitag2_frame.c $(FRAME).c ../lf_ia_codec.c
 
 test_lf_ia_carrier: test_lf_ia_carrier.c ../lf_ia_carrier.c ../lf_ia_carrier.h

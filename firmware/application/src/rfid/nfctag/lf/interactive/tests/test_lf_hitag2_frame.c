@@ -5,6 +5,8 @@
 
 #include "../../../../reader/lf/lf_hitag2_frame.h"
 #include "../lf_ia_codec.h"
+#include "ht2_answer_capture.h"
+#include "ht2_no_tag_capture.h"
 
 static int m_failed = 0;
 static int m_checks = 0;
@@ -36,7 +38,31 @@ static size_t answer(uint8_t *bits, size_t sof, uint32_t page, const char *junk)
     return n;
 }
 
+// The captures through lf_rdr_ia's envelope step with the Hitag 2 link: 40 periods skipped, a 1000 µs window, sliced
+// 25 % from the low rail, 32 periods a bit. Returns the bits decoded.
+static size_t envelope_bits(const int16_t *s, size_t n, int32_t min_depth, size_t *n_runs) {
+    uint16_t runs[400];
+    uint8_t bits[32];
+    lf_ia_envelope_info_t info;
+    bool clean;
+    *n_runs = lf_ia_envelope_runs(s, n, 40, 125, min_depth, 25, 16, 48, runs, 400, &info);
+    return lf_ia_decode_runs_ex(runs, *n_runs, LF_IA_CODING_MANCHESTER, 32, 0, bits, 256, &clean);
+}
+
+static void test_min_depth(void) {
+    const size_t n_ans = sizeof(HT2_ANSWER_CAPTURE) / sizeof(HT2_ANSWER_CAPTURE[0]);
+    const size_t n_none = sizeof(HT2_NO_TAG_CAPTURE) / sizeof(HT2_NO_TAG_CAPTURE[0]);
+    size_t nr;
+    size_t nb = envelope_bits(HT2_NO_TAG_CAPTURE, n_none, 40, &nr);
+    CHECK(nb > 0, "no tag at min_depth 40 should show the phantom answer: %zu bits", nb);
+    nb = envelope_bits(HT2_NO_TAG_CAPTURE, n_none, HT2_MIN_DEPTH, &nr);
+    CHECK(nb == 0 && nr == 0, "no tag at HT2_MIN_DEPTH: %zu bits, %zu runs", nb, nr);
+    nb = envelope_bits(HT2_ANSWER_CAPTURE, n_ans, HT2_MIN_DEPTH, &nr);
+    CHECK(nb == 38, "answer at HT2_MIN_DEPTH: %zu bits", nb);
+}
+
 int main(void) {
+    test_min_depth();
     ht2_frame_t f;
     uint8_t b[8];
     uint32_t page = 0;

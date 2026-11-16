@@ -10,6 +10,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// ADC counts: an answer must swing at least this far from idle. With no tag, the field rings after the reader's last
+// gap, about 2800 counts from the idle level measured before it, and that ringing decodes as 1 bit. The PM3's
+// simulated tag swings about 10000, rail to rail.
+#define HT2_MIN_DEPTH (5000)
+
 // One use of the reader (a scan or a read), from the field's power-up. The start-of-frame length is the tag's: the
 // datasheet gives 5 ones, and some tags (and the PM3's simulation) send 6.
 typedef struct {
