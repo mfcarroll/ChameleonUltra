@@ -232,5 +232,6 @@
 #define DATA_CMD_LF_RDR_TRANSACT                (3185)
 #define DATA_CMD_LF_RDR_CAPTURE                 (3186)
 #define DATA_CMD_HITAG2_READER_LINK             (3187)
+#define DATA_CMD_LF_RDR_LAST                    (3189)
 
 #endif

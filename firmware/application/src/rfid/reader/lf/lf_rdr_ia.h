@@ -63,3 +63,6 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
 // The last capture's samples and load runs, for diagnosis.
 const int16_t *lf_rdr_capture(size_t *n);
 const uint16_t *lf_rdr_runs(size_t *n);
+// The reply of the most recent transaction whose capture completed, with n_bits and n_runs 0 before the first one.
+// Its runs are the ones lf_rdr_runs() returns.
+const lf_rdr_reply_t *lf_rdr_last(void);

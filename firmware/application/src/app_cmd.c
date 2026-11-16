@@ -20,6 +20,7 @@
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
 #include "lf_hitag2_reader.h"
+#include "lf_rdr_frame.h"
 #include "lf_rdr_ia.h"
 #endif
 #include "lf_ia_debug.h"
@@ -2267,12 +2268,18 @@ static data_frame_tx_t *cmd_processor_hitag2_read(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, status, sizeof(out), out);
 }
 
+// Out, for LF_RDR_TRANSACT and LF_RDR_LAST: see lf_rdr_frame_pack.
+static data_frame_tx_t *lf_rdr_reply_frame(uint16_t cmd, const lf_rdr_reply_t *rx) {
+    static uint8_t out[LF_RDR_FRAME_MAX];
+    size_t n_runs;
+    const uint16_t *runs = lf_rdr_runs(&n_runs);
+    const size_t len = lf_rdr_frame_pack(rx, runs, n_runs, out);
+    return data_frame_make(cmd, rx->n_bits ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, (uint16_t)len, out);
+}
+
 // In: an lf_rdr_link_t, the power-up time (u16 µs, 0 for a field already on), the number of command bits (u8), then
-// the command bits packed first-bit-first. All little-endian. Out: the answer's bit count (u16), 32 bytes of bits,
-// the envelope's first loaded sample (u16), idle, load and threshold levels (i16 each), the run count (u16), then up
-// to 400 runs (u16 each).
+// the command bits packed first-bit-first. All little-endian. Out: see lf_rdr_reply_frame.
 static data_frame_tx_t *cmd_processor_lf_rdr_transact(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    static uint8_t out[2 + 32 + 10 + 400 * 2];
     if (length < sizeof(lf_rdr_link_t) + 3) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
@@ -2292,19 +2299,13 @@ static data_frame_tx_t *cmd_processor_lf_rdr_transact(uint16_t cmd, uint16_t sta
     if (!ok) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    size_t n_runs;
-    const uint16_t *runs = lf_rdr_runs(&n_runs);
-    const uint16_t nb = (uint16_t)rx.n_bits, nr = (uint16_t)n_runs;
-    const uint16_t first = (uint16_t)rx.env.first;
-    const int16_t lv[3] = {(int16_t)rx.env.idle, (int16_t)rx.env.load, (int16_t)rx.env.threshold};
-    const size_t keep = n_runs < 400 ? n_runs : 400;
-    memcpy(out, &nb, 2);
-    memcpy(out + 2, rx.bits, 32);
-    memcpy(out + 34, &first, 2);
-    memcpy(out + 36, lv, 6);
-    memcpy(out + 42, &nr, 2);
-    memcpy(out + 44, runs, keep * 2);
-    return data_frame_make(cmd, rx.n_bits ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, (uint16_t)(44 + keep * 2), out);
+    return lf_rdr_reply_frame(cmd, &rx);
+}
+
+// In: nothing. Out: the last completed transaction's answer, in the same bytes LF_RDR_TRANSACT returned for it.
+// Before the first transaction, the bit and run counts are 0.
+static data_frame_tx_t *cmd_processor_lf_rdr_last(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return lf_rdr_reply_frame(cmd, lf_rdr_last());
 }
 
 // In: the offset (u16, big-endian). Out: the total sample count (u16), the count here (u16), then the samples (i16),
@@ -3526,6 +3527,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_RDR_TRANSACT,              before_reader_run,           cmd_processor_lf_rdr_transact,               NULL                   },
     {    DATA_CMD_LF_RDR_CAPTURE,               NULL,                        cmd_processor_lf_rdr_capture,                NULL                   },
     {    DATA_CMD_HITAG2_READER_LINK,           NULL,                        cmd_processor_hitag2_reader_link,            NULL                   },
+    {    DATA_CMD_LF_RDR_LAST,                  NULL,                        cmd_processor_lf_rdr_last,                   NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 

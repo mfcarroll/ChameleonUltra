@@ -22,6 +22,8 @@ static int16_t m_cap[LF_RDR_CAPTURE_MAX];
 static size_t m_cap_n;
 static uint16_t m_runs[LF_RDR_MAX_RUNS];
 static size_t m_runs_n;
+// The reply of the last transaction whose capture completed. Its runs are the ones in m_runs.
+static lf_rdr_reply_t m_last;
 
 static const lf_rdr_link_t *m_link;
 static const uint8_t *m_tx;
@@ -164,6 +166,7 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     rx->n_runs = m_runs_n;
     rx->n_bits = lf_ia_decode_runs_ex(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc,
                                       link->coding_flags, rx->bits, LF_RDR_MAX_RX_BITS, &rx->clean);
+    m_last = *rx;
     return true;
 }
 
@@ -175,4 +178,8 @@ const int16_t *lf_rdr_capture(size_t *n) {
 const uint16_t *lf_rdr_runs(size_t *n) {
     *n = m_runs_n;
     return m_runs;
+}
+
+const lf_rdr_reply_t *lf_rdr_last(void) {
+    return &m_last;
 }

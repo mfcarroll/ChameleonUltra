@@ -1,11 +1,12 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined
 
-test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier
+test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame
 	./test_lf_ia_codec
 	./test_lf_ia_hitag2
 	./test_lf_hitag2_frame
 	./test_lf_ia_carrier
+	./test_lf_rdr_frame
 
 test_lf_ia_codec: test_lf_ia_codec.c ht2_answer_capture.h ../lf_ia_codec.c ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -o $@ test_lf_ia_codec.c ../lf_ia_codec.c
@@ -21,7 +22,12 @@ test_lf_hitag2_frame: test_lf_hitag2_frame.c $(FRAME).c $(FRAME).h ../lf_ia_code
 test_lf_ia_carrier: test_lf_ia_carrier.c ../lf_ia_carrier.c ../lf_ia_carrier.h
 	$(CC) $(CFLAGS) -o $@ test_lf_ia_carrier.c ../lf_ia_carrier.c -lm
 
+RDR_FRAME = ../../../../reader/lf/lf_rdr_frame
+
+test_lf_rdr_frame: test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_FRAME).h ../../../../reader/lf/lf_rdr_ia.h ../lf_ia_codec.h
+	$(CC) $(CFLAGS) -I.. -I../../../../reader/lf -o $@ test_lf_rdr_frame.c $(RDR_FRAME).c
+
 clean:
-	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier
+	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame
 
 .PHONY: test clean
