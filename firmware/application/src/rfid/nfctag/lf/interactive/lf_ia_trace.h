@@ -13,7 +13,9 @@
 #include "lf_ia.h"
 #include "lf_ia_debug.h"
 
-#define LF_IA_TRACE_RECORDS (32u)
+// The retained region (noinit.ld, 32 KB) also holds the MIFARE Classic auth log, about 18 KB. 48 records leave about
+// 650 bytes of it free, and 50 is the most that fits.
+#define LF_IA_TRACE_RECORDS (48u)
 #define LF_IA_TRACE_KEEP    (8u)   // the first records since a clear, never overwritten
 #define LF_IA_TRACE_GAPS    (48u)
 
