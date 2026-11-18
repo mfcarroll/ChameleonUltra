@@ -7,6 +7,7 @@
 #include "../lf_ia_codec.h"
 #include "ht2_answer_capture.h"
 #include "ht2_cu_answer_capture.h"
+#include "ht2_tag_answer_capture.h"
 
 static int m_failed = 0;
 static int m_checks = 0;
@@ -336,9 +337,28 @@ static void test_envelope_loaded_tail(void) {
     CHECK(lf_ia_envelope_runs(flat, 600, 40, 125, 100, 25, 16, 48, runs, 400, &info) == 0, "a lone load is no answer");
 }
 
+static void test_envelope_release_tail(void) {
+    // A genuine tag lets go after its last half-bit, and the detector climbs back past the slice 44 periods later. The
+    // climb is no load half: the answer ends clean, on its final no-load half.
+    uint16_t runs[400];
+    lf_ia_envelope_info_t info;
+    const size_t n = sizeof(HT2_TAG_ANSWER_CAPTURE) / sizeof(HT2_TAG_ANSWER_CAPTURE[0]);
+    const size_t nr = lf_ia_envelope_runs(HT2_TAG_ANSWER_CAPTURE, n, 40, 125, 100, 25, 16, 48, runs, 400, &info);
+    uint8_t got[8] = {0};
+    bool clean = false;
+    const size_t nb = lf_ia_decode_runs_ex(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 64, &clean);
+    char s[65];
+    bits_to_string(got, nb, s);
+    CHECK(nb == 37 && clean && strcmp(s, "1111101010101010101010101010101010101") == 0, "tag answer: %zu bits%s %s", nb,
+          clean ? "" : " (unclean)", s);
+    CHECK(nr > 0 && !LF_IA_RUN_IS_LOAD(runs[nr - 1]) && LF_IA_RUN_LEN(runs[nr - 1]) == 16, "last run %04x",
+          nr ? runs[nr - 1] : 0);
+}
+
 int main(void) {
     test_decode_bench_capture();
     test_envelope_loaded_tail();
+    test_envelope_release_tail();
     test_decode_jitter();
     test_decode_one_class();
     test_decode_edges();

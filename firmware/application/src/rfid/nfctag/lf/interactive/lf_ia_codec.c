@@ -241,17 +241,25 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
     }
     info->first = i;
 
+    // After a tag lets go, the detector climbs back to the unmodulated level. That level sits above a slice near the low
+    // rail, so the climb reads as a load run. The climb never gets past mid-level, and every real load half does. The
+    // first run starts at mid-level.
     size_t nr = 0;
     bool level = true;
+    bool peaked = true;
     uint32_t len = 0;
     for (; i < n; i++) {
         const bool l = (s[i] < thr) == load_low;
         if (l == level) {
             len++;
+            peaked = peaked || ((s[i] < first_thr) == load_low);
             if (len > max_idle_fc) {
                 break;
             }
             continue;
+        }
+        if (level && !peaked) {
+            break;
         }
         if (nr >= max_runs || len > LF_IA_RUN_LEN_MAX) {
             return 0;
@@ -259,6 +267,14 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
         runs[nr++] = LF_IA_RUN(level, len);
         level = l;
         len = 1;
+        peaked = (s[i] < first_thr) == load_low;
+    }
+    // The answer ended with the no-load stretch before the climb, which holds at most its final half-bit.
+    if (level && !peaked) {
+        if (nr > 0 && LF_IA_RUN_LEN(runs[nr - 1]) > half_fc) {
+            runs[nr - 1] = LF_IA_RUN(false, half_fc);
+        }
+        return nr;
     }
     // A stretch past max_idle_fc ends the answer, and may still hold its final half-bit. A no-load one usually does. A
     // loaded one does when the tag rests loaded (a CU emulating one listens with its load on), so its last load half

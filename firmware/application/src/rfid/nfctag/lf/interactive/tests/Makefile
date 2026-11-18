@@ -8,7 +8,7 @@ test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier
 	./test_lf_ia_carrier
 	./test_lf_rdr_frame
 
-test_lf_ia_codec: test_lf_ia_codec.c ht2_answer_capture.h ../lf_ia_codec.c ../lf_ia_codec.h
+test_lf_ia_codec: test_lf_ia_codec.c ht2_answer_capture.h ht2_cu_answer_capture.h ht2_tag_answer_capture.h ../lf_ia_codec.c ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -o $@ test_lf_ia_codec.c ../lf_ia_codec.c
 
 test_lf_ia_hitag2: test_lf_ia_hitag2.c ../lf_ia_hitag2.c ../lf_ia_hitag2.h ../lf_ia_codec.c ../lf_ia_codec.h ../lf_ia.h
