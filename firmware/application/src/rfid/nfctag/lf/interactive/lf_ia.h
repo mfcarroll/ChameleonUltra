@@ -80,12 +80,17 @@ typedef struct {
 // (125 kHz). LF_IA_MODE_ALT_DELAY: the module answers at its alternative delay (Hitag 2: the middle of the reader's
 // listening window, rather than a genuine fob's timing). LF_IA_MODE_ALT_PROTOCOL: the module follows its alternative
 // protocol rule (Hitag 2: it answers only every second START_AUTH, as the datasheet says a genuine tag does).
+// LF_IA_MODE_REST_UNLOADED: after each answer the engine holds the load off for one bit of the answer's coding before
+// it listens again. A genuine tag rests unloaded, and the engine otherwise listens with the load on at once. If the
+// answer ends on a load half-bit, the reader then sees that half end. If it ends on a no-load half, the load comes back
+// one bit after the answer instead of at its end.
 //
 // The modes are kept in retained RAM, so they survive sleep (a test runs at a reader on battery) but not a power-on
 // reset or a flash, which set every slot to 0.
 #define LF_IA_MODE_SCALE     (1u << 0)
 #define LF_IA_MODE_ALT_DELAY (1u << 1)
 #define LF_IA_MODE_ALT_PROTOCOL (1u << 2)
+#define LF_IA_MODE_REST_UNLOADED (1u << 3)
 #define LF_IA_SLOTS          (8u)
 void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]);
 // Runs the engine's slow work (the carrier measurement) from the main loop.

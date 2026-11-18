@@ -67,6 +67,7 @@ typedef enum {
     ST_IDLE,     // waiting for the wake comparator
     ST_LISTEN,   // capturing a command
     ST_ANSWER,   // an answer is armed or playing
+    ST_REST,     // the answer has ended: the load stays off until the tick (LF_IA_MODE_REST_UNLOADED)
     ST_RECHECK,  // a gap ran past lost_us: waiting to check the field with the load off
 } state_t;
 
@@ -603,9 +604,20 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
         r->t_tx_end_us = nrfx_timer_capture_get(&m_ia_timer, CC_TX_END);
     }
     lf_ia_trace_stats()->responses++;
-    if (m_state == ST_ANSWER) {
-        listen(m_tuning.settle_us);
+    if (m_state != ST_ANSWER) {
+        return;
     }
+    if (m_timing.mode & LF_IA_MODE_REST_UNLOADED) {
+        // One bit of the answer's coding, in the carrier the answer was timed by. For Hitag 2 that is 256 µs. With the
+        // 300 µs settle, the engine sees gaps again about 560 µs after the answer, and a reader waits at least 90 periods
+        // (720 µs, the PM3's HITAG_T_WAIT_2_MIN) before its next command.
+        load_set(false);
+        m_state = ST_REST;
+        const uint32_t rest_us = (uint32_t)lroundf((float)m_rsp.bit_fc * 1e6f / fc_used());
+        nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + rest_us, true);
+        return;
+    }
+    listen(m_tuning.settle_us);
 }
 
 static void timer_handler(nrf_timer_event_t ev, void *ctx) {
@@ -617,6 +629,10 @@ static void timer_handler(nrf_timer_event_t ev, void *ctx) {
         return;
     }
     nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
+    if (m_state == ST_REST) {
+        listen(m_tuning.settle_us);
+        return;
+    }
     if (m_state != ST_RECHECK) {
         return;
     }
