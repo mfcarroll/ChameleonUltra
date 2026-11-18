@@ -17,17 +17,20 @@ lf_ia_decode_status_t lf_ia_decode_intervals(const uint32_t *intervals, size_t n
         sum += intervals[i];
     }
 
+    uint32_t split = lo + (hi - lo) / 2u;
     if ((uint64_t)hi * 100u < (uint64_t)lo * cfg->min_ratio_pct) {
-        if (split_out) {
-            *split_out = (uint32_t)(sum / n);
+        if (cfg->one_class_split == 0) {
+            if (split_out) {
+                *split_out = (uint32_t)(sum / n);
+            }
+            return LF_IA_DECODE_ONE_CLASS;
         }
-        return LF_IA_DECODE_ONE_CLASS;
+        split = cfg->one_class_split;
     }
     if (n > max_bits) {
         return LF_IA_DECODE_OVERFLOW;
     }
 
-    const uint32_t split = lo + (hi - lo) / 2u;
     if (split_out) {
         *split_out = split;
     }

@@ -101,6 +101,29 @@ static void test_decode_one_class(void) {
     lf_ia_decode_status_t st = lf_ia_decode_intervals(iv, 32, &cfg, bits, 32, &n, &mean);
     CHECK(st == LF_IA_DECODE_ONE_CLASS && n == 0, "one class: st=%d n=%zu", st, n);
     CHECK(mean > 155 && mean < 177, "one class mean %u", mean);
+
+    // With a fixed split, the same burst reads as 32 zeros, and a burst of long intervals as 32 ones.
+    const lf_ia_decode_cfg_t fixed = {.min_ratio_pct = 115, .short_is_one = false, .one_class_split = 200};
+    uint32_t split = 0;
+    st = lf_ia_decode_intervals(iv, 32, &fixed, bits, 32, &n, &split);
+    CHECK(st == LF_IA_DECODE_OK && n == 32 && split == 200, "fixed split, zeros: st=%d n=%zu split=%u", st, n, split);
+    CHECK(bits[0] == 0 && bits[1] == 0 && bits[2] == 0 && bits[3] == 0, "fixed split, zeros: %02x%02x%02x%02x",
+          bits[0], bits[1], bits[2], bits[3]);
+    for (int i = 0; i < 32; i++) {
+        iv[i] = 240 + (uint32_t)(rnd() % 21) - 10;
+    }
+    st = lf_ia_decode_intervals(iv, 32, &fixed, bits, 32, &n, NULL);
+    CHECK(st == LF_IA_DECODE_OK && n == 32, "fixed split, ones: st=%d n=%zu", st, n);
+    CHECK(bits[0] == 0xFF && bits[1] == 0xFF && bits[2] == 0xFF && bits[3] == 0xFF,
+          "fixed split, ones: %02x%02x%02x%02x", bits[0], bits[1], bits[2], bits[3]);
+
+    // A burst with two classes ignores the fixed split and keeps its own midpoint.
+    const uint32_t mixed[4] = {150, 250, 150, 250};
+    st = lf_ia_decode_intervals(mixed, 4, &fixed, bits, 32, &n, &split);
+    CHECK(st == LF_IA_DECODE_OK && split == 200 && (bits[0] & 0xF0) == 0x50, "two classes: split %u", split);
+    const uint32_t skew[4] = {170, 270, 170, 270};
+    st = lf_ia_decode_intervals(skew, 4, &fixed, bits, 32, &n, &split);
+    CHECK(st == LF_IA_DECODE_OK && split == 220, "two classes keep their own split: %u", split);
 }
 
 static void test_decode_edges(void) {

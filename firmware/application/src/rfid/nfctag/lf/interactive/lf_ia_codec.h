@@ -40,9 +40,12 @@ typedef struct {
     uint16_t min_ratio_pct;
     // Map the short class to 1 and the long class to 0, instead of short to 0.
     bool short_is_one;
+    // A frame whose bits all have one value has only one class, with nothing to measure the split from. If this is
+    // not 0, such a frame is read against this fixed split (µs) instead, from the protocol's nominal bit timing.
+    uint32_t one_class_split;
 } lf_ia_decode_cfg_t;
 
-#define LF_IA_DECODE_CFG_DEFAULT { .min_ratio_pct = 115, .short_is_one = false }
+#define LF_IA_DECODE_CFG_DEFAULT { .min_ratio_pct = 115, .short_is_one = false, .one_class_split = 0 }
 
 static inline bool lf_ia_bit_get(const uint8_t *bits, size_t i) {
     return (bits[i >> 3] >> (7u - (i & 7u))) & 1u;
@@ -54,8 +57,9 @@ static inline void lf_ia_bit_put(uint8_t *bits, size_t i, bool v) {
 }
 
 // Classifies each interval between gap starts as a bit. The split sits midway between the shortest and longest
-// interval of this burst, so it follows the reader's own timing rather than a fixed threshold. split_out (if not
-// NULL) receives that midpoint, or the one class's mean if the result is LF_IA_DECODE_ONE_CLASS.
+// interval of this burst, so it follows the reader's own timing rather than a fixed threshold. If the burst has one
+// class and cfg->one_class_split is set, that split classifies it. split_out (if not NULL) receives the split used, or
+// the one class's mean if the result is LF_IA_DECODE_ONE_CLASS.
 lf_ia_decode_status_t lf_ia_decode_intervals(const uint32_t *intervals, size_t n, const lf_ia_decode_cfg_t *cfg,
                                              uint8_t *bits, size_t max_bits, size_t *n_bits, uint32_t *split_out);
 

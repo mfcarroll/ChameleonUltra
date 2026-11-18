@@ -111,6 +111,22 @@ int main(void) {
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "alt: a field drop starts the count again");
     m_mode = 0;
 
+    // A password of all ones or all zeros has one interval class.
+    static const uint32_t SAME[] = {0xFFFFFFFFu, 0x00000000u};
+    for (size_t i = 0; i < 2; i++) {
+        uint8_t pages[LF_HITAG2_DATA_SIZE];
+        memcpy(pages, PAGES, sizeof(pages));
+        memset(&pages[4], SAME[i] ? 0xFF : 0x00, 4);
+        m = lf_ia_hitag2_load(pages);
+        m->field_on(m->ctx);
+        CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "same-bit password %08X: START_AUTH", SAME[i]);
+        CHECK(send(m, ~SAME[i], 32, &rsp) == LF_IA_IGNORE, "same-bit password %08X: the opposite is wrong", SAME[i]);
+        CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND, "same-bit password %08X: START_AUTH again", SAME[i]);
+        CHECK(send(m, SAME[i], 32, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x060E0F10,
+              "same-bit password %08X gives page 3", SAME[i]);
+        m->field_off(m->ctx);
+    }
+
     printf("%d checks, %d failed\n", m_checks, m_failed);
     return m_failed ? 1 : 0;
 }

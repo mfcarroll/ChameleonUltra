@@ -134,7 +134,9 @@ static const lf_ia_module_t m_hitag2 = {
     .name = "hitag2",
     .eof_us = HT2_EOF_US,
     .want_decode = true,
-    .decode = LF_IA_DECODE_CFG_DEFAULT,
+    // A password of all zeros or all ones is one class. 25 periods is midway between a 0 (20) and a 1 (30). START_AUTH
+    // and READ PAGE always carry both values.
+    .decode = { .min_ratio_pct = 115, .short_is_one = false, .one_class_split = 25u * LF_IA_US_PER_FC },
     .field_on = field_on,
     .on_command = on_command,
     .field_off = field_off,
