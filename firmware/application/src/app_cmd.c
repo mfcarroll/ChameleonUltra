@@ -3374,12 +3374,14 @@ static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint1
 // In: the index of the first record (u16, big-endian, optional). Out: the count written since the clear (u32), the
 // record size (u16), the number of records here (u8), the number of first records kept (u8), the current boot (u16),
 // then the records.
+// As many records as fit one frame, so a larger record can't push a reply past it.
+#define LF_IA_TRACE_PER_READ ((NETDATA_MAX_DATA_LENGTH - 10u) / sizeof(lf_ia_trace_rec_t))
 static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    static uint8_t out[10 + 14 * sizeof(lf_ia_trace_rec_t)];
+    static uint8_t out[10 + LF_IA_TRACE_PER_READ * sizeof(lf_ia_trace_rec_t)];
     const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
     uint32_t total;
     uint16_t boot;
-    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 10), 14, &total, &boot);
+    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 10), LF_IA_TRACE_PER_READ, &total, &boot);
     const uint16_t size = sizeof(lf_ia_trace_rec_t);
     memcpy(out, &total, 4);
     memcpy(out + 4, &size, 2);
