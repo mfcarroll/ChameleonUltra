@@ -14,7 +14,7 @@
 #include "lf_ia_debug.h"
 
 // The retained region (noinit.ld, 32 KB) also holds the MIFARE Classic auth log, about 18 KB. 48 records leave about
-// 650 bytes of it free, and 50 is the most that fits.
+// 450 bytes of it free.
 #define LF_IA_TRACE_RECORDS (48u)
 #define LF_IA_TRACE_KEEP    (8u)   // the first records since a clear, never overwritten
 #define LF_IA_TRACE_GAPS    (48u)
@@ -66,6 +66,10 @@ typedef struct __attribute__((packed)) {
     uint8_t mode;              // the slot's LF_IA_MODE_ flags
     uint8_t slot;              // the active slot, 1 to 8
     uint8_t meas_us32;         // how long the last measurement took in the main loop, in 32 µs units
+    // COMMAND with an answer: the last time the engine saw the reader's field, from the command's end to the answer's
+    // end. The watch sees up to about 35 µs before t_tx_end_us (the ADC's conversion and the 4-sample mean's lag). If
+    // it is earlier than that, the reader dropped its field while the CU was answering. 0: never seen.
+    uint32_t t_field_seen_us;
 } lf_ia_trace_rec_t;
 
 // Field sessions. session_start counts the session. session_end writes its FIELD_OFF record, committed, if the

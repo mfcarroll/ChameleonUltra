@@ -159,6 +159,15 @@ static struct {
     bool frozen;
 } m_env;
 
+// The field watch while an answer is due or playing: the ADC keeps sampling, and the engine notes the last time the
+// field was above a floor. The detector's own state (m_det) stays as the command left it.
+static struct {
+    uint32_t k_done;     // samples processed
+    int32_t h1, h2, h3;  // the previous three samples, for the 4-sample mean
+    int32_t floor;       // a quarter of the field-on level, at least FIELD_MIN / 2
+    uint32_t seen_us;    // the last time the mean was above the floor, 0 if never
+} m_watch;
+
 static uint32_t now_us(void) {
     return nrfx_timer_capture(&m_ia_timer, CC_NOW);
 }
@@ -305,6 +314,24 @@ static void listen(uint32_t settle_us) {
     m_meas_n = 0;
     m_meas_done = m_timing.measured;
     adc_listen_start(settle_us);
+}
+
+// Listens again after an answer, on the ADC that has kept sampling since the command: the same ring and sample times.
+// Stopping the ADC and starting it again at once sometimes left it not sampling, and the engine then read its stale
+// ring for good.
+static void listen_resume(uint32_t settle_us) {
+    load_set(true);
+    m_state = ST_LISTEN;
+    m_meas_n = 0;
+    m_meas_done = m_timing.measured;
+    const uint32_t t0 = m_det.t0, wrap = m_det.last_wrap;
+    det_reset();
+    m_det.t0 = t0;
+    m_det.last_wrap = wrap;
+    m_det.k_done = m_watch.k_done;
+    const uint32_t now = now_us();
+    m_det.settle_until = now + (settle_us < SETTLE_MIN_US ? SETTLE_MIN_US : settle_us);
+    nrfx_timer_compare(&m_ia_timer, CC_TICK, now + TICK_US, true);
 }
 
 // Hands this listen's quiet samples to the main loop for the carrier measurement: from a listen tick (force false)
@@ -462,8 +489,43 @@ static bool arm_answer(const lf_ia_response_t *rsp, uint32_t end_us, lf_ia_trace
     return true;
 }
 
+// Processes the samples written since the last look, and notes when the field was last above the floor.
+static void watch_tick(void) {
+    const uint32_t t_in = now_us();
+    const int32_t ready = (int32_t)(t_in - m_det.t0 - CONV_US);
+    if (ready < 0) {
+        return;
+    }
+    const uint32_t k_end = (uint32_t)ready / SAMPLE_US + 1u;
+    if (k_end - m_watch.k_done > RING_N - TICK_US / SAMPLE_US) {
+        lf_ia_trace_stats()->buffer_slips++;
+        m_watch.k_done = k_end - (RING_N - TICK_US / SAMPLE_US);
+    }
+    for (uint32_t k = m_watch.k_done; k < k_end; k++) {
+        const int32_t x = m_ring[k % RING_N];
+        const int32_t mean = (x + m_watch.h1 + m_watch.h2 + m_watch.h3) / 4;
+        m_watch.h3 = m_watch.h2;
+        m_watch.h2 = m_watch.h1;
+        m_watch.h1 = x;
+        if (mean > m_watch.floor) {
+            m_watch.seen_us = m_det.t0 + k * SAMPLE_US - SMOOTH_LAG_US;
+        }
+    }
+    m_watch.k_done = k_end;
+}
+
+// Starts the field watch where gap detection stopped. The listen ticks have already seen the field up to here.
+static void watch_start(void) {
+    m_watch.k_done = m_det.k_done;
+    m_watch.h1 = m_watch.h2 = m_watch.h3 = m_det.level;
+    m_watch.floor = m_det.level / 4 > FIELD_MIN / 2 ? m_det.level / 4 : FIELD_MIN / 2;
+    m_watch.seen_us = m_det.t0 + (m_det.k_done ? m_det.k_done - 1u : 0u) * SAMPLE_US - SMOOTH_LAG_US;
+    nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + TICK_US, true);
+}
+
 static void command_end(uint32_t t_detect) {
-    adc_listen_stop();
+    // Gap detection ends here. The ADC keeps sampling if an answer goes out, for the field watch.
+    nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
     if (m_env.armed) {
         m_env.frozen = true;
         m_env.armed = false;
@@ -471,6 +533,7 @@ static void command_end(uint32_t t_detect) {
 
     const size_t n = m_det.n_gaps;
     if (m_ended) {
+        adc_listen_stop();
         listen(0);
         return;
     }
@@ -536,8 +599,11 @@ static void command_end(uint32_t t_detect) {
         m_ended = true;
     }
     if (!armed) {
+        adc_listen_stop();
         listen(m_tuning.settle_us);
+        return;
     }
+    watch_start();
 }
 
 // Processes the samples written since the last tick, then checks for a command's end.
@@ -607,6 +673,10 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
     if (m_state != ST_ANSWER) {
         return;
     }
+    watch_tick();
+    if (r && r->type == LF_IA_TR_COMMAND) {
+        r->t_field_seen_us = m_watch.seen_us;
+    }
     if (m_timing.mode & LF_IA_MODE_REST_UNLOADED) {
         // One bit of the answer's coding, in the carrier the answer was timed by. For Hitag 2 that is 256 µs. With the
         // 300 µs settle, the engine sees gaps again about 560 µs after the answer, and a reader waits at least 90 periods
@@ -617,7 +687,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
         nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + rest_us, true);
         return;
     }
-    listen(m_tuning.settle_us);
+    listen_resume(m_tuning.settle_us);
 }
 
 static void timer_handler(nrf_timer_event_t ev, void *ctx) {
@@ -628,9 +698,15 @@ static void timer_handler(nrf_timer_event_t ev, void *ctx) {
         listen_tick();
         return;
     }
+    if (m_state == ST_ANSWER && m_adc_on) {
+        nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + TICK_US, true);
+        watch_tick();
+        return;
+    }
     nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
     if (m_state == ST_REST) {
-        listen(m_tuning.settle_us);
+        watch_tick();  // keeps the ring's read position current through the rest
+        listen_resume(m_tuning.settle_us);
         return;
     }
     if (m_state != ST_RECHECK) {
