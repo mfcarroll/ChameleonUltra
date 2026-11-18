@@ -157,6 +157,7 @@ static struct {
     uint32_t last_us;
     bool armed;
     bool frozen;
+    uint8_t skip;  // command ends still to pass before the ring freezes
 } m_env;
 
 // The field watch while an answer is due or playing: the ADC keeps sampling, and the engine notes the last time the
@@ -527,8 +528,12 @@ static void command_end(uint32_t t_detect) {
     // Gap detection ends here. The ADC keeps sampling if an answer goes out, for the field watch.
     nrfx_timer_compare_int_disable(&m_ia_timer, CC_TICK);
     if (m_env.armed) {
-        m_env.frozen = true;
-        m_env.armed = false;
+        if (m_env.skip) {
+            m_env.skip--;
+        } else {
+            m_env.frozen = true;
+            m_env.armed = false;
+        }
     }
 
     const size_t n = m_det.n_gaps;
@@ -836,11 +841,12 @@ const lf_ia_stats_t *lf_ia_stats(void) {
     return lf_ia_trace_stats();
 }
 
-void lf_ia_env_arm(void) {
+void lf_ia_env_arm(uint8_t skip) {
     CRITICAL_REGION_ENTER();
     m_env.head = 0;
     m_env.frozen = false;
     m_env.armed = true;
+    m_env.skip = skip;
     CRITICAL_REGION_EXIT();
 }
 

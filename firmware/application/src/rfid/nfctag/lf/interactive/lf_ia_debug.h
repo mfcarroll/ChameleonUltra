@@ -32,9 +32,10 @@ typedef struct __attribute__((packed)) {
 lf_ia_tuning_t *lf_ia_tuning(void);
 const lf_ia_stats_t *lf_ia_stats(void);
 
-// The envelope ring keeps the latest smoothed samples (10 µs apart) while the engine listens. Once armed, it freezes
-// at the next command's end, so it holds that command.
-void lf_ia_env_arm(void);
+// The envelope ring keeps the latest smoothed samples (10 µs apart) while the engine listens. Once armed, it lets
+// `skip` command ends pass and freezes at the next one, so it holds that command and what came before it. With skip 1
+// that includes the previous answer's end and the settle after it (the engine doesn't record while it answers).
+void lf_ia_env_arm(uint8_t skip);
 // Copies up to max samples, oldest first, from offset. Returns how many. last_us receives the newest sample's time,
 // frozen whether the ring has frozen.
 size_t lf_ia_env_read(size_t offset, int16_t *out, size_t max, uint32_t *last_us, uint8_t *frozen);

@@ -3408,8 +3408,9 @@ static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
+// In: optionally the number of command ends to let pass before the ring freezes (u8, default 0). Out: nothing.
 static data_frame_tx_t *cmd_processor_lf_ia_env_arm(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    lf_ia_env_arm();
+    lf_ia_env_arm(length >= 1 ? data[0] : 0);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
