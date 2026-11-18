@@ -6,6 +6,7 @@
 
 #include "../lf_ia_codec.h"
 #include "ht2_answer_capture.h"
+#include "ht2_cu_answer_capture.h"
 
 static int m_failed = 0;
 static int m_checks = 0;
@@ -313,8 +314,31 @@ static void test_envelope_real_answer(void) {
     CHECK(strcmp(s, "11111100000001000000100000001100000100") != 0, "midway slicing should not decode it: %s", s);
 }
 
+static void test_envelope_loaded_tail(void) {
+    // The answer ends on a load half and the emulating CU stays loaded after it. That last half-bit is kept.
+    uint16_t runs[400];
+    lf_ia_envelope_info_t info;
+    const size_t n = sizeof(HT2_CU_ANSWER_CAPTURE) / sizeof(HT2_CU_ANSWER_CAPTURE[0]);
+    const size_t nr = lf_ia_envelope_runs(HT2_CU_ANSWER_CAPTURE, n, 40, 125, 100, 25, 16, 48, runs, 400, &info);
+    uint8_t got[8] = {0};
+    const size_t nb = lf_ia_decode_runs(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 64);
+    char s[65];
+    bits_to_string(got, nb, s);
+    CHECK(nb == 37 && strcmp(s, "1111100000001000000100000001100000100") == 0, "CU answer: %zu bits %s", nb, s);
+    CHECK(nr > 0 && LF_IA_RUN_IS_LOAD(runs[nr - 1]) && LF_IA_RUN_LEN(runs[nr - 1]) == 16, "last run %04x",
+          nr ? runs[nr - 1] : 0);
+
+    // A load that starts and never ends is no answer: there is nothing before it to end.
+    static int16_t flat[600];
+    for (size_t i = 0; i < 600; i++) {
+        flat[i] = (int16_t)(i < 200 ? 1000 : 5000);
+    }
+    CHECK(lf_ia_envelope_runs(flat, 600, 40, 125, 100, 25, 16, 48, runs, 400, &info) == 0, "a lone load is no answer");
+}
+
 int main(void) {
     test_decode_bench_capture();
+    test_envelope_loaded_tail();
     test_decode_jitter();
     test_decode_one_class();
     test_decode_edges();
