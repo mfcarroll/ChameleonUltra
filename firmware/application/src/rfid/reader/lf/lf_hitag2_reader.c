@@ -99,10 +99,15 @@ uint8_t lf_hitag2_reader_read(uint32_t password, uint32_t pages[8], uint8_t *rea
         return STATUS_LF_TAG_NO_FOUND;
     }
 
-    // The tag's answer to the password is page 3. It only shows the password was taken: page 3 is read below.
+    // The tag's answer to the password is page 3. It only shows the password was taken: page 3 is read below. If that
+    // answer is lost, the tag may have taken the password anyway, and then it ignores a repeat. So each retry starts
+    // again from a field reset and START_AUTH.
     uint32_t page3;
     bool authed = false;
     for (uint32_t i = 0; i < 3 && !authed; i++) {
+        if (i > 0 && !start_auth(&uid, 1)) {
+            continue;
+        }
         authed = exchange(password, 32, 0, &page3);
     }
     if (!authed) {
