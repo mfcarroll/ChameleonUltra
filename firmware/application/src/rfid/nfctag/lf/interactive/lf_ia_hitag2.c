@@ -137,6 +137,9 @@ static const lf_ia_module_t m_hitag2 = {
     // A password of all zeros or all ones is one class. 25 periods is midway between a 0 (20) and a 1 (30). START_AUTH
     // and READ PAGE always carry both values.
     .decode = { .min_ratio_pct = 115, .short_is_one = false, .one_class_split = 25u * LF_IA_US_PER_FC },
+    // A reader may send its next command 90 periods after the answer (HT2 datasheet, T_wait2). The rest and the 200 µs
+    // settle (25 periods) end at 81. A CU reader takes an answer as over after 48 quiet periods, and sees 56 + about 2.
+    .rest_fc = 56u,
     .field_on = field_on,
     .on_command = on_command,
     .field_off = field_off,

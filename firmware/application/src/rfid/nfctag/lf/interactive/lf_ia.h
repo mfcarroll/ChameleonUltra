@@ -63,6 +63,8 @@ typedef struct {
     uint32_t eof_us;        // a field-on stretch this long after a gap ends the command
     bool want_decode;       // run lf_ia_decode_intervals on each command before on_command
     lf_ia_decode_cfg_t decode;
+    // LF_IA_MODE_REST_UNLOADED: carrier periods to hold the load off after an answer. 0: one bit of the answer's coding.
+    uint32_t rest_fc;
 
     // Called with the field newly up, before the first command. May be NULL.
     void (*field_on)(void *ctx);
@@ -80,10 +82,10 @@ typedef struct {
 // (125 kHz). LF_IA_MODE_ALT_DELAY: the module answers at its alternative delay (Hitag 2: the middle of the reader's
 // listening window, rather than a genuine fob's timing). LF_IA_MODE_ALT_PROTOCOL: the module follows its alternative
 // protocol rule (Hitag 2: it answers only every second START_AUTH, as the datasheet says a genuine tag does).
-// LF_IA_MODE_REST_UNLOADED: after each answer the engine holds the load off for one bit of the answer's coding before
-// it listens again. A genuine tag rests unloaded, and the engine otherwise listens with the load on at once. If the
-// answer ends on a load half-bit, the reader then sees that half end. If it ends on a no-load half, the load comes back
-// one bit after the answer instead of at its end.
+// LF_IA_MODE_REST_UNLOADED: after each answer the engine holds the load off for the module's rest_fc before it listens
+// again. A genuine tag rests unloaded, and the engine otherwise listens with the load on at once. If the answer ends on
+// a load half-bit, the reader then sees that half end. If it ends on a no-load half, the load comes back after the rest
+// instead of at the answer's end.
 //
 // The modes are kept in retained RAM, so they survive sleep (a test runs at a reader on battery) but not a power-on
 // reset or a flash, which set every slot to 0.

@@ -123,7 +123,9 @@ static volatile uint32_t m_meas_session;  // the session the copy belongs to, so
 static uint32_t m_session_id;
 
 static lf_ia_tuning_t m_tuning = {
-    .settle_us = 300,
+    // Measured on 2026-11-18: after the load comes back on, the field line overshoots to 3 to 6 times its level and is
+    // back within 10 % after 45 to 121 µs, for field-on levels from 3870 down to 477. It never dips.
+    .settle_us = 200,
     .lost_us = 1500,
     .min_gap_us = 20,
     .thr_pct = 50,
@@ -683,12 +685,11 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
         r->t_field_seen_us = m_watch.seen_us;
     }
     if (m_timing.mode & LF_IA_MODE_REST_UNLOADED) {
-        // One bit of the answer's coding, in the carrier the answer was timed by. For Hitag 2 that is 256 µs. With the
-        // 300 µs settle, the engine sees gaps again about 560 µs after the answer, and a reader waits at least 90 periods
-        // (720 µs, the PM3's HITAG_T_WAIT_2_MIN) before its next command.
+        // The module's rest, else one bit of the answer's coding, in the carrier the answer was timed by.
         load_set(false);
         m_state = ST_REST;
-        const uint32_t rest_us = (uint32_t)lroundf((float)m_rsp.bit_fc * 1e6f / fc_used());
+        const uint32_t rest_fc = m_module->rest_fc ? m_module->rest_fc : m_rsp.bit_fc;
+        const uint32_t rest_us = (uint32_t)lroundf((float)rest_fc * 1e6f / fc_used());
         nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + rest_us, true);
         return;
     }
