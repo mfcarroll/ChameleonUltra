@@ -111,7 +111,7 @@ static uint16_t lf_burst_frames(void) {
 // EXPERIMENT exp/fsk-pulse-fieldlog: one record per field, so a tester's report shows how each try at a reader went.
 // A field starts when LPCOMP sees the reader (or sense enable finds it on) and ends at lf_field_lost or
 // lf_sense_disable. The records sit in noinit RAM, as the pulse trim's store does, and survive the sleep between
-// tries. Each record holds the wake it happened in and its start in ms since that boot (RTC1, wraps at 512 s).
+// tries. Each record holds the wake it happened in and its start in ms since that boot (RTC1, wraps at 1024 s).
 // A gap between two fields of one wake tells a drop-out from a new try. Command 3130 with 0xF1 reads the log, and
 // 0xF0 clears it.
 #define FLOG_N     64
@@ -148,10 +148,13 @@ static __attribute__((section(".noinit_fieldlog"))) struct {
 } m_flog;
 static bool m_flog_woke;           // this boot has counted its wake
 static flog_t *m_flog_cur = NULL;  // the open field's record
+static uint32_t m_flog_t0_ticks;   // the open field's start, in RTC1 ticks
 static volatile uint8_t m_flog_why = FLOG_END_OTHER;  // set before lf_field_lost
 
-static uint32_t flog_now_ms(void) {
-    return (uint32_t)((uint64_t)app_timer_cnt_get() * 1000u / APP_TIMER_CLOCK_FREQ);
+// APP_TIMER_CLOCK_FREQ is RTC1's input clock. RTC1 counts at that clock divided by APP_TIMER_CONFIG_RTC_FREQUENCY + 1
+// (16384 Hz here), so a tick is 2 / 32768 s.
+static uint32_t flog_ticks_ms(uint32_t ticks) {
+    return (uint32_t)((uint64_t)ticks * 1000u * (APP_TIMER_CONFIG_RTC_FREQUENCY + 1) / APP_TIMER_CLOCK_FREQ);
 }
 
 static void flog_clear(void) {
@@ -173,7 +176,8 @@ static void flog_open(void) {
     memset(e, 0, sizeof(*e));
     e->wake = m_flog.wake;
     e->slot = tag_emulation_get_slot();
-    e->t0_ms = flog_now_ms();
+    m_flog_t0_ticks = app_timer_cnt_get();
+    e->t0_ms = flog_ticks_ms(m_flog_t0_ticks);
     e->lvl_min = 0xFF;
     m_flog.n++;
     m_flog_cur = e;
@@ -185,7 +189,7 @@ static void flog_close(uint8_t why) {
         return;
     }
     m_flog_cur = NULL;
-    const uint32_t ms = (flog_now_ms() - e->t0_ms) & 0x7FFFFFFFu;  // RTC1's 24 bits wrap at 512 s
+    const uint32_t ms = flog_ticks_ms(app_timer_cnt_diff_compute(app_timer_cnt_get(), m_flog_t0_ticks));
     e->dur_ms = (uint16_t)(ms > 0xFFFFu ? 0xFFFFu : ms);
     e->end = why;
 }
