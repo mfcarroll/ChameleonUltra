@@ -10,7 +10,6 @@
 #include "lf_rdr_trace.h"
 #include "nrf_gpio.h"
 #include "nrf_saadc.h"
-#include "nrf_soc.h"
 #include "nrfx_saadc.h"
 #include "timeslot.h"
 
@@ -45,35 +44,11 @@ static void field_on(void) {
     start_lf_125khz_radio();
 }
 
-// The field's PWM, the capture's sampling and the command's delays all run from HFCLK. Outside a radio timeslot it
-// runs from the RC oscillator unless something holds the crystal, and on two CUs that ran 0.3 to 1.1 % fast. A capture outlasts its timeslot, so a tag clocked by its own crystal (a CU emulating one) read
-// that much slow, while a tag that divides the reader's carrier read true. Held from the first transaction until the
-// field goes off.
-static bool m_xtal;
-
-static void xtal_hold(bool on) {
-    if (on == m_xtal) {
-        return;
-    }
-    if (on) {
-        sd_clock_hfclk_request();
-        uint32_t running = 0;
-        while (!running) {
-            sd_clock_hfclk_is_running(&running);
-        }
-    } else {
-        sd_clock_hfclk_release();
-    }
-    m_xtal = on;
-}
-
 void lf_rdr_field(bool on) {
     if (on) {
-        xtal_hold(true);
         start_lf_125khz_radio();
     } else {
         stop_lf_125khz_radio();
-        xtal_hold(false);
     }
 }
 
@@ -146,7 +121,6 @@ static void adc_release(void) {
 bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t power_up_us,
                      lf_rdr_reply_t *rx) {
     memset(rx, 0, sizeof(*rx));
-    xtal_hold(true);
     const size_t n = link->capture_n;
     if (n_tx > LF_RDR_MAX_TX_BITS || n < 64 || n > LF_RDR_CAPTURE_MAX || link->bit_fc < 2 ||
         link->gap_us >= link->bit0_us || link->gap_us >= link->bit1_us) {
