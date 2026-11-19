@@ -69,7 +69,7 @@ int main(void) {
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_IGNORE, "password before START_AUTH");
     CHECK(send(m, read_cmd(4, 0), 10, &rsp) == LF_IA_IGNORE, "read before authentication");
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x01020304, "START_AUTH gives the UID");
-    CHECK(rsp.delay_fc == 240 && rsp.delay_us == 0, "delay %u fc", rsp.delay_fc);
+    CHECK(rsp.delay_fc == 196 && rsp.delay_us == 0, "delay %u fc", rsp.delay_fc);
     CHECK(send(m, 0x1F, 5, &rsp) == LF_IA_IGNORE, "other 5-bit frame");
     m_mode = LF_IA_MODE_ALT_DELAY;
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && rsp.delay_fc == 292, "alt delay %u fc", rsp.delay_fc);

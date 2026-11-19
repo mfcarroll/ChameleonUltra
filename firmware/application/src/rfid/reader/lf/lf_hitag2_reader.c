@@ -1,7 +1,7 @@
 // Hitag 2 password-mode reading. The command timings follow a Hitag 2 reader's (the PM3's armsrc/hitag2.c): a gap of
 // 6 carrier periods starts each bit, a 0 is 20 periods gap to gap and a 1 is 30, and a stop gap and 36 periods of
-// field end the command. The tag answers 199 to about 230 periods later, in Manchester at RF/32 behind 5 or 6
-// start-of-frame ones.
+// field end the command. A test tag began its answer about 195 periods after the stop gap, so about 160 after the
+// command's end. It answers in Manchester at RF/32 behind 5 or 6 start-of-frame ones.
 
 #include "lf_hitag2_reader.h"
 

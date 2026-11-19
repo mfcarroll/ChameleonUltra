@@ -18,11 +18,13 @@
 #include <string.h>
 
 #define HT2_EOF_US    (300u)   // longer than a 1 bit's field-on time (30 - 6 periods, 192 µs)
-// The reader samples from 192 to about 320 periods after its command, which ends 36 periods after the stop gap, so
-// from about 228 to 356 periods after the stop gap. A genuine fob answers 227 periods after the reader's last edge.
-// HT2_DELAY_FC sits early in the reader's window, near the fob. HT2_DELAY_ALT_FC (LF_IA_MODE_ALT_DELAY) is the
-// window's middle.
-#define HT2_DELAY_FC      (240u)
+// The delay counts from the end of the reader's last gap (the stop gap). A Hitag 2 test tag, read by a CU at 0 to
+// 7 mm on 2026-11-18, began its answer 194 to 197 periods after it, so 200 to 203 after the gap began. The PM3's
+// hitag2.c quotes the HT2 datasheet (rev 2.1, 3.5) for a turnaround of 199 to 206 periods. HT2_DELAY_FC matches the
+// tag. The PM3's reader samples from 192 to about 320 periods after its command, which ends 36 periods after the stop
+// gap, so from about 228 to 356 periods after the stop gap. HT2_DELAY_ALT_FC (LF_IA_MODE_ALT_DELAY) is the middle of
+// that window.
+#define HT2_DELAY_FC      (196u)
 #define HT2_DELAY_ALT_FC  (292u)
 #define HT2_BIT_FC    (32u)
 #define HT2_SOF_BITS  (5u)
