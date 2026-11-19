@@ -108,6 +108,133 @@ static uint16_t lf_burst_frames(void) {
     return m_pulse && m_lf_bursts < LF_SHORT_BURSTS ? LF_SHORT_FRAMES : 10u;
 }
 
+// EXPERIMENT exp/fsk-pulse-fieldlog: one record per field, so a tester's report shows how each try at a reader went.
+// A field starts when LPCOMP sees the reader (or sense enable finds it on) and ends at lf_field_lost or
+// lf_sense_disable. The records sit in noinit RAM, as the pulse trim's store does, and survive the sleep between
+// tries. Each record holds the wake it happened in and its start in ms since that boot (RTC1, wraps at 512 s).
+// A gap between two fields of one wake tells a drop-out from a new try. Command 3130 with 0xF1 reads the log, and
+// 0xF0 clears it.
+#define FLOG_N     64
+#define FLOG_MAGIC 0x464C4F01u
+// How a field ended.
+#define FLOG_END_OPEN  0  // still on when read
+#define FLOG_END_LONG  1  // a long (m_lf_settle_ms) check read low
+#define FLOG_END_SHORT 2  // a short (2 ms) check read low
+#define FLOG_END_WD    3  // the check after a watchdog reset read low
+#define FLOG_END_MEAS  4  // the check after a pulse-trim measurement read low
+#define FLOG_END_SENSE 5  // sensing stopped (a slot change, a mode change or a command)
+#define FLOG_END_OTHER 15
+// The field level, from LPCOMP at three more references after a long check: 1 above 1/16 VDD, 2 above 2/8,
+// 3 above 4/8, 4 above 6/8. 0 means no long check read the field.
+typedef struct {
+    uint16_t wake;
+    uint8_t slot, end;
+    uint32_t t0_ms;
+    uint16_t dur_ms;
+    uint16_t frames;   // frames started (bursts x frames per burst)
+    uint16_t long_hi;  // long checks that read the field
+    uint16_t short_hi; // short checks that read the field
+    uint8_t lvl_first, lvl_min, lvl_max;
+    uint8_t meas;      // pulse-trim measurements: high nibble with a line, low nibble without
+    uint8_t wd;        // watchdog resets
+    uint8_t pad;
+    uint16_t pt_top;   // the last measurement's field level in ADC counts (pt_longest_on), 0 none
+} flog_t;
+static __attribute__((section(".noinit_fieldlog"))) struct {
+    uint32_t magic;
+    uint16_t n;     // fields since the log was cleared (wraps); the ring holds the last FLOG_N
+    uint16_t wake;  // boots that logged a field
+    flog_t e[FLOG_N];
+} m_flog;
+static bool m_flog_woke;           // this boot has counted its wake
+static flog_t *m_flog_cur = NULL;  // the open field's record
+static volatile uint8_t m_flog_why = FLOG_END_OTHER;  // set before lf_field_lost
+
+static uint32_t flog_now_ms(void) {
+    return (uint32_t)((uint64_t)app_timer_cnt_get() * 1000u / APP_TIMER_CLOCK_FREQ);
+}
+
+static void flog_clear(void) {
+    memset(&m_flog, 0, sizeof(m_flog));
+    m_flog.magic = FLOG_MAGIC;
+    m_flog_woke = false;
+    m_flog_cur = NULL;
+}
+
+static void flog_open(void) {
+    if (m_flog.magic != FLOG_MAGIC) {
+        flog_clear();
+    }
+    if (!m_flog_woke) {
+        m_flog_woke = true;
+        m_flog.wake++;
+    }
+    flog_t *e = &m_flog.e[m_flog.n % FLOG_N];
+    memset(e, 0, sizeof(*e));
+    e->wake = m_flog.wake;
+    e->slot = tag_emulation_get_slot();
+    e->t0_ms = flog_now_ms();
+    e->lvl_min = 0xFF;
+    m_flog.n++;
+    m_flog_cur = e;
+}
+
+static void flog_close(uint8_t why) {
+    flog_t *e = m_flog_cur;
+    if (e == NULL) {
+        return;
+    }
+    m_flog_cur = NULL;
+    const uint32_t ms = (flog_now_ms() - e->t0_ms) & 0x7FFFFFFFu;  // RTC1's 24 bits wrap at 512 s
+    e->dur_ms = (uint16_t)(ms > 0xFFFFu ? 0xFFFFu : ms);
+    e->end = why;
+}
+
+// One LPCOMP sample at another reference. LPCOMP must be off to change its reference, and it then needs its start-up
+// time. Called only after a long check, where 0.2-0.5 ms more of silence changes nothing for the reader.
+static bool flog_above(uint32_t refsel) {
+    NRF_LPCOMP->TASKS_STOP = 1;
+    NRF_LPCOMP->ENABLE = 0;
+    NRF_LPCOMP->REFSEL = refsel;
+    NRF_LPCOMP->EVENTS_READY = 0;
+    NRF_LPCOMP->ENABLE = 1;
+    NRF_LPCOMP->TASKS_START = 1;
+    for (uint32_t i = 0; i < 30 && !NRF_LPCOMP->EVENTS_READY; i++) {
+        bsp_delay_us(10);
+    }
+    NRF_LPCOMP->TASKS_SAMPLE = 1;
+    return NRF_LPCOMP->RESULT != 0;
+}
+
+// After a long check read the field (LPCOMP on at 1/16): two more samples, then LPCOMP back as is_lf_field_exists
+// left it. The reference changes raise LPCOMP events, which lpcomp_event_handler ignores while emulating. They are
+// cleared anyway, so lf_field_lost's re-arm can't fire on a stale one.
+static void flog_level(void) {
+    flog_t *e = m_flog_cur;
+    if (e == NULL) {
+        return;
+    }
+    uint8_t lvl;
+    if (flog_above(NRF_LPCOMP_REF_SUPPLY_4_8)) {
+        lvl = flog_above(NRF_LPCOMP_REF_SUPPLY_6_8) ? 4 : 3;
+    } else {
+        lvl = flog_above(NRF_LPCOMP_REF_SUPPLY_2_8) ? 2 : 1;
+    }
+    (void)flog_above(NRF_LPCOMP_REF_SUPPLY_1_16);
+    NRF_LPCOMP->EVENTS_UP = 0;
+    NRF_LPCOMP->EVENTS_DOWN = 0;
+    NRF_LPCOMP->EVENTS_CROSS = 0;
+    if (e->lvl_first == 0) {
+        e->lvl_first = lvl;
+    }
+    if (lvl < e->lvl_min) {
+        e->lvl_min = lvl;
+    }
+    if (lvl > e->lvl_max) {
+        e->lvl_max = lvl;
+    }
+}
+
 // The pulse-learned trim (LF_EXP_FSK_TRIM_LEARN): while the slot has none, a field is measured instead of emulated, in
 // the main loop (lf_tag_em_pulse_process).
 static volatile bool m_pt_pending = false;
@@ -448,6 +575,10 @@ static void lf_playback(void) {
     }
     d_play++;
     d_t_play = m_lf_wd_ticks;
+    if (m_flog_cur != NULL) {
+        const uint32_t f = (uint32_t)m_flog_cur->frames + lf_burst_frames();
+        m_flog_cur->frames = (uint16_t)(f > 0xFFFFu ? 0xFFFFu : f);
+    }
     if (m_cont_req && IS_FSK_EMU_TYPE(m_tag_type) && lf_cont_arm()) {
         return;  // research exp/fsk-phasecont: starts on TIMER3's compare
     }
@@ -460,6 +591,8 @@ static void lf_playback(void) {
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
     d_lost++;
+    flog_close(m_flog_why);
+    m_flog_why = FLOG_END_OTHER;
     if (m_pulse && m_lf_bursts <= LF_SHORT_BURSTS) {
         pt_note_short_field(tag_emulation_get_slot());  // exp/fsk-selftrim-489-pulse: a field that went within ~300 ms
     }
@@ -505,6 +638,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     }
     d_det++;
     m_lf_bursts = 0;
+    flog_close(FLOG_END_OTHER);  // a record still open here missed its end
+    flog_open();
     if (IS_FSK_EMU_TYPE(m_tag_type)) {
         lf_exp_fsk_sync();  // EXPERIMENT: the slot's preset (lf_exp_fsk.h), before the field's first burst
         lf_exp_fsk_note_field();
@@ -610,6 +745,14 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     if (is_lf_field_exists() && m_pwm_seq != NULL) {
         // Field still present — play another finite burst then check again.
         d_chk_hi++;
+        if (m_flog_cur != NULL) {
+            if (long_check) {
+                m_flog_cur->long_hi++;
+                flog_level();
+            } else {
+                m_flog_cur->short_hi++;
+            }
+        }
         lf_playback();
     } else {
         // Field gone — clean up.
@@ -617,6 +760,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
             d_lo_short++;
         }
         d_chk_lo++;
+        m_flog_why = long_check ? FLOG_END_LONG : FLOG_END_SHORT;
         lf_field_lost();
     }
 }
@@ -740,6 +884,9 @@ static void lf_wd_handler(void *p_context) {
         return;
     }
     d_wd_fire++;
+    if (m_flog_cur != NULL && m_flog_cur->wd < 0xFF) {
+        m_flog_cur->wd++;
+    }
     m_lf_wd_busy = true;
     lf_cont_disarm();  // research exp/fsk-phasecont: an arm that never fired lands here; restart the grid
     if (!lf_pwm_stop_bounded()) {
@@ -760,6 +907,7 @@ static void lf_wd_handler(void *p_context) {
         lf_playback();
     } else {
         d_chk_lo++;
+        m_flog_why = FLOG_END_WD;
         lf_field_lost();
     }
 }
@@ -852,6 +1000,7 @@ static void lf_sense_disable(void) {
     // research C129: keep m_pwm_seq. The sequences are static, and hw mode -r then -e re-enables
     // sensing without reloading the slot, which left nothing to play.
     m_is_lf_emulating = false;
+    flog_close(FLOG_END_SENSE);  // after the PWM stops, so pwm_handler can't close the record too
     hfclk_release();
 }
 
@@ -1663,6 +1812,9 @@ static void pt_longest_on(const int16_t *x, uint32_t n, uint32_t *at, uint32_t *
     }
     *at = 0;
     *len = 0;
+    if (m_flog_cur != NULL) {
+        m_flog_cur->pt_top = (uint16_t)(top < 0 ? 0 : top > 0xFFFF ? 0xFFFF : top);
+    }
     if (top < PT_FIELD_MIN) {
         return;
     }
@@ -1744,7 +1896,12 @@ void lf_tag_em_pulse_process(void) {
     pt_slot_t *e = &m_pt.s[slot < PT_SLOTS ? slot : 0];
     int32_t ppm10;
     int16_t snr10;
-    if (pt_measure(&ppm10, &snr10)) {
+    const bool lined = pt_measure(&ppm10, &snr10);
+    if (m_flog_cur != NULL) {
+        const uint8_t hi = m_flog_cur->meas >> 4, lo = m_flog_cur->meas & 0x0F;
+        m_flog_cur->meas = lined ? (uint8_t)((hi < 15 ? hi + 1 : 15) << 4 | lo) : (uint8_t)(hi << 4 | (lo < 15 ? lo + 1 : 15));
+    }
+    if (lined) {
         if (e->measures < 0xFFFF) e->measures++;
         if (e->have_last && abs(ppm10 - e->last_ppm10) <= PT_AGREE_PPM10) {
             e->ppm10 = (ppm10 + e->last_ppm10) / 2;
@@ -1757,6 +1914,7 @@ void lf_tag_em_pulse_process(void) {
         e->fails++;
     }
     if (!pt_field_present()) {
+        m_flog_why = FLOG_END_MEAS;
         lf_field_lost();
         return;
     }
@@ -1782,6 +1940,9 @@ uint16_t lf_tag_em_pulse_status(const uint8_t *req, uint16_t len, uint8_t *o) {
     if (len == 1 && req[0] == 0xC1) {
         lf_tag_em_pulse_clear();
     }
+    if (len == 1 && (req[0] == 0xF0 || req[0] == 0xF1)) {
+        return lf_tag_em_field_log(req[0] == 0xF0, o);
+    }
     uint16_t n = 0;
     o[n++] = 1;
     o[n++] = tag_emulation_get_slot();
@@ -1797,6 +1958,42 @@ uint16_t lf_tag_em_pulse_status(const uint8_t *req, uint16_t len, uint8_t *o) {
         n = put_u16(o, n, e->measures);
         n = put_u16(o, n, e->fails);
         n = put_u16(o, n, e->short_fields);
+    }
+    return n;
+}
+
+// EXPERIMENT exp/fsk-pulse-fieldlog: command 3130 with 0xF1 (read) or 0xF0 (clear, then read). Reply (big-endian):
+// version u8 (1), entry size u8 (24), fields since the clear u16, wake u16, then the ring's records oldest first:
+// wake u16, slot u8, end u8, start ms u32, duration ms u16, frames u16, long checks high u16, short checks high u16,
+// level first u8, level min u8 (0xFF none), level max u8, measurements u8 (high nibble with a line, low without),
+// watchdog resets u8, pad u8, measured field level u16. The open field's record reads with end 0 and duration 0.
+uint16_t lf_tag_em_field_log(bool clear, uint8_t *o) {
+    if (clear || m_flog.magic != FLOG_MAGIC) {
+        flog_clear();
+    }
+    uint16_t n = 0;
+    o[n++] = 1;
+    o[n++] = 24;
+    n = put_u16(o, n, m_flog.n);
+    n = put_u16(o, n, m_flog.wake);
+    const uint16_t count = m_flog.n < FLOG_N ? m_flog.n : FLOG_N;
+    for (uint16_t k = 0; k < count; k++) {
+        const flog_t *e = &m_flog.e[(uint16_t)(m_flog.n - count + k) % FLOG_N];
+        n = put_u16(o, n, e->wake);
+        o[n++] = e->slot;
+        o[n++] = e->end;
+        n = put_u32(o, n, e->t0_ms);
+        n = put_u16(o, n, e->dur_ms);
+        n = put_u16(o, n, e->frames);
+        n = put_u16(o, n, e->long_hi);
+        n = put_u16(o, n, e->short_hi);
+        o[n++] = e->lvl_first;
+        o[n++] = e->lvl_min;
+        o[n++] = e->lvl_max;
+        o[n++] = e->meas;
+        o[n++] = e->wd;
+        o[n++] = 0;
+        n = put_u16(o, n, e->pt_top);
     }
     return n;
 }

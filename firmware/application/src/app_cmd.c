@@ -2417,7 +2417,7 @@ static data_frame_tx_t *cmd_processor_exp_fsk(uint16_t cmd, uint16_t status, uin
 
 // EXPERIMENT exp/fsk-selftrim-489-pulse: what each slot learned from a reader's pulses; 0xC1 clears.
 static data_frame_tx_t *cmd_processor_pulse_test(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t out[200];
+    static uint8_t out[1600];  // the field log (0xF1) takes 1542
     uint16_t n = lf_tag_em_pulse_status(data, length, out);
     return data_frame_make(cmd, STATUS_SUCCESS, n, out);
 }
