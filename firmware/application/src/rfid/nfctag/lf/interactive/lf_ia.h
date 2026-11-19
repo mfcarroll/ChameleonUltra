@@ -63,7 +63,8 @@ typedef struct {
     uint32_t eof_us;        // a field-on stretch this long after a gap ends the command
     bool want_decode;       // run lf_ia_decode_intervals on each command before on_command
     lf_ia_decode_cfg_t decode;
-    // LF_IA_MODE_REST_UNLOADED: carrier periods to hold the load off after an answer. 0: one bit of the answer's coding.
+    // Carrier periods to hold the load off after an answer (unless LF_IA_MODE_REST_LOADED). 0: one bit of the answer's
+    // coding.
     uint32_t rest_fc;
 
     // Called with the field newly up, before the first command. May be NULL.
@@ -82,17 +83,18 @@ typedef struct {
 // (125 kHz). LF_IA_MODE_ALT_DELAY: the module answers at its alternative delay (Hitag 2: the middle of the reader's
 // listening window, rather than a genuine fob's timing). LF_IA_MODE_ALT_PROTOCOL: the module follows its alternative
 // protocol rule (Hitag 2: it answers only every second START_AUTH, as the datasheet says a genuine tag does).
-// LF_IA_MODE_REST_UNLOADED: after each answer the engine holds the load off for the module's rest_fc before it listens
-// again. A genuine tag rests unloaded, and the engine otherwise listens with the load on at once. If the answer ends on
-// a load half-bit, the reader then sees that half end. If it ends on a no-load half, the load comes back after the rest
-// instead of at the answer's end.
+// After each answer the engine holds the load off for the module's rest_fc, as a genuine tag rests unloaded, and then
+// listens with the load on. The answer's last half-bit then ends cleanly, whatever its level. LF_IA_MODE_REST_LOADED
+// skips the rest and listens with the load on as soon as the answer ends. That was the engine's only behaviour until
+// 2026-11-18, and a door reader accepted it. It squeezes a final no-load half-bit, which breaks a CU reader on an
+// odd UID.
 //
 // The modes are kept in retained RAM, so they survive sleep (a test runs at a reader on battery) but not a power-on
 // reset or a flash, which set every slot to 0.
 #define LF_IA_MODE_SCALE     (1u << 0)
 #define LF_IA_MODE_ALT_DELAY (1u << 1)
 #define LF_IA_MODE_ALT_PROTOCOL (1u << 2)
-#define LF_IA_MODE_REST_UNLOADED (1u << 3)
+#define LF_IA_MODE_REST_LOADED (1u << 3)
 #define LF_IA_SLOTS          (8u)
 void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]);
 // Runs the engine's slow work (the carrier measurement) from the main loop.

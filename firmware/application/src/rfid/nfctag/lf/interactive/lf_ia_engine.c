@@ -67,7 +67,7 @@ typedef enum {
     ST_IDLE,     // waiting for the wake comparator
     ST_LISTEN,   // capturing a command
     ST_ANSWER,   // an answer is armed or playing
-    ST_REST,     // the answer has ended: the load stays off until the tick (LF_IA_MODE_REST_UNLOADED)
+    ST_REST,     // the answer has ended: the load stays off until the tick (unless LF_IA_MODE_REST_LOADED)
     ST_RECHECK,  // a gap ran past lost_us: waiting to check the field with the load off
 } state_t;
 
@@ -684,7 +684,7 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
     if (r && r->type == LF_IA_TR_COMMAND) {
         r->t_field_seen_us = m_watch.seen_us;
     }
-    if (m_timing.mode & LF_IA_MODE_REST_UNLOADED) {
+    if (!(m_timing.mode & LF_IA_MODE_REST_LOADED)) {
         // The module's rest, else one bit of the answer's coding, in the carrier the answer was timed by.
         load_set(false);
         m_state = ST_REST;

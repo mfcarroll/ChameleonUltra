@@ -277,7 +277,7 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
         return nr;
     }
     // A stretch past max_idle_fc ends the answer, and may still hold its final half-bit. A no-load one usually does. A
-    // loaded one does when the tag rests loaded (a CU emulating one listens with its load on), so its last load half
+    // loaded one does when the tag rests loaded (a CU emulating one with LF_IA_MODE_REST_LOADED), so its last load half
     // runs on into the rest. A loaded stretch with nothing before it is no answer.
     const bool ended = len > max_idle_fc;
     if (len > 0 && nr < max_runs && !(level && ended && nr == 0)) {
