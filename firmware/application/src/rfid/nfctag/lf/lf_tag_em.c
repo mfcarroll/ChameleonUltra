@@ -242,6 +242,11 @@ static void flog_level(void) {
 // The pulse-learned trim (LF_EXP_FSK_TRIM_LEARN): while the slot has none, a field is measured instead of emulated, in
 // the main loop (lf_tag_em_pulse_process).
 static volatile bool m_pt_pending = false;
+// A field is being measured: from the LPCOMP handler's measure path until lf_tag_em_pulse_process plays or gives up.
+// The burst watchdog must stay quiet meanwhile. Nothing plays, so its timer still runs from the slot's last burst, and
+// after an idle it fired within 50 ms and started a burst over the measurement (bench 2026-11-19: no line, level
+// 10400-16260 against ~4260 clean).
+static volatile bool m_pt_measuring = false;
 static bool pt_needs_measure(uint8_t slot);
 static int16_t pt_trim_ticks(int32_t ppm10);
 static int16_t pt_preset_trim(uint8_t slot, uint8_t preset);
@@ -656,6 +661,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
             g_usb_led_marquee_enable = false;
             set_slot_light_color(RGB_BLUE);
             TAG_FIELD_LED_ON()
+            m_pt_measuring = true;
             m_pt_pending = true;
             return;
         }
@@ -884,6 +890,10 @@ static void lf_wd_handler(void *p_context) {
     if (m_lf_sense_state != LF_SENSE_STATE_ENABLE || !m_is_lf_emulating) {
         return;
     }
+    if (m_pt_measuring) {
+        d_t_play = m_lf_wd_ticks;  // the first burst after the measurement starts the watchdog's count afresh
+        return;
+    }
     if ((m_lf_wd_ticks - d_t_play) * LF_WD_PERIOD_MS < lf_wd_limit_ms()) {
         return;
     }
@@ -1004,6 +1014,7 @@ static void lf_sense_disable(void) {
     // research C129: keep m_pwm_seq. The sequences are static, and hw mode -r then -e re-enables
     // sensing without reloading the slot, which left nothing to play.
     m_is_lf_emulating = false;
+    m_pt_measuring = false;
     flog_close(FLOG_END_SENSE);  // after the PWM stops, so pwm_handler can't close the record too
     hfclk_release();
 }
@@ -1890,6 +1901,7 @@ void lf_tag_em_pulse_process(void) {
     }
     m_pt_pending = false;
     if (m_lf_sense_state != LF_SENSE_STATE_ENABLE) {
+        m_pt_measuring = false;
         m_is_lf_emulating = false;
         g_is_tag_emulating = false;
         TAG_FIELD_LED_OFF()
@@ -1918,6 +1930,7 @@ void lf_tag_em_pulse_process(void) {
         e->fails++;
     }
     if (!pt_field_present()) {
+        m_pt_measuring = false;
         m_flog_why = FLOG_END_MEAS;
         lf_field_lost();
         return;
@@ -1928,6 +1941,7 @@ void lf_tag_em_pulse_process(void) {
     }
     lf_exp_fsk_sync();  // the learned trim
     m_lf_bursts = 0;
+    m_pt_measuring = false;
     lf_playback();
 }
 
