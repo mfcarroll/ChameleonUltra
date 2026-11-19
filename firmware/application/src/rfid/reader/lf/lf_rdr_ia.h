@@ -51,6 +51,7 @@ typedef struct {
     lf_ia_envelope_info_t env;
 } lf_rdr_reply_t;
 
+// Turns the field on or off. Off also lets go of the crystal, which the field and every transaction hold.
 void lf_rdr_field(bool on);
 
 // Sends tx (n_tx bits, first bit first) and decodes the answer into rx. If power_up_us is not 0, the field is
