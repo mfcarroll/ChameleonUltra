@@ -38,9 +38,12 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/circular_buffer.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/manchester.c \
   $(PROJ_DIR)/rfid/nfctag/lf/utils/psk1.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/utils/selftrim.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/lf_selftrim.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/em410x.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/hidprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pac.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/protocols/indala.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/ioprox.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/viking.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/jablotron.c \
@@ -48,6 +51,12 @@ SRC_FILES += \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/wiegand.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/idteck.c \
   $(PROJ_DIR)/rfid/nfctag/lf/protocols/pyramid.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_codec.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_carrier.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_engine.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_trace.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_test_module.c \
+  $(PROJ_DIR)/rfid/nfctag/lf/interactive/lf_ia_hitag2.c \
   $(PROJ_DIR)/utils/dataframe.c \
   $(PROJ_DIR)/utils/battery_health.c \
   $(PROJ_DIR)/utils/delayed_reset.c \
@@ -195,6 +204,7 @@ INC_FOLDERS += \
   ${PROJ_DIR}/rfid/nfctag/hf \
   ${PROJ_DIR}/rfid/nfctag/lf \
   ${PROJ_DIR}/rfid/nfctag/lf/utils \
+  ${PROJ_DIR}/rfid/nfctag/lf/interactive \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
@@ -342,7 +352,7 @@ INC_FOLDERS += \
 
 # Libraries common to all targets
 LIB_FILES += \
-  $(SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/libnrf_cc310_0.9.13.a \
+  $(SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/no-interrupts/libnrf_cc310_0.9.13.a \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.8.a \
 
 ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
@@ -353,6 +363,11 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_125khz_radio.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em410x_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_em4x05_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_rdr_ia.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_rdr_frame.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_rdr_trace.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_hitag2_reader.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_hitag2_frame.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_gap.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_generic.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_reader_data.c \
@@ -364,6 +379,8 @@ ifeq	(${CURRENT_DEVICE_TYPE}, ${CHAMELEON_ULTRA})
     $(PROJ_DIR)/rfid/reader/lf/lf_viking_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_jablotron_data.c \
     $(PROJ_DIR)/rfid/reader/lf/lf_pyramid_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_indala_data.c \
+    $(PROJ_DIR)/rfid/reader/lf/lf_indala_psk.c \
 
   INC_FOLDERS +=\
     ${PROJ_DIR}/rfid/reader/ \

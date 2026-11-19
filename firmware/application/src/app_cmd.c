@@ -13,12 +13,22 @@
 #include "tag_persistence.h"
 #include "nrf_pwr_mgmt.h"
 #include "settings.h"
+#include "lf_selftrim.h"
 #include "delayed_reset.h"
 #include "netdata.h"
 #if defined(PROJECT_CHAMELEON_ULTRA)
 #include "bsp_wdt.h"
 #include "lf_reader_generic.h"
 #include "lf_em4x05_data.h"
+#include "lf_hitag2_reader.h"
+#include "lf_rdr_frame.h"
+#include "lf_rdr_ia.h"
+#include "lf_rdr_trace.h"
+#endif
+#include "lf_ia_debug.h"
+#include "lf_ia_hitag2.h"
+#include "lf_ia_trace.h"
+#if defined(PROJECT_CHAMELEON_ULTRA)
 #include "rc522.h"
 #include "mf1_crapto1.h"
 #include "parity.h"
@@ -235,6 +245,33 @@ static data_frame_tx_t *cmd_processor_set_sleep_timeout(uint16_t cmd, uint16_t s
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     settings_set_sleep_timeout(data[0]);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// Reply: enabled u8, learned trim i16 (3.8 ppm steps), last measurement ppm x10 i16, its SNR dB x10 i16,
+// its outcome u8 (selftrim_why_t), measurements since the slot was loaded u16; big-endian.
+static data_frame_tx_t *cmd_processor_get_lf_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_selftrim_status_t s;
+    lf_selftrim_get_status(&s);
+    uint8_t out[10];
+    out[0] = s.enabled;
+    out[1] = (uint8_t)((uint16_t)s.applied >> 8);
+    out[2] = (uint8_t)s.applied;
+    out[3] = (uint8_t)((uint16_t)s.last_ppm10 >> 8);
+    out[4] = (uint8_t)s.last_ppm10;
+    out[5] = (uint8_t)((uint16_t)s.last_snr10 >> 8);
+    out[6] = (uint8_t)s.last_snr10;
+    out[7] = s.last_why;
+    out[8] = (uint8_t)(s.measurements >> 8);
+    out[9] = (uint8_t)s.measurements;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
+static data_frame_tx_t *cmd_processor_set_lf_selftrim(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 1 || data[0] > 1) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    settings_set_lf_selftrim(data[0]);
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
@@ -842,6 +879,41 @@ static data_frame_tx_t *cmd_processor_em410x_scan(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, STATUS_LF_TAG_OK, 2 + id_size, card_buffer);
 }
 
+/**
+ * Parse the tail shared by every *_WRITE_TO_T55XX request: the new key at old_keys_offset - 4,
+ * one or more 4-byte old keys, then an optional flags byte.
+ * Keys are 4 bytes each, so a remainder of exactly 1 after them is the flags byte.
+ * Without it the tag gets no password: clients that predate the byte always sent a
+ * key the user never chose, so a key alone is not a request for password mode.
+ * The old keys are tried either way, so tags locked by earlier firmware stay rewritable.
+ */
+static bool parse_t55xx_write_keys(const uint8_t *data, uint16_t length, uint16_t old_keys_offset, uint8_t *old_key_count, bool *use_passwd) {
+    if (length < old_keys_offset + 4) {
+        return false;
+    }
+    uint16_t keys_len = length - old_keys_offset;
+    *use_passwd = false;
+    if (keys_len % 4 == 1) {
+        uint8_t flags = data[length - 1];
+        if (flags == T55XX_WRITE_FLAG_SET_PASSWORD) {
+            *use_passwd = true;
+        } else if (flags != T55XX_WRITE_FLAG_NO_PASSWORD) {
+            return false;
+        }
+        keys_len -= 1;
+    }
+    if (keys_len % 4 != 0 || keys_len / 4 > UINT8_MAX) {
+        return false;
+    }
+    *old_key_count = keys_len / 4;
+    return true;
+}
+
+static data_frame_tx_t *cmd_processor_lf_t55xx_write_features(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t features = T55XX_WRITE_FEATURE_PASSWORD_OPT_IN;
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(features), &features);
+}
+
 static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[5];
@@ -849,11 +921,13 @@ static data_frame_tx_t *cmd_processor_em410x_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -864,22 +938,26 @@ static data_frame_tx_t *cmd_processor_em410x_electra_write_to_t55xx(uint16_t cmd
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_em410x_electra_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
 static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     typedef struct {
         uint8_t id[13];
-        uint8_t old_key[4];
-        uint8_t new_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, new_keys)) % sizeof(payload->new_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
@@ -889,7 +967,7 @@ static data_frame_tx_t *cmd_processor_hidprox_write_to_t55xx(uint16_t cmd, uint1
     cn = (cn << 32) | (bytes_to_num(payload->id + 6, 4));
     uint32_t il = payload->id[10];
     uint32_t oem = bytes_to_num(payload->id + 11, 2);
-    status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->old_key, payload->new_keys, (length - offsetof(payload_t, new_keys)) / sizeof(payload->new_keys));
+    status = write_hidprox_to_t55xx(format, fc, cn, il, oem, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -922,20 +1000,19 @@ static data_frame_tx_t *cmd_processor_ioprox_write_to_t55xx(uint16_t cmd, uint16
 
     payload_t *payload = (payload_t *)data;
 
-    // Validate packet length
-    if (length < sizeof(payload_t) ||
-            (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-
-    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
 
     // Pass card_data (including raw8 at index 4-11) directly to the T55xx writer.
     status = write_ioprox_to_t55xx(
                  payload->card_data,
                  payload->new_key,
                  payload->old_keys,
-                 old_cnt
+                 old_key_count,
+                 use_passwd
              );
 
     return data_frame_make(cmd, status, 0, NULL);
@@ -1008,11 +1085,13 @@ static data_frame_tx_t *cmd_processor_viking_write_to_t55xx(uint16_t cmd, uint16
         uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_viking_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -1024,10 +1103,12 @@ static data_frame_tx_t *cmd_processor_pac_write_to_t55xx(uint16_t cmd, uint16_t 
         uint8_t old_keys[4];
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_pac_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -1056,10 +1137,38 @@ static data_frame_tx_t *cmd_processor_jablotron_write_to_t55xx(uint16_t cmd, uin
         uint8_t old_keys[4];
     } PACKED payload_t;
     payload_t *payload = (payload_t *)data;
-    if (length < sizeof(payload_t) || (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    status = write_jablotron_to_t55xx(payload->id, payload->new_key, payload->old_keys, (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys));
+    status = write_jablotron_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_indala_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t card_buffer[LF_INDALA_TAG_ID_SIZE] = {0x00};
+    status = scan_indala(card_buffer);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(card_buffer), card_buffer);
+}
+
+static data_frame_tx_t *cmd_processor_indala_write_to_t55xx(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    typedef struct {
+        uint8_t id[LF_INDALA_TAG_ID_SIZE];
+        uint8_t new_key[4];
+        uint8_t old_keys[4]; // we can have more than one... struct just to compute offsets with min 1 key
+    } PACKED payload_t;
+    payload_t *payload = (payload_t *)data;
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+
+    status = write_indala_to_t55xx(payload->id, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 
@@ -1092,6 +1201,7 @@ static data_frame_tx_t *cmd_processor_lf_t55xx_write(uint16_t cmd, uint16_t stat
     status = lf_t55xx_write_block(p->block, word, passwd, use_pwd, page1);
     return data_frame_make(cmd, status, 0, NULL);
 }
+
 
 #define GENERIC_READ_LEN 800
 #define GENERIC_READ_TIMEOUT_MS 500
@@ -1332,6 +1442,28 @@ static data_frame_tx_t *cmd_processor_idteck_get_emu_id(uint16_t cmd, uint16_t s
     return data_frame_make(cmd, STATUS_SUCCESS, LF_IDTECK_TAG_ID_SIZE, buffer->buffer);
 }
 
+// In: the eight pages (32 bytes), page 0 first. Sets them on the Hitag 2 slot data and reloads it.
+static data_frame_tx_t *cmd_processor_hitag2_set_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_HITAG2_DATA_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_HITAG2);
+    memcpy(buffer->buffer, data, LF_HITAG2_DATA_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_HITAG2, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// Out: the active slot's eight Hitag 2 pages, if its LF type is Hitag 2.
+static data_frame_tx_t *cmd_processor_hitag2_get_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_HITAG2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_HITAG2);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_HITAG2_DATA_SIZE, buffer->buffer);
+}
+
 static data_frame_tx_t *cmd_processor_seos_read_emu_data(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_SEOS);
     nfc_tag_seos_information_t *info = (nfc_tag_seos_information_t *)buffer->buffer;
@@ -1427,13 +1559,13 @@ static data_frame_tx_t *cmd_processor_idteck_write_to_t55xx(uint16_t cmd, uint16
 
     payload_t *payload = (payload_t *)data;
 
-    if (length < sizeof(payload_t) ||
-        (length - offsetof(payload_t, old_keys)) % sizeof(payload->old_keys) != 0) {
+    uint8_t old_key_count;
+    bool use_passwd;
+    if (!parse_t55xx_write_keys(data, length, offsetof(payload_t, old_keys), &old_key_count, &use_passwd)) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
 
-    uint8_t old_cnt = (length - offsetof(payload_t, old_keys)) / sizeof(payload->old_keys);
-    status = write_idteck_to_t55xx(payload->card_data, payload->new_key, payload->old_keys, old_cnt);
+    status = write_idteck_to_t55xx(payload->card_data, payload->new_key, payload->old_keys, old_key_count, use_passwd);
     return data_frame_make(cmd, status, 0, NULL);
 }
 #endif
@@ -1506,6 +1638,26 @@ static data_frame_tx_t *cmd_processor_jablotron_get_emu_id(uint16_t cmd, uint16_
     }
     tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_JABLOTRON);
     return data_frame_make(cmd, STATUS_SUCCESS, LF_JABLOTRON_TAG_ID_SIZE, buffer->buffer);
+}
+
+static data_frame_tx_t *cmd_processor_indala_set_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != LF_INDALA_TAG_ID_SIZE) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_INDALA);
+    memcpy(buffer->buffer, data, LF_INDALA_TAG_ID_SIZE);
+    tag_emulation_load_by_buffer(TAG_TYPE_INDALA, false);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+static data_frame_tx_t *cmd_processor_indala_get_emu_id(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    tag_slot_specific_type_t tag_types;
+    tag_emulation_get_specific_types_by_slot(tag_emulation_get_slot(), &tag_types);
+    if (tag_types.tag_lf != TAG_TYPE_INDALA) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    tag_data_buffer_t *buffer = get_buffer_by_tag_type(TAG_TYPE_INDALA);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_INDALA_TAG_ID_SIZE, buffer->buffer);
 }
 
 static nfc_tag_14a_coll_res_reference_t *get_coll_res_data(bool write) {
@@ -2086,6 +2238,26 @@ static data_frame_tx_t *before_reader_run(uint16_t cmd, uint16_t status, uint16_
  * before reader run, reset reader and on antenna,
  * we must to wait some time, to init picc(power).
  */
+// BLE advertising drops the 125 kHz field for ~1.6 ms per event, which corrupts LF reads and writes.
+// Pause it for the whole LF command; nothing is paused while a client is connected.
+static bool m_lf_adv_paused = false;
+
+static data_frame_tx_t *before_lf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    data_frame_tx_t *ret = before_reader_run(cmd, status, length, data);
+    if (ret == NULL) {
+        m_lf_adv_paused = advertising_pause();
+    }
+    return ret;
+}
+
+static data_frame_tx_t *after_lf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (m_lf_adv_paused) {
+        m_lf_adv_paused = false;
+        advertising_resume();
+    }
+    return NULL;
+}
+
 static data_frame_tx_t *before_hf_reader_run(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     data_frame_tx_t *ret = before_reader_run(cmd, status, length, data);
     if (ret == NULL) {
@@ -2208,6 +2380,124 @@ static data_frame_tx_t *cmd_processor_em4x05_scan(uint16_t cmd, uint16_t status,
     payload.uid_hi    = U32HTONL(tag.uid_hi);
     payload.is_em4x69 = tag.is_em4x69 ? 1 : 0;
     return data_frame_make(cmd, STATUS_LF_TAG_OK, sizeof(payload), (uint8_t *)&payload);
+}
+
+// Out: the UID (u32, big-endian).
+static data_frame_tx_t *cmd_processor_hitag2_scan(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t uid = 0;
+    status = lf_hitag2_reader_uid(&uid);
+    if (status != STATUS_LF_TAG_OK) {
+        return data_frame_make(cmd, status, 0, NULL);
+    }
+    uid = U32HTONL(uid);
+    return data_frame_make(cmd, status, sizeof(uid), (uint8_t *)&uid);
+}
+
+// In: the password (u32, big-endian). Out: the eight pages (u32 each, big-endian), then a mask of the pages read
+// (u8), also when the status says the read was incomplete.
+static data_frame_tx_t *cmd_processor_hitag2_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length != 4) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const uint32_t pwd = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3];
+    uint32_t pages[8];
+    uint8_t out[33];
+    status = lf_hitag2_reader_read(pwd, pages, &out[32]);
+    for (int i = 0; i < 8; i++) {
+        const uint32_t be = U32HTONL(pages[i]);
+        memcpy(&out[4 * i], &be, 4);
+    }
+    return data_frame_make(cmd, status, sizeof(out), out);
+}
+
+// Out, for LF_RDR_TRANSACT and LF_RDR_LAST: see lf_rdr_frame_pack.
+static data_frame_tx_t *lf_rdr_reply_frame(uint16_t cmd, const lf_rdr_reply_t *rx) {
+    static uint8_t out[LF_RDR_FRAME_MAX];
+    size_t n_runs;
+    const uint16_t *runs = lf_rdr_runs(&n_runs);
+    const size_t len = lf_rdr_frame_pack(rx, runs, n_runs, out);
+    return data_frame_make(cmd, rx->n_bits ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND, (uint16_t)len, out);
+}
+
+// In: an lf_rdr_link_t, the power-up time (u16 µs, 0 for a field already on), the number of command bits (u8), then
+// the command bits packed first-bit-first. All little-endian. Out: see lf_rdr_reply_frame.
+static data_frame_tx_t *cmd_processor_lf_rdr_transact(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    if (length < sizeof(lf_rdr_link_t) + 3) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_rdr_link_t link;
+    memcpy(&link, data, sizeof(link));
+    uint16_t power_up;
+    memcpy(&power_up, data + sizeof(link), 2);
+    const uint8_t n_tx = data[sizeof(link) + 2];
+    const uint8_t *tx = data + sizeof(link) + 3;
+    if (length < sizeof(link) + 3 + (n_tx + 7u) / 8u) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_rdr_field(true);
+    lf_rdr_reply_t rx;
+    const bool ok = lf_rdr_transact(&link, tx, n_tx, power_up, &rx);
+    lf_rdr_field(false);
+    if (!ok) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return lf_rdr_reply_frame(cmd, &rx);
+}
+
+// In: nothing. Out: the last completed transaction's answer, in the same bytes LF_RDR_TRANSACT returned for it.
+// Before the first transaction, the bit and run counts are 0.
+static data_frame_tx_t *cmd_processor_lf_rdr_last(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return lf_rdr_reply_frame(cmd, lf_rdr_last());
+}
+
+// In: the first record (u16, big-endian), counted from the oldest held. Out: the records added since the clear (u16),
+// the record size (u16), the count here (u8), then the records (see lf_rdr_trace_pack), all little-endian.
+static data_frame_tx_t *cmd_processor_lf_rdr_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[5 + 14 * LF_RDR_TRACE_REC_SIZE];
+    const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
+    uint16_t total;
+    const size_t n = lf_rdr_trace_read(first, out + 5, 14, &total);
+    const uint16_t size = LF_RDR_TRACE_REC_SIZE;
+    out[0] = (uint8_t)total;
+    out[1] = (uint8_t)(total >> 8);
+    out[2] = (uint8_t)size;
+    out[3] = (uint8_t)(size >> 8);
+    out[4] = (uint8_t)n;
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(5 + n * LF_RDR_TRACE_REC_SIZE), out);
+}
+
+static data_frame_tx_t *cmd_processor_lf_rdr_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_rdr_trace_clear();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// In: the offset (u16, big-endian). Out: the total sample count (u16), the count here (u16), then the samples (i16),
+// all little-endian.
+static data_frame_tx_t *cmd_processor_lf_rdr_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[4 + 1900 * 2];
+    if (length < 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const size_t offset = (size_t)data[0] << 8 | data[1];
+    size_t total;
+    const int16_t *cap = lf_rdr_capture(&total);
+    const size_t n = offset < total ? (total - offset < 1900 ? total - offset : 1900) : 0;
+    const uint16_t t16 = (uint16_t)total, n16 = (uint16_t)n;
+    memcpy(out, &t16, 2);
+    memcpy(out + 2, &n16, 2);
+    memcpy(out + 4, cap + offset, n * 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(4 + n * 2), out);
+}
+
+// In: nothing to read, or a whole lf_rdr_link_t (little-endian) to set. Out: the Hitag 2 reader's link.
+static data_frame_tx_t *cmd_processor_hitag2_reader_link(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_rdr_link_t *link = lf_hitag2_reader_link();
+    if (length == sizeof(lf_rdr_link_t)) {
+        memcpy(link, data, sizeof(lf_rdr_link_t));
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(lf_rdr_link_t), (uint8_t *)link);
 }
 
 static data_frame_tx_t *cmd_processor_lf_sniff(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -3221,6 +3511,80 @@ static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint1
     return data_frame_make(cmd, STATUS_SUCCESS, 4, buf);
 }
 #endif
+
+// In: the index of the first record (u16, big-endian, optional). Out: the count written since the clear (u32), the
+// record size (u16), the number of records here (u8), the number of first records kept (u8), the current boot (u16),
+// then the records.
+// As many records as fit one frame, so a larger record can't push a reply past it.
+#define LF_IA_TRACE_PER_READ ((NETDATA_MAX_DATA_LENGTH - 10u) / sizeof(lf_ia_trace_rec_t))
+static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[10 + LF_IA_TRACE_PER_READ * sizeof(lf_ia_trace_rec_t)];
+    const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
+    uint32_t total;
+    uint16_t boot;
+    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 10), LF_IA_TRACE_PER_READ, &total, &boot);
+    const uint16_t size = sizeof(lf_ia_trace_rec_t);
+    memcpy(out, &total, 4);
+    memcpy(out + 4, &size, 2);
+    out[6] = (uint8_t)n;
+    out[7] = LF_IA_TRACE_KEEP;
+    memcpy(out + 8, &boot, 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(10 + n * size), out);
+}
+
+// In: nothing to read, or 8 bytes to set (one per slot, LF_IA_MODE_ flags). Out: the 8 slot modes.
+static data_frame_tx_t *cmd_processor_lf_ia_slot_modes(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint8_t modes[LF_IA_SLOTS];
+    if (length == LF_IA_SLOTS) {
+        lf_ia_slot_modes_set(data);
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    lf_ia_slot_modes_get(modes);
+    return data_frame_make(cmd, STATUS_SUCCESS, LF_IA_SLOTS, modes);
+}
+
+static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_ia_trace_clear();
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// In: optionally the number of command ends to let pass before the ring freezes (u8, default 0). Out: nothing.
+static data_frame_tx_t *cmd_processor_lf_ia_env_arm(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_ia_env_arm(length >= 1 ? data[0] : 0);
+    return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
+}
+
+// In: the offset (u16, big-endian). Out: frozen (u8), the newest sample's time (u32), the number of samples here
+// (u16), then the samples (i16), oldest first.
+static data_frame_tx_t *cmd_processor_lf_ia_env_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[7 + 2000 * 2];
+    if (length < 2) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const size_t offset = (size_t)data[0] << 8 | data[1];
+    uint32_t last_us;
+    uint8_t frozen;
+    const uint16_t n = (uint16_t)lf_ia_env_read(offset, (int16_t *)(out + 7), 2000, &last_us, &frozen);
+    out[0] = frozen;
+    memcpy(out + 1, &last_us, 4);
+    memcpy(out + 5, &n, 2);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(7 + n * 2u), out);
+}
+
+// In: nothing to read, or a whole lf_ia_tuning_t to set. Out: the tuning, then the counters.
+static data_frame_tx_t *cmd_processor_lf_ia_tuning(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[sizeof(lf_ia_tuning_t) + sizeof(lf_ia_stats_t)];
+    if (length == sizeof(lf_ia_tuning_t)) {
+        memcpy(lf_ia_tuning(), data, sizeof(lf_ia_tuning_t));
+    } else if (length != 0) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    memcpy(out, lf_ia_tuning(), sizeof(lf_ia_tuning_t));
+    memcpy(out + sizeof(lf_ia_tuning_t), lf_ia_stats(), sizeof(lf_ia_stats_t));
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
+}
+
 static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_APP_VERSION,              NULL,                        cmd_processor_get_app_version,               NULL                   },
     {    DATA_CMD_CHANGE_DEVICE_MODE,           NULL,                        cmd_processor_change_device_mode,            NULL                   },
@@ -3230,6 +3594,12 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick,             NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_READ,             NULL,                        cmd_processor_lf_ia_trace_read,              NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_CLEAR,            NULL,                        cmd_processor_lf_ia_trace_clear,             NULL                   },
+    {    DATA_CMD_LF_IA_ENV_ARM,                NULL,                        cmd_processor_lf_ia_env_arm,                 NULL                   },
+    {    DATA_CMD_LF_IA_ENV_READ,               NULL,                        cmd_processor_lf_ia_env_read,                NULL                   },
+    {    DATA_CMD_LF_IA_TUNING,                 NULL,                        cmd_processor_lf_ia_tuning,                  NULL                   },
+    {    DATA_CMD_LF_IA_SLOT_MODES,             NULL,                        cmd_processor_lf_ia_slot_modes,              NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick,             NULL                   },
     {    DATA_CMD_SLOT_DATA_CONFIG_SAVE,        NULL,                        cmd_processor_slot_data_config_save,         NULL                   },
     {    DATA_CMD_ENTER_BOOTLOADER,             NULL,                        cmd_processor_enter_bootloader,              NULL                   },
@@ -3265,6 +3635,8 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_GET_ALL_SLOT_NICKS,           NULL,                        cmd_processor_get_all_slot_nicks,            NULL                   },
     {    DATA_CMD_GET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_get_long_press_threshold,      NULL                   },
     {    DATA_CMD_SET_LONG_PRESS_THRESHOLD,     NULL,                        cmd_processor_set_long_press_threshold,      NULL                   },
+    {    DATA_CMD_GET_LF_SELFTRIM,              NULL,                        cmd_processor_get_lf_selftrim,               NULL                   },
+    {    DATA_CMD_SET_LF_SELFTRIM,              NULL,                        cmd_processor_set_lf_selftrim,               NULL                   },
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 
@@ -3290,23 +3662,26 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_MF1_HARDNESTED_ACQUIRE,       before_hf_reader_run,        cmd_processor_mf1_hardnested_nonces_acquire, after_hf_reader_run    },
     {    DATA_CMD_MF1_CHECK_KEYS_ON_BLOCK,      before_hf_reader_run,        cmd_processor_mf1_check_keys_on_block,       after_hf_reader_run    },
 
-    {    DATA_CMD_EM410X_SCAN,                  before_reader_run,           cmd_processor_em410x_scan,                   NULL                   },
-    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_em410x_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_reader_run,           cmd_processor_em410x_electra_write_to_t55xx, NULL                   },
-    {    DATA_CMD_HIDPROX_SCAN,                 before_reader_run,           cmd_processor_hidprox_scan,                  NULL                   },
-    {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_reader_run,           cmd_processor_hidprox_write_to_t55xx,        NULL                   },
-    {    DATA_CMD_VIKING_SCAN,                  before_reader_run,           cmd_processor_viking_scan,                   NULL                   },
-    {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_viking_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_IOPROX_SCAN,                  before_reader_run,           cmd_processor_ioprox_scan,                   NULL                   },
-    {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_ioprox_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_PAC_SCAN,                     before_reader_run,           cmd_processor_pac_scan,                      NULL                   },
-    {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_reader_run,           cmd_processor_pac_write_to_t55xx,            NULL                   },
-    {    DATA_CMD_JABLOTRON_SCAN,               before_reader_run,           cmd_processor_jablotron_scan,                NULL                   },
-    {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_reader_run,           cmd_processor_jablotron_write_to_t55xx,      NULL                   },
-    {    DATA_CMD_PYRAMID_SCAN,                 before_reader_run,           cmd_processor_pyramid_scan,                  NULL                   },
-    {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_reader_run,           cmd_processor_idteck_write_to_t55xx,         NULL                   },
-    {    DATA_CMD_LF_T55XX_WRITE,               before_reader_run,           cmd_processor_lf_t55xx_write,                NULL                   },
-    {    DATA_CMD_ADC_GENERIC_READ,             before_reader_run,           cmd_processor_generic_read,                  NULL                   },
+    {    DATA_CMD_EM410X_SCAN,                  before_lf_reader_run,        cmd_processor_em410x_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_EM410X_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_em410x_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_EM410X_ELECTRA_WRITE_TO_T55XX, before_lf_reader_run,        cmd_processor_em410x_electra_write_to_t55xx, after_lf_reader_run    },
+    {    DATA_CMD_HIDPROX_SCAN,                 before_lf_reader_run,        cmd_processor_hidprox_scan,                  after_lf_reader_run    },
+    {    DATA_CMD_HIDPROX_WRITE_TO_T55XX,       before_lf_reader_run,        cmd_processor_hidprox_write_to_t55xx,        after_lf_reader_run    },
+    {    DATA_CMD_VIKING_SCAN,                  before_lf_reader_run,        cmd_processor_viking_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_VIKING_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_viking_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_IOPROX_SCAN,                  before_lf_reader_run,        cmd_processor_ioprox_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_IOPROX_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_ioprox_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_PAC_SCAN,                     before_lf_reader_run,        cmd_processor_pac_scan,                      after_lf_reader_run    },
+    {    DATA_CMD_PAC_WRITE_TO_T55XX,           before_lf_reader_run,        cmd_processor_pac_write_to_t55xx,            after_lf_reader_run    },
+    {    DATA_CMD_JABLOTRON_SCAN,               before_lf_reader_run,        cmd_processor_jablotron_scan,                after_lf_reader_run    },
+    {    DATA_CMD_JABLOTRON_WRITE_TO_T55XX,     before_lf_reader_run,        cmd_processor_jablotron_write_to_t55xx,      after_lf_reader_run    },
+    {    DATA_CMD_PYRAMID_SCAN,                 before_lf_reader_run,        cmd_processor_pyramid_scan,                  after_lf_reader_run    },
+    {    DATA_CMD_IDTECK_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_idteck_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_INDALA_SCAN,                  before_lf_reader_run,        cmd_processor_indala_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_INDALA_WRITE_TO_T55XX,        before_lf_reader_run,        cmd_processor_indala_write_to_t55xx,         after_lf_reader_run    },
+    {    DATA_CMD_LF_T55XX_WRITE,               before_lf_reader_run,        cmd_processor_lf_t55xx_write,                after_lf_reader_run    },
+    {    DATA_CMD_LF_T55XX_WRITE_FEATURES,      NULL,                        cmd_processor_lf_t55xx_write_features,       NULL                   },
+    {    DATA_CMD_ADC_GENERIC_READ,             before_lf_reader_run,        cmd_processor_generic_read,                  after_lf_reader_run    },
 
     {    DATA_CMD_HF14A_SET_FIELD_ON,           before_reader_run,           cmd_processor_hf14a_set_field_on,            NULL                   },
     {    DATA_CMD_HF14A_SET_FIELD_OFF,          before_reader_run,           cmd_processor_hf14a_set_field_off,           NULL                   },
@@ -3316,8 +3691,16 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_IOPROX_DECODE_RAW,            NULL,                        cmd_processor_ioprox_decode_raw,             NULL                   },
     {    DATA_CMD_IOPROX_COMPOSE_ID,            NULL,                        cmd_processor_ioprox_compose_id,             NULL                   },
-    {    DATA_CMD_EM4X05_SCAN,                  before_reader_run,           cmd_processor_em4x05_scan,                   NULL                   },
-    {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
+    {    DATA_CMD_EM4X05_SCAN,                  before_lf_reader_run,        cmd_processor_em4x05_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_LF_SNIFF,                     before_lf_reader_run,        cmd_processor_lf_sniff,                      after_lf_reader_run    },
+    {    DATA_CMD_HITAG2_SCAN,                  before_lf_reader_run,        cmd_processor_hitag2_scan,                   after_lf_reader_run    },
+    {    DATA_CMD_HITAG2_READ,                  before_lf_reader_run,        cmd_processor_hitag2_read,                   after_lf_reader_run    },
+    {    DATA_CMD_LF_RDR_TRANSACT,              before_lf_reader_run,        cmd_processor_lf_rdr_transact,               after_lf_reader_run    },
+    {    DATA_CMD_LF_RDR_CAPTURE,               NULL,                        cmd_processor_lf_rdr_capture,                NULL                   },
+    {    DATA_CMD_HITAG2_READER_LINK,           NULL,                        cmd_processor_hitag2_reader_link,            NULL                   },
+    {    DATA_CMD_LF_RDR_LAST,                  NULL,                        cmd_processor_lf_rdr_last,                   NULL                   },
+    {    DATA_CMD_LF_RDR_TRACE_READ,            NULL,                        cmd_processor_lf_rdr_trace_read,             NULL                   },
+    {    DATA_CMD_LF_RDR_TRACE_CLEAR,           NULL,                        cmd_processor_lf_rdr_trace_clear,            NULL                   },
     {    DATA_CMD_HF14A_SNIFF,                  NULL,                        cmd_processor_hf14a_sniff,                   NULL                   },
     {    DATA_CMD_HF14A_AUTH_TRACE,             before_hf_reader_run,        cmd_processor_hf14a_auth_trace,              after_hf_reader_run    },
 
@@ -3380,10 +3763,14 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_JABLOTRON_GET_EMU_ID,           NULL,                      cmd_processor_jablotron_get_emu_id,          NULL                   },
     {    DATA_CMD_IDTECK_SET_EMU_ID,              NULL,                      cmd_processor_idteck_set_emu_id,             NULL                   },
     {    DATA_CMD_IDTECK_GET_EMU_ID,              NULL,                      cmd_processor_idteck_get_emu_id,             NULL                   },
+    {    DATA_CMD_HITAG2_SET_EMU_DATA,            NULL,                      cmd_processor_hitag2_set_emu_data,           NULL                   },
+    {    DATA_CMD_HITAG2_GET_EMU_DATA,            NULL,                      cmd_processor_hitag2_get_emu_data,           NULL                   },
 
     {    DATA_CMD_SEOS_READ_EMU_DATA,             NULL,                      cmd_processor_seos_read_emu_data,            NULL                   },
     {    DATA_CMD_SEOS_WRITE_EMU_DATA,            NULL,                      cmd_processor_seos_write_emu_data,           NULL                   },
     {    DATA_CMD_SEOS_WRITE_EMU_KEYS,            NULL,                      cmd_processor_seos_write_emu_keys,           NULL                   },
+    {    DATA_CMD_INDALA_SET_EMU_ID,              NULL,                      cmd_processor_indala_set_emu_id,             NULL                   },
+    {    DATA_CMD_INDALA_GET_EMU_ID,              NULL,                      cmd_processor_indala_get_emu_id,             NULL                   },
 
     /* ISO14443-4 T=CL emulation */
 #if defined(PROJECT_CHAMELEON_ULTRA)

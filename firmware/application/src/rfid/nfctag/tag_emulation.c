@@ -51,7 +51,7 @@ bool is_tag_specific_type_valid(tag_specific_type_t tag_type) {
 /**
  * Tag data stored in flash. Total length must be aligned by 4 bytes (whole words).
  */
-static uint8_t m_tag_data_buffer_lf[20];  // LF card data buffer
+static uint8_t m_tag_data_buffer_lf[32];  // LF card data buffer: the largest is a Hitag 2 tag's eight pages
 static uint16_t m_tag_data_lf_crc;
 static tag_data_buffer_t m_tag_data_lf = {sizeof(m_tag_data_buffer_lf), m_tag_data_buffer_lf, &m_tag_data_lf_crc};
 
@@ -100,6 +100,9 @@ static tag_base_handler_map_t tag_base_map[] = {
     {TAG_SENSE_LF, TAG_TYPE_JABLOTRON,   lf_tag_data_loadcb,           lf_tag_jablotron_data_savecb, lf_tag_jablotron_data_factory, &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_IDTECK,      lf_tag_data_loadcb,           lf_tag_idteck_data_savecb,    lf_tag_idteck_data_factory,    &m_tag_data_lf},
     {TAG_SENSE_LF, TAG_TYPE_FARPOINTE_PYRAMID, lf_tag_data_loadcb,     lf_tag_pyramid_data_savecb,   lf_tag_pyramid_data_factory,   &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_INDALA,      lf_tag_data_loadcb,           lf_tag_indala_data_savecb,    lf_tag_indala_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_HITAG2,      lf_tag_data_loadcb,           lf_tag_hitag2_data_savecb,    lf_tag_hitag2_data_factory,    &m_tag_data_lf},
+    {TAG_SENSE_LF, TAG_TYPE_LF_IA_TEST,  lf_tag_data_loadcb,           lf_tag_ia_test_data_savecb,   lf_tag_ia_test_data_factory,   &m_tag_data_lf},
     // MF1 tag emulation
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_Mini, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
     {TAG_SENSE_HF, TAG_TYPE_MIFARE_1024, nfc_tag_mf1_data_loadcb,      nfc_tag_mf1_data_savecb,      nfc_tag_mf1_data_factory,      &m_tag_data_hf},
@@ -239,13 +242,16 @@ static void load_data_by_tag_type(uint8_t slot, tag_specific_type_t tag_type) {
     // it may be caused by the firmware update at this time, the data must be deleted and rebuilt.
     uint16_t length = buffer->length;
     bool ret = fds_read_sync(map_info.id, map_info.key, &length, buffer->buffer);
-    if (false == ret) {
+    if (ret) {
+        ret = tag_emulation_load_by_buffer(tag_type, true);
+    } else {
         NRF_LOG_INFO("tag slot data no exists.");
-        return;
     }
-    ret = tag_emulation_load_by_buffer(tag_type, true);
     if (ret) {
         NRF_LOG_INFO("load tag data in slot %d, type %d done.", slot, tag_type);
+    } else if (sense_type == TAG_SENSE_LF) {
+        // LF emulation would otherwise play the waveform it loaded last, from another slot or type
+        lf_tag_data_clear();
     }
 }
 
@@ -682,8 +688,9 @@ void tag_emulation_change_type(uint8_t slot, tag_specific_type_t tag_type) {
             break;  // never happen
     }
     NRF_LOG_INFO("tag type = %d", tag_type);
-    // After the update is completed, we need to notify the relevant data in the update of the memory
-    if (sense_type != TAG_SENSE_NO) {
+    // After the update is completed, we need to notify the relevant data in the update of the memory.
+    // The data buffers hold the active slot's data. Another slot's data loads when that slot becomes active.
+    if (sense_type != TAG_SENSE_NO && slot == tag_emulation_get_slot()) {
         load_data_by_tag_type(slot, tag_type);
         NRF_LOG_INFO("reload data success.");
     }

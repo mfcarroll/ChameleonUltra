@@ -482,6 +482,111 @@ class MFUAuthArgsUnit(ReaderRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class T55xxPasswordArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_password_arg(parser: ArgumentParserNoExit):
+        parser.add_argument(
+            "--password",
+            type=str,
+            required=False,
+            metavar="<hex>",
+            help="Protect the T55xx with this 8-hex-digit password (any value, 00000000 included). "
+            "Default: no password",
+        )
+        parser.add_argument(
+            "--current-password",
+            type=str,
+            required=False,
+            metavar="<hex>",
+            help="Password the T55xx is protected with now, if it isn't one of the defaults "
+            "tried automatically. Needed to rewrite or unlock a tag with your own password",
+        )
+        return parser
+
+    @staticmethod
+    def _parse_t55xx_key(value: Union[str, None], option: str) -> Union[bytes, None]:
+        if value is None:
+            return None
+        if not re.match(r"^[a-fA-F0-9]{8}$", value):
+            raise ArgsParserError(f"{option} must be exactly 8 hex characters")
+        return bytes.fromhex(value)
+
+    def t55xx_keys(self, args: argparse.Namespace) -> dict:
+        """
+        Keyword arguments for the cmd *_write_to_t55xx methods: the password the user asked for
+        (or None) and the tag's current password (or None). Warns when the firmware cannot write
+        without a password.
+        """
+        password = self._parse_t55xx_key(args.password, "--password")
+        current_password = self._parse_t55xx_key(
+            args.current_password, "--current-password"
+        )
+        # Skip the warning on devices without T55xx writers (Lite): the write itself will say so
+        commands = self.device_com.commands
+        has_writers = not len(commands) or Command.EM410X_WRITE_TO_T55XX in commands
+        if password is None and has_writers and not self.cmd.t55xx_password_opt_in():
+            print(
+                f"{color_string((CY, 'WARNING'))}: this firmware protects every T55xx write with "
+                f"password 20206666. Update the firmware to write without a password."
+            )
+        return {"password": password, "current_password": current_password}
+
+    def t55xx_verify_write(self, expected, read_back, show) -> None:
+        """
+        Read the tag back after a T55xx write and report whether it carries what was written.
+        A T55xx never acknowledges a write and the firmware leaves checking to the client, so
+        without this a write blocked by an unknown password still looks like it worked.
+        LF reads can miss or misdecode, so: any read matching is enough to verify, but a
+        failure needs the same other value read twice.
+        """
+        reads = []
+        for _ in range(3):
+            try:
+                got = read_back()
+            except UnexpectedResponseError:
+                continue
+            if got == expected:
+                print(f"{color_string((CG, 'Verified'))}: the tag reads back as written.")
+                return
+            if got in reads:
+                print(f"{color_string((CR, 'Write failed'))}: the tag reads {show(got)}, not {show(expected)}. "
+                      f"If it is password-protected, give its password with --current-password.")
+                return
+            reads.append(got)
+        if reads:
+            print(f"{color_string((CY, 'Not verified'))}: the tag read back as "
+                  f"{', '.join(show(r) for r in reads)}, not {show(expected)}, but not consistently.")
+        else:
+            print(f"{color_string((CY, 'Not verified'))}: the tag could not be read back as this type. "
+                  f"If the write was blocked by a password, give it with --current-password.")
+
+    def t55xx_verify_em410x(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, lambda: self.cmd.em410x_scan()[1], lambda v: v.hex().upper())
+
+    def t55xx_verify_hidprox(self, format: int, fc: int, cn: int, il: int, oem: int):
+        def read_back():
+            _, r_fc, cn_hi, cn_lo, r_il, r_oem = self.cmd.hidprox_scan(format)
+            return (r_fc, (cn_hi << 32) + cn_lo, r_il, r_oem)
+        self.t55xx_verify_write((fc, cn, il, oem), read_back, lambda v: f"FC {v[0]} CN {v[1]}")
+
+    def t55xx_verify_ioprox(self, raw8: bytes):
+        self.t55xx_verify_write(raw8, lambda: self.cmd.ioprox_scan()[3], lambda v: v.hex().upper())
+
+    def t55xx_verify_pac(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.pac_scan,
+                                lambda v: ''.join(chr(b) if 0x20 <= b < 0x7f else '.' for b in v))
+
+    def t55xx_verify_viking(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.viking_scan, lambda v: v.hex().upper())
+
+    def t55xx_verify_jablotron(self, id_bytes: bytes):
+        self.t55xx_verify_write(id_bytes, self.cmd.jablotron_scan, lambda v: v.hex().upper())
+
+    @staticmethod
+    def t55xx_verify_idteck():
+        print(f"{color_string((CY, 'Not verified'))}: this firmware has no IDTECK reader to read the tag back.")
+
+
 class LFEMIdArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_card_arg(parser: ArgumentParserNoExit, required=False):
@@ -898,6 +1003,58 @@ class LFIdteckIdArgsUnit(DeviceRequiredUnit):
         raise NotImplementedError("Please implement this")
 
 
+class LFIndalaIdArgsUnit(DeviceRequiredUnit):
+    @staticmethod
+    def add_card_arg(parser: ArgumentParserNoExit, required=False):
+        group = parser.add_mutually_exclusive_group(required=required)
+        group.add_argument(
+            "-r",
+            "--raw",
+            type=str,
+            help="Raw 64-bit frame (16 hex chars)",
+            metavar="<hex>",
+        )
+        group.add_argument(
+            "--fc",
+            type=int,
+            dest="_indala_fc",
+            help="Facility code (26-bit format, use with --cn). Parity and checksum are"
+            " encoded the same way as Proxmark. Use --raw to make an exact copy",
+            metavar="<dec>",
+        )
+        parser.add_argument(
+            "--cn",
+            type=int,
+            dest="_indala_cn",
+            help="Card number (26-bit format, use with --fc)",
+            metavar="<dec>",
+        )
+        return parser
+
+    def before_exec(self, args: argparse.Namespace):
+        if not super().before_exec(args):
+            return False
+        fc = getattr(args, "_indala_fc", None)
+        cn = getattr(args, "_indala_cn", None)
+        if fc is not None or cn is not None:
+            if fc is None or cn is None:
+                raise ArgsParserError("--fc and --cn must be used together")
+            if not (0 <= fc <= 255):
+                raise ArgsParserError("FC must be 0-255")
+            if not (0 <= cn <= 65535):
+                raise ArgsParserError("CN must be 0-65535")
+            args.raw = indala_encode_raw(fc, cn).hex()
+        if args.raw is not None and not re.match(r"^[a-fA-F0-9]{16}$", args.raw):
+            raise ArgsParserError("Raw must be exactly 16 hex characters")
+        return True
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        raise NotImplementedError("Please implement this")
+
+    def on_exec(self, args: argparse.Namespace):
+        raise NotImplementedError("Please implement this")
+
+
 class TagTypeArgsUnit(DeviceRequiredUnit):
     @staticmethod
     def add_type_args(parser: ArgumentParserNoExit):
@@ -947,9 +1104,12 @@ lf_ioprox = lf.subgroup("ioprox", "ioProx commands")
 lf_pac = lf.subgroup("pac", "PAC/Stanley commands")
 lf_viking = lf.subgroup("viking", "Viking commands")
 lf_jablotron = lf.subgroup("jablotron", "Jablotron commands")
+lf_indala = lf.subgroup("indala", "Indala commands")
 lf_generic = lf.subgroup("generic", "Generic commands")
 lf_idteck = lf.subgroup("idteck", "IDTECK commands")
 lf_pyramid = lf.subgroup("pyramid", "Farpointe/Pyramid commands")
+lf_hitag2 = lf.subgroup("hitag2", "Hitag 2 commands")
+lf_interactive = lf.subgroup("interactive", "Interactive LF emulation commands")
 
 
 @root.command("clear")
@@ -5981,11 +6141,12 @@ class LFEMRead(ReaderRequiredUnit):
 
 
 @lf_em_410x.command("write")
-class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
+class LFEM410xWriteT55xx(LFEMIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write em410x id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
@@ -5994,8 +6155,9 @@ class LFEM410xWriteT55xx(LFEMIdArgsUnit, ReaderRequiredUnit):
                 "Writing to T55xx supports 5-byte EM410X (10 hex) or 13-byte Electra (26 hex) IDs."
             )
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.em410x_write_to_t55xx(id_bytes)
+        self.cmd.em410x_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - EM410x ID write done: {id_hex}")
+        self.t55xx_verify_em410x(id_bytes)
 
 
 @lf_hid_prox.command("read")
@@ -6022,11 +6184,12 @@ class LFHIDProxRead(LFHIDIdReadArgsUnit, ReaderRequiredUnit):
 
 
 @lf_hid_prox.command("write")
-class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
+class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write hidprox card data to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         if args.fc is None:
@@ -6045,7 +6208,7 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
             args.il,
             args.oem,
         )
-        self.cmd.hidprox_write_to_t55xx(id)
+        self.cmd.hidprox_write_to_t55xx(id, **self.t55xx_keys(args))
         print(f"HIDProx/{format}")
         if args.fc > 0:
             print(f" FC: {args.fc}")
@@ -6055,6 +6218,7 @@ class LFHIDProxWriteT55xx(LFHIDIdArgsUnit, ReaderRequiredUnit):
             print(f" OEM: {args.oem}")
         print(f" CN: {args.cn}")
         print("write done.")
+        self.t55xx_verify_hidprox(format.value, args.fc, args.cn, args.il, args.oem)
 
 
 @lf_hid_prox.command("econfig")
@@ -6126,11 +6290,12 @@ class LFIOProxRead(LFIOProxReadArgsUnit, ReaderRequiredUnit):
 
 
 @lf_ioprox.command("write")
-class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
+class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write ioProx card data to t55xx"
-        return self.add_card_arg(parser, required=False)
+        self.add_card_arg(parser, required=False)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         # defaults
@@ -6147,7 +6312,7 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
             raw8 = res[3]
 
         payload16 = struct.pack(">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8)
-        self.cmd.ioprox_write_to_t55xx(payload16)
+        self.cmd.ioprox_write_to_t55xx(payload16, **self.t55xx_keys(args))
 
         print("ioProx XSF format")
         print(f"   Version: {color_string((CG, ver))}")
@@ -6155,6 +6320,7 @@ class LFIOProxWriteT55xx(LFIOProxIdArgsUnit, ReaderRequiredUnit):
         print(f"   ID: {color_string((CY, cn))}")
         print(f"   Raw: {color_string((CY, raw8.hex().upper()))}")
         print("Write done.")
+        self.t55xx_verify_ioprox(raw8)
 
 
 @lf_ioprox.command("econfig")
@@ -6383,18 +6549,20 @@ class LFPacIdArgsUnit(DeviceRequiredUnit):
 
 
 @lf_pac.command("write")
-class LFPacWriteT55xx(LFPacIdArgsUnit, ReaderRequiredUnit):
+class LFPacWriteT55xx(LFPacIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write PAC/Stanley id to T55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_bytes = bytes.fromhex(args.id)
-        self.cmd.pac_write_to_t55xx(id_bytes)
+        self.cmd.pac_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         id_ascii = "".join(chr(b) if 0x20 <= b < 0x7F else "." for b in id_bytes)
         raw = pac_encode_raw(id_bytes)
         print(f" - PAC/Stanley write done - CN: {id_ascii} | Raw: {raw.hex().upper()}")
+        self.t55xx_verify_pac(id_bytes)
 
 
 @lf_pac.command("econfig")
@@ -6438,31 +6606,35 @@ class LFVikingRead(ReaderRequiredUnit):
 
 
 @lf_viking.command("write")
-class LFVikingWriteT55xx(LFVikingIdArgsUnit, ReaderRequiredUnit):
+class LFVikingWriteT55xx(LFVikingIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write Viking id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.viking_write_to_t55xx(id_bytes)
+        self.cmd.viking_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Viking ID(8H): {id_hex} write done.")
+        self.t55xx_verify_viking(id_bytes)
 
 
 @lf_idteck.command("write")
-class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, ReaderRequiredUnit):
+class LFIdteckWriteT55xx(LFIdteckIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Clone an IDTECK PSK1 frame onto a T55xx tag."
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.idteck_write_to_t55xx(id_bytes)
+        self.cmd.idteck_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - IDTECK frame {id_hex} written to T55xx.")
+        self.t55xx_verify_idteck()
 
 
 @lf_idteck.command("econfig")
@@ -6514,7 +6686,7 @@ class LFIdteckEconfig(SlotIndexArgsAndGoUnit, LFIdteckIdArgsUnit):
 
 
 @lf.command("clone")
-class LFT55xxClone(ReaderRequiredUnit):
+class LFT55xxClone(T55xxPasswordArgsUnit, ReaderRequiredUnit):
     """
     Clone a scanned or manually-specified LF card ID onto a blank T55xx tag.
 
@@ -6539,6 +6711,7 @@ class LFT55xxClone(ReaderRequiredUnit):
         parser.description = (
             "Clone a LF card ID onto a blank T55xx tag.\n"
             "Supported types: em410x, electra, hid, ioprox, pac, viking, idteck.\n"
+            "The tag is written without a password unless --password is given.\n"
             "Only supported on Chameleon Ultra (Lite has no LF writer)."
         )
         parser.add_argument(
@@ -6611,7 +6784,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             metavar="HEX",
             help="ioProx raw 8 bytes in hex, e.g. 007854E03A5D65AB",
         )
-        return parser
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         # Clone requires LF writer — only available on Chameleon Ultra (not Lite)
@@ -6619,6 +6792,7 @@ class LFT55xxClone(ReaderRequiredUnit):
             print(" - Error: LF clone requires Chameleon Ultra. Lite has no LF writer.")
             return
         t = args.type
+        keys = self.t55xx_keys(args)
 
         if t in ("em410x", "electra"):
             if args.id is None:
@@ -6629,7 +6803,8 @@ class LFT55xxClone(ReaderRequiredUnit):
                     f"--id must be exactly {expected} hex characters for {t}"
                 )
             id_bytes = bytes.fromhex(args.id)
-            self.cmd.em410x_write_to_t55xx(id_bytes)
+            self.cmd.em410x_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_em410x(id_bytes)
             label = "EM410x Electra" if t == "electra" else "EM410x"
             print(f" - {label} ID cloned to T55xx: {args.id.upper()}")
 
@@ -6653,7 +6828,8 @@ class LFT55xxClone(ReaderRequiredUnit):
                 il,
                 oem,
             )
-            self.cmd.hidprox_write_to_t55xx(id_bytes)
+            self.cmd.hidprox_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_hidprox(fmt.value, fc, cn, il, oem)
             print(" - HID Prox cloned to T55xx")
             print(f"   Format : {fmt.name}")
             if fc:
@@ -6677,7 +6853,8 @@ class LFT55xxClone(ReaderRequiredUnit):
             payload16 = struct.pack(
                 ">BBH8s4x", ver & 0xFF, fc & 0xFF, cn & 0xFFFF, raw8
             )
-            self.cmd.ioprox_write_to_t55xx(payload16)
+            self.cmd.ioprox_write_to_t55xx(payload16, **keys)
+            verify = lambda: self.t55xx_verify_ioprox(raw8)
             print(" - ioProx cloned to T55xx")
             print(f"   Ver    : {ver}")
             print(f"   FC     : {fc} [0x{fc:02X}]")
@@ -6690,7 +6867,8 @@ class LFT55xxClone(ReaderRequiredUnit):
             if len(args.id) != 8:
                 raise ArgsParserError("--id must be exactly 8 ASCII characters for pac")
             id_bytes = args.id.encode("ascii")
-            self.cmd.pac_write_to_t55xx(id_bytes)
+            self.cmd.pac_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_pac(id_bytes)
             print(f" - PAC/Stanley ID cloned to T55xx: {args.id}")
 
         elif t == "viking":
@@ -6701,7 +6879,8 @@ class LFT55xxClone(ReaderRequiredUnit):
                     "--id must be exactly 8 hex characters for viking"
                 )
             id_bytes = bytes.fromhex(args.id)
-            self.cmd.viking_write_to_t55xx(id_bytes)
+            self.cmd.viking_write_to_t55xx(id_bytes, **keys)
+            verify = lambda: self.t55xx_verify_viking(id_bytes)
             print(f" - Viking ID cloned to T55xx: {args.id.upper()}")
 
         elif t == "idteck":
@@ -6714,8 +6893,11 @@ class LFT55xxClone(ReaderRequiredUnit):
             else:
                 raise ArgsParserError("--id must be 8 or 16 hex characters for idteck")
             id_bytes = bytes.fromhex(id_hex)
-            self.cmd.idteck_write_to_t55xx(id_bytes)
+            self.cmd.idteck_write_to_t55xx(id_bytes, **keys)
+            verify = self.t55xx_verify_idteck
             print(f" - IDTECK frame cloned to T55xx: {id_hex.upper()}")
+
+        verify()
 
 
 @lf_generic.command("adcread")
@@ -6743,6 +6925,344 @@ class LFADCGenericRead(ReaderRequiredUnit):
             print(f"avg: {hex(round(avg / len(resp)))}")
         else:
             print("generic read error")
+
+
+# Page 2 is not used in password mode. In crypto mode its last two bytes and page 1 hold the 48-bit key.
+HITAG2_PAGE_NAMES = (
+    "UID",
+    "Password (reader's)",
+    "Key, high bytes (crypto mode only)",
+    "Config + tag password",
+    "User",
+    "User",
+    "User",
+    "User",
+)
+
+
+def _hitag2_print_pages(pages: bytes):
+    for n in range(8):
+        print(
+            f"   {n}  {pages[4 * n : 4 * n + 4].hex(' ').upper()}  {HITAG2_PAGE_NAMES[n]}"
+        )
+    config = pages[12]
+    mode = "crypto" if config & 0x08 else "password"
+    print(
+        f"   Config 0x{config:02X}: {mode} mode. The emulation answers password mode only."
+    )
+
+
+def _hex_arg(value: str, nbytes: int, name: str) -> bytes:
+    try:
+        b = bytes.fromhex(value)
+    except ValueError:
+        raise ArgsParserError(f"{name} must be hex")
+    if len(b) != nbytes:
+        raise ArgsParserError(f"{name} must be {2 * nbytes} hex digits")
+    return b
+
+
+@lf_hitag2.command("reader")
+class LFHitag2Reader(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Read a Hitag 2 tag's UID"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        uid = self.cmd.hitag2_scan()
+        print(f" - UID: {color_string((CG, uid.hex().upper()))}")
+
+
+@lf_hitag2.command("read")
+class LFHitag2Read(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Read a Hitag 2 tag in password mode: its UID, then its eight pages. It shows the tag's passwords "
+            "in full. Crypto mode is not supported."
+        )
+        parser.add_argument(
+            "-k",
+            "--key",
+            required=True,
+            metavar="<hex8>",
+            help="the reader password, page 1",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if not re.fullmatch(r"[0-9a-fA-F]{8}", args.key):
+            raise ArgsParserError("key must be 8 hex digits")
+        resp = self.cmd.hitag2_read(bytes.fromhex(args.key))
+        if resp.status == Status.MF_ERR_AUTH:
+            print(f" - {color_string((CR, 'The tag did not accept the password'))}")
+        elif (
+            resp.status not in (Status.LF_TAG_OK, Status.LF_TAG_NO_FOUND)
+            or resp.parsed is None
+        ):
+            print(f" - {color_string((CR, 'No Hitag 2 tag found'))}")
+            return
+        _, pages = resp.parsed
+        for p, page in enumerate(pages):
+            value = page.hex().upper() if page is not None else "-- -- -- --"
+            if page is not None:
+                value = " ".join(value[i : i + 2] for i in range(0, 8, 2))
+            print(f"   {p}  {value}  {HITAG2_PAGE_NAMES[p]}")
+        if resp.status == Status.LF_TAG_NO_FOUND:
+            print(f" - {color_string((CY, 'Some pages could not be read'))}")
+
+
+@lf_hitag2.command("econfig")
+class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set the Hitag 2 pages emulated on a slot. Give any of the options to change those pages; "
+            "give none to show them. The slot's LF type must be HITAG2 (hw slot type -s <n> -t HITAG2)."
+        )
+        self.add_slot_args(parser)
+        parser.add_argument("--uid", metavar="<hex8>", help="page 0, the UID")
+        parser.add_argument(
+            "--pwd", metavar="<hex8>", help="page 1, the password the reader must send"
+        )
+        parser.add_argument(
+            "--config",
+            metavar="<hex2>",
+            help="the configuration byte, page 3's first byte",
+        )
+        parser.add_argument(
+            "--tag-pwd",
+            metavar="<hex6>",
+            help="the tag password, page 3's last three bytes",
+        )
+        parser.add_argument(
+            "--page",
+            nargs=2,
+            action="append",
+            metavar=("<0-7>", "<hex8>"),
+            help="set any page, repeatable",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        slotinfo = self.cmd.get_slot_info()
+        if TagSpecificType(slotinfo[self.slot_num - 1]["lf"]) != TagSpecificType.HITAG2:
+            print(
+                f"{color_string((CR, 'ERROR'))}: Slot {self.slot_num} LF type is not HITAG2. "
+                f"Set it with: hw slot type -s {self.slot_num} -t HITAG2"
+            )
+            return
+        pages = bytearray(self.cmd.hitag2_get_emu_data())
+        changed = False
+        for n, value in args.page or []:
+            if not n.isdigit() or not 0 <= int(n) <= 7:
+                raise ArgsParserError("page number must be 0 to 7")
+            pages[4 * int(n) : 4 * int(n) + 4] = _hex_arg(value, 4, "page data")
+            changed = True
+        if args.uid is not None:
+            pages[0:4] = _hex_arg(args.uid, 4, "--uid")
+            changed = True
+        if args.pwd is not None:
+            pages[4:8] = _hex_arg(args.pwd, 4, "--pwd")
+            changed = True
+        if args.config is not None:
+            pages[12:13] = _hex_arg(args.config, 1, "--config")
+            changed = True
+        if args.tag_pwd is not None:
+            pages[13:16] = _hex_arg(args.tag_pwd, 3, "--tag-pwd")
+            changed = True
+        if changed:
+            self.cmd.hitag2_set_emu_data(bytes(pages))
+            print(
+                f" - Slot {self.slot_num} Hitag 2 pages set. Save them with: hw slot store"
+            )
+        print(f" - Slot {self.slot_num} Hitag 2 pages:")
+        _hitag2_print_pages(bytes(pages))
+
+
+LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHIIIhBBBB")
+LF_IA_MODES = {0: "baseline", 1: "scale", 2: "mid-window", 3: "scale + mid-window"}
+LF_IA_MODE_NAMES = {"baseline": 0, "scale": 1, "mid": 2, "both": 3}
+LF_IA_TIMING_BITS = 0x03
+LF_IA_ALT_PROTOCOL = 0x04  # Hitag 2: answers only every second START_AUTH
+
+
+def lf_ia_mode_name(mode: int) -> str:
+    name = LF_IA_MODES[mode & LF_IA_TIMING_BITS]
+    if mode & LF_IA_ALT_PROTOCOL:
+        name += ", every second START_AUTH"
+    return name
+
+
+LF_IA_VERDICTS = {0: "ignored", 1: "answered", 2: "ended the exchange"}
+LF_IA_DECODES = {
+    0: "ok",
+    1: "one interval class",
+    2: "too few gaps",
+    3: "too many gaps",
+}
+
+
+def _lf_ia_bits(raw: bytes, n: int) -> str:
+    n = min(n, 8 * len(raw))
+    return "".join("1" if raw[i // 8] >> (7 - i % 8) & 1 else "0" for i in range(n))
+
+
+@lf_interactive.command("trace")
+class LFInteractiveTrace(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Show the exchange trace of an interactive LF emulation (such as Hitag 2): each reader command with "
+            "its decoded bits, what the slot answered and when, grouped by boot and field session, with the "
+            "counters since the last clear. The trace survives sleep. A session with no command only counts in "
+            "the counters. If the trace has filled, it keeps the first 8 records and the latest 40. It shows a "
+            "reader's password in full."
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        recs, total, keep, boot = [], 0, 0, 0
+        while True:
+            total, size, chunk, keep, boot = self.cmd.lf_ia_trace_read(len(recs))
+            if size != LF_IA_TRACE_REC.size:
+                print(
+                    f"{color_string((CR, 'ERROR'))}: trace record size {size}, this client reads {LF_IA_TRACE_REC.size}"
+                )
+                return
+            if not chunk:
+                break
+            recs += chunk
+        c = self.cmd.lf_ia_counters()
+        print(
+            f" - {c['sessions']} field sessions, {c['commands']} commands, {c['responses']} answered, "
+            f"{c['late']} late, since the clear. This is boot {boot} since the clear."
+        )
+        lost = total - len(recs)
+        if lost > 0:
+            print(
+                f" - {total} records: the first {keep} and the latest {len(recs) - keep} are kept"
+            )
+        else:
+            print(f" - {total} records")
+        last_session = None
+        for i, raw in enumerate(recs):
+            if lost > 0 and i == keep:
+                print(f"   ... {lost} records overwritten ...")
+                last_session = None
+            v = LF_IA_TRACE_REC.unpack(raw)
+            (
+                kind,
+                verdict,
+                decode,
+                flags,
+                t_us,
+                t_detect,
+                t_ready,
+                t_due,
+                t_tx,
+                t_tx_end,
+            ) = v[:10]
+            n_gaps, n_bits, n_tx_bits = v[10:13]
+            bits, tx_bits = v[17], v[18]
+            rec_boot, session, t_session = v[-10:-7]
+            fc_used, fc_meas, snr10, mstat, mode, slot = v[-7:-1]
+            if (rec_boot, session) != last_session:
+                last_session = (rec_boot, session)
+                print(
+                    f"   boot {rec_boot}, field session {session}, field on at {t_session / 1e6:.6f} s, "
+                    f"slot {slot}, mode {lf_ia_mode_name(mode)}"
+                )
+            if kind == 2:
+                print(
+                    f"   {t_us / 1e6:12.6f} s  field off"
+                    + ("  (came back)" if flags & 8 else "")
+                )
+            elif kind == 3:
+                line = f"   {t_us / 1e6:12.6f} s  command, {n_gaps} gaps"
+                if decode == 0:
+                    line += f", {n_bits} bits {_lf_ia_bits(bits, n_bits)}"
+                else:
+                    line += f", decode: {LF_IA_DECODES.get(decode, decode)}"
+                print(line + f", {LF_IA_VERDICTS.get(verdict, verdict)}")
+                if verdict == 1:
+                    late = color_string((CR, " LATE")) if flags & 1 else ""
+                    print(
+                        f"{'':18}answer {n_tx_bits} bits {_lf_ia_bits(tx_bits, n_tx_bits)}, ready {t_ready - t_us} us "
+                        f"after the command, sent at {t_tx - t_us} us (due {t_due - t_us}){late}"
+                    )
+                    meas = (
+                        f"measured {fc_meas / 10:.1f} Hz ({snr10 / 10:.0f} dB)"
+                        if fc_meas
+                        else "not measured"
+                        + (f" (status {mstat})" if mstat != 255 else "")
+                    )
+                    print(f"{'':18}timed at {fc_used / 10:.1f} Hz, carrier {meas}")
+
+
+@lf_interactive.command("timing")
+class LFInteractiveTiming(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Show or set each slot's mode for interactive LF emulation (such as Hitag 2), a research test. "
+            "baseline: a carrier period is taken as 8 µs. scale: the answer is timed by the reader's carrier, "
+            "measured at the start of each field. mid: the answer comes at the middle of the reader's window. "
+            "both: scale and mid. --every-second on: a Hitag 2 slot answers only every second START_AUTH, as the "
+            "datasheet says a genuine tag does. The modes survive sleep. A power-on reset or a flash sets every slot to scale."
+        )
+        parser.add_argument(
+            "-s",
+            "--slot",
+            type=int,
+            choices=range(1, 9),
+            metavar="<1-8>",
+            help="the slot to set",
+        )
+        parser.add_argument(
+            "--mode", choices=sorted(LF_IA_MODE_NAMES), help="the timing for that slot"
+        )
+        parser.add_argument(
+            "--every-second",
+            choices=("on", "off"),
+            help="answer only every second START_AUTH in that slot",
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        modes = self.cmd.lf_ia_slot_modes()
+        changes = args.mode is not None or args.every_second is not None
+        if args.slot is not None or changes:
+            if args.slot is None or not changes:
+                raise ArgsParserError("give --slot with --mode or --every-second")
+            m = modes[args.slot - 1]
+            if args.mode is not None:
+                m = (m & ~LF_IA_TIMING_BITS) | LF_IA_MODE_NAMES[args.mode]
+            if args.every_second is not None:
+                m = (
+                    (m | LF_IA_ALT_PROTOCOL)
+                    if args.every_second == "on"
+                    else (m & ~LF_IA_ALT_PROTOCOL)
+                )
+            modes[args.slot - 1] = m
+            modes = self.cmd.lf_ia_slot_modes(modes)
+        for i, m in enumerate(modes):
+            print(f"   slot {i + 1}  {lf_ia_mode_name(m)}")
+
+
+@lf_interactive.command("clear")
+class LFInteractiveClear(DeviceRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Clear the interactive LF emulation's exchange trace and its counters"
+        )
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        self.cmd.lf_ia_trace_clear()
+        print(" - Trace and counters cleared")
 
 
 @hw_slot.command("list")
@@ -6973,6 +7493,20 @@ class HWSlotList(DeviceRequiredUnit):
                         f"      {'Frame:':40}{color_string((CY, frame.hex().upper()))}"
                     )
                     print(f"      {'Card ID:':40}{color_string((CG, card_id_str))}")
+                if lf_tag_type == TagSpecificType.Indala:
+                    raw = self.cmd.indala_get_emu_id()
+                    fc, cn = indala_decode_raw(raw)
+                    print(f"      {'Raw:':40}{color_string((CY, raw.hex().upper()))}")
+                    print(f"      {'FC:':40}{color_string((CG, fc))}")
+                    print(f"      {'Card:':40}{color_string((CG, cn))}")
+                if lf_tag_type == TagSpecificType.HITAG2:
+                    pages = self.cmd.hitag2_get_emu_data()
+                    print(
+                        f"      {'UID:':40}{color_string((CY, pages[0:4].hex().upper()))}"
+                    )
+                    print(
+                        f"      {'Config:':40}{color_string((CY, f'0x{pages[12]:02X}'))}"
+                    )
         if current != selected:
             self.cmd.set_active_slot(selected)
 
@@ -7178,6 +7712,208 @@ class LFVikingEconfig(SlotIndexArgsAndGoUnit, LFVikingIdArgsUnit):
             print(f"ID: {response.hex().upper()}")
 
 
+def indala_decode_raw(raw: bytes):
+    """Decode Indala 26-bit FC/CN from 8-byte raw frame (PM3-compatible bit mapping)."""
+    bits = []
+    for b in raw:
+        for i in range(7, -1, -1):
+            bits.append((b >> i) & 1)
+
+    fc = 0
+    fc |= bits[57] << 7
+    fc |= bits[49] << 6
+    fc |= bits[44] << 5
+    fc |= bits[47] << 4
+    fc |= bits[48] << 3
+    fc |= bits[53] << 2
+    fc |= bits[39] << 1
+    fc |= bits[58] << 0
+
+    cn = 0
+    cn |= bits[42] << 15
+    cn |= bits[45] << 14
+    cn |= bits[43] << 13
+    cn |= bits[40] << 12
+    cn |= bits[52] << 11
+    cn |= bits[36] << 10
+    cn |= bits[35] << 9
+    cn |= bits[51] << 8
+    cn |= bits[46] << 7
+    cn |= bits[33] << 6
+    cn |= bits[37] << 5
+    cn |= bits[54] << 4
+    cn |= bits[56] << 3
+    cn |= bits[59] << 2
+    cn |= bits[50] << 1
+    cn |= bits[41] << 0
+
+    return fc, cn
+
+
+def indala_encode_raw(fc: int, cn: int) -> bytes:
+    """Encode FC/CN into 8-byte Indala 26-bit raw frame (PM3-compatible bit mapping)."""
+    bits = [0] * 64
+
+    # preamble
+    bits[0] = 1
+    bits[2] = 1
+    bits[32] = 1
+
+    # fc
+    bits[57] = (fc >> 7) & 1
+    bits[49] = (fc >> 6) & 1
+    bits[44] = (fc >> 5) & 1
+    bits[47] = (fc >> 4) & 1
+    bits[48] = (fc >> 3) & 1
+    bits[53] = (fc >> 2) & 1
+    bits[39] = (fc >> 1) & 1
+    bits[58] = fc & 1
+
+    # cn
+    bits[42] = (cn >> 15) & 1
+    bits[45] = (cn >> 14) & 1
+    bits[43] = (cn >> 13) & 1
+    bits[40] = (cn >> 12) & 1
+    bits[52] = (cn >> 11) & 1
+    bits[36] = (cn >> 10) & 1
+    bits[35] = (cn >> 9) & 1
+    bits[51] = (cn >> 8) & 1
+    bits[46] = (cn >> 7) & 1
+    bits[33] = (cn >> 6) & 1
+    bits[37] = (cn >> 5) & 1
+    bits[54] = (cn >> 4) & 1
+    bits[56] = (cn >> 3) & 1
+    bits[59] = (cn >> 2) & 1
+    bits[50] = (cn >> 1) & 1
+    bits[41] = cn & 1
+
+    # checksum (sum of specific cn bits)
+    chk = sum(
+        [
+            (cn >> 14) & 1,
+            (cn >> 12) & 1,
+            (cn >> 9) & 1,
+            (cn >> 8) & 1,
+            (cn >> 6) & 1,
+            (cn >> 5) & 1,
+            (cn >> 2) & 1,
+            cn & 1,
+        ]
+    )
+    if chk % 2 == 0:
+        bits[62], bits[63] = 1, 0
+    else:
+        bits[62], bits[63] = 0, 1
+
+    # parity
+    p1, p2 = 1, 1
+    for i in range(33, 64):
+        if i % 2:
+            p1 ^= bits[i]
+        else:
+            p2 ^= bits[i]
+    bits[34] = p1
+    bits[38] = p2
+
+    raw = bytearray(8)
+    for i in range(64):
+        if bits[i]:
+            raw[i // 8] |= 1 << (7 - (i % 8))
+    return bytes(raw)
+
+
+def _indala_bit(raw: bytes, i: int) -> int:
+    return (raw[i // 8] >> (7 - i % 8)) & 1
+
+
+def indala_has_26bit_preamble(raw: bytes) -> bool:
+    """True if bits 0-32 hold the 26-bit preamble: bits 0, 2 and 32 set, the rest clear."""
+    return all(_indala_bit(raw, i) == (i in (0, 2, 32)) for i in range(33))
+
+
+def indala_check_bits_match(raw: bytes) -> bool:
+    """True if the parity (34, 38) and checksum (62, 63) bits equal those indala_encode_raw() writes."""
+    expected = indala_encode_raw(*indala_decode_raw(raw))
+    return all(
+        _indala_bit(raw, i) == _indala_bit(expected, i) for i in (34, 38, 62, 63)
+    )
+
+
+def indala_format_output(raw: bytes) -> str:
+    """Format Indala raw bytes as PM3-style output string."""
+    lines = [f"Indala (len 64)  Raw: {raw.hex().upper()}"]
+    # Decode FC and card whenever the preamble matches, like Proxmark.
+    # A real card's parity and checksum bits can differ from those produced
+    # by the encoder.
+    if indala_has_26bit_preamble(raw):
+        fc, cn = indala_decode_raw(raw)
+        parity = f"{_indala_bit(raw, 34)}{_indala_bit(raw, 38)}"
+        checksum = f"{_indala_bit(raw, 62)}{_indala_bit(raw, 63)}"
+        lines.append(
+            f"   Fmt 26  FC: {fc}  Card: {cn}  Parity: {parity}  Checksum: {checksum}"
+        )
+        if not indala_check_bits_match(raw):
+            lines.append(
+                "   The parity or checksum bits are different from those produced by --fc/--cn."
+                " To make an exact copy of this card, clone it with -r."
+            )
+    return "\n".join(lines)
+
+
+@lf_indala.command("read")
+class LFIndalaRead(ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = "Scan for an Indala tag"
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        resp = self.cmd.indala_scan()
+        if resp.status != Status.LF_TAG_OK or resp.parsed is None:
+            print(f" Indala scan failed: {resp.status}")
+            return
+        print(f" {indala_format_output(resp.parsed)}")
+
+
+@lf_indala.command("write")
+class LFIndalaWriteT55xx(LFIndalaIdArgsUnit, ReaderRequiredUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Clone Indala tag to T55XX (use -r <hex>, or --fc <n> --cn <n>)"
+        )
+        return self.add_card_arg(parser, required=True)
+
+    def on_exec(self, args: argparse.Namespace):
+        id_bytes = bytes.fromhex(args.raw)
+        self.cmd.indala_write_to_t55xx(id_bytes)
+        print(f" {indala_format_output(id_bytes)}")
+        print(" Write done. Verify with 'lf indala read'.")
+
+
+@lf_indala.command("econfig")
+class LFIndalaEconfig(SlotIndexArgsAndGoUnit, LFIndalaIdArgsUnit):
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Set or get emulated Indala card (use -r/--fc+--cn to set, omit to get)"
+        )
+        self.add_slot_args(parser)
+        self.add_card_arg(parser)
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.raw is not None:
+            id_bytes = bytes.fromhex(args.raw)
+            self.cmd.indala_set_emu_id(id_bytes)
+            print(" - Set emulated Indala:")
+            print(f"   {indala_format_output(id_bytes)}")
+        else:
+            response = self.cmd.indala_get_emu_id()
+            print(" - Get emulated Indala:")
+            print(f"   {indala_format_output(response)}")
+
+
 @lf_jablotron.command("read")
 class LFJablotronRead(ReaderRequiredUnit):
     def args_parser(self) -> ArgumentParserNoExit:
@@ -7248,17 +7984,21 @@ class LFPyramidRead(ReaderRequiredUnit):
 
 
 @lf_jablotron.command("write")
-class LFJablotronWriteT55xx(LFJablotronIdArgsUnit, ReaderRequiredUnit):
+class LFJablotronWriteT55xx(
+    LFJablotronIdArgsUnit, T55xxPasswordArgsUnit, ReaderRequiredUnit
+):
     def args_parser(self) -> ArgumentParserNoExit:
         parser = ArgumentParserNoExit()
         parser.description = "Write Jablotron id to t55xx"
-        return self.add_card_arg(parser, required=True)
+        self.add_card_arg(parser, required=True)
+        return self.add_password_arg(parser)
 
     def on_exec(self, args: argparse.Namespace):
         id_hex = args.id
         id_bytes = bytes.fromhex(id_hex)
-        self.cmd.jablotron_write_to_t55xx(id_bytes)
+        self.cmd.jablotron_write_to_t55xx(id_bytes, **self.t55xx_keys(args))
         print(f" - Jablotron ID: {id_hex.upper()} write done.")
+        self.t55xx_verify_jablotron(id_bytes)
 
 
 @lf_jablotron.command("econfig")
@@ -7775,6 +8515,38 @@ class HWSettingsLongPressThreshold(DeviceRequiredUnit):
         else:
             current = self.cmd.get_long_press_threshold()
             print(f"Current long press threshold: {current} ms")
+
+
+@hw_settings.command("selftrim")
+class HWSettingsSelfTrim(DeviceRequiredUnit):
+    WHY = ["trim", "near-matched (no trim)", "weak", "own line", "too far", "no line", "matched"]
+
+    def args_parser(self) -> ArgumentParserNoExit:
+        parser = ArgumentParserNoExit()
+        parser.description = (
+            "Get or set PSK1 self-trim: while emulating a PSK1 tag (e.g. IDTECK), measure the reader's clock "
+            "and trim the subcarrier to match it"
+        )
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--enable", action="store_true", help="Enable self-trim")
+        group.add_argument("--disable", action="store_true", help="Disable self-trim")
+        return parser
+
+    def on_exec(self, args: argparse.Namespace):
+        if args.enable or args.disable:
+            self.cmd.set_lf_selftrim(args.enable)
+            print(f"PSK1 self-trim {'enabled' if args.enable else 'disabled'}.")
+            print(color_string((CY, "Do not forget to store your settings in flash!")))
+            return
+        s = self.cmd.get_lf_selftrim()
+        print(f"PSK1 self-trim: {'enabled' if s['enabled'] else 'disabled'}")
+        print(f"  trim: {s['applied']:+d} steps ({s['applied'] * 3.8147:+.1f} ppm)")
+        if s["measurements"]:
+            why = self.WHY[s["why"]] if s["why"] < len(self.WHY) else str(s["why"])
+            print(f"  last measurement: reader {s['ppm']:+.1f} ppm, {s['snr']:.1f} dB, {why}"
+                  f" ({s['measurements']} since the slot was loaded)")
+        else:
+            print("  no measurement since the slot was loaded")
 
 
 @hw.command("raw")
