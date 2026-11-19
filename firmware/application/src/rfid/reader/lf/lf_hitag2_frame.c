@@ -7,6 +7,7 @@
 
 void ht2_frame_reset(ht2_frame_t *f) {
     f->sof = 0;
+    f->seen = 0;
 }
 
 bool ht2_frame_page(ht2_frame_t *f, const uint8_t *bits, size_t n, bool clean, uint32_t *page) {
@@ -20,7 +21,11 @@ bool ht2_frame_page(ht2_frame_t *f, const uint8_t *bits, size_t n, bool clean, u
                 return false;
             }
         }
-        f->sof = (uint8_t)(n - 32u);
+        if (f->seen != n - 32u) {
+            f->seen = (uint8_t)(n - 32u);
+            return false;
+        }
+        f->sof = f->seen;
     }
 
     const size_t sof = f->sof;

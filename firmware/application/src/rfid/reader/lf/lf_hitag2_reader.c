@@ -16,7 +16,7 @@
 // The tag takes 313 periods to power up and then waits 232 for START_AUTH, so it must come 2.5 to 4.3 ms after the
 // field. 371 periods matches the PM3's reader.
 #define HT2_POWER_UP_US   (371u * 8u)
-#define HT2_TRIES         (8u)     // START_AUTHs per use: a tag answers only every second one, and a scan wants two
+#define HT2_TRIES         (10u)    // START_AUTHs per use: a tag may answer only every second one, and a scan wants three
 #define HT2_PAGE_TRIES    (6u)     // READ PAGEs per page, for two answers that agree
 
 // The framing learned in this use (a scan or a read). Each use starts from a field reset, and may meet another tag.

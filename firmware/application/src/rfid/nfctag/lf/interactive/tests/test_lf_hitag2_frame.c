@@ -70,9 +70,11 @@ int main(void) {
     uint32_t page = 0;
     size_t n;
 
-    // A clean answer with 6 start-of-frame ones sets the length, also for a page that starts with ones.
+    // Two clean answers with 6 start-of-frame ones set the length, also for a page that starts with ones. The first
+    // alone does not count.
     ht2_frame_reset(&f);
     n = answer(b, 6, 0xF0123456u, "");
+    CHECK(!ht2_frame_page(&f, b, n, true, &page) && f.sof == 0, "one clean answer does not set the length");
     CHECK(ht2_frame_page(&f, b, n, true, &page) && page == 0xF0123456u && f.sof == 6, "learn 6: %08x", page);
     // Then an answer with junk after it keeps its framing: the junk is ignored.
     n = answer(b, 6, 0xE1000001u, "11");
@@ -91,7 +93,18 @@ int main(void) {
     CHECK(!ht2_frame_page(&f, b, n, true, &page) && f.sof == 0, "36 bits does not set the length");
     // The datasheet's 5 ones.
     n = answer(b, 5, 0x0A0B0C0Du, "");
+    CHECK(!ht2_frame_page(&f, b, n, true, &page) && f.sof == 0, "first of two");
     CHECK(ht2_frame_page(&f, b, n, true, &page) && page == 0x0A0B0C0Du && f.sof == 5, "learn 5: %08x", page);
+
+    // A CU emulating the tag can add a trailing 0 to a clean answer (its load drops briefly after the answer). With a
+    // page starting with 1, that answer alone looks like 6 ones and a page shifted by a bit. It is not learned unless
+    // the next clean answer agrees, and the next one, 37 bits, sets 5.
+    ht2_frame_reset(&f);
+    n = answer(b, 5, 0x80000001u, "0");
+    CHECK(!ht2_frame_page(&f, b, n, true, &page) && f.sof == 0, "an extra 0 alone");
+    n = answer(b, 5, 0x80000001u, "");
+    CHECK(!ht2_frame_page(&f, b, n, true, &page) && f.sof == 0, "disagreeing lengths");
+    CHECK(ht2_frame_page(&f, b, n, true, &page) && page == 0x80000001u && f.sof == 5, "then 5: %08x", page);
     // A zero where a start-of-frame one belongs does not count.
     n = answer(b, 5, 0x0A0B0C0Du, "");
     lf_ia_bit_put(b, 2, false);
