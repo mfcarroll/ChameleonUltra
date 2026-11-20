@@ -74,8 +74,9 @@ size_t lf_ia_encode_intervals(const uint8_t *bits, size_t n_bits, uint32_t t0, u
 size_t lf_ia_encode_runs(const uint8_t *bits, size_t n_bits, lf_ia_coding_t coding, uint16_t bit_fc, uint32_t flags,
                          uint16_t *runs, size_t max_runs);
 
-// Decodes load runs back to bits: each run is rounded to whole half-bits, then read per coding. A trailing lone
-// half-bit is dropped. The decode stops at the first bit that breaks the coding (a Manchester bit with both halves
+// Decodes load runs back to bits: each run is rounded to whole half-bits, then read per coding. For Manchester and
+// biphase the rounding first takes out the answer's own stretch of load runs over no-load runs, which a slice off the
+// middle of the swing causes. A trailing lone half-bit is dropped. The decode stops at the first bit that breaks the coding (a Manchester bit with both halves
 // equal, a biphase bit with no flip at its start), because whatever follows a frame (noise, or another device
 // answering) is not part of it. Returns the number of bits written before that, which a caller checks against the
 // frame length it expects. Returns 0 if the bits do not fit in max_bits.

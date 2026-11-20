@@ -139,6 +139,27 @@ size_t lf_ia_decode_runs_ex(const uint16_t *runs, size_t n_runs, lf_ia_coding_t 
     const bool inv = (flags & LF_IA_INVERT) != 0;
     const size_t per_bit = coding == LF_IA_CODING_ASK ? 1u : 2u;
 
+    // A slice off the middle of the swing stretches every load run and shrinks every no-load run, by an amount that
+    // varies from answer to answer (0 to 4 periods for a tag at a CU reader). Manchester and biphase runs are one or
+    // two half-bits, so each run's distance from its rounded length measures the stretch. Interior runs only: the
+    // slicer cuts the first and last. stretch4 is in quarter periods.
+    int32_t stretch4 = 0;
+    if (coding != LF_IA_CODING_ASK && n_runs > 2) {
+        int32_t sum[2] = {0, 0}, cnt[2] = {0, 0};
+        for (size_t i = 1; i + 1 < n_runs; i++) {
+            const uint32_t len = LF_IA_RUN_LEN(runs[i]);
+            const uint32_t k = (len + unit / 2u) / unit;
+            if (k == 1u || k == 2u) {
+                const int l = LF_IA_RUN_IS_LOAD(runs[i]) ? 1 : 0;
+                sum[l] += (int32_t)len - (int32_t)(k * unit);
+                cnt[l]++;
+            }
+        }
+        if (cnt[0] > 0 && cnt[1] > 0) {
+            stretch4 = (2 * sum[1] * cnt[0] - 2 * sum[0] * cnt[1]) / (cnt[0] * cnt[1]);
+        }
+    }
+
     // Walk the runs as a stream of units (half-bits, or whole bits for ASK), one bit at a time.
     size_t r = 0;
     uint32_t left = 0;  // units still to read from run r
@@ -154,8 +175,11 @@ size_t lf_ia_decode_runs_ex(const uint16_t *runs, size_t n_runs, lf_ia_coding_t 
                     *clean = true;
                     return n;  // a trailing half-bit is dropped
                 }
-                left = (LF_IA_RUN_LEN(runs[r]) + unit / 2u) / unit;
-                level = LF_IA_RUN_IS_LOAD(runs[r]) != inv;
+                const bool load = LF_IA_RUN_IS_LOAD(runs[r]);
+                int32_t len4 = 4 * (int32_t)LF_IA_RUN_LEN(runs[r]) + (load ? -stretch4 : stretch4);
+                len4 = len4 > 0 ? len4 : 0;
+                left = ((uint32_t)len4 + 2u * unit) / (4u * unit);
+                level = load != inv;
                 r++;
             }
             h[k] = level;

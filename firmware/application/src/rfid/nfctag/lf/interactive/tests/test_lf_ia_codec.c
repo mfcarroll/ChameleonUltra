@@ -355,6 +355,31 @@ static void test_envelope_release_tail(void) {
           nr ? runs[nr - 1] : 0);
 }
 
+static void test_decode_stretch(void) {
+    // A slice near the low rail stretches load runs and shrinks no-load runs, the two-half runs most (a tag at 5 to
+    // 10 mm: load runs 18 and 34 to 43 periods, no-load runs 14 and 20 to 29). Plain rounding takes a load run of 40
+    // for three half-bits and a no-load run of 23 for one.
+    const char *want = "1111110011001100110010110100101101001";
+    uint8_t bits[8], got[8];
+    size_t nb;
+    bits_from_string(want, bits, &nb);
+    uint16_t r[80];
+    const size_t n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, r, 80);
+    size_t doubles[2] = {0, 0};
+    for (size_t i = 1; i + 1 < n; i++) {
+        const bool load = LF_IA_RUN_IS_LOAD(r[i]);
+        const uint32_t len = LF_IA_RUN_LEN(r[i]);
+        // Every fourth two-half run of each level comes out at 40 (load) or 23 (no load).
+        const int32_t d = len == 16 ? 2 : (doubles[load]++ % 4 == 1 ? (load ? 8 : 9) : 3);
+        r[i] = LF_IA_RUN(load, (uint32_t)((int32_t)len + (load ? d : -d)));
+    }
+    char s[64];
+    bool clean = false;
+    const size_t m = lf_ia_decode_runs_ex(r, n, LF_IA_CODING_MANCHESTER, 32, 0, got, 64, &clean);
+    bits_to_string(got, m, s);
+    CHECK(m == nb && clean && strcmp(s, want) == 0, "stretched answer: %zu bits%s %s", m, clean ? "" : " (unclean)", s);
+}
+
 static void test_envelope_weak_load_half(void) {
     // Out at 5 to 10 mm a tag's load half now and then stays below mid-level. It is still part of the answer: only a
     // load that runs on into the end, like the detector's climb after the tag lets go, ends it.
@@ -394,6 +419,7 @@ int main(void) {
     test_envelope_loaded_tail();
     test_envelope_release_tail();
     test_envelope_weak_load_half();
+    test_decode_stretch();
     test_decode_jitter();
     test_decode_one_class();
     test_decode_edges();
