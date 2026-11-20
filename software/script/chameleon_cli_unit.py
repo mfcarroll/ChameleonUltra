@@ -6902,16 +6902,19 @@ class LFHitag2Econfig(SlotIndexArgsAndGoUnit):
 
 
 LF_IA_TRACE_REC = struct.Struct("<BBBBIIIIIIHHHHIHH16s16s96HHHIIIhBBBB")
-LF_IA_MODES = {0: "baseline", 1: "scale", 2: "mid-window", 3: "scale + mid-window"}
-LF_IA_MODE_NAMES = {"baseline": 0, "scale": 1, "mid": 2, "both": 3}
-LF_IA_TIMING_BITS = 0x03
+LF_IA_MODES = {0: "baseline", 1: "scale"}
+LF_IA_MODE_NAMES = {"baseline": 0, "scale": 1}
+LF_IA_TIMING_BITS = 0x01
 LF_IA_ALT_PROTOCOL = 0x04  # Hitag 2: answers only every second START_AUTH
+LF_IA_REST_LOADED = 0x08  # listens with the load on as soon as an answer ends
 
 
 def lf_ia_mode_name(mode: int) -> str:
     name = LF_IA_MODES[mode & LF_IA_TIMING_BITS]
     if mode & LF_IA_ALT_PROTOCOL:
         name += ", every second START_AUTH"
+    if mode & LF_IA_REST_LOADED:
+        name += ", rests loaded"
     return name
 
 
@@ -7028,9 +7031,9 @@ class LFInteractiveTiming(DeviceRequiredUnit):
         parser.description = (
             "Show or set each slot's mode for interactive LF emulation (such as Hitag 2), a research test. "
             "baseline: a carrier period is taken as 8 µs. scale: the answer is timed by the reader's carrier, "
-            "measured at the start of each field. mid: the answer comes at the middle of the reader's window. "
-            "both: scale and mid. --every-second on: a Hitag 2 slot answers only every second START_AUTH, as the "
-            "datasheet says a genuine tag does. The modes survive sleep but not a power-on reset or a flash."
+            "measured at the start of each field. --every-second on: a Hitag 2 slot answers only every second "
+            "START_AUTH, as the datasheet says a genuine tag does. The modes survive sleep but not a power-on "
+            "reset or a flash."
         )
         parser.add_argument(
             "-s",

@@ -71,8 +71,8 @@ int main(void) {
     CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x01020304, "START_AUTH gives the UID");
     CHECK(rsp.delay_fc == 196 && rsp.delay_us == 0, "delay %u fc", rsp.delay_fc);
     CHECK(send(m, 0x1F, 5, &rsp) == LF_IA_IGNORE, "other 5-bit frame");
-    m_mode = LF_IA_MODE_ALT_DELAY;
-    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && rsp.delay_fc == 292, "alt delay %u fc", rsp.delay_fc);
+    m_mode = 1u << 1;  // a bit with no meaning: the answer keeps its delay
+    CHECK(send(m, 0x18, 5, &rsp) == LF_IA_RESPOND && rsp.delay_fc == 196, "unused mode bit: delay %u fc", rsp.delay_fc);
     m_mode = 0;
     CHECK(send(m, 0x2AB, 11, &rsp) == LF_IA_IGNORE, "an 11-bit frame is noise");
     CHECK(send(m, 0x0A0B0C0D, 32, &rsp) == LF_IA_RESPOND && payload(&rsp) == 0x060E0F10, "password gives page 3");

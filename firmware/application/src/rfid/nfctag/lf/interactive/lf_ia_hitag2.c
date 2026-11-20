@@ -21,11 +21,8 @@
 // The delay counts from the end of the reader's last gap (the stop gap). A Hitag 2 test tag, read by a CU at 0 to
 // 7 mm on 2026-11-18, began its answer 194 to 197 periods after it, so 200 to 203 after the gap began. The PM3's
 // hitag2.c quotes the HT2 datasheet (rev 2.1, 3.5) for a turnaround of 199 to 206 periods. HT2_DELAY_FC matches the
-// tag. The PM3's reader samples from 192 to about 320 periods after its command, which ends 36 periods after the stop
-// gap, so from about 228 to 356 periods after the stop gap. HT2_DELAY_ALT_FC (LF_IA_MODE_ALT_DELAY) is the middle of
-// that window.
+// tag.
 #define HT2_DELAY_FC      (196u)
-#define HT2_DELAY_ALT_FC  (292u)
 #define HT2_BIT_FC    (32u)
 #define HT2_SOF_BITS  (5u)
 
@@ -52,7 +49,7 @@ static uint32_t page(size_t n) {
 }
 
 // Sets rsp to a start-of-frame and one 32-bit page, sent at the module's delay.
-static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value, uint8_t mode) {
+static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value) {
     memset(rsp->bits, 0, sizeof(rsp->bits));
     for (size_t i = 0; i < HT2_SOF_BITS; i++) {
         lf_ia_bit_put(rsp->bits, i, true);
@@ -64,7 +61,7 @@ static lf_ia_verdict_t answer(lf_ia_response_t *rsp, uint32_t value, uint8_t mod
     rsp->coding = LF_IA_CODING_MANCHESTER;
     rsp->coding_flags = 0;
     rsp->bit_fc = HT2_BIT_FC;
-    rsp->delay_fc = (mode & LF_IA_MODE_ALT_DELAY) ? HT2_DELAY_ALT_FC : HT2_DELAY_FC;
+    rsp->delay_fc = HT2_DELAY_FC;
     return LF_IA_RESPOND;
 }
 
@@ -95,7 +92,7 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             m_state = HT2_UID_SENT;
-            return answer(rsp, page(0), cmd->mode);
+            return answer(rsp, page(0));
 
         case 32:
             if (m_state != HT2_UID_SENT) {
@@ -106,7 +103,7 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             m_state = HT2_AUTHENTICATED;
-            return answer(rsp, page(3), cmd->mode);
+            return answer(rsp, page(3));
 
         case 10: {
             if (m_state != HT2_AUTHENTICATED) {
@@ -119,10 +116,10 @@ static lf_ia_verdict_t on_command(void *ctx, const lf_ia_command_t *cmd, lf_ia_r
                 return LF_IA_IGNORE;
             }
             if (op == 0xCu) {
-                return answer(rsp, page(n), cmd->mode);
+                return answer(rsp, page(n));
             }
             if (op == 0x6u) {
-                return answer(rsp, ~page(n), cmd->mode);
+                return answer(rsp, ~page(n));
             }
             return LF_IA_IGNORE;
         }

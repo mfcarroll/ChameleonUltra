@@ -35,7 +35,7 @@ typedef struct {
     const uint8_t *bits;
     size_t n_bits;
 
-    uint8_t mode;  // the slot's LF_IA_MODE_ flags, for a module that offers LF_IA_MODE_ALT_DELAY or _ALT_PROTOCOL
+    uint8_t mode;  // the slot's LF_IA_MODE_ flags, for a module that offers LF_IA_MODE_ALT_PROTOCOL
 } lf_ia_command_t;
 
 typedef enum {
@@ -80,9 +80,8 @@ typedef struct {
 //
 // LF_IA_MODE_SCALE: the engine measures the reader's carrier at the start of each listen (lf_ia_carrier.h) and times
 // the answer's bits and delay in that reader's carrier periods. Without it, a carrier period is taken as 8 µs
-// (125 kHz). LF_IA_MODE_ALT_DELAY: the module answers at its alternative delay (Hitag 2: the middle of the reader's
-// listening window, rather than a genuine fob's timing). LF_IA_MODE_ALT_PROTOCOL: the module follows its alternative
-// protocol rule (Hitag 2: it answers only every second START_AUTH, as the datasheet says a genuine tag does).
+// (125 kHz). LF_IA_MODE_ALT_PROTOCOL: the module follows its alternative protocol rule (Hitag 2: it answers only every
+// second START_AUTH, as the datasheet says a genuine tag does).
 // After each answer the engine holds the load off for the module's rest_fc, as a genuine tag rests unloaded, and then
 // listens with the load on. The answer's last half-bit then ends cleanly, whatever its level. LF_IA_MODE_REST_LOADED
 // skips the rest and listens with the load on as soon as the answer ends. That was the engine's only behaviour until
@@ -91,8 +90,10 @@ typedef struct {
 //
 // The modes are kept in retained RAM, so they survive sleep (a test runs at a reader on battery) but not a power-on
 // reset or a flash, which set every slot to 0.
+//
+// Bit 1 (0x02) has no meaning, and the engine ignores it. Pages and scripts made for earlier builds still set it, so
+// don't give it a new meaning while those are in use.
 #define LF_IA_MODE_SCALE     (1u << 0)
-#define LF_IA_MODE_ALT_DELAY (1u << 1)
 #define LF_IA_MODE_ALT_PROTOCOL (1u << 2)
 #define LF_IA_MODE_REST_LOADED (1u << 3)
 #define LF_IA_SLOTS          (8u)
