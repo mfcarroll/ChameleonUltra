@@ -53,10 +53,9 @@ static void test_min_depth(void) {
     const size_t n_ans = sizeof(HT2_ANSWER_CAPTURE) / sizeof(HT2_ANSWER_CAPTURE[0]);
     const size_t n_none = sizeof(HT2_NO_TAG_CAPTURE) / sizeof(HT2_NO_TAG_CAPTURE[0]);
     size_t nr;
-    // At min_depth 40 the field's ringing passes for a load. Its second swing never reaches mid-level, so the slicer
-    // ends the answer there, short of a bit. HT2_MIN_DEPTH rejects it outright.
+    // At min_depth 40 the field's ringing passes for an answer. HT2_MIN_DEPTH rejects it.
     size_t nb = envelope_bits(HT2_NO_TAG_CAPTURE, n_none, 40, &nr);
-    CHECK(nr > 0 && nb == 0, "no tag at min_depth 40: %zu bits, %zu runs", nb, nr);
+    CHECK(nr > 0, "no tag at min_depth 40 should show the phantom answer: %zu runs", nr);
     nb = envelope_bits(HT2_NO_TAG_CAPTURE, n_none, HT2_MIN_DEPTH, &nr);
     CHECK(nb == 0 && nr == 0, "no tag at HT2_MIN_DEPTH: %zu bits, %zu runs", nb, nr);
     nb = envelope_bits(HT2_ANSWER_CAPTURE, n_ans, HT2_MIN_DEPTH, &nr);

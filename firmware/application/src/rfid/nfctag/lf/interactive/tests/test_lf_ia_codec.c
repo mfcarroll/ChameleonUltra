@@ -355,10 +355,45 @@ static void test_envelope_release_tail(void) {
           nr ? runs[nr - 1] : 0);
 }
 
+static void test_envelope_weak_load_half(void) {
+    // Out at 5 to 10 mm a tag's load half now and then stays below mid-level. It is still part of the answer: only a
+    // load that runs on into the end, like the detector's climb after the tag lets go, ends it.
+    static int16_t s[1800];
+    const char *want = "1111101010101010101010101010101010101";
+    uint8_t bits[8], got[8];
+    size_t nb;
+    bits_from_string(want, bits, &nb);
+    uint16_t r[80];
+    const size_t n = lf_ia_encode_runs(bits, nb, LF_IA_CODING_MANCHESTER, 32, 0, r, 80);
+    size_t i = 0;
+    for (; i < 205; i++) {
+        s[i] = 4300;
+    }
+    for (size_t k = 0; k < n; k++) {
+        // One load half in the middle peaks at 7000: past the slice (3575), short of mid-level (9300).
+        const int16_t level = LF_IA_RUN_IS_LOAD(r[k]) ? (k == n / 2 + (n / 2) % 2 ? 7000 : 14300) : 0;
+        for (uint32_t j = 0; j < LF_IA_RUN_LEN(r[k]); j++) {
+            s[i++] = level;
+        }
+    }
+    for (int j = 1; i < 1800; i++, j++) {
+        s[i] = (int16_t)(j < 24 ? j * 4300 / 24 : 4300);
+    }
+    uint16_t runs[400];
+    lf_ia_envelope_info_t info;
+    const size_t nr = lf_ia_envelope_runs(s, 1800, 40, 125, 100, 25, 16, 48, runs, 400, &info);
+    bool clean = false;
+    const size_t m = lf_ia_decode_runs_ex(runs, nr, LF_IA_CODING_MANCHESTER, 32, 0, got, 64, &clean);
+    char str[64];
+    bits_to_string(got, m, str);
+    CHECK(m == nb && clean && strcmp(str, want) == 0, "weak load half: %zu bits%s %s", m, clean ? "" : " (unclean)", str);
+}
+
 int main(void) {
     test_decode_bench_capture();
     test_envelope_loaded_tail();
     test_envelope_release_tail();
+    test_envelope_weak_load_half();
     test_decode_jitter();
     test_decode_one_class();
     test_decode_edges();

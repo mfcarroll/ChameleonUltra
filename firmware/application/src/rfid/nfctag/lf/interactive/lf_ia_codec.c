@@ -242,8 +242,9 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
     info->first = i;
 
     // After a tag lets go, the detector climbs back to the unmodulated level. That level sits above a slice near the low
-    // rail, so the climb reads as a load run. The climb never gets past mid-level, and every real load half does. The
-    // first run starts at mid-level.
+    // rail, so the climb reads as a load run that lasts until the answer's end. The climb never gets past mid-level.
+    // A load half inside the answer can stay below mid-level too (a tag at 5 to 10 mm, now and then), but a no-load
+    // half follows it. The first run starts at mid-level.
     size_t nr = 0;
     bool level = true;
     bool peaked = true;
@@ -257,9 +258,6 @@ size_t lf_ia_envelope_runs(const int16_t *s, size_t n, size_t skip, size_t windo
                 break;
             }
             continue;
-        }
-        if (level && !peaked) {
-            break;
         }
         if (nr >= max_runs || len > LF_IA_RUN_LEN_MAX) {
             return 0;
