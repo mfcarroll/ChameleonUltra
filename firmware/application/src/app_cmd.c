@@ -2311,13 +2311,15 @@ static data_frame_tx_t *cmd_processor_lf_rdr_last(uint16_t cmd, uint16_t status,
     return lf_rdr_reply_frame(cmd, lf_rdr_last());
 }
 
-// In: the first record (u16, big-endian), counted from the oldest held. Out: the records added since the clear (u16),
-// the record size (u16), the count here (u8), then the records (see lf_rdr_trace_pack), all little-endian.
+// In: the first record (u16, big-endian), counted from the oldest held, then optionally the most records to send (u8,
+// 0 for all that fit). Out: the records added since the clear (u16), the record size (u16), the count here (u8), then
+// the records (see lf_rdr_trace_pack), all little-endian.
 static data_frame_tx_t *cmd_processor_lf_rdr_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static uint8_t out[5 + 14 * LF_RDR_TRACE_REC_SIZE];
     const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
+    const size_t want = length >= 3 && data[2] != 0 && data[2] < 14 ? data[2] : 14;
     uint16_t total;
-    const size_t n = lf_rdr_trace_read(first, out + 5, 14, &total);
+    const size_t n = lf_rdr_trace_read(first, out + 5, want, &total);
     const uint16_t size = LF_RDR_TRACE_REC_SIZE;
     out[0] = (uint8_t)total;
     out[1] = (uint8_t)(total >> 8);
@@ -2332,17 +2334,19 @@ static data_frame_tx_t *cmd_processor_lf_rdr_trace_clear(uint16_t cmd, uint16_t 
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
 
-// In: the offset (u16, big-endian). Out: the total sample count (u16), the count here (u16), then the samples (i16),
-// all little-endian.
+// In: the offset (u16, big-endian), then optionally the most samples to send (u16, big-endian, 0 for all that fit).
+// Out: the total sample count (u16), the count here (u16), then the samples (i16), all little-endian.
 static data_frame_tx_t *cmd_processor_lf_rdr_capture(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     static uint8_t out[4 + 1900 * 2];
     if (length < 2) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
     const size_t offset = (size_t)data[0] << 8 | data[1];
+    const size_t asked = length >= 4 ? ((size_t)data[2] << 8 | data[3]) : 0;
+    const size_t want = asked != 0 && asked < 1900 ? asked : 1900;
     size_t total;
     const int16_t *cap = lf_rdr_capture(&total);
-    const size_t n = offset < total ? (total - offset < 1900 ? total - offset : 1900) : 0;
+    const size_t n = offset < total ? (total - offset < want ? total - offset : want) : 0;
     const uint16_t t16 = (uint16_t)total, n16 = (uint16_t)n;
     memcpy(out, &t16, 2);
     memcpy(out + 2, &n16, 2);
