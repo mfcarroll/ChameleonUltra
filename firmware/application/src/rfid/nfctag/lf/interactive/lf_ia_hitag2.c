@@ -20,9 +20,10 @@
 #define HT2_EOF_US    (300u)   // longer than a 1 bit's field-on time (30 - 6 periods, 192 µs)
 // The delay counts from the end of the reader's last gap (the stop gap). A Hitag 2 test tag, read by a CU at 0 to
 // 7 mm on 2026-11-18, began its answer 194 to 197 periods after it, so 200 to 203 after the gap began. The PM3's
-// hitag2.c quotes the HT2 datasheet (rev 2.1, 3.5) for a turnaround of 199 to 206 periods. HT2_DELAY_FC matches the
-// tag.
-#define HT2_DELAY_FC      (196u)
+// hitag2.c quotes the HT2 datasheet (rev 2.1, 3.5) for a turnaround of 199 to 206 periods. Empirically, on a Paxton Net2
+// reader, both Chameleon Ultra DevKit and Production acquire reliably across 182.5-195 periods (1460-1560 us) centered
+// at 189 periods (1512 us), whereas 196 sits just below the upper failure cliff.
+#define HT2_DELAY_FC      (189u)
 #define HT2_BIT_FC    (32u)
 #define HT2_SOF_BITS  (5u)
 
