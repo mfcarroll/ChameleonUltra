@@ -407,6 +407,11 @@ static void test_filling_stays_on(void) {
     present(1, NONE);
     present(1, NONE);
     assert(m_store.not_kept == before + 2);
+    // A save before sleep writes the totals even while filling, so a recovery has the latest counters.
+    const uint32_t sessions = m_store.stats.sessions;
+    lf_ia_trace_save_all();
+    power_on();
+    assert(m_store.stats.sessions == sessions && m_store.not_kept == before + 2);
 }
 
 static void test_cut_write_is_skipped(void) {

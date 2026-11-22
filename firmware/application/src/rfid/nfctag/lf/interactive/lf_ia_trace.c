@@ -40,8 +40,8 @@
 // - E_FIELD_OFF: session (u16), flags (u8, the record's), measurement status (u8), the time the field went (u32),
 //   level (u16), SNR (i16, 0.1 dB), measured carrier (u32, 0.1 Hz, 0: none), measurement time (u8, 32 µs units),
 //   outcome (u8, OUTCOME_), commands (u16).
-// - E_TOTALS, when a save starts and at sleep: boot (u16), slot_done (u16), session (u32), dropped (u32), not kept
-//   (u32), 0 (u32), then lf_ia_stats_t.
+// - E_TOTALS, when a save starts (unless the log is filling) and before sleep or an update: boot (u16), slot_done
+//   (u16), session (u32), dropped (u32), not kept (u32), 0 (u32), then lf_ia_stats_t.
 // - E_FIRMWARE, after a clear and at each start-up that lost the retained RAM (a flash or a power-on reset): the
 //   firmware's git version, NUL-padded. The entries after it, until the next E_FIRMWARE, come from that firmware.
 #define LF_IA_LOG_FORMAT (1u)
@@ -587,9 +587,7 @@ void lf_ia_trace_save_all(void) {
     if (!op_wait() || m_store.state != LF_IA_LOG_READY) {
         return;
     }
-    if (!(m_store.flags & LF_IA_LOGI_FILLING)) {
-        append_totals();
-    }
+    append_totals();  // even while filling: a recovery takes the counters from the last one
     m_saving = false;
     for (uint32_t guard = 0; guard < 4u * RAM_BYTES / PIECE_SLEEP; guard++) {
         if (!save_step(PIECE_SLEEP, true) || !op_wait() || m_store.state != LF_IA_LOG_READY) {
