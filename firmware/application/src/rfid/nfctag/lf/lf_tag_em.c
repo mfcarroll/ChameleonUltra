@@ -87,8 +87,8 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
     }
-    // No tag data loaded yet (a new slot before its default data is written)
-    if (m_pwm_seq == NULL) {
+    // No tag data loaded yet (a new slot before its default data is written). An interactive type has no waveform.
+    if (m_pwm_seq == NULL && !m_ia_active) {
         return;
     }
 
