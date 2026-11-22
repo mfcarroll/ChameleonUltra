@@ -107,6 +107,8 @@ static data_frame_tx_t *cmd_processor_enter_bootloader(uint16_t cmd, uint16_t st
 #define BOOTLOADER_DFU_GPREGRET_MASK            (0xB0)
 #define BOOTLOADER_DFU_START_BIT_MASK           (0x01)
 #define BOOTLOADER_DFU_START    (BOOTLOADER_DFU_GPREGRET_MASK |         BOOTLOADER_DFU_START_BIT_MASK)
+    // The update keeps the interactive LF log's flash but restarts with the retained RAM wiped.
+    lf_ia_trace_save_all();
     APP_ERROR_CHECK(sd_power_gpregret_clr(0, 0xffffffff));
     APP_ERROR_CHECK(sd_power_gpregret_set(0, BOOTLOADER_DFU_START));
     nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_DFU);
