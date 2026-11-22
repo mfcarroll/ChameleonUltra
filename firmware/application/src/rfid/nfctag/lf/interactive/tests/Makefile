@@ -1,12 +1,13 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined
 
-test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame
+test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace
 	./test_lf_ia_codec
 	./test_lf_ia_hitag2
 	./test_lf_hitag2_frame
 	./test_lf_ia_carrier
 	./test_lf_rdr_frame
+	./test_lf_ia_trace
 
 test_lf_ia_codec: test_lf_ia_codec.c ht2_answer_capture.h ht2_cu_answer_capture.h ht2_tag_answer_capture.h ../lf_ia_codec.c ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -o $@ test_lf_ia_codec.c ../lf_ia_codec.c
@@ -29,7 +30,10 @@ RDR_TRACE = ../../../../reader/lf/lf_rdr_trace
 test_lf_rdr_frame: test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_FRAME).h $(RDR_TRACE).c $(RDR_TRACE).h ../../../../reader/lf/lf_rdr_ia.h ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -I.. -I../../../../reader/lf -o $@ test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_TRACE).c
 
+test_lf_ia_trace: test_lf_ia_trace.c ../lf_ia_trace.c ../lf_ia_trace.h ../lf_ia_trace_flash.h ../lf_ia.h ../lf_ia_debug.h
+	$(CC) $(CFLAGS) -I.. -o $@ test_lf_ia_trace.c
+
 clean:
-	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame
+	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace
 
 .PHONY: test clean

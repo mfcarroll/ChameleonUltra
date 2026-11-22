@@ -35,6 +35,7 @@ NRF_LOG_MODULE_REGISTER();
 #include "dataframe.h"
 #include "battery_health.h"
 #include "fds_util.h"
+#include "lf_ia_trace.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
 #include "syssleep.h"
@@ -303,6 +304,10 @@ static void system_off_enter(void) {
     m_system_off_processing = true;
     // Save tag data
     tag_emulation_save();
+    // Save the interactive LF log's RAM buffer. Not on a low battery, where the write might be cut off.
+    if (!g_is_low_battery_shutdown) {
+        lf_ia_trace_save_all();
+    }
 
     if (g_is_low_battery_shutdown) {
         // Don't create too complex animations, just blink LED1 three times.
@@ -1160,6 +1165,7 @@ int main(void) {
     on_data_frame_complete(on_data_frame_received);
 
     check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
+    lf_ia_trace_init();       // Interactive LF log: after the noinit wipe, which check_wakeup_src does at the first power-up
     tag_mode_enter();         // Enter card emulation mode by default
 
     // usbd event listener

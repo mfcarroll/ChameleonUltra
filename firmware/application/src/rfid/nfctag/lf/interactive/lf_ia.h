@@ -66,6 +66,9 @@ typedef struct {
     // Carrier periods to hold the load off after an answer (unless LF_IA_MODE_REST_LOADED). 0: one bit of the answer's
     // coding.
     uint32_t rest_fc;
+    // If the module answers a decoded command of this many bits, the reader has accepted the tag (lf_ia_trace.h counts
+    // a session with one as a success). 0: none does.
+    uint16_t accept_bits;
 
     // Called with the field newly up, before the first command. May be NULL.
     void (*field_on)(void *ctx);

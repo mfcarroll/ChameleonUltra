@@ -77,7 +77,7 @@ static const nrfx_timer_t m_ia_timer = NRFX_TIMER_INSTANCE(3);
 static const lf_ia_module_t *m_module;
 static volatile state_t m_state = ST_OFF;
 static bool m_ended;  // the module returned LF_IA_END: listen only for the field to drop
-static lf_ia_trace_rec_t *m_off_rec;  // the FIELD_OFF record of the session that just ended, if it had one
+static lf_ia_trace_rec_t *m_off_rec;  // the FIELD_OFF record of the session that just ended
 static bool m_adc_on;
 
 static nrf_ppi_channel_t m_ppi_adc_end, m_ppi_adc_restart, m_ppi_adc_go, m_ppi_tx, m_ppi_tx_start, m_ppi_tx_end;
@@ -351,6 +351,8 @@ static void measure_carrier(bool force) {
 }
 
 void lf_ia_process(void) {
+    // The log writes flash, which halts the CPU, only while no field is present for any emulation.
+    lf_ia_trace_process(!g_is_tag_emulating && (m_state == ST_IDLE || m_state == ST_OFF));
     if (!m_meas_pending) {
         return;
     }
@@ -395,7 +397,7 @@ static void session_start(void) {
     if (m_slot_modes.magic == SLOT_MODES_MAGIC && m_timing.slot < LF_IA_SLOTS) {
         m_timing.mode = m_slot_modes.modes[m_timing.slot];
     }
-    lf_ia_trace_session_start(now_us());
+    lf_ia_trace_session_start(now_us(), (uint8_t)(m_timing.slot + 1u), m_timing.mode, m_module->accept_bits);
     if (m_module->field_on) {
         m_module->field_on(m_module->ctx);
     }
@@ -409,9 +411,7 @@ static void field_gone(uint32_t t) {
         m_module->field_off(m_module->ctx);
     }
     m_off_rec = lf_ia_trace_session_end(t, (uint16_t)m_det.level);
-    if (m_off_rec) {
-        timing_to_trace(m_off_rec);  // a measurement that finished after the last answer shows here
-    }
+    timing_to_trace(m_off_rec);  // a measurement that finished after the last answer shows here
 
     m_state = ST_RECHECK;
     nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + RECHECK_US, true);
@@ -560,6 +560,9 @@ static void command_end(uint32_t t_detect) {
     r->n_gaps = (uint16_t)n;
     r->level = (uint16_t)m_det.level;
     r->n_noise = m_det.noise;
+    for (size_t i = 0; i < n; i++) {
+        r->max_gap_us = m_gaps[i].width_us > r->max_gap_us ? m_gaps[i].width_us : r->max_gap_us;
+    }
     if (m_det.dropped) {
         r->flags |= LF_IA_TRF_GAPS_DROPPED;
     }
@@ -608,6 +611,7 @@ static void command_end(uint32_t t_detect) {
     if (!armed) {
         adc_listen_stop();
         listen(m_tuning.settle_us);
+        lf_ia_trace_flush();  // nothing changes the record after this, and the settle has time for it
         return;
     }
     watch_start();
@@ -691,9 +695,11 @@ static void pwm_handler(nrfx_pwm_evt_type_t ev) {
         const uint32_t rest_fc = m_module->rest_fc ? m_module->rest_fc : m_rsp.bit_fc;
         const uint32_t rest_us = (uint32_t)lroundf((float)rest_fc * 1e6f / fc_used());
         nrfx_timer_compare(&m_ia_timer, CC_TICK, now_us() + rest_us, true);
+        lf_ia_trace_flush();  // the record is complete, and the rest has time for it
         return;
     }
     listen_resume(m_tuning.settle_us);
+    lf_ia_trace_flush();
 }
 
 static void timer_handler(nrf_timer_event_t ev, void *ctx) {
@@ -720,15 +726,14 @@ static void timer_handler(nrf_timer_event_t ev, void *ctx) {
     }
     if (is_lf_field_exists()) {
         // The field came back, or never left: a reader that drops its field this long has reset the tag.
-        if (m_off_rec) {
-            m_off_rec->flags |= LF_IA_TRF_FIELD_BACK;
-        }
+        m_off_rec->flags |= LF_IA_TRF_FIELD_BACK;
         nrfx_lpcomp_disable();
         session_start();
         return;
     }
     m_state = ST_IDLE;
     lf_adc_release();
+    lf_ia_trace_flush();
     lf_tag_em_ia_field_lost();
 }
 
@@ -794,6 +799,7 @@ void lf_ia_sense_disable(void) {
     }
     const bool claimed = m_state != ST_IDLE;
     m_state = ST_OFF;
+    lf_ia_trace_flush();
     adc_listen_stop();
     if (claimed) {
         lf_adc_release();

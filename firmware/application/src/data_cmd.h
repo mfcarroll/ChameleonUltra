@@ -220,7 +220,7 @@
 #define DATA_CMD_HITAG2_READ                    (3037)
 #define DATA_CMD_HITAG2_SCAN                    (3038)
 
-// The interactive LF engine's trace and bench instrumentation. Payloads are the firmware's packed structs,
+// The interactive LF engine's log and bench instrumentation. Payloads are the firmware's packed structs,
 // little-endian.
 #define DATA_CMD_LF_IA_TRACE_READ               (3180)
 #define DATA_CMD_LF_IA_TRACE_CLEAR              (3181)
@@ -228,6 +228,10 @@
 #define DATA_CMD_LF_IA_ENV_READ                 (3183)
 #define DATA_CMD_LF_IA_TUNING                   (3184)
 #define DATA_CMD_LF_IA_SLOT_MODES               (3188)
+// The interactive LF engine's exchange log. 3180 and 3181 are the same as 3193 and 3194.
+#define DATA_CMD_LF_IA_LOG_INFO                 (3192)
+#define DATA_CMD_LF_IA_LOG_READ                 (3193)
+#define DATA_CMD_LF_IA_LOG_CLEAR                (3194)
 // The interactive LF reader engine's bench commands.
 #define DATA_CMD_LF_RDR_TRANSACT                (3185)
 #define DATA_CMD_LF_RDR_CAPTURE                 (3186)

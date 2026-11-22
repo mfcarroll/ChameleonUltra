@@ -3,3 +3,4 @@ test_lf_ia_carrier
 test_lf_ia_codec
 test_lf_ia_hitag2
 test_lf_rdr_frame
+test_lf_ia_trace

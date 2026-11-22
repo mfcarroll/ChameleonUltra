@@ -3371,24 +3371,32 @@ static data_frame_tx_t *cmd_processor_hf14a_4_debug_counters(uint16_t cmd, uint1
 }
 #endif
 
-// In: the index of the first record (u16, big-endian, optional). Out: the count written since the clear (u32), the
-// record size (u16), the number of records here (u8), the number of first records kept (u8), the current boot (u16),
-// then the records.
-// As many records as fit one frame, so a larger record can't push a reply past it.
-#define LF_IA_TRACE_PER_READ ((NETDATA_MAX_DATA_LENGTH - 10u) / sizeof(lf_ia_trace_rec_t))
-static data_frame_tx_t *cmd_processor_lf_ia_trace_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    static uint8_t out[10 + LF_IA_TRACE_PER_READ * sizeof(lf_ia_trace_rec_t)];
-    const size_t first = length >= 2 ? ((size_t)data[0] << 8 | data[1]) : 0;
-    uint32_t total;
-    uint16_t boot;
-    const size_t n = lf_ia_trace_read(first, (lf_ia_trace_rec_t *)(out + 10), LF_IA_TRACE_PER_READ, &total, &boot);
-    const uint16_t size = sizeof(lf_ia_trace_rec_t);
-    memcpy(out, &total, 4);
-    memcpy(out + 4, &size, 2);
-    out[6] = (uint8_t)n;
-    out[7] = LF_IA_TRACE_KEEP;
-    memcpy(out + 8, &boot, 2);
-    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(10 + n * size), out);
+// Out: lf_ia_trace_info_t.
+static data_frame_tx_t *cmd_processor_lf_ia_log_info(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    lf_ia_trace_info_t info;
+    lf_ia_trace_info(&info);
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(info), (uint8_t *)&info);
+}
+
+// In: the stream offset (u32, little-endian), and optionally the most bytes to send (u16, little-endian). Out: the
+// offset (u32), the stream's end (u32), then the bytes. 3180 takes the same form, so a client made for the old trace
+// gets STATUS_PAR_ERR.
+static data_frame_tx_t *cmd_processor_lf_ia_log_read(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    static uint8_t out[NETDATA_MAX_DATA_LENGTH];
+    if (length != 4 && length != 6) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint32_t offset, end;
+    memcpy(&offset, data, 4);
+    size_t max = sizeof(out) - 8u;
+    if (length == 6) {
+        const uint16_t want = (uint16_t)(data[4] | data[5] << 8);
+        max = want < max ? want : max;
+    }
+    const size_t n = lf_ia_trace_read(offset, out + 8, max, &end);
+    memcpy(out, &offset, 4);
+    memcpy(out + 4, &end, 4);
+    return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(8u + n), out);
 }
 
 // In: nothing to read, or 8 bytes to set (one per slot, LF_IA_MODE_ flags). Out: the 8 slot modes.
@@ -3403,7 +3411,8 @@ static data_frame_tx_t *cmd_processor_lf_ia_slot_modes(uint16_t cmd, uint16_t st
     return data_frame_make(cmd, STATUS_SUCCESS, LF_IA_SLOTS, modes);
 }
 
-static data_frame_tx_t *cmd_processor_lf_ia_trace_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+// Restarts the log. The erase goes on afterwards, while no field is present: lf_ia_trace_info_t.erase_left counts down.
+static data_frame_tx_t *cmd_processor_lf_ia_log_clear(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
     lf_ia_trace_clear();
     return data_frame_make(cmd, STATUS_SUCCESS, 0, NULL);
 }
@@ -3453,8 +3462,11 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_SET_SLOT_DATA_DEFAULT,        NULL,                        cmd_processor_set_slot_data_default,         NULL                   },
     {    DATA_CMD_SET_SLOT_ENABLE,              NULL,                        cmd_processor_set_slot_enable,               NULL                   },
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick,             NULL                   },
-    {    DATA_CMD_LF_IA_TRACE_READ,             NULL,                        cmd_processor_lf_ia_trace_read,              NULL                   },
-    {    DATA_CMD_LF_IA_TRACE_CLEAR,            NULL,                        cmd_processor_lf_ia_trace_clear,             NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_READ,             NULL,                        cmd_processor_lf_ia_log_read,                NULL                   },
+    {    DATA_CMD_LF_IA_TRACE_CLEAR,            NULL,                        cmd_processor_lf_ia_log_clear,               NULL                   },
+    {    DATA_CMD_LF_IA_LOG_INFO,               NULL,                        cmd_processor_lf_ia_log_info,                NULL                   },
+    {    DATA_CMD_LF_IA_LOG_READ,               NULL,                        cmd_processor_lf_ia_log_read,                NULL                   },
+    {    DATA_CMD_LF_IA_LOG_CLEAR,              NULL,                        cmd_processor_lf_ia_log_clear,               NULL                   },
     {    DATA_CMD_LF_IA_ENV_ARM,                NULL,                        cmd_processor_lf_ia_env_arm,                 NULL                   },
     {    DATA_CMD_LF_IA_ENV_READ,               NULL,                        cmd_processor_lf_ia_env_read,                NULL                   },
     {    DATA_CMD_LF_IA_TUNING,                 NULL,                        cmd_processor_lf_ia_tuning,                  NULL                   },
