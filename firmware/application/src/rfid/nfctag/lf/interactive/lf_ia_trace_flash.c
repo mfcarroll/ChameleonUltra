@@ -58,14 +58,17 @@ uint32_t lf_ia_flash_size(void) {
 }
 
 bool lf_ia_flash_write(uint32_t offset, const void *src, uint32_t len) {
+    flash_init();
     return m_ok && nrf_fstorage_write(&m_log_fs, m_log_fs.start_addr + offset, src, len, NULL) == NRF_SUCCESS;
 }
 
 bool lf_ia_flash_erase_page(uint32_t offset) {
+    flash_init();
     return m_ok && nrf_fstorage_erase(&m_log_fs, m_log_fs.start_addr + offset, 1, NULL) == NRF_SUCCESS;
 }
 
 bool lf_ia_flash_busy(void) {
+    flash_init();
     return m_ok && nrf_fstorage_is_busy(&m_log_fs);
 }
 

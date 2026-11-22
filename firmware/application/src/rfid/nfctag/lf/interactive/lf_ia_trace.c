@@ -651,11 +651,12 @@ static void recover(void) {
 }
 
 void lf_ia_trace_init(void) {
+    const bool flash = lf_ia_flash_base() != NULL;  // also sets up the port, which every boot needs before a write
     if (store_valid()) {
         return;
     }
     store_reset();
-    if (lf_ia_flash_base() && start_valid()) {
+    if (flash && start_valid()) {
         recover();
     }
     append_firmware();
