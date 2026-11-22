@@ -345,11 +345,13 @@ static void encode_field_off(const lf_ia_trace_rec_t *r) {
                              ? (uint16_t)(1u << (2u * (m_pres.slot - 1u) + (outcome == OUTCOME_SUCCESS ? 0u : 1u)))
                              : 0u;
     LOCK();
-    const bool filling = m_store.state != LF_IA_LOG_ERASING &&
-                         capacity() - m_store.saved < (m_store.head - m_store.saved) + FILL_MARGIN;
-    if (filling) {
+    // Filling stays on until a clear. The test counts the RAM buffer's contents, which shrink when a session is
+    // dropped, so without the flag the next session could pass it again.
+    if (m_store.state != LF_IA_LOG_ERASING &&
+        capacity() - m_store.saved < (m_store.head - m_store.saved) + FILL_MARGIN) {
         m_store.flags |= LF_IA_LOGI_FILLING;
     }
+    const bool filling = m_store.flags & LF_IA_LOGI_FILLING;
     if (filling && (outcome == OUTCOME_NONE || (m_store.slot_done & bit))) {
         m_store.head = m_pres.start;
         m_store.not_kept++;

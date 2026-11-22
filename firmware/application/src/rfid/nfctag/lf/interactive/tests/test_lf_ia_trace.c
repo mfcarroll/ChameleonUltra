@@ -371,8 +371,15 @@ static void test_filling_keeps_first_success_and_failure(void) {
     }
     assert(m_store.flags & LF_IA_LOGI_FILLING);
     assert(m_store.not_kept > 0);
+    // Once filling, a session with no command is dropped, even right after a dropped session left the RAM buffer
+    // nearly empty.
+    uint32_t before = m_store.not_kept;
+    present(1, SUCCESS);
+    present(1, NONE);
+    present(1, NONE);
+    assert(m_store.not_kept == before + 3);
     // Slots 3 and 4 have nothing kept yet: their first success and failure still go in.
-    const uint32_t before = m_store.not_kept;
+    before = m_store.not_kept;
     present(3, SUCCESS);
     present(3, SUCCESS);
     present(4, FAILURE);
@@ -384,6 +391,22 @@ static void test_filling_keeps_first_success_and_failure(void) {
     parsed_t p;
     parse(g_stream, read_all(), &p);
     assert(p.bad == 0);
+}
+
+// The session that first finds the log filling is dropped, which empties the RAM buffer again. The next session must
+// still count as filling.
+static void test_filling_stays_on(void) {
+    fresh(32u * 1024u);
+    present(1, SUCCESS);
+    present(1, FAILURE);
+    while (!(m_store.flags & LF_IA_LOGI_FILLING)) {
+        process_until_idle();
+        present(1, SUCCESS);
+    }
+    const uint32_t before = m_store.not_kept;
+    present(1, NONE);
+    present(1, NONE);
+    assert(m_store.not_kept == before + 2);
 }
 
 static void test_cut_write_is_skipped(void) {
@@ -450,6 +473,7 @@ int main(void) {
     test_survives_power_on();
     test_other_format_erased_gently();
     test_filling_keeps_first_success_and_failure();
+    test_filling_stays_on();
     test_cut_write_is_skipped();
     test_clear_ignores_operation_in_flight();
     test_ram_full_drops();
