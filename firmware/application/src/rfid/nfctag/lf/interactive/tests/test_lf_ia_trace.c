@@ -80,7 +80,8 @@ void lf_ia_flash_wait(void) { sim_complete(); }
 // ---- A parser, as a client would write it ----------------------------------------------------------------------
 
 typedef struct {
-    int headers, commands, offs, totals, bad;
+    int headers, commands, offs, totals, bad, firmwares;
+    int first_type;
     uint16_t boot[2048];
     uint16_t session[2048];  // per header
     uint8_t slot[2048];
@@ -94,10 +95,10 @@ static void parse(const uint8_t *s, uint32_t n, parsed_t *p) {
     memset(p, 0, sizeof(*p));
     uint32_t pos = 0;
     bool bad_run = false;
-    while (pos + 8 <= n) {
+    while (pos < n) {
         const uint8_t *e = s + pos;
         const uint32_t len = 4u * e[2];
-        if (!(e[0] == ENTRY_MAGIC && e[2] >= 2 && pos + len <= n && e[len - 2] == e[2] &&
+        if (!(pos + 8 <= n && e[0] == ENTRY_MAGIC && e[2] >= 2 && pos + len <= n && e[len - 2] == e[2] &&
               get16(e + len - 4) == crc16(e, len - 4))) {
             p->bad += !bad_run;
             bad_run = true;
@@ -106,6 +107,9 @@ static void parse(const uint8_t *s, uint32_t n, parsed_t *p) {
         }
         bad_run = false;
         const uint8_t *q = e + 4;
+        if (!p->first_type) {
+            p->first_type = e[1];
+        }
         switch (e[1]) {
             case E_HEADER:
                 p->boot[p->headers] = get16(q);
@@ -124,6 +128,10 @@ static void parse(const uint8_t *s, uint32_t n, parsed_t *p) {
                 break;
             case E_FIELD_OFF:
                 p->outcome[p->offs++] = q[17];
+                break;
+            case E_FIRMWARE:
+                assert(strcmp((const char *)q, GIT_VERSION) == 0);
+                p->firmwares++;
                 break;
             case E_TOTALS:
                 p->totals++;
@@ -317,6 +325,7 @@ static void test_survives_power_on(void) {
     parsed_t p;
     parse(g_stream, read_all(), &p);
     assert(p.headers == 41 && p.bad == 0);
+    assert(p.firmwares == 2 && p.first_type == E_FIRMWARE);  // one at the start, one at the power-on
     assert(p.session[40] == p.session[39] + 1 && p.boot[40] == p.boot[39] + 1);
 }
 
@@ -405,7 +414,7 @@ static void test_clear_ignores_operation_in_flight(void) {
     lf_ia_trace_process(true);
     assert(g_op.on && !g_op.erase);
     lf_ia_trace_clear();
-    assert(m_store.head == 0 && m_store.saved == 0 && m_store.boot == 1);
+    assert(m_store.saved == 0 && m_store.boot == 1 && m_store.head == 16);  // the firmware entry only
     sim_complete();
     while (m_store.state == LF_IA_LOG_ERASING) {
         lf_ia_trace_process(true);
@@ -419,6 +428,7 @@ static void test_clear_ignores_operation_in_flight(void) {
     parsed_t p;
     parse(g_stream, read_all(), &p);
     assert(p.headers == 1 && p.session[0] == 1 && p.boot[0] == 1 && p.bad == 0);
+    assert(p.firmwares == 1 && p.first_type == E_FIRMWARE);
 }
 
 static void test_ram_full_drops(void) {

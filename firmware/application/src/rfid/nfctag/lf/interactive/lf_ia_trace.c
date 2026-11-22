@@ -42,13 +42,19 @@
 //   outcome (u8, OUTCOME_), commands (u16).
 // - E_TOTALS, when a save starts and at sleep: boot (u16), slot_done (u16), session (u32), dropped (u32), not kept
 //   (u32), 0 (u32), then lf_ia_stats_t.
+// - E_FIRMWARE, after a clear and at each start-up that lost the retained RAM (a flash or a power-on reset): the
+//   firmware's git version, NUL-padded. The entries after it, until the next E_FIRMWARE, come from that firmware.
 #define LF_IA_LOG_FORMAT (1u)
 #define START_MAGIC      (0x4C41494Cu)  // "LIAL"
 #define START_BYTES      (16u)
 #define ENTRY_MAGIC      (0xA0u + LF_IA_LOG_FORMAT)
 #define ENTRY_MAX        (4u + 34u + 16u + 16u + 4u * LF_IA_TRACE_GAPS + 4u)
 
-enum { E_HEADER = 1, E_FIELD_OFF = 2, E_COMMAND = 3, E_TOTALS = 4 };
+enum { E_HEADER = 1, E_FIELD_OFF = 2, E_COMMAND = 3, E_TOTALS = 4, E_FIRMWARE = 5 };
+
+#ifndef GIT_VERSION
+#define GIT_VERSION "unknown"
+#endif
 
 #define CF_LATE          (1u << 0)
 #define CF_GAPS_DROPPED  (1u << 1)
@@ -229,6 +235,13 @@ static void append_totals(void) {
     memcpy(p + 20, &m_store.stats, sizeof(lf_ia_stats_t));
     UNLOCK();
     append(E_TOTALS, p, sizeof(p));
+}
+
+static void append_firmware(void) {
+    uint8_t p[32] = {0};
+    const size_t n = strlen(GIT_VERSION) < sizeof(p) ? strlen(GIT_VERSION) : sizeof(p);
+    memcpy(p, GIT_VERSION, n);
+    append(E_FIRMWARE, p, (n + 4u) & ~3u);  // at least one NUL
 }
 
 // The gaps go in for a command that failed to decode, and for the first decoded command of each length in the
@@ -599,11 +612,11 @@ static void recover(void) {
     }
     uint32_t boot = 0, session = 0, pos = 0;
     bool bad_run = false;
-    while (pos + 8u <= end) {
+    while (pos < end) {
         const uint8_t *e = s + pos;
         const uint32_t n = 4u * e[2];
-        const bool ok = e[0] == ENTRY_MAGIC && e[2] >= 2u && pos + n <= end && e[n - 2u] == e[2] &&
-                        get16(e + n - 4u) == crc16(e, n - 4u);
+        const bool ok = pos + 8u <= end && e[0] == ENTRY_MAGIC && e[2] >= 2u && pos + n <= end &&
+                        e[n - 2u] == e[2] && get16(e + n - 4u) == crc16(e, n - 4u);
         if (!ok) {
             if (!bad_run) {
                 m_store.recover_bad++;
@@ -645,6 +658,7 @@ void lf_ia_trace_init(void) {
     if (lf_ia_flash_base() && start_valid()) {
         recover();
     }
+    append_firmware();
 }
 
 void lf_ia_trace_clear(void) {
@@ -658,6 +672,7 @@ void lf_ia_trace_clear(void) {
     m_fails = 0;
     m_gen++;
     UNLOCK();
+    append_firmware();
 }
 
 void lf_ia_trace_info(lf_ia_trace_info_t *out) {
