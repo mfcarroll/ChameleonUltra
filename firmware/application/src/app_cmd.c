@@ -3443,16 +3443,32 @@ static data_frame_tx_t *cmd_processor_lf_ia_log_read(uint16_t cmd, uint16_t stat
     return data_frame_make(cmd, STATUS_SUCCESS, (uint16_t)(8u + n), out);
 }
 
-// In: nothing to read, or 8 bytes to set (one per slot, LF_IA_MODE_ flags). Out: the 8 slot modes.
+// In: nothing to read; 8 bytes to set the modes (one per slot, LF_IA_MODE_ flags) and leave the delays; or 24 bytes
+// to set both, the 8 modes then 8 answer delays (u16 carrier periods, little-endian, 0 for the module's own, else 100
+// to 400). Out: the 8 modes, then the 8 delays. Older pages read only the first 8 bytes.
 static data_frame_tx_t *cmd_processor_lf_ia_slot_modes(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
-    uint8_t modes[LF_IA_SLOTS];
-    if (length == LF_IA_SLOTS) {
+    uint16_t delays[LF_IA_SLOTS];
+    if (length == 3u * LF_IA_SLOTS) {
+        for (size_t i = 0; i < LF_IA_SLOTS; i++) {
+            delays[i] = (uint16_t)(data[LF_IA_SLOTS + 2u * i] | data[LF_IA_SLOTS + 2u * i + 1u] << 8);
+        }
+        if (!lf_ia_slot_delays_set(delays)) {
+            return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        }
+        lf_ia_slot_modes_set(data);
+    } else if (length == LF_IA_SLOTS) {
         lf_ia_slot_modes_set(data);
     } else if (length != 0) {
         return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
     }
-    lf_ia_slot_modes_get(modes);
-    return data_frame_make(cmd, STATUS_SUCCESS, LF_IA_SLOTS, modes);
+    uint8_t out[3u * LF_IA_SLOTS];
+    lf_ia_slot_modes_get(out);
+    lf_ia_slot_delays_get(delays);
+    for (size_t i = 0; i < LF_IA_SLOTS; i++) {
+        out[LF_IA_SLOTS + 2u * i] = (uint8_t)delays[i];
+        out[LF_IA_SLOTS + 2u * i + 1u] = (uint8_t)(delays[i] >> 8);
+    }
+    return data_frame_make(cmd, STATUS_SUCCESS, sizeof(out), out);
 }
 
 // Restarts the log. The erase goes on afterwards, while no field is present: lf_ia_trace_info_t.erase_left counts down.

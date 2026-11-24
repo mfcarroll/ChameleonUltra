@@ -104,6 +104,13 @@ void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]);
 // Runs the engine's slow work (the carrier measurement) from the main loop.
 void lf_ia_process(void);
 void lf_ia_slot_modes_set(const uint8_t modes[LF_IA_SLOTS]);
+// Per-slot answer delays, in carrier periods from the end of the reader's stop gap, kept with the modes. 0 leaves the
+// module's own delay (Hitag 2: HT2_DELAY_FC). With LF_IA_MODE_SCALE the periods are the reader's measured ones.
+#define LF_IA_DELAY_MIN_FC   (100u)
+#define LF_IA_DELAY_MAX_FC   (400u)
+void lf_ia_slot_delays_get(uint16_t delays_fc[LF_IA_SLOTS]);
+// Values outside LF_IA_DELAY_MIN_FC..LF_IA_DELAY_MAX_FC, other than 0, return false and change nothing.
+bool lf_ia_slot_delays_set(const uint16_t delays_fc[LF_IA_SLOTS]);
 
 // Registers the module the engine runs while the slot's LF tag type is this module's. NULL clears it.
 void lf_ia_set_module(const lf_ia_module_t *module);

@@ -91,17 +91,25 @@ static uint32_t m_intervals[LF_IA_MAX_GAPS];
 static uint8_t m_bits[LF_IA_MAX_BITS / 8];
 static lf_ia_response_t m_rsp;
 
-// The slot modes, in retained RAM (lf_ia.h).
-#define SLOT_MODES_MAGIC (0x4D41494Cu)  // "LIAM"
+// The slot modes and delays, in retained RAM (lf_ia.h). Firmware before the delays wrote the same layout up to the
+// modes with SLOT_MODES_MAGIC; its modes still count, with no delays.
+#define SLOT_MODES_MAGIC (0x4D41494Cu)   // "LIAM": modes only
+#define SLOT_DELAYS_MAGIC (0x4441494Cu)  // "LIAD": modes and delays
 static __attribute__((section(".noinit_lfiam"))) struct {
     uint32_t magic;
     uint8_t modes[LF_IA_SLOTS];
+    uint16_t delays_fc[LF_IA_SLOTS];
 } m_slot_modes;
+
+static bool modes_valid(void) {
+    return m_slot_modes.magic == SLOT_MODES_MAGIC || m_slot_modes.magic == SLOT_DELAYS_MAGIC;
+}
 
 // This session's timing: the slot's mode and the reader's carrier, once measured.
 static struct {
     uint8_t slot;     // 0-based
     uint8_t mode;
+    uint16_t delay_fc;  // the slot's answer delay, 0 for the module's own
     bool measured;
     float fc_hz;      // the measurement, valid if measured
     lf_ia_carrier_t last;
@@ -394,8 +402,11 @@ static void session_start(void) {
     memset(&m_timing, 0, sizeof(m_timing));
     m_session_id++;
     m_timing.slot = tag_emulation_get_slot();
-    if (m_slot_modes.magic == SLOT_MODES_MAGIC && m_timing.slot < LF_IA_SLOTS) {
+    if (modes_valid() && m_timing.slot < LF_IA_SLOTS) {
         m_timing.mode = m_slot_modes.modes[m_timing.slot];
+        if (m_slot_modes.magic == SLOT_DELAYS_MAGIC) {
+            m_timing.delay_fc = m_slot_modes.delays_fc[m_timing.slot];
+        }
     }
     lf_ia_trace_session_start(now_us(), (uint8_t)(m_timing.slot + 1u), m_timing.mode, m_module->accept_bits);
     if (m_module->field_on) {
@@ -599,6 +610,9 @@ static void command_end(uint32_t t_detect) {
     const lf_ia_verdict_t v = m_module->on_command(m_module->ctx, &cmd, &m_rsp);
     r->verdict = (uint8_t)v;
 
+    if (m_rsp.delay_fc && m_timing.delay_fc) {
+        m_rsp.delay_fc = m_timing.delay_fc;
+    }
     if (m_tuning.rsp_delay_us) {
         m_rsp.delay_us = m_tuning.rsp_delay_us;
         m_rsp.delay_fc = 0;
@@ -824,7 +838,7 @@ void lf_ia_field_detected(void) {
 }
 
 void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]) {
-    if (m_slot_modes.magic == SLOT_MODES_MAGIC) {
+    if (modes_valid()) {
         memcpy(modes, m_slot_modes.modes, LF_IA_SLOTS);
     } else {
         memset(modes, 0, LF_IA_SLOTS);
@@ -833,9 +847,36 @@ void lf_ia_slot_modes_get(uint8_t modes[LF_IA_SLOTS]) {
 
 void lf_ia_slot_modes_set(const uint8_t modes[LF_IA_SLOTS]) {
     CRITICAL_REGION_ENTER();
+    if (m_slot_modes.magic != SLOT_DELAYS_MAGIC) {
+        memset(m_slot_modes.delays_fc, 0, sizeof(m_slot_modes.delays_fc));
+    }
     memcpy(m_slot_modes.modes, modes, LF_IA_SLOTS);
-    m_slot_modes.magic = SLOT_MODES_MAGIC;
+    m_slot_modes.magic = SLOT_DELAYS_MAGIC;
     CRITICAL_REGION_EXIT();
+}
+
+void lf_ia_slot_delays_get(uint16_t delays_fc[LF_IA_SLOTS]) {
+    if (m_slot_modes.magic == SLOT_DELAYS_MAGIC) {
+        memcpy(delays_fc, m_slot_modes.delays_fc, sizeof(m_slot_modes.delays_fc));
+    } else {
+        memset(delays_fc, 0, LF_IA_SLOTS * sizeof(uint16_t));
+    }
+}
+
+bool lf_ia_slot_delays_set(const uint16_t delays_fc[LF_IA_SLOTS]) {
+    for (size_t i = 0; i < LF_IA_SLOTS; i++) {
+        if (delays_fc[i] && (delays_fc[i] < LF_IA_DELAY_MIN_FC || delays_fc[i] > LF_IA_DELAY_MAX_FC)) {
+            return false;
+        }
+    }
+    CRITICAL_REGION_ENTER();
+    if (!modes_valid()) {
+        memset(m_slot_modes.modes, 0, LF_IA_SLOTS);
+    }
+    memcpy(m_slot_modes.delays_fc, delays_fc, sizeof(m_slot_modes.delays_fc));
+    m_slot_modes.magic = SLOT_DELAYS_MAGIC;
+    CRITICAL_REGION_EXIT();
+    return true;
 }
 
 // ---- Instrumentation ------------------------------------------------------------------------------------------------
