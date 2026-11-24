@@ -29,7 +29,9 @@ static lf_rdr_reply_t m_last;
 static const lf_rdr_link_t *m_link;
 static const uint8_t *m_tx;
 static size_t m_tx_n;
-static uint32_t m_power_up_us;
+static uint32_t m_off_us;       // a reset gap before the command, 0 for none
+static uint32_t m_on_us;        // field on before the command
+static bool m_switch_on;        // the field is off and must be switched on first
 static volatile bool m_sent;
 
 // The PWM's stop leaves LF_ANT_DRIVER to the GPIO, so the field is cut by driving the pin low (as lf_gap.c does).
@@ -71,10 +73,12 @@ static void send_cb(void) {
     if (l->eof_gap & LF_RDR_CAPTURE_COMMAND) {
         lf_125khz_radio_sample_link(true);
     }
-    if (m_power_up_us) {
+    if (m_off_us) {
+        gap(m_off_us);
+    } else if (m_switch_on) {
         field_on();
-        bsp_delay_us(m_power_up_us);
     }
+    bsp_delay_us(m_on_us);
     for (size_t i = 0; i < m_tx_n; i++) {
         const uint32_t period = lf_ia_bit_get(m_tx, i) ? l->bit1_us : l->bit0_us;
         gap(l->gap_us);
@@ -118,8 +122,8 @@ static void adc_release(void) {
     lf_adc_release();
 }
 
-bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t power_up_us,
-                     lf_rdr_reply_t *rx) {
+static bool transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t off_us, uint32_t on_us,
+                     bool switch_on, lf_rdr_reply_t *rx) {
     memset(rx, 0, sizeof(*rx));
     const size_t n = link->capture_n;
     if (n_tx > LF_RDR_MAX_TX_BITS || n < 64 || n > LF_RDR_CAPTURE_MAX || link->bit_fc < 2 ||
@@ -130,7 +134,7 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     // Each gap's PWM stop and restart adds about 14 µs to its bit, so a long command overran a slot sized from the
     // nominal periods. When the slot ran out during the stop, the SoftDevice's return disturbed the field, and a tag
     // read two extra bits after a 32-bit command. Budget 40 µs a bit, and a larger margin.
-    uint32_t slot_us = power_up_us + link->stop_us + link->gap_us + 1000u;
+    uint32_t slot_us = off_us + on_us + link->stop_us + link->gap_us + 1000u;
     for (size_t i = 0; i < n_tx; i++) {
         slot_us += (lf_ia_bit_get(tx, i) ? link->bit1_us : link->bit0_us) + 40u;
     }
@@ -139,7 +143,9 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     m_link = link;
     m_tx = tx;
     m_tx_n = n_tx;
-    m_power_up_us = power_up_us;
+    m_off_us = off_us;
+    m_on_us = on_us;
+    m_switch_on = switch_on;
     m_sent = false;
     request_timeslot(slot_us, send_cb);
 
@@ -168,8 +174,18 @@ bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, 
     rx->n_bits = lf_ia_decode_runs_ex(m_runs, m_runs_n, (lf_ia_coding_t)link->coding, link->bit_fc,
                                       link->coding_flags, rx->bits, LF_RDR_MAX_RX_BITS, &rx->clean);
     m_last = *rx;
-    lf_rdr_trace_add(tx, n_tx, power_up_us, rx, m_runs, m_runs_n);
+    lf_rdr_trace_add(tx, n_tx, on_us, rx, m_runs, m_runs_n);
     return true;
+}
+
+bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t power_up_us,
+                     lf_rdr_reply_t *rx) {
+    return transact(link, tx, n_tx, 0, power_up_us, power_up_us != 0, rx);
+}
+
+bool lf_rdr_transact_reset(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t off_us, uint32_t on_us,
+                           lf_rdr_reply_t *rx) {
+    return transact(link, tx, n_tx, off_us, on_us, false, rx);
 }
 
 const int16_t *lf_rdr_capture(size_t *n) {

@@ -239,5 +239,6 @@
 #define DATA_CMD_LF_RDR_LAST                    (3189)
 #define DATA_CMD_LF_RDR_TRACE_READ              (3190)
 #define DATA_CMD_LF_RDR_TRACE_CLEAR             (3191)
+#define DATA_CMD_HITAG2_RESET_PROBE             (3195)
 
 #endif

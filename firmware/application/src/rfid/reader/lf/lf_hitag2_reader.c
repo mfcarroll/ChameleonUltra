@@ -9,7 +9,7 @@
 
 #include "app_status.h"
 #include "bsp_delay.h"
-#include "lf_125khz_radio.h"
+#include "bsp_wdt.h"
 #include "lf_hitag2_frame.h"
 
 #define HT2_RESET_MS      (20u)    // field off, so the tag starts from power-up
@@ -50,15 +50,19 @@ static void bits_put(uint8_t *bits, size_t first, uint32_t v, size_t n) {
     }
 }
 
-// Sends a command of n bits and returns its 32-bit answer.
-static bool exchange(uint32_t cmd, size_t n, uint32_t power_up_us, uint32_t *page) {
+// Sends a command of n bits and returns its 32-bit answer. With reset, the field goes off for off_us and is back on
+// for on_us before the command; without, on_us is the power-up time (see lf_rdr_transact).
+static bool exchange_ex(uint32_t cmd, size_t n, bool reset, uint32_t off_us, uint32_t on_us, uint32_t *page) {
     uint8_t tx[4] = {0};
     bits_put(tx, 0, cmd, n);
     lf_rdr_reply_t rx;
-    if (!lf_rdr_transact(&m_link, tx, n, power_up_us, &rx)) {
-        return false;
-    }
-    return ht2_frame_page(&m_frame, rx.bits, rx.n_bits, rx.clean, page);
+    const bool ok = reset ? lf_rdr_transact_reset(&m_link, tx, n, off_us, on_us, &rx)
+                          : lf_rdr_transact(&m_link, tx, n, on_us, &rx);
+    return ok && ht2_frame_page(&m_frame, rx.bits, rx.n_bits, rx.clean, page);
+}
+
+static bool exchange(uint32_t cmd, size_t n, uint32_t power_up_us, uint32_t *page) {
+    return exchange_ex(cmd, n, false, 0, power_up_us, page);
 }
 
 // Powers the tag up and sends START_AUTH (11000) until it has answered with its UID `need` times alike. The last
@@ -135,4 +139,29 @@ uint8_t lf_hitag2_reader_read(uint32_t password, uint32_t pages[8], uint8_t *rea
     }
     lf_rdr_field(false);
     return *read_mask == 0xFFu ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t lf_hitag2_reader_reset_probe(const uint16_t *gaps_us, size_t n_gaps, uint32_t wait_us, uint8_t rounds,
+                                     uint8_t *started, uint8_t *answered) {
+    memset(started, 0, n_gaps);
+    memset(answered, 0, n_gaps);
+    bool any = false;
+    // Round by round, so a drift in coupling spreads over every gap rather than landing on one.
+    for (uint8_t r = 0; r < rounds; r++) {
+        for (size_t i = 0; i < n_gaps; i++) {
+            bsp_wdt_feed();  // a probe runs for seconds, and the watchdog resets the CU after 2 s
+            uint32_t uid;
+            if (!start_auth(&uid, 1)) {
+                continue;
+            }
+            any = true;
+            started[i]++;
+            uint32_t v;
+            if (exchange_ex(0x18u, 5, true, gaps_us[i], wait_us, &v) && v == uid) {
+                answered[i]++;
+            }
+        }
+    }
+    lf_rdr_field(false);
+    return any ? STATUS_LF_TAG_OK : STATUS_LF_TAG_NO_FOUND;
 }

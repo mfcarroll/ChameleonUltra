@@ -60,6 +60,12 @@ void lf_rdr_field(bool on);
 bool lf_rdr_transact(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t power_up_us,
                      lf_rdr_reply_t *rx);
 
+// As lf_rdr_transact, for a field that is already on, with a reset first. Inside the same timeslot, before the
+// command, the field goes off for off_us as one long command gap (so LF_RDR_DAMP_GAPS applies) and back on, then stays
+// on for on_us. With off_us 0 the field stays on throughout. The trace records on_us as the power-up time.
+bool lf_rdr_transact_reset(const lf_rdr_link_t *link, const uint8_t *tx, size_t n_tx, uint32_t off_us, uint32_t on_us,
+                           lf_rdr_reply_t *rx);
+
 // The last capture's samples and load runs, for diagnosis.
 const int16_t *lf_rdr_capture(size_t *n);
 const uint16_t *lf_rdr_runs(size_t *n);

@@ -2271,6 +2271,44 @@ static data_frame_tx_t *cmd_processor_hitag2_read(uint16_t cmd, uint16_t status,
     return data_frame_make(cmd, status, sizeof(out), out);
 }
 
+#define HT2_PROBE_MAX_GAPS   (12u)
+#define HT2_PROBE_MAX_ROUNDS (8u)
+#define HT2_PROBE_MAX_GAP_US (20000u)
+#define HT2_PROBE_MAX_WAIT_US (10000u)
+
+// In: the wait after each gap (u16 µs), the rounds (u8, 1 to 8), the gap count (u8, 1 to 12), then the gaps (u16 µs
+// each, at most 20000, 0 for none), all little-endian. Out: for each gap, the tries that got a UID first (u8) and the
+// answers after the gap (u8). See lf_hitag2_reader_reset_probe.
+static data_frame_tx_t *cmd_processor_hitag2_reset_probe(uint16_t cmd, uint16_t status, uint16_t length,
+                                                         uint8_t *data) {
+    if (length < 4 || length != 4u + 2u * data[3]) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    const uint16_t wait_us = (uint16_t)(data[0] | data[1] << 8);
+    const uint8_t rounds = data[2];
+    const uint8_t n = data[3];
+    if (wait_us > HT2_PROBE_MAX_WAIT_US || rounds == 0 || rounds > HT2_PROBE_MAX_ROUNDS || n == 0 ||
+        n > HT2_PROBE_MAX_GAPS) {
+        return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+    }
+    uint16_t gaps[HT2_PROBE_MAX_GAPS];
+    for (uint8_t i = 0; i < n; i++) {
+        gaps[i] = (uint16_t)(data[4 + 2 * i] | data[5 + 2 * i] << 8);
+        if (gaps[i] > HT2_PROBE_MAX_GAP_US) {
+            return data_frame_make(cmd, STATUS_PAR_ERR, 0, NULL);
+        }
+    }
+    uint8_t started[HT2_PROBE_MAX_GAPS];
+    uint8_t answered[HT2_PROBE_MAX_GAPS];
+    status = lf_hitag2_reader_reset_probe(gaps, n, wait_us, rounds, started, answered);
+    uint8_t out[2u * HT2_PROBE_MAX_GAPS];
+    for (uint8_t i = 0; i < n; i++) {
+        out[2 * i] = started[i];
+        out[2 * i + 1] = answered[i];
+    }
+    return data_frame_make(cmd, status, (uint16_t)(2u * n), out);
+}
+
 // Out, for LF_RDR_TRANSACT and LF_RDR_LAST: see lf_rdr_frame_pack.
 static data_frame_tx_t *lf_rdr_reply_frame(uint16_t cmd, const lf_rdr_reply_t *rx) {
     static uint8_t out[LF_RDR_FRAME_MAX];
@@ -3567,6 +3605,7 @@ static cmd_data_map_t m_data_cmd_map[] = {
     {    DATA_CMD_LF_SNIFF,                     before_reader_run,           cmd_processor_lf_sniff,                      NULL                   },
     {    DATA_CMD_HITAG2_SCAN,                  before_reader_run,           cmd_processor_hitag2_scan,                   NULL                   },
     {    DATA_CMD_HITAG2_READ,                  before_reader_run,           cmd_processor_hitag2_read,                   NULL                   },
+    {    DATA_CMD_HITAG2_RESET_PROBE,           before_reader_run,           cmd_processor_hitag2_reset_probe,            NULL                   },
     {    DATA_CMD_LF_RDR_TRANSACT,              before_reader_run,           cmd_processor_lf_rdr_transact,               NULL                   },
     {    DATA_CMD_LF_RDR_CAPTURE,               NULL,                        cmd_processor_lf_rdr_capture,                NULL                   },
     {    DATA_CMD_HITAG2_READER_LINK,           NULL,                        cmd_processor_hitag2_reader_link,            NULL                   },

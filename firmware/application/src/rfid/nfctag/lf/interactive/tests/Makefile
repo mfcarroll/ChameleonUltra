@@ -1,13 +1,15 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined
 
-test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace
+test: test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace \
+      test_lf_hitag2_reader
 	./test_lf_ia_codec
 	./test_lf_ia_hitag2
 	./test_lf_hitag2_frame
 	./test_lf_ia_carrier
 	./test_lf_rdr_frame
 	./test_lf_ia_trace
+	./test_lf_hitag2_reader
 
 test_lf_ia_codec: test_lf_ia_codec.c ht2_answer_capture.h ht2_cu_answer_capture.h ht2_tag_answer_capture.h ../lf_ia_codec.c ../lf_ia_codec.h
 	$(CC) $(CFLAGS) -o $@ test_lf_ia_codec.c ../lf_ia_codec.c
@@ -33,7 +35,14 @@ test_lf_rdr_frame: test_lf_rdr_frame.c $(RDR_FRAME).c $(RDR_FRAME).h $(RDR_TRACE
 test_lf_ia_trace: test_lf_ia_trace.c ../lf_ia_trace.c ../lf_ia_trace.h ../lf_ia_trace_flash.h ../lf_ia.h ../lf_ia_debug.h
 	$(CC) $(CFLAGS) -I.. -o $@ test_lf_ia_trace.c
 
+HT2_READER = ../../../../reader/lf/lf_hitag2_reader
+
+# The reader against a simulated tag: the test fakes the reader link and the delays.
+test_lf_hitag2_reader: test_lf_hitag2_reader.c $(HT2_READER).c $(HT2_READER).h $(FRAME).c $(FRAME).h ../lf_ia_codec.c ../lf_ia_codec.h
+	$(CC) $(CFLAGS) -I.. -I../../../../reader/lf -I../../../../.. -I../../../../../bsp -o $@ test_lf_hitag2_reader.c $(HT2_READER).c $(FRAME).c ../lf_ia_codec.c
+
 clean:
-	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace
+	rm -f test_lf_ia_codec test_lf_ia_hitag2 test_lf_hitag2_frame test_lf_ia_carrier test_lf_rdr_frame test_lf_ia_trace \
+	      test_lf_hitag2_reader
 
 .PHONY: test clean
