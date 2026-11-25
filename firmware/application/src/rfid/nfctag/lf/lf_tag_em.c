@@ -4,18 +4,26 @@
 
 #include "bsp_delay.h"
 #include "fds_util.h"
+#include "lf_selftrim.h"
+#include "nrf_clock.h"
+#include "interactive/lf_ia.h"
+#include "interactive/lf_ia_hitag2.h"
+#include "interactive/lf_ia_test_module.h"
 #include "nrf_gpio.h"
+#include "nrf_sdh.h"
 #include "nrf_soc.h"
 #include "nrfx_lpcomp.h"
 #include "nrfx_pwm.h"
 #include "protocols/em410x.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
 #include "protocols/ioprox.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
 #include "protocols/pyramid.h"
 #include "protocols/viking.h"
+#include "rfid_main.h"
 #include "syssleep.h"
 #include "tag_emulation.h"
 #include "tag_persistence.h"
@@ -30,15 +38,33 @@ NRF_LOG_MODULE_REGISTER();
 
 // Whether the USB light effect is allowed to enable
 extern bool g_usb_led_marquee_enable;
+extern bool g_is_static_wake;
 
 // Whether it is currently in the low -frequency card number of broadcasting
 static volatile bool m_is_lf_emulating = false;
+// An LF field has started emulation since the app booted up
+static volatile bool m_lf_field_seen = false;
 // Cache tag type
 static tag_specific_type_t m_tag_type = TAG_TYPE_UNDEFINED;
+
+// The interactive engine, instead of the broadcast, owns the PWM while sense is enabled.
+static bool m_ia_active = false;
 
 // The pwm to broadcast modulated card id
 const nrfx_pwm_t m_broadcast = NRFX_PWM_INSTANCE(0);
 const nrf_pwm_sequence_t *m_pwm_seq = NULL;
+// The PWM base clock currently in use
+static nrf_pwm_clk_t m_pwm_clk = NRF_PWM_CLK_125kHz;
+
+// pwm_handler() checks the field between bursts. Each check pauses the signal and restarts the frame.
+// Bursts last about 500 ms. That keeps the pauses rare, and the device still notices a reader leave within 500 ms.
+#define LF_TAG_BURST_TARGET_MS 500
+#define LF_TAG_BURST_MIN_FRAMES 2
+#define LF_TAG_BURST_MAX_FRAMES 255
+static uint16_t m_frames_per_burst = LF_TAG_BURST_MIN_FRAMES;
+
+// A T5577 starts its first PSK1 frame about 8 bits after the field comes on.
+#define LF_TAG_PSK1_POWERUP_US (8 * 256)  // 8 bits at RF/32
 
 static void lf_field_lost(void) {
     // Open the incident interruption, so that the next event can be in and out normally
@@ -50,6 +76,15 @@ static void lf_field_lost(void) {
     // call sleep_timer_start *after* unsetting g_is_tag_emulating
     sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);  // Start the timer to enter the sleep
     NRF_LOG_INFO("LF FIELD LOST");
+}
+
+// Main loop: PSK1 self-trim measurement (lf_selftrim.c).
+void lf_tag_em_selftrim_process(void) {
+    lf_selftrim_process(m_is_lf_emulating, IS_PSK1_TYPE(m_tag_type));
+}
+
+void lf_tag_em_ia_field_lost(void) {
+    lf_field_lost();
 }
 
 /**
@@ -75,6 +110,11 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     if (m_is_lf_emulating || event != NRF_LPCOMP_EVENT_UP) {
         return;
     }
+    // No tag data loaded yet (a new slot before its default data is written). An interactive type loads a module, not
+    // a waveform, so it never sets m_pwm_seq.
+    if (m_pwm_seq == NULL && !m_ia_active) {
+        return;
+    }
 
     sleep_timer_stop();  // turn off dormant delay
     // Disable LPCOMP during emulation — LF_RSSI fluctuates during load
@@ -84,6 +124,7 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
 
     // set the emulation status logo bit
     m_is_lf_emulating = true;
+    m_lf_field_seen = true;
     g_is_tag_emulating = true;
     // turn off USB light effect when emulating cards
     g_usb_led_marquee_enable = false;
@@ -91,12 +132,30 @@ static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // LED status update
     set_slot_light_color(RGB_BLUE);
     TAG_FIELD_LED_ON()
+    // A field that arrives after the static-wake check ends the dark wake
+    if (g_is_static_wake) {
+        g_is_static_wake = false;
+        light_up_by_slot();
+    }
+
+    // Delay PSK1 ~2 ms to mimic a T5577's startup time
+    if (IS_PSK1_TYPE(m_tag_type)) {
+        bsp_delay_us(LF_TAG_PSK1_POWERUP_US);
+    }
+
+    if (m_ia_active) {
+        lf_ia_field_detected();
+        NRF_LOG_INFO("LF FIELD DETECTED, interactive");
+        return;
+    }
 
     // Play a finite burst then stop — field check happens in EVT_STOPPED after
     // PWM has fully released LF_MOD, so ANT_NO_MOD() and the settle delay are
     // effective. NRFX_PWM_FLAG_LOOP kept the pin owned by the peripheral,
     // making the field check always read "present" due to self-drive on LF_RSSI.
-    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+    lf_selftrim_on_field();
+    lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));  // a trim kept from an earlier field
+    nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
 
     NRF_LOG_INFO("LF FIELD DETECTED");
 }
@@ -122,11 +181,16 @@ static void pwm_handler(nrfx_pwm_evt_type_t event_type) {
     bsp_delay_ms(2);  // let peak detector drain: ~2 ms time constant on LF_RSSI
     if (is_lf_field_exists()) {
         // Field still present — play another finite burst then check again.
-        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, 10, NRFX_PWM_FLAG_STOP);
+        lf_selftrim_apply(m_pwm_seq, IS_PSK1_TYPE(m_tag_type));
+        nrfx_pwm_simple_playback(&m_broadcast, m_pwm_seq, m_frames_per_burst, NRFX_PWM_FLAG_STOP);
     } else {
         // Field gone — clean up.
         lf_field_lost();
     }
+}
+
+static nrf_pwm_clk_t pwm_clk_for_type(tag_specific_type_t type) {
+    return IS_PSK1_TYPE(type) ? NRF_PWM_CLK_16MHz : NRF_PWM_CLK_125kHz;
 }
 
 static void pwm_init(void) {
@@ -139,10 +203,11 @@ static void pwm_init(void) {
     // Base clock depends on the currently-loaded tag type. Legacy ASK/FSK
     // protocols (EM410x, HID, ioProx, Viking, PAC) use 125kHz base so that
     // their hardcoded counter_top values (8-64 range) produce the correct
-    // absolute timing. PSK1 protocols need finer resolution for the 16us
-    // subcarrier period, so pwm_init uses 1MHz base with counter_top=16.
+    // absolute timing. PSK1 protocols use a 16MHz base with counter_top=256 for
+    // the 16us subcarrier period, fine enough to trim its rate (utils/psk1.h).
     // See tag_base_type.h IS_PSK1_TYPE for the list of qualifying types.
-    cfg.base_clock = IS_PSK1_TYPE(m_tag_type) ? NRF_PWM_CLK_1MHz : NRF_PWM_CLK_125kHz;
+    cfg.base_clock = pwm_clk_for_type(m_tag_type);
+    m_pwm_clk = cfg.base_clock;
     cfg.count_mode = NRF_PWM_MODE_UP;
     cfg.load_mode = NRF_PWM_LOAD_WAVE_FORM;
     cfg.step_mode = NRF_PWM_STEP_AUTO;
@@ -150,6 +215,45 @@ static void pwm_init(void) {
     nrfx_err_t err_code = nrfx_pwm_init(&m_broadcast, &cfg, pwm_handler);
     APP_ERROR_CHECK(err_code);
 }
+
+// HFXO started without the SoftDevice: a field wake-up emulates before the SoftDevice is enabled
+static bool m_hfclk_direct = false;
+
+static void hfclk_request(void) {
+    if (nrf_sdh_is_enabled()) {
+        sd_clock_hfclk_request();
+        uint32_t hfclk_running = 0;
+        while (!hfclk_running) {
+            sd_clock_hfclk_is_running(&hfclk_running);
+        }
+    } else {
+        nrf_clock_task_trigger(NRF_CLOCK_TASK_HFCLKSTART);
+        while (!nrf_clock_hf_is_running(NRF_CLOCK_HFCLK_HIGH_ACCURACY)) {
+        }
+        m_hfclk_direct = true;
+    }
+}
+
+static void hfclk_release(void) {
+    if (m_hfclk_direct) {
+        m_hfclk_direct = false;
+        nrf_clock_task_trigger(NRF_CLOCK_TASK_HFCLKSTOP);
+    } else {
+        sd_clock_hfclk_release();
+    }
+}
+
+// The SoftDevice now owns the clock: move the direct request to it so it keeps HFXO running
+static void lf_sdh_state_handler(nrf_sdh_state_evt_t state, void *p_context) {
+    if (state == NRF_SDH_EVT_STATE_ENABLED && m_hfclk_direct) {
+        m_hfclk_direct = false;
+        sd_clock_hfclk_request();
+    }
+}
+
+NRF_SDH_STATE_OBSERVER(m_lf_sdh_state_observer, 0) = {
+    .handler = lf_sdh_state_handler,
+};
 
 static void lf_sense_enable(void) {
     // PWM bit timing divides HFCLK by a fixed ratio. On HFINT (64 MHz RC,
@@ -167,25 +271,32 @@ static void lf_sense_enable(void) {
     // Paired release in lf_sense_disable(). SD reference-counts HFXO requests,
     // so this coexists with BLE. Both functions run from thread context
     // (tag_mode_enter/tag_emulation_sense_end) where SVCs are safe.
-    sd_clock_hfclk_request();
-    uint32_t hfclk_running = 0;
-    while (!hfclk_running) {
-        sd_clock_hfclk_is_running(&hfclk_running);
-    }
+    hfclk_request();
 
     lpcomp_init();
-    pwm_init();  // use precise hardware pwm to broadcast card id
+    m_ia_active = lf_ia_get_module() != NULL;
+    if (m_ia_active) {
+        lf_ia_sense_enable();
+    } else {
+        pwm_init();  // use precise hardware pwm to broadcast card id
+    }
     if (is_lf_field_exists()) {
         lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
     }
 }
 
 static void lf_sense_disable(void) {
-    nrfx_pwm_uninit(&m_broadcast);
+    lf_selftrim_abort();
+    if (m_ia_active) {
+        lf_ia_sense_disable();
+        m_ia_active = false;
+    } else {
+        nrfx_pwm_uninit(&m_broadcast);
+    }
     nrfx_lpcomp_uninit();
-    m_pwm_seq = NULL;
+    // Keep m_pwm_seq: lf_sense_enable() doesn't load it again
     m_is_lf_emulating = false;
-    sd_clock_hfclk_release();
+    hfclk_release();
 }
 
 static enum {
@@ -194,8 +305,54 @@ static enum {
     LF_SENSE_STATE_ENABLE,
 } m_lf_sense_state = LF_SENSE_STATE_NONE;
 
+// The LPCOMP and PWM interrupt handlers start and continue emulation. lf_emulation_stop() masks both until
+// lf_emulation_resume(). An interrupt while the PWM restarts could start emulation on an uninitialised PWM, start it
+// twice, or end it twice.
+static bool lf_emulation_stop(void) {
+    NRFX_IRQ_DISABLE(LPCOMP_IRQn);
+    NRFX_IRQ_DISABLE(nrfx_get_irq_number(m_broadcast.p_registers));
+    const bool was_emulating = m_is_lf_emulating;
+    nrfx_pwm_stop(&m_broadcast, true);
+    nrfx_pwm_uninit(&m_broadcast);
+    m_is_lf_emulating = false;
+    return was_emulating;
+}
+
+// Sets the PWM up for the current tag type, then starts emulation again if a field is present
+static void lf_emulation_resume(bool was_emulating) {
+    pwm_init();  // also unmasks the PWM interrupt
+    if (was_emulating) {
+        // As in pwm_handler(), the field check needs LF_MOD released and LF_RSSI settled
+        ANT_NO_MOD();
+        bsp_delay_ms(2);
+    }
+    // is_lf_field_exists() also turns LPCOMP back on, which lf_field_lost() needs
+    if (is_lf_field_exists() && m_pwm_seq != NULL) {
+        lpcomp_event_handler(NRF_LPCOMP_EVENT_UP);
+    } else if (was_emulating) {
+        lf_field_lost();
+    }
+    NRFX_IRQ_ENABLE(LPCOMP_IRQn);
+}
+
+/**@brief Forget the waveform, for a slot with no LF data. Stops emulation if it's running.
+ */
+void lf_tag_data_clear(void) {
+    if (m_lf_sense_state == LF_SENSE_STATE_ENABLE) {
+        const bool was_emulating = lf_emulation_stop();
+        m_pwm_seq = NULL;
+        lf_emulation_resume(was_emulating);
+    } else {
+        m_pwm_seq = NULL;
+    }
+}
+
 static uint16_t lf_em410x_id_size(tag_specific_type_t type) {
     return type == TAG_TYPE_EM410X_ELECTRA ? LF_EM410X_ELECTRA_TAG_ID_SIZE : LF_EM410X_TAG_ID_SIZE;
+}
+
+bool lf_field_seen(void) {
+    return m_lf_field_seen;
 }
 
 /**
@@ -218,11 +375,26 @@ void lf_tag_125khz_sense_switch(bool enable) {
     }
 }
 
-/** @brief lf card data loader
- * @param type     Refined tag type
- * @param buffer   Data buffer
- */
-int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+static int lf_tag_data_load(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    lf_selftrim_on_load();
+    // The interactive types replace the module in one step: the engine may be using the old one from an interrupt, so
+    // it must never see NULL between the two.
+    if (type == TAG_TYPE_HITAG2 && buffer->length >= LF_HITAG2_DATA_SIZE) {
+        m_tag_type = type;
+        lf_ia_set_module(lf_ia_hitag2_load(buffer->buffer));
+        NRF_LOG_INFO("load lf hitag2 data finish.");
+        return LF_HITAG2_DATA_SIZE;
+    }
+
+    if (type == TAG_TYPE_LF_IA_TEST && buffer->length >= LF_IA_TEST_FRAME_SIZE) {
+        m_tag_type = type;
+        lf_ia_set_module(lf_ia_test_module_load(buffer->buffer));
+        NRF_LOG_INFO("load lf interactive test data finish.");
+        return LF_IA_TEST_FRAME_SIZE;
+    }
+
+    lf_ia_set_module(NULL);
+
     // ensure buffer size is large enough for specific tag type,
     // so that tag data (e.g., card numbers) can be converted to corresponding pwm sequence here.
     if ((type == TAG_TYPE_EM410X || type == TAG_TYPE_EM410X_ELECTRA) && buffer->length >= lf_em410x_id_size(type)) {
@@ -298,8 +470,68 @@ int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
         return LF_PYRAMID_TAG_ID_SIZE;
     }
 
+    if (type == TAG_TYPE_INDALA && buffer->length >= LF_INDALA_TAG_ID_SIZE) {
+        m_tag_type = type;
+        void *codec = indala.alloc();
+        m_pwm_seq = indala.modulator(codec, buffer->buffer);
+        indala.free(codec);
+        NRF_LOG_INFO("load lf indala data finish.");
+        return LF_INDALA_TAG_ID_SIZE;
+    }
+
     NRF_LOG_ERROR("no valid data exists in buffer for tag type: %d.", type);
     return 0;
+}
+
+// Sizes bursts for the loaded waveform, at the clock pwm_init() picks for its type
+static void update_frames_per_burst(void) {
+    const size_t entries = (size_t)m_pwm_seq->length / 4u;
+    uint64_t ticks = 0;
+    for (size_t i = 0; i < entries; i++) {
+        ticks += m_pwm_seq->values.p_wave_form[i].counter_top;
+    }
+    ticks *= (uint64_t)m_pwm_seq->repeats + 1u;
+    const uint32_t hz = (pwm_clk_for_type(m_tag_type) == NRF_PWM_CLK_16MHz) ? 16000000u : 125000u;
+    const uint64_t frame_us = ticks * 1000000u / hz;
+    // pwm_handler() reads the count between bursts, so write it once
+    uint64_t n = LF_TAG_BURST_MIN_FRAMES;
+    if (frame_us > 0) {
+        n = ((uint64_t)LF_TAG_BURST_TARGET_MS * 1000u + frame_us - 1u) / frame_us;
+    }
+    if (n < LF_TAG_BURST_MIN_FRAMES) {
+        n = LF_TAG_BURST_MIN_FRAMES;
+    } else if (n > LF_TAG_BURST_MAX_FRAMES) {
+        n = LF_TAG_BURST_MAX_FRAMES;
+    }
+    m_frames_per_burst = (uint16_t)n;
+}
+
+/** @brief lf card data loader
+ * @param type     Refined tag type
+ * @param buffer   Data buffer
+ */
+int lf_tag_data_loadcb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    int ret = lf_tag_data_load(type, buffer);
+    // An interactive type loads a module, not a waveform, so it has no bursts to size
+    bool ia = lf_ia_get_module() != NULL;
+    if (ret > 0 && !ia) {
+        update_frames_per_burst();
+    }
+    if (ret > 0 && m_lf_sense_state == LF_SENSE_STATE_ENABLE) {
+        if (ia != m_ia_active) {
+            // lf_sense_enable() picks the PWM or the interactive engine, and lf_emulation_resume() restarts only the
+            // PWM. So a load that changes engine turns sensing off and on, which also starts the new engine in a field
+            // that's already on.
+            lf_sense_disable();
+            lf_sense_enable();
+        } else if (!ia && (pwm_clk_for_type(m_tag_type) != m_pwm_clk || !m_is_lf_emulating)) {
+            // pwm_init() picks the base clock from the tag type, but only runs when sense is enabled. Restart
+            // emulation as well if it isn't running: a reader whose field is already on doesn't raise another
+            // field-detect interrupt.
+            lf_emulation_resume(lf_emulation_stop());
+        }
+    }
+    return ret;
 }
 
 /** @brief Id card deposit card number before callback
@@ -469,4 +701,43 @@ bool lf_tag_pyramid_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
         0x01, 0x01, 0x01, 0x4A, 0xE3, 0x5E, 0x7F, 0x4F,
     };
     return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_indala_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_INDALA ? LF_INDALA_TAG_ID_SIZE : 0;
+}
+
+/** @brief Indala default frame: 26-bit format, FC 123, card 1337. */
+bool lf_tag_indala_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t tag_id[8] = {0xA0, 0x00, 0x00, 0x00, 0x8F, 0x49, 0xD2, 0xA1};
+    return lf_tag_data_factory(slot, tag_type, tag_id, sizeof(tag_id));
+}
+
+int lf_tag_ia_test_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_LF_IA_TEST ? LF_IA_TEST_FRAME_SIZE : 0;
+}
+
+bool lf_tag_ia_test_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t frame[LF_IA_TEST_FRAME_SIZE] = {0xA5, 0x5A, 0xF0, 0x0F};
+    return lf_tag_data_factory(slot, tag_type, frame, sizeof(frame));
+}
+
+int lf_tag_hitag2_data_savecb(tag_specific_type_t type, tag_data_buffer_t *buffer) {
+    return m_tag_type == TAG_TYPE_HITAG2 ? LF_HITAG2_DATA_SIZE : 0;
+}
+
+// A made-up tag: UID 01020304, reader password 0A0B0C0D, configuration 06 (Hitag 2, Manchester, password mode) with
+// tag password 0E0F10, and every other page its own number repeated.
+bool lf_tag_hitag2_data_factory(uint8_t slot, tag_specific_type_t tag_type) {
+    uint8_t pages[LF_HITAG2_DATA_SIZE] = {
+        0x01, 0x02, 0x03, 0x04,
+        0x0A, 0x0B, 0x0C, 0x0D,
+        0x02, 0x02, 0x02, 0x02,
+        0x06, 0x0E, 0x0F, 0x10,
+        0x04, 0x04, 0x04, 0x04,
+        0x05, 0x05, 0x05, 0x05,
+        0x06, 0x06, 0x06, 0x06,
+        0x07, 0x07, 0x07, 0x07,
+    };
+    return lf_tag_data_factory(slot, tag_type, pages, sizeof(pages));
 }

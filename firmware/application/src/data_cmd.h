@@ -51,6 +51,8 @@
 #define DATA_CMD_GET_LONG_PRESS_THRESHOLD       (1041)
 #define DATA_CMD_SET_LONG_PRESS_THRESHOLD       (1042)
 #define DATA_CMD_GET_BATTERY_INFO_EX            (1043)
+#define DATA_CMD_GET_LF_SELFTRIM                (1045)
+#define DATA_CMD_SET_LF_SELFTRIM                (1046)
 
 //
 // ******************************************************************
@@ -116,11 +118,24 @@
 #define DATA_CMD_IOPROX_WRITE_TO_T55XX          (3011)
 #define DATA_CMD_IOPROX_DECODE_RAW              (3012)
 #define DATA_CMD_IOPROX_COMPOSE_ID              (3013)
+#define DATA_CMD_INDALA_SCAN                    (3035)
+#define DATA_CMD_INDALA_WRITE_TO_T55XX          (3036)
 #define DATA_CMD_LF_T55XX_WRITE                 (3016)
 #define DATA_CMD_IDTECK_WRITE_TO_T55XX          (3018)
 #define DATA_CMD_JABLOTRON_SCAN                 (3019)
 #define DATA_CMD_JABLOTRON_WRITE_TO_T55XX       (3020)
 #define DATA_CMD_PYRAMID_SCAN                   (3021)
+// Provisional ID: 3022 and 3033-3036 are claimed by open PRs.
+#define DATA_CMD_LF_T55XX_WRITE_FEATURES        (3029)
+
+// Optional trailing byte on the *_WRITE_TO_T55XX commands, after the old keys.
+// Without it, the tag is written with no password.
+#define T55XX_WRITE_FLAG_NO_PASSWORD            (0x01)
+#define T55XX_WRITE_FLAG_SET_PASSWORD           (0x02)
+
+// Bits returned by DATA_CMD_LF_T55XX_WRITE_FEATURES.
+// Bit 0: password mode is opt-in and the trailing flag byte above is understood.
+#define T55XX_WRITE_FEATURE_PASSWORD_OPT_IN     (1 << 0)
 
 //
 // ******************************************************************
@@ -210,9 +225,37 @@
 #define DATA_CMD_JABLOTRON_GET_EMU_ID           (5011)
 #define DATA_CMD_IDTECK_SET_EMU_ID              (5012)
 #define DATA_CMD_IDTECK_GET_EMU_ID              (5013)
+#define DATA_CMD_INDALA_SET_EMU_ID              (5026)
+#define DATA_CMD_INDALA_GET_EMU_ID              (5027)
+#define DATA_CMD_HITAG2_SET_EMU_DATA            (5040)
+#define DATA_CMD_HITAG2_GET_EMU_DATA            (5041)
 
 #define DATA_CMD_EM4X05_SCAN                    (3030)
 #define DATA_CMD_EM4X05_READSNIFF               (3032)
 #define DATA_CMD_LF_SNIFF                       (3031)
+// 3036 is DATA_CMD_INDALA_WRITE_TO_T55XX in PR #509, so the Hitag 2 scan is 3038.
+#define DATA_CMD_HITAG2_READ                    (3037)
+#define DATA_CMD_HITAG2_SCAN                    (3038)
+
+// The interactive LF engine's log and bench instrumentation. Payloads are the firmware's packed structs,
+// little-endian.
+#define DATA_CMD_LF_IA_TRACE_READ               (3180)
+#define DATA_CMD_LF_IA_TRACE_CLEAR              (3181)
+#define DATA_CMD_LF_IA_ENV_ARM                  (3182)
+#define DATA_CMD_LF_IA_ENV_READ                 (3183)
+#define DATA_CMD_LF_IA_TUNING                   (3184)
+#define DATA_CMD_LF_IA_SLOT_MODES               (3188)
+// The interactive LF engine's exchange log. 3180 and 3181 are the same as 3193 and 3194.
+#define DATA_CMD_LF_IA_LOG_INFO                 (3192)
+#define DATA_CMD_LF_IA_LOG_READ                 (3193)
+#define DATA_CMD_LF_IA_LOG_CLEAR                (3194)
+// The interactive LF reader engine's bench commands.
+#define DATA_CMD_LF_RDR_TRANSACT                (3185)
+#define DATA_CMD_LF_RDR_CAPTURE                 (3186)
+#define DATA_CMD_HITAG2_READER_LINK             (3187)
+#define DATA_CMD_LF_RDR_LAST                    (3189)
+#define DATA_CMD_LF_RDR_TRACE_READ              (3190)
+#define DATA_CMD_LF_RDR_TRACE_CLEAR             (3191)
+#define DATA_CMD_HITAG2_RESET_PROBE             (3195)
 
 #endif

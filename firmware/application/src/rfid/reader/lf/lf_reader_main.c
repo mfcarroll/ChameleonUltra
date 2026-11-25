@@ -7,9 +7,10 @@
 #include "lf_125khz_radio.h"
 #include "lf_reader_data.h"
 #include "protocols/em410x.h"
-#include "protocols/ioprox.h"
 #include "protocols/hidprox.h"
 #include "protocols/idteck.h"
+#include "protocols/indala.h"
+#include "protocols/ioprox.h"
 #include "protocols/t55xx.h"
 #include "protocols/jablotron.h"
 #include "protocols/pac.h"
@@ -138,12 +139,21 @@ static void try_reset_t55xx_passwd(uint32_t new_passwd, uint8_t *old_passwds, ui
 
 /**
  * Write card data to t55xx
+ *
+ * new_passwd is always stored in block 7; use_passwd decides whether block 0 turns password mode on.
+ * The two are independent, so any value, 00000000 included, can be a password.
  */
-static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t passwd = bytes_to_num(new_passwd, 4);
 
+    // The reset below runs either way, so a tag protected with one of the old passwords is
+    // re-keyed to `passwd` first and accepts the writes that follow, including a block 0 without PWD.
+    if (use_passwd && blk_count > 0) {
+        blks[0] |= T5577_PWD;
+    }
+
     start_lf_125khz_radio();
-    bsp_delay_ms(1);  // Delays for a while after starting the field
+    bsp_delay_ms(4);  // The T5577 needs ~4 ms to power up before it accepts a command
 
     try_reset_t55xx_passwd(passwd, old_passwds, old_passwd_count);
     t55xx_write_data(passwd, blks, blk_count);
@@ -157,28 +167,28 @@ static uint8_t write_t55xx(uint32_t *blks, uint8_t blk_count, uint8_t *new_passw
 /**
  * Write em410x card data to t55xx
  */
-uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
-uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_em410x_electra_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = em410x_electra_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write hidprox card data to t55xx
  */
-uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_t il, uint32_t oem, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     wiegand_card_t card = {
         .format = format,
         .card_number = cn,
@@ -191,13 +201,13 @@ uint8_t write_hidprox_to_t55xx(uint8_t format, uint32_t fc, uint64_t cn, uint32_
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write ioprox card data to t55xx
  */
-uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     // Prepare T5577 block array: index 0 = config word, 1-2 = data blocks
     uint32_t blks[3] = {0x00};
 
@@ -207,54 +217,74 @@ uint8_t write_ioprox_to_t55xx(uint8_t *card_data, uint8_t *new_passwd, uint8_t *
         return STATUS_PAR_ERR;
     }
 
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write viking card data to t55xx
  */
-uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_viking_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = viking_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
-uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_pac_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = pac_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write jablotron card data to t55xx
  */
-uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_jablotron_to_t55xx(uint8_t *uid, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = jablotron_t55xx_writer(uid, blks);
     if (blk_count == 0) {
         return STATUS_PAR_ERR;
     }
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Write IDTECK card data to t55xx (PSK1 RF/32, 64-bit frame).
  */
-uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count) {
+uint8_t write_idteck_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
     uint32_t blks[7] = {0x00};
     uint8_t blk_count = idteck_t55xx_writer(data, blks);
     if (blk_count == 0) return STATUS_PAR_ERR;
-    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count);
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
 }
 
 /**
  * Set the LF card scanning timeout value (in milliseconds).
  */
 void set_scan_tag_timeout(uint32_t ms) { g_timeout_readem_ms = ms; }
+
+// An Indala read takes several 33ms captures and needs two to agree, so it gets a
+// longer budget than the other scans' default. 3s covers the whole phase rotation
+// in lf_indala_data.c (8 phases x 8 captures), so the backup phases get tried.
+#define INDALA_READ_TIMEOUT_MS 3000
+
+uint8_t scan_indala(uint8_t *data) {
+    uint32_t timeout = g_timeout_readem_ms > INDALA_READ_TIMEOUT_MS ? g_timeout_readem_ms : INDALA_READ_TIMEOUT_MS;
+    if (indala_read(data, timeout)) {
+        return STATUS_LF_TAG_OK;
+    }
+    return STATUS_LF_TAG_NO_FOUND;
+}
+
+uint8_t write_indala_to_t55xx(uint8_t *data, uint8_t *new_passwd, uint8_t *old_passwds, uint8_t old_passwd_count, bool use_passwd) {
+    uint32_t blks[7] = {0x00};
+    uint8_t blk_count = indala_t55xx_writer(data, blks);
+    if (blk_count == 0) return STATUS_PAR_ERR;
+    return write_t55xx(blks, blk_count, new_passwd, old_passwds, old_passwd_count, use_passwd);
+}
 
 #if defined(PROJECT_CHAMELEON_ULTRA)
 /**
@@ -278,7 +308,7 @@ uint8_t lf_t55xx_write_block(uint8_t block, uint32_t word, uint32_t passwd, bool
     uint32_t *pwd_ptr = use_passwd ? &passwd : NULL;
 
     start_lf_125khz_radio();
-    bsp_delay_ms(1);  // Delay for a while after starting the field
+    bsp_delay_ms(4);  // The T5577 needs ~4 ms to power up before it accepts a command
 
     t55xx_send_cmd(opcode, pwd_ptr, 0, &word, block);
     t55xx_send_cmd(T5577_OPCODE_RESET, NULL, 0, NULL, 0);

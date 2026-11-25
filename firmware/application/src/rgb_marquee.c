@@ -424,35 +424,40 @@ void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop) {
 }
 
 
-// Charging animation
-// the current percentage of the battery 0-4 4 represents full electric breathing light
+// USB idle animation: the active slot's LED breathes in its own colour, between a dim floor and a low peak.
+// The other LEDs stay off. Each level step lasts USB_IDLE_STEP_MS, so a breath takes about 5 s.
+#define USB_IDLE_LEVEL_MIN  10
+#define USB_IDLE_LEVEL_MAX  45
+#define USB_IDLE_STEP_MS    70
 volatile bool callback_waiting6 = 0;
 void rgb_marquee_usb_idle_pwm_callback(nrfx_pwm_evt_type_t event_type) {
     if (event_type == NRF_DRV_PWM_EVT_FINISHED) {
         callback_waiting6 = 1;
     }
 }
-void rgb_marquee_usb_idle(void) {
+void rgb_marquee_usb_idle(uint8_t color, uint8_t slot) {
     uint32_t *led_array = hw_get_led_array();
-    const uint16_t delay_time = 25;
-    static int16_t light_level = 99; //LED brightness value
+    const uint16_t delay_time = USB_IDLE_STEP_MS;
+    static int16_t light_level = USB_IDLE_LEVEL_MAX; //LED brightness value
 
     if (!g_usb_led_marquee_enable && rgb_marquee_usb_idle_step != 0) {
-        light_level = 99;
+        light_level = USB_IDLE_LEVEL_MAX;
         callback_waiting6 = 0;
         rgb_marquee_stop();
         return;
     }
 
     if (rgb_marquee_usb_idle_step == 0) {
+        // Take the colour and slot once per breath, so a slot change shows from the next breath
+        rgb_marquee_usb_idle_color = color;
         set_slot_light_color(rgb_marquee_usb_idle_color);
         for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
             nrf_gpio_pin_clear(led_array[i]);
         }
-        pwm_config.output_pins[0] = led_array[2];
-        pwm_config.output_pins[1] = led_array[3];
-        pwm_config.output_pins[2] = led_array[4];
-        pwm_config.output_pins[3] = led_array[5];
+        pwm_config.output_pins[0] = led_array[slot];
+        pwm_config.output_pins[1] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[2] = NRF_DRV_PWM_PIN_NOT_USED;
+        pwm_config.output_pins[3] = NRF_DRV_PWM_PIN_NOT_USED;
         rgb_marquee_usb_idle_step = 1;
 
         // Reset the state of the lamp when the USB is not turned on
@@ -460,12 +465,12 @@ void rgb_marquee_usb_idle(void) {
     }
 
     if (rgb_marquee_usb_idle_step == 1) {
-        light_level  = 0;
+        light_level = USB_IDLE_LEVEL_MIN;
         rgb_marquee_usb_idle_step = 2;
     }
 
     if (rgb_marquee_usb_idle_step == 2 || rgb_marquee_usb_idle_step == 3 || rgb_marquee_usb_idle_step == 4) {
-        if (light_level <= 99) {
+        if (light_level <= USB_IDLE_LEVEL_MAX) {
             if (rgb_marquee_usb_idle_step == 2) {
                 //Treatment brightness
                 pwm_sequ_val.channel_0 = get_pwmduty(light_level);
@@ -497,12 +502,12 @@ void rgb_marquee_usb_idle(void) {
     }
 
     if (rgb_marquee_usb_idle_step == 5) {
-        light_level = 99;
+        light_level = USB_IDLE_LEVEL_MAX;
         rgb_marquee_usb_idle_step = 6;
     }
 
     if (rgb_marquee_usb_idle_step == 6 || rgb_marquee_usb_idle_step == 7 || rgb_marquee_usb_idle_step == 8) {
-        if (light_level >= 0) {
+        if (light_level >= USB_IDLE_LEVEL_MIN) {
             if (rgb_marquee_usb_idle_step == 6) {
                 //Treatment brightness
                 pwm_sequ_val.channel_0 = get_pwmduty(light_level);
@@ -530,10 +535,6 @@ void rgb_marquee_usb_idle(void) {
             }
         } else {
             rgb_marquee_usb_idle_step = 0;
-            //if (++rgb_marquee_usb_idle_color == RGB_WHITE) rgb_marquee_usb_idle_color = RGB_RED;
-            uint8_t new_color = rand() % 6;
-            for (; new_color == rgb_marquee_usb_idle_color; new_color = rand() % 6);
-            rgb_marquee_usb_idle_color = new_color;
         }
     }
 }

@@ -15,7 +15,8 @@ void rgb_marquee_sweep_to(uint8_t color, uint8_t dir, uint8_t end);
 void rgb_marquee_slot_switch(uint8_t led_down, uint8_t color_led_down, uint8_t led_up, uint8_t color_led_up);
 void rgb_marquee_sweep_fade(uint8_t color, uint8_t dir, uint8_t end, uint8_t start_light, uint8_t stop_light);
 void rgb_marquee_sweep_from_to(uint8_t color, uint8_t start, uint8_t stop);
-void rgb_marquee_usb_idle(void);
+// Breathe the LED of the given slot (0 to 7) in the given colour, for USB with a host and no program
+void rgb_marquee_usb_idle(uint8_t color, uint8_t slot);
 void rgb_marquee_symmetric_out(uint8_t color, uint8_t slot);
 void rgb_marquee_symmetric_in(uint8_t color, uint8_t slot);
 

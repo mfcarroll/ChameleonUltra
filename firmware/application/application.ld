@@ -5,9 +5,17 @@ GROUP(-lgcc -lc -lnosys)
 
 MEMORY
 {
-  FLASH (rx) : ORIGIN = 0x27000, LENGTH = 0xCC000
+  /* The application ends where the interactive LF log starts, so an application that grows into the log fails to
+     link. A DFU update writes the application in place (single bank), so it leaves the log alone. */
+  FLASH (rx) : ORIGIN = 0x27000, LENGTH = 0x70000
+  /* The interactive LF log (lf_ia_trace_flash.c), up to FDS: 22 virtual pages of 8 KB below the bootloader at
+     0xF3000 start at 0xC7000. */
+  LF_IA_LOG (r) : ORIGIN = 0x97000, LENGTH = 0x30000
   RAM (rwx) :  ORIGIN = 0x20002ae8, LENGTH = 0x35518
 }
+
+PROVIDE(__lf_ia_log_start = ORIGIN(LF_IA_LOG));
+PROVIDE(__lf_ia_log_end = ORIGIN(LF_IA_LOG) + LENGTH(LF_IA_LOG));
 
 SECTIONS
 {

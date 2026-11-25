@@ -63,6 +63,8 @@ class Command(enum.IntEnum):
 
     GET_LONG_PRESS_THRESHOLD = 1041
     SET_LONG_PRESS_THRESHOLD = 1042
+    GET_LF_SELFTRIM = 1045
+    SET_LF_SELFTRIM = 1046
 
     HF14A_SCAN = 2000
     MF1_DETECT_SUPPORT = 2001
@@ -109,6 +111,7 @@ class Command(enum.IntEnum):
     JABLOTRON_SCAN = 3019
     JABLOTRON_WRITE_TO_T55XX = 3020
     PYRAMID_SCAN = 3021
+    LF_T55XX_WRITE_FEATURES = 3029  # provisional ID
 
     MF1_WRITE_EMU_BLOCK_DATA = 4000
     HF14A_SET_ANTI_COLL_DATA = 4001
@@ -185,9 +188,21 @@ class Command(enum.IntEnum):
     JABLOTRON_GET_EMU_ID = 5011
     IDTECK_SET_EMU_ID = 5012
     IDTECK_GET_EMU_ID = 5013
+    INDALA_SET_EMU_ID = 5026
+    INDALA_GET_EMU_ID = 5027
+    INDALA_SCAN = 3035
+    INDALA_WRITE_TO_T55XX = 3036
+    HITAG2_SET_EMU_DATA = 5040
+    HITAG2_GET_EMU_DATA = 5041
     EM4X05_SCAN = 3030
     EM4X05_READSNIFF = 3032
     LF_SNIFF = 3031
+    HITAG2_READ = 3037
+    HITAG2_SCAN = 3038  # 3036 is INDALA_WRITE_TO_T55XX in PR #509
+    LF_IA_TRACE_READ = 3180
+    LF_IA_TRACE_CLEAR = 3181
+    LF_IA_TUNING = 3184
+    LF_IA_SLOT_MODES = 3188
 
 
 @enum.unique
@@ -336,7 +351,7 @@ class TagSpecificType(enum.IntEnum):
     # Paradox
 
     # PSK Tag-Talk-First      300
-    # Indala
+    Indala = 300
     # Keri
     # NexWatch
     IDTECK = 310
@@ -346,6 +361,7 @@ class TagSpecificType(enum.IntEnum):
     # EM4x05/4x69
     # EM4x50/4x70
     # Hitag series
+    HITAG2 = 470
 
     TAG_TYPES_LF_END = 999
 
@@ -429,6 +445,10 @@ class TagSpecificType(enum.IntEnum):
             return "Jablotron"
         elif self == TagSpecificType.IDTECK:
             return "IDTECK"
+        elif self == TagSpecificType.Indala:
+            return "Indala"
+        elif self == TagSpecificType.HITAG2:
+            return "Hitag 2"
         elif self == TagSpecificType.MIFARE_Mini:
             return "Mifare Mini"
         elif self == TagSpecificType.MIFARE_1024:

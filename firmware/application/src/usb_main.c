@@ -14,6 +14,8 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
+extern bool g_is_static_wake;
+
 // USB DEFINES START
 static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst, app_usbd_cdc_acm_user_event_t event);
 
@@ -40,6 +42,8 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 volatile bool g_usb_connected = false;
 volatile bool g_usb_port_opened = false;
 volatile bool g_usb_led_marquee_enable = true;
+// True from a bus suspend until the host resumes or resets the bus, or USB power goes away
+static volatile bool m_usb_suspended = false;
 static uint8_t cdc_data_buffer[NRF_DRV_USBD_EPSIZE];
 
 /** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
@@ -86,10 +90,16 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
     switch (event) {
         case APP_USBD_EVT_DRV_SUSPEND:
             NRF_LOG_INFO("USB SUSPEND");
+            m_usb_suspended = true;
             break;
 
         case APP_USBD_EVT_DRV_RESUME:
             NRF_LOG_INFO("USB RESUME");
+            m_usb_suspended = false;
+            break;
+
+        case APP_USBD_EVT_DRV_RESET:
+            m_usb_suspended = false;
             break;
 
         case APP_USBD_EVT_STARTED:
@@ -103,6 +113,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 
         case APP_USBD_EVT_POWER_DETECTED:
             sleep_timer_stop();
+            g_is_static_wake = false;
             NRF_LOG_INFO("USB power detected");
             if (!nrf_drv_usbd_is_enabled()) {
                 app_usbd_enable();
@@ -115,6 +126,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
             NRF_LOG_INFO("USB power removed");
             g_usb_connected = false;
             g_usb_led_marquee_enable = false;
+            m_usb_suspended = false;
             app_usbd_stop();
             break;
 
@@ -179,4 +191,9 @@ int fputc(int ch, FILE *f){
 
 bool is_usb_working(void) {
     return g_usb_port_opened;
+}
+
+bool usb_host_is_active(void) {
+    // Only a host moves the device to Addressed, with SET_ADDRESS. A charger or a charge-only cable never does.
+    return app_usbd_core_state_get() >= APP_USBD_STATE_Addressed && !m_usb_suspended;
 }
