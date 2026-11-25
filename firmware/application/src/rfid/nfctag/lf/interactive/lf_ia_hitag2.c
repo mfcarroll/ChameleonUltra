@@ -19,8 +19,9 @@
 
 #define HT2_EOF_US    (300u)   // longer than a 1 bit's field-on time (30 - 6 periods, 192 µs)
 // Carrier periods from the end of the reader's stop gap to the start of the answer. Shorter than the datasheet's
-// 199 to 206 (counted from the start of the gap): a Paxton Net2 accepted 182 to 195, and 189 is the middle of that.
-#define HT2_DELAY_FC      (189u)
+// 199 to 206 (counted from the start of the gap). A Paxton Net2 accepted up to 195, and two other readers from 192 and
+// 193. A genuine tag answers START_AUTH at 193 to 195.
+#define HT2_DELAY_FC      (194u)
 #define HT2_BIT_FC    (32u)
 #define HT2_SOF_BITS  (5u)
 
